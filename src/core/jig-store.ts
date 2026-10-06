@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import type { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
-import { DomainError } from './store.ts';
+import { DomainError, type Store } from './store.ts';
 
 // Rows of the jig tables (ARCH-03 §10.2, schema v5): installed packages, project pins, drafts,
 // instances ('이 프로젝트의 jig'), setting-change log, step runs, input reads and bake records.
@@ -216,17 +216,35 @@ const asRead = (row: Row): JigRead =>
 const asBake = (row: Row): JigBake => ({ ...row, items: decode(row.items as string) }) as JigBake;
 
 export class JigStore {
-  private readonly db: DatabaseSync;
-  constructor(db: DatabaseSync) {
-    this.db = db;
+  private readonly source: DatabaseSync | Store;
+  private readonly packagesDb: DatabaseSync;
+  private readonly instanceDbs = new Map<string, DatabaseSync>();
+  /** One DB (tests, a single file), or a Store: packages in its app DB, the rest per project. */
+  constructor(source: DatabaseSync | Store) {
+    this.source = source;
+    this.packagesDb = source instanceof DatabaseSync ? source : source.app;
+  }
+  private of(projectId: string) {
+    return this.source instanceof DatabaseSync ? this.source : this.source.db(projectId);
+  }
+  /** The DB of the project an instance belongs to (instance ids are unique across projects). */
+  private ofInstance(instanceId: string) {
+    if (this.source instanceof DatabaseSync) return this.source;
+    let db = this.instanceDbs.get(instanceId);
+    if (!db || !this.source.databases().includes(db)) {
+      db = this.source.findDb('SELECT 1 FROM jig_instances WHERE id=?', instanceId);
+      if (!db) return this.source.app; // No such instance: reads find nothing, writes fail.
+      this.instanceDbs.set(instanceId, db);
+    }
+    return db;
   }
   // Rows come back as plain objects (node:sqlite returns null-prototype ones).
-  private one(sql: string, ...args: (string | number | null)[]) {
-    const row = this.db.prepare(sql).get(...args);
+  private one(db: DatabaseSync, sql: string, ...args: (string | number | null)[]) {
+    const row = db.prepare(sql).get(...args);
     return row ? ({ ...row } as Row) : undefined;
   }
-  private all(sql: string, ...args: (string | number | null)[]) {
-    return this.db
+  private all(db: DatabaseSync, sql: string, ...args: (string | number | null)[]) {
+    return db
       .prepare(sql)
       .all(...args)
       .map((row) => ({ ...row }) as Row);
@@ -235,9 +253,16 @@ export class JigStore {
   // Installed packages (this PC). The same id@version is never overwritten.
   addPackage(value: z.input<typeof newPackage>): JigPackage {
     const input = newPackage.parse(value);
-    if (this.one('SELECT 1 FROM jig_packages WHERE id=? AND version=?', input.id, input.version))
+    if (
+      this.one(
+        this.packagesDb,
+        'SELECT 1 FROM jig_packages WHERE id=? AND version=?',
+        input.id,
+        input.version,
+      )
+    )
       throw new DomainError('JIG_VERSION_EXISTS');
-    this.db
+    this.packagesDb
       .prepare('INSERT INTO jig_packages VALUES(?,?,?,?,?,?,?,?,?)')
       .run(
         input.id,
@@ -253,20 +278,29 @@ export class JigStore {
     return this.package(input.id, input.version);
   }
   package(jigId: string, version: string): JigPackage {
-    const row = this.one('SELECT * FROM jig_packages WHERE id=? AND version=?', jigId, version);
+    const row = this.one(
+      this.packagesDb,
+      'SELECT * FROM jig_packages WHERE id=? AND version=?',
+      jigId,
+      version,
+    );
     return row ? asPackage(row) : notFound();
   }
   packages(jigId?: string): JigPackage[] {
     return (
       jigId
-        ? this.all('SELECT * FROM jig_packages WHERE id=? ORDER BY installedAt', jigId)
-        : this.all('SELECT * FROM jig_packages ORDER BY id, installedAt')
+        ? this.all(
+            this.packagesDb,
+            'SELECT * FROM jig_packages WHERE id=? ORDER BY installedAt',
+            jigId,
+          )
+        : this.all(this.packagesDb, 'SELECT * FROM jig_packages ORDER BY id, installedAt')
     ).map(asPackage);
   }
 
   // Versions pinned to a project: one version per jig.
   pin(projectId: string, jigId: string, version: string) {
-    this.db
+    this.of(projectId)
       .prepare(
         `INSERT INTO project_jigs VALUES(?,?,?,?) ON CONFLICT(projectId, jigId)
           DO UPDATE SET version=excluded.version, pinnedAt=excluded.pinnedAt`,
@@ -276,6 +310,7 @@ export class JigStore {
   }
   pinned(projectId: string) {
     return this.all(
+      this.of(projectId),
       'SELECT jigId, version, pinnedAt FROM project_jigs WHERE projectId=? ORDER BY pinnedAt',
       projectId,
     ) as { jigId: string; version: string; pinnedAt: string }[];
@@ -284,7 +319,7 @@ export class JigStore {
   unpin(projectId: string, jigId: string) {
     return (
       Number(
-        this.db
+        this.of(projectId)
           .prepare('DELETE FROM project_jigs WHERE projectId=? AND jigId=?')
           .run(projectId, jigId).changes,
       ) > 0
@@ -298,7 +333,7 @@ export class JigStore {
   ): JigDraft {
     const draftId = randomUUID(),
       at = now();
-    this.db
+    this.of(projectId)
       .prepare("INSERT INTO jig_drafts VALUES(?,?,?,?,'open',?,?)")
       .run(
         draftId,
@@ -311,17 +346,24 @@ export class JigStore {
     return this.draft(projectId, draftId);
   }
   draft(projectId: string, draftId: string): JigDraft {
-    const row = this.one('SELECT * FROM jig_drafts WHERE projectId=? AND id=?', projectId, draftId);
+    const row = this.one(
+      this.of(projectId),
+      'SELECT * FROM jig_drafts WHERE projectId=? AND id=?',
+      projectId,
+      draftId,
+    );
     return row ? (row as unknown as JigDraft) : notFound();
   }
   drafts(projectId: string, state?: JigDraft['state']): JigDraft[] {
     return (state
       ? this.all(
+          this.of(projectId),
           'SELECT * FROM jig_drafts WHERE projectId=? AND state=? ORDER BY createdAt',
           projectId,
           state,
         )
       : this.all(
+          this.of(projectId),
           'SELECT * FROM jig_drafts WHERE projectId=? ORDER BY createdAt',
           projectId,
         )) as unknown as JigDraft[];
@@ -333,7 +375,7 @@ export class JigStore {
     { state, opened = false }: { state?: JigDraft['state']; opened?: boolean },
   ): JigDraft {
     const draft = this.draft(projectId, draftId);
-    this.db
+    this.of(projectId)
       .prepare('UPDATE jig_drafts SET state=?, openedAt=? WHERE projectId=? AND id=?')
       .run(
         z.enum(['open', 'archived', 'pinned', 'discarded']).parse(state ?? draft.state),
@@ -349,7 +391,7 @@ export class JigStore {
     const input = newInstance.parse(value);
     const instanceId = randomUUID(),
       at = now();
-    this.db
+    this.of(projectId)
       .prepare('INSERT INTO jig_instances VALUES(?,?,?,?,?,?,?,?,?)')
       .run(
         instanceId,
@@ -366,6 +408,7 @@ export class JigStore {
   }
   instance(projectId: string, instanceId: string): JigInstanceRow {
     const row = this.one(
+      this.of(projectId),
       'SELECT * FROM jig_instances WHERE projectId=? AND id=?',
       projectId,
       instanceId,
@@ -374,6 +417,7 @@ export class JigStore {
   }
   instances(projectId: string): JigInstanceRow[] {
     return this.all(
+      this.of(projectId),
       'SELECT * FROM jig_instances WHERE projectId=? ORDER BY createdAt',
       projectId,
     ).map(asInstance);
@@ -385,7 +429,7 @@ export class JigStore {
   ): JigInstanceRow {
     const patch = instancePatch.parse(value);
     const current = this.instance(projectId, instanceId);
-    this.db
+    this.of(projectId)
       .prepare(
         'UPDATE jig_instances SET version=?, title=?, body=?, status=?, updatedAt=? WHERE projectId=? AND id=?',
       )
@@ -405,6 +449,7 @@ export class JigStore {
   appendParam(instanceId: string, value: z.input<typeof newParamEntry>): ParamLogEntry {
     const input = newParamEntry.parse(value);
     const row = this.one(
+      this.ofInstance(instanceId),
       `INSERT INTO jig_param_log
         SELECT ?, COALESCE(MAX(seq), 0) + 1, ?, ?, ?, ?, ?, ?, ? FROM jig_param_log WHERE instanceId=?
         RETURNING seq`,
@@ -422,6 +467,7 @@ export class JigStore {
   }
   paramEntry(instanceId: string, seq: number): ParamLogEntry {
     const row = this.one(
+      this.ofInstance(instanceId),
       'SELECT * FROM jig_param_log WHERE instanceId=? AND seq=?',
       instanceId,
       seq,
@@ -429,9 +475,11 @@ export class JigStore {
     return row ? asParam(row) : notFound();
   }
   paramLog(instanceId: string): ParamLogEntry[] {
-    return this.all('SELECT * FROM jig_param_log WHERE instanceId=? ORDER BY seq', instanceId).map(
-      asParam,
-    );
+    return this.all(
+      this.ofInstance(instanceId),
+      'SELECT * FROM jig_param_log WHERE instanceId=? ORDER BY seq',
+      instanceId,
+    ).map(asParam);
   }
 
   // Step runs: the latest result of each step (input-hash cache and status). A failed run without
@@ -440,7 +488,7 @@ export class JigStore {
   saveRun(instanceId: string, stepId: string, value: z.input<typeof runInput>): JigRun {
     const input = runInput.parse(value);
     const keep = `excluded.status='failed' AND excluded.outputRef IS NULL AND jig_runs.outputRef IS NOT NULL`;
-    this.db
+    this.ofInstance(instanceId)
       .prepare(
         `INSERT INTO jig_runs VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(instanceId, stepId) DO UPDATE SET
           inputHash=CASE WHEN ${keep} THEN jig_runs.inputHash ELSE excluded.inputHash END,
@@ -461,6 +509,7 @@ export class JigStore {
   }
   run(instanceId: string, stepId: string): JigRun {
     const row = this.one(
+      this.ofInstance(instanceId),
       'SELECT * FROM jig_runs WHERE instanceId=? AND stepId=?',
       instanceId,
       stepId,
@@ -468,13 +517,17 @@ export class JigStore {
     return row ? asRun(row) : notFound();
   }
   runs(instanceId: string): JigRun[] {
-    return this.all('SELECT * FROM jig_runs WHERE instanceId=? ORDER BY rowid', instanceId).map(
-      asRun,
-    );
+    return this.all(
+      this.ofInstance(instanceId),
+      'SELECT * FROM jig_runs WHERE instanceId=? ORDER BY rowid',
+      instanceId,
+    ).map(asRun);
   }
   /** Sets the status of the given steps (e.g. `stale` after a setting change), keeping results. */
   setRunStatus(instanceId: string, stepIds: string[], status: StepStatus) {
-    const set = this.db.prepare('UPDATE jig_runs SET status=? WHERE instanceId=? AND stepId=?');
+    const set = this.ofInstance(instanceId).prepare(
+      'UPDATE jig_runs SET status=? WHERE instanceId=? AND stepId=?',
+    );
     for (const stepId of stepIds) set.run(stepStatus.parse(status), instanceId, stepId);
   }
 
@@ -482,7 +535,7 @@ export class JigStore {
   addRead(instanceId: string, value: z.input<typeof newRead>): JigRead {
     const input = newRead.parse(value);
     const readId = randomUUID();
-    this.db
+    this.ofInstance(instanceId)
       .prepare('INSERT INTO jig_reads VALUES(?,?,?,?,?,?,?,?,?)')
       .run(
         readId,
@@ -498,18 +551,28 @@ export class JigStore {
     return this.read(instanceId, readId);
   }
   read(instanceId: string, readId: string): JigRead {
-    const row = this.one('SELECT * FROM jig_reads WHERE instanceId=? AND id=?', instanceId, readId);
+    const row = this.one(
+      this.ofInstance(instanceId),
+      'SELECT * FROM jig_reads WHERE instanceId=? AND id=?',
+      instanceId,
+      readId,
+    );
     return row ? asRead(row) : notFound();
   }
   reads(instanceId: string, linkId?: string): JigRead[] {
     return (
       linkId
         ? this.all(
+            this.ofInstance(instanceId),
             'SELECT * FROM jig_reads WHERE instanceId=? AND linkId=? ORDER BY at, rowid',
             instanceId,
             linkId,
           )
-        : this.all('SELECT * FROM jig_reads WHERE instanceId=? ORDER BY at, rowid', instanceId)
+        : this.all(
+            this.ofInstance(instanceId),
+            'SELECT * FROM jig_reads WHERE instanceId=? ORDER BY at, rowid',
+            instanceId,
+          )
     ).map(asRead);
   }
 
@@ -517,7 +580,7 @@ export class JigStore {
   addBake(instanceId: string, value: z.input<typeof newBake>): JigBake {
     const input = newBake.parse(value);
     const recordId = randomUUID();
-    this.db
+    this.ofInstance(instanceId)
       .prepare('INSERT INTO jig_bakes VALUES(?,?,?,?,?,?,?,?,NULL)')
       .run(
         recordId,
@@ -533,6 +596,7 @@ export class JigStore {
   }
   bake(instanceId: string, recordId: string): JigBake {
     const row = this.one(
+      this.ofInstance(instanceId),
       'SELECT * FROM jig_bakes WHERE instanceId=? AND id=?',
       instanceId,
       recordId,
@@ -542,6 +606,7 @@ export class JigStore {
   /** Records of one bake to one linked file, oldest first. */
   bakes(instanceId: string, bakeId: string, linkId: string): JigBake[] {
     return this.all(
+      this.ofInstance(instanceId),
       'SELECT * FROM jig_bakes WHERE instanceId=? AND bakeId=? AND linkId=? ORDER BY rowid',
       instanceId,
       bakeId,
@@ -551,7 +616,7 @@ export class JigStore {
   updateBake(instanceId: string, recordId: string, value: z.input<typeof bakePatch>): JigBake {
     const patch = bakePatch.parse(value);
     const current = this.bake(instanceId, recordId);
-    this.db
+    this.ofInstance(instanceId)
       .prepare(
         'UPDATE jig_bakes SET items=?, baselineReadId=?, appliedAt=? WHERE instanceId=? AND id=?',
       )

@@ -77,7 +77,7 @@ const pinInput = z
 /** The draft store of an engine (its database and data folder). */
 export function draftsFor(workspace: Workspace, dataDirectory: string) {
   return new JigDrafts({
-    db: workspace.store.db,
+    db: workspace.store,
     dataDir: dataDirectory,
     onInstalled: (jigId, version) =>
       jigRuntimeFor(workspace, dataDirectory).registry.forget(jigId, version),
@@ -112,7 +112,7 @@ export async function makeRoutes(
       return true;
     }
     const { jig: jigId, version } = input.from;
-    const pinned = new JigStore(workspace.store.db)
+    const pinned = new JigStore(workspace.store)
       .pinned(projectId)
       .find((row) => row.jigId === jigId);
     const jig = await jigRuntimeFor(workspace, context.dataDirectory).registry.resolve(

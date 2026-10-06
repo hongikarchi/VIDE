@@ -6,6 +6,7 @@ import { resolve, join, basename } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { runDirectory } from './run-directory.mjs';
+import { soleDb } from '../fixtures/store.mjs';
 const runId = process.argv[2] || randomUUID();
 assert.match(runId, /^[a-f0-9-]{36}$/);
 const directory = runDirectory('sdk-workflow', { id: runId, keep: !!process.argv[2] });
@@ -96,17 +97,19 @@ try {
     hash,
   );
   // Inject a lost final response after its real successful receipt; recovery must not ask AI to rerun.
-  app.store.db.prepare('UPDATE workspace_requests SET state=?,result=? WHERE id=?').run(
-    'unknown',
-    JSON.stringify({
-      ...second.result,
-      hostExecuted: false,
-      phase: 'host',
-      code: 'HOST_RESULT_UNKNOWN',
-      operationId: basename(second.result.filename, '.3dm'),
-    }),
-    second.id,
-  );
+  soleDb(app.store)
+    .prepare('UPDATE workspace_requests SET state=?,result=? WHERE id=?')
+    .run(
+      'unknown',
+      JSON.stringify({
+        ...second.result,
+        hostExecuted: false,
+        phase: 'host',
+        code: 'HOST_RESULT_UNKNOWN',
+        operationId: basename(second.result.filename, '.3dm'),
+      }),
+      second.id,
+    );
   await page.reload();
   await page.getByRole('button', { name: '저장된 후보 다시 확인', exact: true }).click();
   await page

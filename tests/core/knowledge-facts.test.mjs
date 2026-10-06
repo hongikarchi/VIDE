@@ -76,7 +76,7 @@ async function setup(options) {
   const store = new Store(':memory:');
   const project = store.createProject('자료');
   const other = store.createProject('다른');
-  const reviews = new KnowledgeReviewStore(store.db);
+  const reviews = new KnowledgeReviewStore(store);
   return {
     file,
     reviews,

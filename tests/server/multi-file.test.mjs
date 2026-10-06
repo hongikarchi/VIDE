@@ -1285,7 +1285,7 @@ test('Live links ask only the hosts the project links, at the same time', async 
   assert.deepEqual(await execution.liveLinks(project.id), []);
   assert.deepEqual(calls, { rhino: 0, zwcad: 0 });
   // A file opened in VIDE: still nothing to ask.
-  const links = new DocumentLinks(store.db);
+  const links = new DocumentLinks(store);
   links.fileLink(project.id, 'rhino', 'F.3dm');
   assert.equal((await execution.liveLinks(project.id))[0].open, null);
   assert.deepEqual(calls, { rhino: 0, zwcad: 0 });
@@ -1325,7 +1325,7 @@ function linkedRhino(t, documents, owned = new Set()) {
     await execution.close();
     store.close();
   });
-  return { store, project, execution, links: new DocumentLinks(store.db) };
+  return { store, project, execution, links: new DocumentLinks(store) };
 }
 const window1 = (path) => ({
   instance: 'I1',

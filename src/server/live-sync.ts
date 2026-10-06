@@ -122,7 +122,11 @@ export class LiveSync {
     const basisId = this.latest.get(key) ?? input.basisId;
     // A Sync stored before per-object storage is moved now, once (ARCH-01 §5 「기존 결과 옮기기」).
     if (!this.workspace.model(projectId, basisId))
-      await moveRowAsync(this.workspace.store.db, basisId, this.workspace.models);
+      await moveRowAsync(
+        this.workspace.store.db(projectId),
+        basisId,
+        this.workspace.models(projectId),
+      );
     const began = performance.now();
     const basis = this.workspace.brief(projectId, basisId);
     const view = this.workspace.model(projectId, basis.id);
@@ -131,7 +135,7 @@ export class LiveSync {
       basis.state !== 'succeeded' ||
       !parsed.success ||
       !view ||
-      this.workspace.models.header(projectId, basis.id)?.objectCount === null ||
+      this.workspace.models(projectId).header(projectId, basis.id)?.objectCount === null ||
       parsed.data.sourceDocument.instance !== input.instance ||
       parsed.data.sourceDocument.documentId !== input.documentId
     )
@@ -199,7 +203,8 @@ export class LiveSync {
     // conversation's pins) keeps it as it was: the change goes to a new Sync instead, so a
     // structure jig sees its input as stale and a review still shows what it reviewed.
     const referenced =
-      input.keep || this.workspace.models.references(projectId, [basis.id]).has(basis.id);
+      input.keep ||
+      this.workspace.models(projectId).references(projectId, [basis.id]).has(basis.id);
     let savedId = basis.id;
     if (referenced) {
       savedId = randomUUID();

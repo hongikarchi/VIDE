@@ -142,6 +142,7 @@ export function members(inputs: { steps: { grid: { columns: { key: string; mark:
 }
 import { readFileSync, writeFileSync } from 'node:fs';
 import { runDirectory } from './run-directory.mjs';
+import { soleDb } from '../fixtures/store.mjs';
 const readFileSyncUtf8 = (path) => readFileSync(path, 'utf8');
 const writeFileSyncUtf8 = (path, text) => writeFileSync(path, text);
 
@@ -290,8 +291,8 @@ except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback
   // 3. The engine side: project, link, Sync, the bake jig and its instance computed to the end.
   const store = new Store(join(directory, 'workspace.sqlite')),
     workspace = new Workspace(store),
-    jigStore = new JigStore(store.db),
-    links = new DocumentLinks(store.db),
+    jigStore = new JigStore(store),
+    links = new DocumentLinks(store),
     project = store.createProject('만들기 시험'),
     dataDir = join(directory, 'data');
   await mkdir(dataDir, { recursive: true });
@@ -304,26 +305,28 @@ except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback
   });
   const display = await sdk.syncEditor(target, () => {});
   assert.equal(display.displayOnly, true);
-  workspace.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-    'sync-1',
-    project.id,
-    JSON.stringify({
-      id: 'sync-1',
-      body: 'Sync',
-      permission: 'review',
-      provider: 'claude-cli',
-      pins: [],
-      sketches: [],
-      files: [],
-      host: 'rhino',
-      source: 'document',
-      linkId: link.id,
-      sourceDocument: target,
-    }),
-    'succeeded',
-    JSON.stringify({ ...display, hostExecuted: true }),
-    new Date().toISOString(),
-  );
+  soleDb(workspace.store)
+    .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+    .run(
+      'sync-1',
+      project.id,
+      JSON.stringify({
+        id: 'sync-1',
+        body: 'Sync',
+        permission: 'review',
+        provider: 'claude-cli',
+        pins: [],
+        sketches: [],
+        files: [],
+        host: 'rhino',
+        source: 'document',
+        linkId: link.id,
+        sourceDocument: target,
+      }),
+      'succeeded',
+      JSON.stringify({ ...display, hostExecuted: true }),
+      new Date().toISOString(),
+    );
   const packed = await packJig(bakeJig(directory), { dataDir, bundle: false, skipTests: true });
   await importPack(packed.bytes, { store: jigStore, dataDir });
   const execution = new Execution(workspace, { sdk });

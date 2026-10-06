@@ -104,7 +104,7 @@ export async function factRoutes(
   const method = request.method ?? 'GET';
   workspace.store.project(projectId);
   const file = knowledgeFile(dataDirectory, projectId);
-  const store = new KnowledgeReviewStore(workspace.store.db);
+  const store = new KnowledgeReviewStore(workspace.store);
   const layer = () => reviewLayer(store, projectId);
   const id = Number(idText);
   const params = url.searchParams;

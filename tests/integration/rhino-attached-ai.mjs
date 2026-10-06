@@ -9,6 +9,7 @@ import { startServer } from '../../src/server/server.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { linkOpenDocument } from './link-helper.mjs';
 import { runDirectory } from './run-directory.mjs';
+import { soleDb } from '../fixtures/store.mjs';
 const directory = runDirectory('rhino-attached-ai');
 await mkdir(directory, { recursive: true });
 const options = sdkOptions(directory);
@@ -79,7 +80,7 @@ try {
   });
   const project = app.store.listProjects()[0];
   const rows = () =>
-    app.store.db
+    soleDb(app.store)
       .prepare('SELECT * FROM workspace_requests WHERE projectId=? ORDER BY rowid')
       .all(project.id)
       .map((row) => ({ ...row, result: row.result ? JSON.parse(row.result) : null }));

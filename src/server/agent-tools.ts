@@ -1534,7 +1534,7 @@ export function conversationSources(
   },
   { requestId, ledger }: Pick<ConversationToolSources, 'requestId' | 'ledger'> = {},
 ): ConversationToolSources {
-  const file = workspace.store.db.location();
+  const data = workspace.store.dataDirectory();
   return {
     projectId: conversation.projectId,
     conversationId: conversation.id,
@@ -1542,17 +1542,15 @@ export function conversationSources(
     requestId,
     targetLinkIds: conversation.targets ?? null,
     workspace,
-    jigs: file ? jigRuntimeFor(workspace, dirname(file)) : undefined,
-    links: new DocumentLinks(workspace.store.db),
+    jigs: data ? jigRuntimeFor(workspace, data) : undefined,
+    links: new DocumentLinks(workspace.store),
     agenda: new Agenda(workspace.store),
     ledger,
-    ...(file
-      ? { skills: () => skillCatalog(workspace, dirname(file), conversation.projectId) }
-      : {}),
-    ...(file ? { facts: factsOf(workspace, dirname(file), conversation.projectId) } : {}),
-    ...(file && conversation.kind === 'jig-make' && conversation.draftId
+    ...(data ? { skills: () => skillCatalog(workspace, data, conversation.projectId) } : {}),
+    ...(data ? { facts: factsOf(workspace, data, conversation.projectId) } : {}),
+    ...(data && conversation.kind === 'jig-make' && conversation.draftId
       ? {
-          draft: draftOf(workspace, dirname(file), conversation.projectId, conversation.draftId, {
+          draft: draftOf(workspace, data, conversation.projectId, conversation.draftId, {
             turns: turnCount(workspace, conversation.projectId, conversation.id),
           }),
         }
@@ -1569,7 +1567,7 @@ function factsOf(workspace: Workspace, dataDirectory: string, projectId: string)
   }
   return {
     file,
-    layer: () => reviewLayer(new KnowledgeReviewStore(workspace.store.db), projectId),
+    layer: () => reviewLayer(new KnowledgeReviewStore(workspace.store), projectId),
     returned: new Map<number, FactState>(),
   };
 }

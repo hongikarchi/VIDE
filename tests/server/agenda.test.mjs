@@ -9,6 +9,7 @@ import { Store } from '../../src/core/store.ts';
 import { Agenda } from '../../src/core/agenda.ts';
 import { startServer } from '../../src/server/server.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 async function storeOf(t) {
   const directory = await mkdtemp(join(tmpdir(), 'vide-agenda-'));
   const store = new Store(join(directory, 'data.sqlite'));
@@ -81,7 +82,9 @@ test('add, edit, finish, order and remove; stale revisions and other projects ar
   agenda.add(other.id, { text: '남는 것' });
   store.deleteProject(project.id);
   assert.equal(
-    store.db.prepare('SELECT count(*) AS n FROM agenda_items WHERE projectId=?').get(project.id).n,
+    soleDb(store)
+      .prepare('SELECT count(*) AS n FROM agenda_items WHERE projectId=?')
+      .get(project.id).n,
     0,
   );
   assert.equal(agenda.list(other.id).length, 1);

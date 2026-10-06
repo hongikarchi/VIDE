@@ -14,6 +14,7 @@ import { AttachedZwcadDocuments } from '../../hosts/zwcad/attached-documents.ts'
 import { DocumentLinks, matchOpenDocuments } from '../../src/core/document-links.ts';
 import { Store } from '../../src/core/store.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 async function rhinoEngine(t, document) {
   const root = await mkdtemp(join(tmpdir(), 'vide-link-follow-'));
   const connections = join(root, 'rhino-connections');
@@ -109,25 +110,27 @@ test('Save As: the linked row follows the window, keeps its Sync and a second Li
   });
   assert.equal(linked.path, 'C:\\p\\A.3dm');
   // Its Sync stays with the row after the rename.
-  app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-    'sync-a',
-    project.id,
-    JSON.stringify({
-      id: 'sync-a',
-      linkId: linked.id,
-      provider: 'codex-cli',
-      host: 'rhino',
-      source: 'document',
-      permission: 'candidate',
-      body: 'Sync',
-      pins: [],
-      sketches: [],
-      files: [],
-    }),
-    'succeeded',
-    JSON.stringify({ hostExecuted: true, host: 'rhino' }),
-    new Date().toISOString(),
-  );
+  soleDb(app.store)
+    .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+    .run(
+      'sync-a',
+      project.id,
+      JSON.stringify({
+        id: 'sync-a',
+        linkId: linked.id,
+        provider: 'codex-cli',
+        host: 'rhino',
+        source: 'document',
+        permission: 'candidate',
+        body: 'Sync',
+        pins: [],
+        sketches: [],
+        files: [],
+      }),
+      'succeeded',
+      JSON.stringify({ hostExecuted: true, host: 'rhino' }),
+      new Date().toISOString(),
+    );
   Object.assign(document, { name: 'B.3dm', path: 'C:\\p\\B.3dm', generation: 2 });
   const after = await api(`/projects/${project.id}/links`);
   assert.equal(after.length, 1);
@@ -137,7 +140,7 @@ test('Save As: the linked row follows the window, keeps its Sync and a second Li
   assert.equal(after[0].connection?.generation, 2);
   assert.equal(after[0].lastSync?.requestId, 'sync-a');
   // Kept in the row, not only in the reply.
-  assert.equal(new DocumentLinks(app.store.db).get(project.id, linked.id).path, 'C:\\p\\B.3dm');
+  assert.equal(new DocumentLinks(app.store).get(project.id, linked.id).path, 'C:\\p\\B.3dm');
   const again = await api(`/projects/${project.id}/links`, 'POST', {
     host: 'rhino',
     instance,
@@ -173,7 +176,7 @@ test('duplicate rows of one window from earlier re-links: one connected row, the
   const project = await api('/projects', 'POST', { name: 'p' });
   const insert = (id, name, path, s) => {
     const at = new Date(Date.now() - s * 1000).toISOString();
-    app.store.db
+    soleDb(app.store)
       .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
       .run(id, project.id, 'rhino', name, path, instance, 7, at, at);
   };
@@ -206,7 +209,7 @@ test('duplicate rows: hiding a closed row or an older re-link never moves the wi
   const project = await api('/projects', 'POST', { name: 'p' });
   const insert = (id, name, path, s) => {
     const at = new Date(Date.now() - s * 1000).toISOString();
-    app.store.db
+    soleDb(app.store)
       .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
       .run(id, project.id, 'rhino', name, path, instance, 7, at, at);
   };
@@ -229,7 +232,7 @@ test('duplicate rows: hiding a closed row or an older re-link never moves the wi
   ]);
   // A closed row re-linked later than the live one (the window was at its file once): the row
   // the window showed at the last poll is the one that follows the next Save As.
-  app.store.db
+  soleDb(app.store)
     .prepare('UPDATE document_links SET updatedAt=? WHERE id=?')
     .run(new Date(Date.now() + 60_000).toISOString(), 'old');
   assert.deepEqual(await state(), [
@@ -297,7 +300,7 @@ test('a closed row reconnects by path only when no row of that window exists', (
 test('DocumentLinks: Link looks up the window first and never renames a file item', () => {
   const store = new Store(':memory:');
   const p = store.createProject('P').id;
-  const links = new DocumentLinks(store.db);
+  const links = new DocumentLinks(store);
   const first = links.link(p, {
     host: 'zwcad',
     name: 'Drawing1.dwg',
@@ -390,13 +393,13 @@ test('a row reconnected by path takes the window, so a Save As there follows it 
   const { app, api } = await zwcadEngine(t, drawing);
   const project = await api('/projects', 'POST', { name: 'p' });
   const at = new Date(Date.now() - 86_400_000).toISOString();
-  app.store.db
+  soleDb(app.store)
     .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
     .run('day1', project.id, 'zwcad', 'plan.dwg', 'D:\\w\\plan.dwg', '1:1:day-one', 1, at, at);
   assert.deepEqual(rows(await api(`/projects/${project.id}/links`)), [
     ['plan.dwg', 'D:\\w\\plan.dwg', true],
   ]);
-  assert.equal(new DocumentLinks(app.store.db).get(project.id, 'day1').instance, CAD);
+  assert.equal(new DocumentLinks(app.store).get(project.id, 'day1').instance, CAD);
   Object.assign(drawing, { name: 'plan-b.dwg', path: 'D:\\w\\plan-b.dwg' });
   const list = await api(`/projects/${project.id}/links`);
   assert.deepEqual(

@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 const shot = process.env.VIDE_SHOT_DIR;
 const directory = await mkdtemp(join(tmpdir(), 'vide-structure-ui-'));
 let app, browser;
@@ -49,37 +50,39 @@ try {
     scene.push(curve('보', [0, y, 5], [7, y, 5]), curve('보', [7, y, 5], [14, y, 5]));
   for (const x of [0, 7, 14]) scene.push(curve('보', [x, 0, 5], [x, 6, 5]));
   scene.push(curve('작은보', [3.5, 0, 5], [3.5, 6, 5]));
-  app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-    'frame-sync',
-    projectId,
-    JSON.stringify({
-      id: 'frame-sync',
-      body: 'rhino sync',
-      pins: [],
-      sketches: [],
-      files: [],
-      provider: 'codex-cli',
-      model: 'codex-cli',
-      effort: 'default',
-      permission: 'review',
-      host: 'rhino',
-    }),
-    'succeeded',
-    JSON.stringify({
-      hostExecuted: true,
-      executionMode: 'sdk',
-      host: 'rhino',
-      sourceDocument: { name: 'frame.3dm', capturedAt: 'test', instance: '1', documentId: 1 },
-      scene,
-      objects: scene.map((row) => ({
-        id: row.id,
-        name: '',
-        kind: 'native',
-        nativeId: row.nativeId,
-      })),
-    }),
-    new Date().toISOString(),
-  );
+  soleDb(app.store)
+    .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+    .run(
+      'frame-sync',
+      projectId,
+      JSON.stringify({
+        id: 'frame-sync',
+        body: 'rhino sync',
+        pins: [],
+        sketches: [],
+        files: [],
+        provider: 'codex-cli',
+        model: 'codex-cli',
+        effort: 'default',
+        permission: 'review',
+        host: 'rhino',
+      }),
+      'succeeded',
+      JSON.stringify({
+        hostExecuted: true,
+        executionMode: 'sdk',
+        host: 'rhino',
+        sourceDocument: { name: 'frame.3dm', capturedAt: 'test', instance: '1', documentId: 1 },
+        scene,
+        objects: scene.map((row) => ({
+          id: row.id,
+          name: '',
+          kind: 'native',
+          nativeId: row.nativeId,
+        })),
+      }),
+      new Date().toISOString(),
+    );
   await page.reload();
   try {
     await page.waitForFunction(

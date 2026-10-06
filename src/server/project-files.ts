@@ -1,4 +1,4 @@
-import { realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import {
@@ -94,6 +94,35 @@ export function deniedPath(path: string, context: FileContext = {}) {
   const parts = resolve(path).split(/[\\/]+/);
   if (parts.some((part) => SECRET_SEGMENTS.has(part.toLowerCase()))) return true;
   return secretName(basename(path));
+}
+
+/**
+ * The turn's own project data folder, `<data>/projects/<projectId>` (ADR-031 6, ADR-032): its
+ * project.sqlite and knowledge.sqlite hold the project's full records (earlier executions' code
+ * included), which the AI may read without a question. Only in the split data folder.
+ */
+export function ownProjectData(projectId: string, context: FileContext = {}) {
+  const data = contextOf(context).dataDirectory;
+  if (!data || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(projectId)) return undefined;
+  if (!existsSync(join(data, 'app.sqlite'))) return undefined;
+  return join(data, 'projects', projectId);
+}
+// Words that change an SQLite DB or a file (SQL, sqlite3 dot commands, Node, shells). One of them
+// makes a command not "read only" (a redirect names its file, which the gate checks on its own).
+const CHANGES =
+  /\b(insert|update|delete|drop|alter|create|vacuum|attach|detach|reindex)\b|\.(save|output|once|import|backup|restore|clone)\b|\b(writeFile\w*|appendFile\w*|copyFile\w*|createWriteStream|unlink\w*|rmSync|rm|rmdir|rename\w*|truncate\w*|mkdir\w*|cp|mv|del|erase|move|copy|ren|Remove-Item|Set-Content|Add-Content|Out-File|Copy-Item|Move-Item|Rename-Item|New-Item|Clear-Content)\b|pragma\s+\w+\s*=/i;
+/**
+ * A shell command that only reads an SQLite file: every database it opens is opened read-only
+ * (`node:sqlite` `readOnly: true`, `sqlite3 -readonly`, a `mode=ro` URI) and nothing in it changes
+ * a DB or a file. The rule for running a command on the turn's own project data folder.
+ */
+export function readOnlySqlite(command: string) {
+  const opens = (
+    command.match(/\bDatabaseSync\s*\(|\bnew\s+Database\s*\(|\bsqlite3(\.exe)?\b/gi) ?? []
+  ).length;
+  const readOnly = (command.match(/readOnly\s*:\s*true|\s-readonly\b|[?&]mode=ro\b/gi) ?? [])
+    .length;
+  return opens > 0 && readOnly >= opens && !CHANGES.test(command);
 }
 
 const error = (code: string) => new DomainError(code);
@@ -395,8 +424,10 @@ export class WorkFolderGate {
       if (request.input.network === true)
         return { allow: false, message: 'Network access is not available to the shell in VIDE.' };
     } else return { allow: false, message: 'This tool is not available in VIDE.' };
+    // A command that only reads SQLite may read the project's own records (see #check).
+    const readOnlyCommand = SHELL_TOOLS.has(request.tool) && readOnlySqlite(text('command') ?? '');
     for (const check of checks) {
-      const answer = await this.#check(check.path, check.action, scope, signal);
+      const answer = await this.#check(check.path, check.action, scope, signal, readOnlyCommand);
       if (!answer.allow) return answer;
     }
     return { allow: true };
@@ -416,6 +447,7 @@ export class WorkFolderGate {
     action: PermissionAction,
     scope: { write: string[]; read: string[] },
     signal: AbortSignal,
+    readOnlyCommand = false,
   ): Promise<GateAnswer> {
     const lexical = resolve(path);
     if (action === 'read' && this.#attachments.has(fold(lexical))) return { allow: true };
@@ -424,6 +456,28 @@ export class WorkFolderGate {
       message:
         "FILE_FORBIDDEN: keys, logins and VIDE's own data are never read or written. Do not retry.",
     };
+    // The project's own records (ADR-031 6): read without a question, never written. A command
+    // there must only read SQLite (`readOnlySqlite`). Other projects and app.sqlite stay refused.
+    const own = ownProjectData(this.#projectId, this.#context);
+    if (own && inside(own, lexical)) {
+      const target = (await real(lexical).catch(() => undefined)) ?? (await nearest(lexical));
+      if (!inside(own, target) || secretName(basename(target))) {
+        this.#onUse(`파일 거절 · ${lexical}`);
+        return forbidden;
+      }
+      if (action === 'read' || (action === 'run' && readOnlyCommand)) {
+        this.#onUse(`프로젝트 기록 읽기 · ${lexical}`);
+        return { allow: true };
+      }
+      this.#onUse(`프로젝트 기록 ${action === 'write' ? '쓰기' : '명령'} 거절 · ${lexical}`);
+      return {
+        allow: false,
+        message:
+          action === 'write'
+            ? "FILE_FORBIDDEN: the project's own records are read only. Nothing was written; do not retry."
+            : "FILE_FORBIDDEN: a command on the project's records must only read them: open each DB read-only (node:sqlite { readOnly: true }, sqlite3 -readonly) and change nothing. Nothing ran.",
+      };
+    }
     if (deniedPath(lexical, this.#context)) {
       this.#onUse(`파일 거절 · ${lexical}`);
       return forbidden;

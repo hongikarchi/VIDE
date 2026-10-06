@@ -160,11 +160,12 @@ export class Applications {
         await this.preview(projectId, target.instance, target.documentId, candidateResult.objects),
       );
     }
-    const row = this.store.db
-      .prepare(
-        'SELECT * FROM connections WHERE host=? AND instanceId=? AND documentId=? AND connected=1',
-      )
-      .get(targetHost, target.instance, String(target.documentId));
+    // One open document is connected to one project at a time (every project DB is asked).
+    const row = this.store.connectedDocument(
+      targetHost,
+      target.instance,
+      String(target.documentId),
+    );
     let connection = row
       ? z.object({ id: z.string(), projectId: z.string() }).parse(row)
       : undefined;

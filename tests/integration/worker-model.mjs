@@ -9,6 +9,7 @@ import { startServer } from '../../src/server/server.ts';
 import { SdkExecution } from '../../src/server/sdk-execution.ts';
 import { runDirectory } from './run-directory.mjs';
 
+import { soleDb } from '../fixtures/store.mjs';
 const directory = runDirectory('worker-ui-check');
 await mkdir(directory, { recursive: true });
 const options = {
@@ -120,7 +121,7 @@ try {
     verified: true,
     text: 'Fixed SDK test',
   };
-  app.store.db
+  soleDb(app.store)
     .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
     .run(
       input.id,

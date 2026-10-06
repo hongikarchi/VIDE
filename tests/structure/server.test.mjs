@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startServer } from '../../src/server/server.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 // Structure jig over HTTP: a stored Rhino Sync → draft → section edits → confirm & analyse → stale.
 const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');
 const curve = (id, layer, points) => ({
@@ -73,31 +74,33 @@ test('structure jig: draft, edits, confirmation, stored result and staleness', a
     };
     const project = (await api('/projects', 'POST', { name: '구조' })).body;
     const insert = (id, createdAt) =>
-      app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-        id,
-        project.id,
-        JSON.stringify({
+      soleDb(app.store)
+        .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+        .run(
           id,
-          body: 'rhino sync',
-          pins: [],
-          sketches: [],
-          files: [],
-          provider: 'codex-cli',
-          model: 'codex-cli',
-          effort: 'default',
-          permission: 'review',
-          host: 'rhino',
-        }),
-        'succeeded',
-        JSON.stringify({
-          hostExecuted: true,
-          host: 'rhino',
-          sourceDocument: { documentId: 'doc-1', instance: 'i-1', name: 'frame.3dm' },
-          scene,
-          objects: scene.map((row) => ({ id: row.id })),
-        }),
-        createdAt,
-      );
+          project.id,
+          JSON.stringify({
+            id,
+            body: 'rhino sync',
+            pins: [],
+            sketches: [],
+            files: [],
+            provider: 'codex-cli',
+            model: 'codex-cli',
+            effort: 'default',
+            permission: 'review',
+            host: 'rhino',
+          }),
+          'succeeded',
+          JSON.stringify({
+            hostExecuted: true,
+            host: 'rhino',
+            sourceDocument: { documentId: 'doc-1', instance: 'i-1', name: 'frame.3dm' },
+            scene,
+            objects: scene.map((row) => ({ id: row.id })),
+          }),
+          createdAt,
+        );
     insert('sync-1', '2026-09-29T01:00:00.000Z');
 
     assert.equal((await api(`/projects/${project.id}/jigs/structure`)).body.draft, null);

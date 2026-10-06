@@ -6,6 +6,7 @@ import { Execution } from '../../src/server/execution.ts';
 import { interventionInput } from '../../src/core/intervention.ts';
 import { requestAdmission, requestConflict } from '../../src/contracts/request-scope.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 function fixture(t, code = 'CANCELLED') {
   const store = new Store(':memory:'),
     workspace = new Workspace(store),
@@ -42,7 +43,7 @@ function fixture(t, code = 'CANCELLED') {
   t.after(async () => {
     release();
     await execution.close();
-    store.db.close();
+    store.close();
   });
   const first = workspace.submit(project.id, input).request;
   execution.start(first);
@@ -130,7 +131,7 @@ test('intervention cannot switch host/permission, overwrite reserved fields, or 
 
 test('recreated workspace retains queued condition but never auto-runs it', (t) => {
   const store = new Store(':memory:');
-  t.after(() => store.db.close());
+  t.after(() => store.close());
   const workspace = new Workspace(store),
     project = store.createProject('restart');
   const input = {

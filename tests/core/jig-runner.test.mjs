@@ -39,6 +39,7 @@ import {
 import { digestEntries } from '../../src/jigs/runtime/loader.ts';
 import { closeJigRuntime, jigRoutes } from '../../src/server/jig-routes.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 // T-046 (PLAN-22): the synthetic example jig as an instance — compute, recompute only the changed
 // steps, undo, restore after a restart — and the failure paths: budget, cycles, fixed settings,
 // unsigned or foreign packs, same version with other content, forbidden files, remote sessions,
@@ -82,7 +83,7 @@ function fixture(t, { openStore = true } = {}) {
   const open = () => {
     const store = new Store(filename);
     const workspace = new Workspace(store);
-    const jigStore = new JigStore(store.db);
+    const jigStore = new JigStore(store);
     const registry = new JigRegistry({ store: jigStore, dataDir, devRoots: [EXT] });
     const runtime = new JigRuntime({
       store: jigStore,
@@ -741,7 +742,7 @@ test('routes: remote sessions cannot import or pin; pin needs confirmation; inst
     ...model(),
     sourceDocument: { ...model().sourceDocument, capturedAt: '2026-09-30T00:00:00.000Z' },
   };
-  workspace.store.db
+  soleDb(workspace.store)
     .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
     .run(
       'sync-1',
@@ -893,7 +894,7 @@ test('prior outputs and apply requests: kept across runs, failures and restarts;
   let state;
   const open = () => {
     const store = new Store(filename);
-    const jigStore = new JigStore(store.db);
+    const jigStore = new JigStore(store);
     const registry = new JigRegistry({ store: jigStore, dataDir, devRoots: [devRoot] });
     const runtime = new JigRuntime({
       store: jigStore,

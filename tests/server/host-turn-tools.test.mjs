@@ -11,6 +11,7 @@ import { AgentTools } from '../../src/server/agent-tools.ts';
 import { instructionFor } from '../../src/ai/agent-connection.ts';
 import { buildFactsDb } from '../core/knowledge-facts.test.mjs';
 
+import { soleDb } from '../fixtures/store.mjs';
 // PLAN-24 T-062 (2026-10-01 user decision: "도구를 만들어놓고 특정 작업에는 안 쓰게 하는 것도
 // 이상하다"): every host modeling turn reads the project beside its target — other linked files'
 // layers and Sync samples (links_layers, sync_sample) and the project's 자료 (project_*), in Plan
@@ -35,7 +36,7 @@ function project(t, { sdk } = {}) {
   const created = store.createProject('호스트 도구');
   mkdirSync(join(directory, 'knowledge'));
   buildFactsDb(join(directory, 'knowledge', created.id + '.sqlite'));
-  const link = new DocumentLinks(store.db).link(created.id, {
+  const link = new DocumentLinks(store).link(created.id, {
     host: 'zwcad',
     name: 'plan.dwg',
     path: 'C:/work/plan.dwg',
@@ -43,36 +44,38 @@ function project(t, { sdk } = {}) {
     documentId: 1,
   });
   // The CAD file's stored Sync: two walls and a column, read from the record only.
-  store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-    'cad-sync',
-    created.id,
-    JSON.stringify({
-      id: 'cad-sync',
-      provider: 'codex-cli',
-      host: 'zwcad',
-      source: 'document',
-      permission: 'candidate',
-      body: 'sync',
-      pins: [],
-      sketches: [],
-      files: [],
-      linkId: link.id,
-    }),
-    'succeeded',
-    JSON.stringify({
-      host: 'zwcad',
-      hostExecuted: true,
-      displayOnly: true,
-      objects: [],
-      scene: [
-        { id: 'w1', type: 'line', length: 6, layer64: layer64('A-WALL') },
-        { id: 'w2', type: 'line', length: 4, layer64: layer64('A-WALL') },
-        { id: 'c1', type: 'polyline', area: 0.36, layer64: layer64('S-COLS') },
-      ],
-      sourceDocument: { name: 'plan.dwg', capturedAt: '2026-10-01T00:00:00.000Z' },
-    }),
-    '2026-10-01T00:00:00.000Z',
-  );
+  soleDb(store)
+    .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+    .run(
+      'cad-sync',
+      created.id,
+      JSON.stringify({
+        id: 'cad-sync',
+        provider: 'codex-cli',
+        host: 'zwcad',
+        source: 'document',
+        permission: 'candidate',
+        body: 'sync',
+        pins: [],
+        sketches: [],
+        files: [],
+        linkId: link.id,
+      }),
+      'succeeded',
+      JSON.stringify({
+        host: 'zwcad',
+        hostExecuted: true,
+        displayOnly: true,
+        objects: [],
+        scene: [
+          { id: 'w1', type: 'line', length: 6, layer64: layer64('A-WALL') },
+          { id: 'w2', type: 'line', length: 4, layer64: layer64('A-WALL') },
+          { id: 'c1', type: 'polyline', area: 0.36, layer64: layer64('S-COLS') },
+        ],
+        sourceDocument: { name: 'plan.dwg', capturedAt: '2026-10-01T00:00:00.000Z' },
+      }),
+      '2026-10-01T00:00:00.000Z',
+    );
   const tools = new AgentTools({ origin: 'http://127.0.0.1:9' });
   const seen = [];
   const answers = [];

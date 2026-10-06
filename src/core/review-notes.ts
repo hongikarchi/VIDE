@@ -12,7 +12,8 @@ export class ReviewNotes {
   }
   list(projectId: string, reviewId: string) {
     this.reviews.get(projectId, reviewId);
-    return this.store.db
+    return this.store
+      .db(projectId)
       .prepare('SELECT * FROM review_notes WHERE projectId=? AND reviewId=? ORDER BY rowid')
       .all(projectId, reviewId)
       .map((row) => reviewNoteSchema.parse(row));
@@ -37,7 +38,11 @@ export class ReviewNotes {
       )
     )
       throw new DomainError('INVALID_INPUT');
-    const existing = this.store.db.prepare('SELECT * FROM review_notes WHERE id=?').get(input.id);
+    // Note ids are unique across every project, as in one DB.
+    const existing = this.store
+      .findDb('SELECT 1 FROM review_notes WHERE id=?', input.id)
+      ?.prepare('SELECT * FROM review_notes WHERE id=?')
+      .get(input.id);
     if (existing) {
       if (
         existing.projectId !== projectId ||
@@ -49,7 +54,8 @@ export class ReviewNotes {
       return reviewNoteSchema.parse(existing);
     }
     if (this.list(projectId, reviewId).length >= 1000) throw new DomainError('INPUT_TOO_LARGE');
-    this.store.db
+    this.store
+      .db(projectId)
       .prepare('INSERT INTO review_notes VALUES(?,?,?,?,?,?,?)')
       .run(
         input.id,
@@ -61,7 +67,7 @@ export class ReviewNotes {
         new Date().toISOString(),
       );
     return reviewNoteSchema.parse(
-      this.store.db.prepare('SELECT * FROM review_notes WHERE id=?').get(input.id),
+      this.store.db(projectId).prepare('SELECT * FROM review_notes WHERE id=?').get(input.id),
     );
   }
 }

@@ -68,7 +68,8 @@ export class RemovedProjects {
  */
 function resultPaths(store: Store, projectId: string) {
   const paths: string[] = [];
-  for (const row of store.db
+  for (const row of store
+    .db(projectId)
     .prepare(
       `SELECT json_extract(result, '$.workerDirectory') AS workerDirectory,
         json_extract(result, '$.filename') AS filename
@@ -95,7 +96,8 @@ export async function removeProject(options: {
   store.project(projectId);
   // Paths the project's rows point at, read before the rows go.
   const candidates = resultPaths(store, projectId);
-  for (const row of store.db
+  for (const row of store
+    .db(projectId)
     .prepare('SELECT path FROM jig_drafts WHERE projectId=?')
     .all(projectId)) {
     const path = text(row.path);

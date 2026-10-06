@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
+import { soleDb } from '../fixtures/store.mjs';
 // The links list, with or without a page's draft lease (`?page=&hold=`, T-084).
 const linksUrl = /\/api\/v1\/projects\/[^/]+\/links(\?.*)?$/;
 const directory = await mkdtemp(join(tmpdir(), 'vide-links-'));
@@ -34,7 +35,7 @@ try {
   const now = Date.now();
   const at = (s) => new Date(now - s * 1000).toISOString();
   const link = (id, host, name, s) =>
-    app.store.db
+    soleDb(app.store)
       .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
       .run(id, projectId, host, name, 'C:\\p\\' + name, '1:2', 1, at(s), at(s));
   const sync = (id, linkId, host, name, ids, s) => {
@@ -45,38 +46,40 @@ try {
       segments: [i, 0, 0, i + 1, 0, 0],
       layer64: b64(host === 'zwcad' ? 'S-BEAM' : 'girder'),
     }));
-    app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-      id,
-      projectId,
-      JSON.stringify({
+    soleDb(app.store)
+      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+      .run(
         id,
-        linkId,
-        provider: 'codex-cli',
-        host,
-        source: 'document',
-        permission: 'candidate',
-        body: name + ' 가져오기',
-        pins: [],
-        sketches: [],
-        files: [],
-      }),
-      'succeeded',
-      JSON.stringify({
-        hostExecuted: true,
-        executionMode: 'sdk',
-        host,
-        displayOnly: true,
-        objects: scene.map((item) => ({
-          id: item.id,
-          name: name + ' ' + item.nativeId,
-          kind: 'native',
-          nativeId: item.nativeId,
-        })),
-        scene,
-        sourceDocument: { name, capturedAt: at(s), instance: '1:2', documentId: 1 },
-      }),
-      at(s),
-    );
+        projectId,
+        JSON.stringify({
+          id,
+          linkId,
+          provider: 'codex-cli',
+          host,
+          source: 'document',
+          permission: 'candidate',
+          body: name + ' 가져오기',
+          pins: [],
+          sketches: [],
+          files: [],
+        }),
+        'succeeded',
+        JSON.stringify({
+          hostExecuted: true,
+          executionMode: 'sdk',
+          host,
+          displayOnly: true,
+          objects: scene.map((item) => ({
+            id: item.id,
+            name: name + ' ' + item.nativeId,
+            kind: 'native',
+            nativeId: item.nativeId,
+          })),
+          scene,
+          sourceDocument: { name, capturedAt: at(s), instance: '1:2', documentId: 1 },
+        }),
+        at(s),
+      );
   };
   link('link-rhino', 'rhino', 'model.3dm', 50);
   link('link-plan-1', 'zwcad', 'plan-1.dwg', 40);
@@ -180,8 +183,9 @@ try {
     projectId,
   );
   assert.equal(
-    app.store.db.prepare("SELECT count(*) AS n FROM workspace_requests WHERE id='sync-rhino'").get()
-      .n,
+    soleDb(app.store)
+      .prepare("SELECT count(*) AS n FROM workspace_requests WHERE id='sync-rhino'")
+      .get().n,
     0,
   );
 
@@ -222,33 +226,35 @@ try {
     return route.fulfill({ status: 500, json: { code: 'UNEXPECTED' } });
   });
   captured = { id: 'sync-new' };
-  app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-    captured.id,
-    projectId,
-    JSON.stringify({
-      id: captured.id,
-      linkId: 'link-new',
-      provider: 'codex-cli',
-      host: 'rhino',
-      source: 'document',
-      permission: 'candidate',
-      body: 'new.3dm 가져오기',
-      pins: [],
-      sketches: [],
-      files: [],
-    }),
-    'succeeded',
-    JSON.stringify({
-      hostExecuted: true,
-      executionMode: 'sdk',
-      host: 'rhino',
-      displayOnly: true,
-      objects: [{ id: 'n-1', name: 'new 1', kind: 'native', nativeId: 'n-1' }],
-      scene: [{ id: 'n-1', nativeId: 'n-1', nativeType: 'Curve', segments: [0, 1, 0, 1, 1, 0] }],
-      sourceDocument: { name: 'new.3dm', capturedAt: at(0), instance: '7:8', documentId: 3 },
-    }),
-    at(0),
-  );
+  soleDb(app.store)
+    .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+    .run(
+      captured.id,
+      projectId,
+      JSON.stringify({
+        id: captured.id,
+        linkId: 'link-new',
+        provider: 'codex-cli',
+        host: 'rhino',
+        source: 'document',
+        permission: 'candidate',
+        body: 'new.3dm 가져오기',
+        pins: [],
+        sketches: [],
+        files: [],
+      }),
+      'succeeded',
+      JSON.stringify({
+        hostExecuted: true,
+        executionMode: 'sdk',
+        host: 'rhino',
+        displayOnly: true,
+        objects: [{ id: 'n-1', name: 'new 1', kind: 'native', nativeId: 'n-1' }],
+        scene: [{ id: 'n-1', nativeId: 'n-1', nativeType: 'Curve', segments: [0, 1, 0, 1, 1, 0] }],
+        sourceDocument: { name: 'new.3dm', capturedAt: at(0), instance: '7:8', documentId: 3 },
+      }),
+      at(0),
+    );
   await page.locator('.link-row[data-link-id="link-new"]').waitFor();
   await page.waitForFunction(() =>
     document.querySelector('.link-row[data-link-id="link-new"]')?.textContent.includes('Live'),
@@ -355,7 +361,7 @@ async function hiddenStart(browser, draftBase) {
     const now = Date.now();
     const at = (s) => new Date(now - s * 1000).toISOString();
     const link = (id, name, s) =>
-      server.store.db
+      soleDb(server.store)
         .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
         .run(id, projectId, 'rhino', name, 'C:\\p\\' + name, '1:2', 1, at(s), at(s));
     const sync = (id, linkId, name, ids, s) => {
@@ -366,38 +372,40 @@ async function hiddenStart(browser, draftBase) {
         segments: [i, 0, 0, i + 1, 0, 0],
         layer64: b64('L'),
       }));
-      server.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-        id,
-        projectId,
-        JSON.stringify({
+      soleDb(server.store)
+        .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+        .run(
           id,
-          ...(linkId ? { linkId } : {}),
-          provider: 'codex-cli',
-          host: 'rhino',
-          source: 'document',
-          permission: 'candidate',
-          body: name + ' 가져오기',
-          pins: [],
-          sketches: [],
-          files: [],
-        }),
-        'succeeded',
-        JSON.stringify({
-          hostExecuted: true,
-          executionMode: 'sdk',
-          host: 'rhino',
-          displayOnly: true,
-          objects: scene.map((item) => ({
-            id: item.id,
-            name: name + ' ' + item.id,
-            kind: 'native',
-            nativeId: item.id,
-          })),
-          scene,
-          sourceDocument: { name, capturedAt: at(s), instance: '1:2', documentId: 1 },
-        }),
-        at(s),
-      );
+          projectId,
+          JSON.stringify({
+            id,
+            ...(linkId ? { linkId } : {}),
+            provider: 'codex-cli',
+            host: 'rhino',
+            source: 'document',
+            permission: 'candidate',
+            body: name + ' 가져오기',
+            pins: [],
+            sketches: [],
+            files: [],
+          }),
+          'succeeded',
+          JSON.stringify({
+            hostExecuted: true,
+            executionMode: 'sdk',
+            host: 'rhino',
+            displayOnly: true,
+            objects: scene.map((item) => ({
+              id: item.id,
+              name: name + ' ' + item.id,
+              kind: 'native',
+              nativeId: item.id,
+            })),
+            scene,
+            sourceDocument: { name, capturedAt: at(s), instance: '1:2', documentId: 1 },
+          }),
+          at(s),
+        );
     };
     // A Sync from before links existed belongs to no file.
     sync('old-capture', undefined, 'old.3dm', ['o-1', 'o-2', 'o-3'], 70);

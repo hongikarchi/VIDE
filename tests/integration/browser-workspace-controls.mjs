@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { runDirectory } from './run-directory.mjs';
+import { soleDb } from '../fixtures/store.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'vide-controls-'));
 let app, browser;
 try {
@@ -324,7 +325,7 @@ try {
           ? { total: 1, displayed: 0, omitted: 1, omittedTypes: { InstanceReference: 1 } }
           : { total: 0, displayed: 0, omitted: 0, omittedTypes: {} },
     };
-    app.store.db
+    soleDb(app.store)
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
       .run(
         id,

@@ -13,7 +13,7 @@ function setup(t, { live } = {}) {
   const store = new Store(':memory:');
   t.after(() => store.close());
   const workspace = new Workspace(store);
-  const links = new DocumentLinks(store.db);
+  const links = new DocumentLinks(store);
   const project = store.createProject('scheduler');
   const link = links.link(project.id, { host: 'rhino', name: 'A.3dm', instance, documentId: 7 });
   const document = {
@@ -206,7 +206,7 @@ test('a work copy VIDE opened gets its first Sync once; later changes wait for â
   const store = new Store(':memory:');
   t.after(() => store.close());
   const workspace = new Workspace(store);
-  const links = new DocumentLinks(store.db);
+  const links = new DocumentLinks(store);
   const project = store.createProject('copy');
   links.link(project.id, { host: 'rhino', name: 'copy.3dm', instance, documentId: 7 });
   const calls = [];

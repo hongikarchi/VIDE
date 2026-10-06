@@ -12,6 +12,7 @@ import { startServer } from '../../src/server/server.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 import { runDirectory } from './run-directory.mjs';
 
+import { soleDb } from '../fixtures/store.mjs';
 const directory = runDirectory('browser-live-sync');
 await mkdir(directory, { recursive: true });
 const instance = '42:100:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -112,7 +113,7 @@ try {
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
   const projectId = await page.locator('#project-picker').inputValue();
   const now = new Date().toISOString();
-  app.store.db
+  soleDb(app.store)
     .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
     .run('link-a', projectId, 'rhino', 'Attached test', null, instance, 7, now, now);
   await page.route('**/api/v1/projects/*/links*', async (route) => {

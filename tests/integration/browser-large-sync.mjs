@@ -15,6 +15,7 @@ import { startServer } from '../../src/server/server.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 import { runDirectory } from './run-directory.mjs';
 
+import { soleDb } from '../fixtures/store.mjs';
 const measureOnly = process.argv.includes('--measure');
 const COUNT = Number(process.env.VIDE_LARGE_COUNT || 10000);
 const GRID = 10; // 10 x 10 vertices per object: 100 vertices, 162 triangles
@@ -149,7 +150,7 @@ try {
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
   const projectId = await page.locator('#project-picker').inputValue();
   const now = new Date().toISOString();
-  app.store.db
+  soleDb(app.store)
     .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
     .run('link-large', projectId, 'rhino', 'Large test', null, instance, 7, now, now);
   await page.route('**/api/v1/projects/*/links*', async (route) => {

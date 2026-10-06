@@ -53,14 +53,16 @@ export class Agenda {
   /** Every item of the project in the user's order (open and done). */
   list(projectId: string): AgendaItem[] {
     this.store.project(projectId);
-    return this.store.db
+    return this.store
+      .db(projectId)
       .prepare('SELECT * FROM agenda_items WHERE projectId=? ORDER BY ord, createdAt, id')
       .all(projectId)
       .map((row) => decode(row as Record<string, unknown>));
   }
   get(projectId: string, id: string): AgendaItem {
     this.store.project(projectId);
-    const row = this.store.db
+    const row = this.store
+      .db(projectId)
       .prepare('SELECT * FROM agenda_items WHERE projectId=? AND id=?')
       .get(projectId, id);
     if (!row) throw new DomainError('NOT_FOUND');
@@ -70,8 +72,9 @@ export class Agenda {
   add(projectId: string, value: unknown, source: 'user' | 'ai' = 'user'): AgendaItem {
     const input = parsed(agendaCreateSchema, value);
     this.store.project(projectId);
-    return this.store.tx(() => {
-      const count = this.store.db
+    return this.store.tx(this.store.db(projectId), () => {
+      const count = this.store
+        .db(projectId)
         .prepare('SELECT count(*) AS n, max(ord) AS last FROM agenda_items WHERE projectId=?')
         .get(projectId) as { n: number; last: number | null };
       // No item count cap (ADR-031 7).
@@ -79,7 +82,8 @@ export class Agenda {
         at = this.now().toISOString(),
         time = input.time ?? null,
         date = input.date ?? (time ? localDate(this.now()) : null);
-      this.store.db
+      this.store
+        .db(projectId)
         .prepare(
           'INSERT INTO agenda_items(id,projectId,text,date,time,doneAt,ord,source,revision,createdAt,updatedAt,kind) VALUES(?,?,?,?,?,NULL,?,?,1,?,?,?)',
         )
@@ -101,7 +105,7 @@ export class Agenda {
   /** Changes the fields given; a stale revision is REVISION_CONFLICT. Clearing the date clears the time. */
   set(projectId: string, id: string, value: unknown): AgendaItem {
     const input = parsed(agendaUpdateSchema, value);
-    return this.store.tx(() => {
+    return this.store.tx(this.store.db(projectId), () => {
       const before = this.get(projectId, id);
       if (input.revision !== before.revision) throw new DomainError('REVISION_CONFLICT');
       let date = input.date === undefined ? before.date : input.date;
@@ -111,7 +115,8 @@ export class Agenda {
       const at = this.now().toISOString();
       const doneAt =
         input.done === undefined ? before.doneAt : input.done ? (before.doneAt ?? at) : null;
-      this.store.db
+      this.store
+        .db(projectId)
         .prepare(
           'UPDATE agenda_items SET text=?,date=?,time=?,kind=?,doneAt=?,revision=revision+1,updatedAt=? WHERE projectId=? AND id=?',
         )
@@ -135,11 +140,11 @@ export class Agenda {
   order(projectId: string, value: unknown): AgendaItem[] {
     const { ids } = parsed(agendaOrderSchema, value);
     if (new Set(ids).size !== ids.length) throw new DomainError('INVALID_INPUT');
-    return this.store.tx(() => {
+    return this.store.tx(this.store.db(projectId), () => {
       const places = ids.map((id) => this.get(projectId, id).order).sort((a, b) => a - b);
-      const update = this.store.db.prepare(
-        'UPDATE agenda_items SET ord=? WHERE projectId=? AND id=?',
-      );
+      const update = this.store
+        .db(projectId)
+        .prepare('UPDATE agenda_items SET ord=? WHERE projectId=? AND id=?');
       ids.forEach((id, index) => update.run(places[index], projectId, id));
       return this.list(projectId);
     });
@@ -149,13 +154,17 @@ export class Agenda {
     const item = this.get(projectId, id);
     if (revision !== undefined && revision !== item.revision)
       throw new DomainError('REVISION_CONFLICT');
-    this.store.db.prepare('DELETE FROM agenda_items WHERE projectId=? AND id=?').run(projectId, id);
+    this.store
+      .db(projectId)
+      .prepare('DELETE FROM agenda_items WHERE projectId=? AND id=?')
+      .run(projectId, id);
     return this.list(projectId);
   }
   /** [완료 비우기]: removes every done item. */
   removeDone(projectId: string) {
     this.store.project(projectId);
-    this.store.db
+    this.store
+      .db(projectId)
       .prepare('DELETE FROM agenda_items WHERE projectId=? AND doneAt IS NOT NULL')
       .run(projectId);
     return this.list(projectId);
@@ -170,12 +179,13 @@ export class Agenda {
    */
   revert(projectId: string, changes: readonly AgendaChange[]) {
     this.store.project(projectId);
-    return this.store.tx(() => {
+    return this.store.tx(this.store.db(projectId), () => {
       let reverted = 0,
         skipped = 0;
       const rewound = new Map<string, number>();
       for (const change of [...changes].reverse()) {
-        const row = this.store.db
+        const row = this.store
+          .db(projectId)
           .prepare('SELECT revision FROM agenda_items WHERE projectId=? AND id=?')
           .get(projectId, change.id) as { revision: number } | undefined;
         if (!row || (rewound.get(change.id) ?? row.revision) !== change.revision) {
@@ -183,13 +193,15 @@ export class Agenda {
           continue;
         }
         if (change.op === 'add') {
-          this.store.db
+          this.store
+            .db(projectId)
             .prepare('DELETE FROM agenda_items WHERE projectId=? AND id=?')
             .run(projectId, change.id);
           reverted++;
         } else {
           const { text, date, time, doneAt, kind } = change.before;
-          this.store.db
+          this.store
+            .db(projectId)
             .prepare(
               'UPDATE agenda_items SET text=?,date=?,time=?,kind=coalesce(?,kind),doneAt=?,revision=revision+1,updatedAt=? WHERE projectId=? AND id=?',
             )

@@ -101,7 +101,14 @@ ADR-032를 사용자가 확인한 뒤 ARCH-01 §5에 반영하고 구현한다. 
 - `src/core/project-split.ts`(`splitProjectDatabase`), 수동 실행 `node tools/db/split.mjs --data <폴더> [--dry-run]`. 엔진·`Store`·화면은 바꾸지 않았다.
 - 시험 `tests/core/project-split.test.mjs` 6건: 분류 누락 없음, 프로젝트 3개 나누기·행 수·무결성·두 번째 실행 무변경, 복사 중·검사 불일치·옮기는 중 실패 때 원본 그대로·남은 파일 없음, 실행 중 잠금 거절, 체크포인트되지 않은 WAL 포함.
 - 설치본 DB 사본(212 MB·프로젝트 1개): 미리 보기·실제 각 약 12초, 표별 행 수 일치, 나눈 DB를 기존 `Store`로 열림. 사본은 지웠다.
-- 남은 것(2단계): 엔진 시작 때 호출, `Store`의 공용·프로젝트별 연결 분리와 프로젝트를 가로지르는 조회 수정, 백업·프로젝트 삭제·지식 DB 경로, AI 턴 읽기 권한. ADR-032의 사용자 확인 뒤 `approved`.
+
+**진행(2026-10-06) — 2단계(엔진 연결) 구현·자동 검증, 커밋은 작업 브랜치, 설치본 반영 남음.** 저장 계약은 [ARCH-01](../architecture/ARCH-01-system.md) §5 「프로젝트별 DB」, AI 읽기 규칙은 §3 「프로젝트 폴더와 파일 도구」.
+- 시작(`src/core/store-open.ts`): `app.sqlite`가 있으면 나뉜 배치, `vide.sqlite`만 있으면 schema를 올린 뒤 한 번 나눔, 실패하면 이전과 같이 `vide.sqlite` 하나로 계속 쓰고 `db-split-failed {code}` 기록, 새 설치는 바로 나뉜 배치. `main.ts`는 그대로(`filename`의 폴더가 데이터 폴더).
+- `Store`: `app`·`db(projectId)`·`databases()`·`tx(db, fn)`, 프로젝트 만들기=폴더·DB, 지우기=DB 닫고 폴더 삭제. 프로젝트 행 클래스는 `Store`를 받아 `projectId`로 DB를 고르고 SQL은 그대로. 요청 ID 색인 `request_index`(app.sqlite, 시작 때 다시 만듦). 한 문서 한 연결·불확실한 쓰기·명령 ID·검토 메모 ID·피드백 identity는 모든 프로젝트 DB를 묻는다. `storedDisplay`·정리(`maintainModels`·`compact`·작업 사본)·복구는 DB마다. 백업(`backupWorkspace`)·지식 DB 경로(`knowledgeFile`, 수집 도구)·프로젝트 삭제의 이전 지식 파일도 바꿨다.
+- AI 읽기(ADR-031 6): 턴은 자기 `projects/<ID>` 폴더를 묻지 않고 읽는다(쓰기는 늘 거절, 셸은 여는 DB마다 읽기 전용 표시가 있고 변경 낱말이 없을 때만). 작업 폴더 값 `records`와 턴 규칙·공통 지침 한 줄이 위치(`project.sqlite`의 `workspace_requests`, `executions[].body`)를 알린다.
+- 시험: `tests/server/project-database.test.mjs` 7건(새 설치 나뉜 배치, 이전 DB 나누기 뒤 같은 요청, 나누기 실패 시 이전 DB로 계속·기록, 두 프로젝트를 가로지르는 검사, 프로젝트 삭제 시 폴더 삭제, AI 읽기 허용·거절, 읽기 전용 명령 판정). 기존 시험은 `tests/fixtures/store.mjs`의 `soleDb`로 한 프로젝트의 DB를 집도록 고쳤고 `new Store(':memory:')`는 메모리의 나뉜 배치라 전체 시험이 프로젝트별 DB로 돈다. `npm run typecheck`·`npm test` 통과(`rhino-transport` 1건은 부하 중 시간 초과, 단독 재실행 통과), 브라우저 시험 8종(conversations·links·live-sync·attached-sync·direct-mode·dashboard-agenda·project-folders·large-model) 통과.
+- 설치본 데이터 사본(257 MB, 프로젝트 1개, 지식 DB 1개): 시작 때 나누기 약 21초 후 같은 요청 86행(목록 85, 하나는 숨김 — 나누지 않은 배치와 같음)·대화 4·연결 파일 2·객체 판 18,357, 지식 DB 열림. 사본은 지웠다.
+- 남은 것: 설치본 갱신과 실제 데이터 폴더의 첫 나누기 확인(첫 시작이 그만큼 늦어짐), ADR-032 사용자 확인 뒤 `approved`.
 
 ## T-125 엔진 비정상 종료 진단 (T-126과 함께)
 

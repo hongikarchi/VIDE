@@ -9,6 +9,7 @@ import { LiveSync } from '../../src/server/live-sync.ts';
 import { captureInput } from '../../src/server/import-model.ts';
 import { displayCoverage } from '../../src/core/display-delta.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 const target = { instance: '1:2:356ff01d-b586-460c-8e2b-8c9f3c083e96', documentId: 7 };
 const OBJECTS = 10_000;
 const POINTS = 100;
@@ -69,12 +70,12 @@ test('10,000 objects: Live Sync of 10 changes stays small in time and storage', 
     workspace.update(project.id, id, 'succeeded', model(revision));
     return performance.now() - started;
   };
-  const before = bytes(store.db);
+  const before = bytes(soleDb(store));
   const firstMs = sync('s1', 4);
-  const afterFirst = bytes(store.db);
+  const afterFirst = bytes(soleDb(store));
   // An unchanged document Synced again adds manifest rows only.
   const secondMs = sync('s2', 5);
-  const afterSecond = bytes(store.db);
+  const afterSecond = bytes(soleDb(store));
   const grown = afterSecond - afterFirst;
   // Manifest rows only (about 300 B per object with these keys, 400 B with Rhino GUIDs), never a
   // copy of the model (about 65 MB of JSON here before per-object storage).
@@ -104,11 +105,11 @@ test('10,000 objects: Live Sync of 10 changes stays small in time and storage', 
   };
   const live = new LiveSync(workspace, sdk);
   live.record(project.id, workspace.brief(project.id, 's2'));
-  const beforeLive = bytes(store.db);
+  const beforeLive = bytes(soleDb(store));
   const started = performance.now();
   const reply = await live.run(project.id, { ...target, basisId: 's2', revision: 5 });
   const liveMs = performance.now() - started;
-  const liveGrown = bytes(store.db) - beforeLive;
+  const liveGrown = bytes(soleDb(store)) - beforeLive;
   assert.equal(reply.requestId, 's2');
   assert.equal(reply.created, false);
   assert.equal(reads, 0, 'the stored model was read whole');
@@ -121,7 +122,10 @@ test('10,000 objects: Live Sync of 10 changes stays small in time and storage', 
   const summary = workspace.brief(project.id, 's2').result;
   assert.equal(summary.sourceDocument.revision, 6);
   assert.equal(summary.displayCoverage.total, OBJECTS - 1);
-  assert.equal(reply.displayRevision, workspace.models.header(project.id, 's2').revision);
+  assert.equal(
+    reply.displayRevision,
+    workspace.models(project.id).header(project.id, 's2').revision,
+  );
   t.diagnostic(
     `first store ${Math.round(firstMs)} ms (+${Math.round((afterFirst - before) / 1024 / 1024)} MB), ` +
       `unchanged full Sync ${Math.round(secondMs)} ms (+${Math.round(grown / 1024)} KB), ` +
@@ -146,7 +150,8 @@ test('a Live Sync copies a basis that a publication points at instead of editing
   workspace.submit(project.id, captureInput({ id: 's1', ...target }));
   workspace.update(project.id, 's1', 'succeeded', small(4));
   // Only a publication points at s1 (no other request's input names it).
-  store.db
+  store
+    .db(project.id)
     .prepare('INSERT INTO publication_exports VALUES(?,?,?,?,?)')
     .run('p1', project.id, 's1', 'm', 's');
   const sdk = {

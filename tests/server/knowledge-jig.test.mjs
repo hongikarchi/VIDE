@@ -88,7 +88,7 @@ test('knowledge jig reads one project DB: summary, issue note, search, evidence;
     const root = join(directory, 'server');
     await mkdir(join(root, 'docs'), { recursive: true });
     await mkdir(join(directory, 'knowledge'));
-    buildDb(join(directory, 'knowledge', project.id + '.sqlite'), root);
+    buildDb(join(directory, 'projects', project.id, 'knowledge.sqlite'), root);
 
     const summary = (await api(`/projects/${project.id}/facts`)).body;
     assert.equal(summary.available, true);
@@ -97,7 +97,7 @@ test('knowledge jig reads one project DB: summary, issue note, search, evidence;
     assert.equal(summary.disciplines[0].issues[0].open, 1);
     assert.equal(summary.brief, null, 'a DB without the status brief shows the issue list only');
     assert.equal(summary.disciplines[0].brief, null);
-    const writable = new DatabaseSync(join(directory, 'knowledge', project.id + '.sqlite'));
+    const writable = new DatabaseSync(join(directory, 'projects', project.id, 'knowledge.sqlite'));
     writable.exec('create table brief(scope text primary key, body text, built_at text)');
     const decided = { text: '스팬 13m 이하', issue: 1, cite: [1], discipline: 'structure' };
     writable.prepare('insert into brief values(?, ?, ?), (?, ?, ?)').run(
@@ -158,7 +158,7 @@ test('knowledge jig reads one project DB: summary, issue note, search, evidence;
     assert.equal((await api('/projects/00000000-0000-4000-8000-000000000000/facts')).status, 404);
 
     // Opening only follows paths recorded under the root.
-    const file = join(directory, 'knowledge', project.id + '.sqlite');
+    const file = join(directory, 'projects', project.id, 'knowledge.sqlite');
     await writeFile(join(root, 'docs', '회의록.docx'), 'x');
     const opened = [];
     assert.deepEqual(

@@ -6,11 +6,12 @@ import { storedForm } from '../../src/core/model-move.ts';
 import { applyDisplayDelta } from '../../src/core/display-delta.ts';
 import { decodeGeometry, encodeGeometry } from '../../src/contracts/geometry-transfer.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 function setup(t) {
   const store = new Store(':memory:');
   t.after(() => store.close());
   const project = store.createProject('p');
-  const db = store.db;
+  const db = soleDb(store);
   const request = (id, input = {}, result = { host: 'rhino' }, state = 'succeeded', at) =>
     db
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
@@ -232,9 +233,10 @@ test('versions no manifest uses are swept; deleting requests or the project remo
   assert.equal(count(db, 'sync_manifests'), 1);
   assert.equal(models.sweep(projectId), 1);
   assert.equal(count(db, 'object_versions'), 3);
+  // Deleting the project drops its whole DB (ADR-032): nothing of it is left to count.
   store.deleteProject(projectId);
-  assert.equal(count(db, 'object_versions'), 0);
-  assert.equal(count(db, 'sync_manifest_items'), 0);
+  assert.throws(() => store.db(projectId), { code: 'NOT_FOUND' });
+  assert.equal(db.isOpen, false);
 });
 
 test('retention keeps the newest 20 Syncs per document and every referenced one', (t) => {

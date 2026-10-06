@@ -81,6 +81,8 @@ interface ServerOptions {
   >;
   /** Test seams for the reference boards' image job (SPEC-09.7): a fake codex or runner. */
   referenceOptions?: Omit<ReferenceBoardsOptions, 'outputs'>;
+  /** Test seam: the one-time split of an old `vide.sqlite` (ADR-032). */
+  storeSplit?: typeof splitProjectDatabase;
 }
 import { readWebAsset } from './web-assets.ts';
 import { Extensions } from '../core/extensions.ts';
@@ -105,7 +107,9 @@ import { quantities, quantitiesCsv } from '../core/quantities.ts';
 import { createServer } from 'node:http';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile, unlink, writeFile } from 'node:fs/promises';
-import { Store, DomainError } from '../core/store.ts';
+import { DomainError } from '../core/store.ts';
+import { openStore } from '../core/store-open.ts';
+import type { splitProjectDatabase } from '../core/project-split.ts';
 import { Workspace } from '../core/workspace.ts';
 import { requestMode } from '../contracts/workspace.ts';
 import { Execution } from './execution.ts';
@@ -228,8 +232,9 @@ export async function startServer({
   remoteOptions,
   connectorOptions,
   referenceOptions,
+  storeSplit,
 }: ServerOptions) {
-  const store = new Store(filename),
+  const { store, event: storeEvent } = await openStore(filename, storeSplit),
     bootstrap = randomBytes(32).toString('hex'),
     session = await localSession(filename === ':memory:' ? undefined : dirname(filename));
   const agentTools = new AgentTools({ origin: () => origin });
@@ -248,12 +253,12 @@ export async function startServer({
           outputs: join(dirname(filename), 'outputs'),
         });
   // Project folders and the AI's file tools (SPEC-01.13): the data folder is never read.
-  const folders = new ProjectFolders(store.db),
+  const folders = new ProjectFolders(store),
     fileContext = { dataDirectory: filename === ':memory:' ? undefined : dirname(filename) };
   const workspace = new Workspace(store),
     removedProjects = new RemovedProjects(filename === ':memory:' ? undefined : dirname(filename)),
     listProjects = () => removedProjects.visible(store.listProjects()),
-    links = new DocumentLinks(store.db),
+    links = new DocumentLinks(store),
     tableViews = new TableViews(store),
     agenda = new Agenda(store),
     structures = new StructureStore(
@@ -351,6 +356,11 @@ export async function startServer({
             ? [
                 ...['', '-wal', '-shm'].map((end) => knowledge + end),
                 knowledge.replace(/\.sqlite$/, '.structural-conditions.md'),
+                // Before the split (ADR-032) these lived in knowledge/; the split keeps the old
+                // DB as *.migrated.
+                ...['.structural-conditions.md', '.sqlite.migrated'].map((end) =>
+                  join(data, 'knowledge', projectId + end),
+                ),
               ]
             : []),
         ]
@@ -514,6 +524,17 @@ export async function startServer({
   const diagnostics = new Diagnostics({
     directory: filename === ':memory:' ? undefined : dirname(filename),
   });
+  // The data folder's opening (ADR-032): the one-time split, or why the old single DB stays.
+  if (storeEvent)
+    diagnostics.write(
+      storeEvent.name,
+      {
+        ...(storeEvent.error === undefined ? {} : Diagnostics.error(storeEvent.error)),
+        ...storeEvent.data,
+        layout: store.layout,
+      },
+      true,
+    );
   const diagnosticSink = (event: string, fields: Record<string, unknown>) =>
     diagnostics.write(event, fields);
   const apiErrorRepeats = new RepeatGate();
@@ -605,7 +626,8 @@ export async function startServer({
   });
   const withApplications = (request: StoredWork) => ({
     ...request,
-    applications: store.db
+    applications: store
+      .db(request.projectId)
       .prepare(
         "SELECT id,state,result FROM commands WHERE projectId=? AND kind='applyCandidate' AND json_extract(payload,'$.requestId')=? ORDER BY rowid",
       )
@@ -1092,7 +1114,8 @@ export async function startServer({
               display: last
                 ? {
                     requestId: last.id,
-                    revision: workspace.models.header(linkList[1], last.id)?.revision ?? 0,
+                    revision:
+                      workspace.models(linkList[1]).header(linkList[1], last.id)?.revision ?? 0,
                   }
                 : null,
               ...(latest && latest !== last && ['failed', 'unknown'].includes(latest.state)
@@ -2364,7 +2387,7 @@ export async function startServer({
           send(200, { requestId: id, full: true });
           return;
         }
-        const delta = workspace.models.deltaSince(projectId, id, since, base);
+        const delta = workspace.models(projectId).deltaSince(projectId, id, since, base);
         if (delta.full) send(200, delta);
         // The host panels keep object rows only (`view=rows`, T-123): no geometry travels.
         else if (url.searchParams.get('view') === 'rows') {
@@ -2431,7 +2454,8 @@ export async function startServer({
           if ('accountProfileId' in input) throw new DomainError('INVALID_INPUT');
           const existing =
             typeof input.id === 'string'
-              ? store.db
+              ? store
+                  .db(projectId)
                   .prepare('SELECT input FROM workspace_requests WHERE id=? AND projectId=?')
                   .get(input.id, projectId)
               : undefined;
@@ -2705,17 +2729,24 @@ export async function startServer({
   const stopHealth = filename === ':memory:' ? () => {} : startHealthLog(diagnostics);
   scheduler?.start();
   // Sync results stored as whole JSON move to per-object storage in the background, then old
-  // Syncs are pruned and the file compacted when idle (PLAN-27 1단계, ARCH-01 §5).
+  // Syncs are pruned and the file compacted when idle (PLAN-27 1단계, ARCH-01 §5). One project DB
+  // after another (ADR-032); a project removed meanwhile is skipped.
   const maintenance =
     filename === ':memory:'
       ? Promise.resolve()
-      : maintainModels(store.db, {
-          log: (event, data) => diagnostics.write(event, data),
-          stopped: () => stopping,
-          idle: () => !stopping && documentSyncs.idle() && (scheduler?.idle() ?? true),
-        })
-          .then(() => undefined)
-          .catch((error) => diagnostics.write('model-move-failed', Diagnostics.error(error)));
+      : (async () => {
+          for (const db of store.databases()) {
+            if (stopping) break;
+            await maintainModels(db, {
+              log: (event, data) => diagnostics.write(event, data),
+              stopped: () => stopping || !store.databases().includes(db),
+              idle: () => !stopping && documentSyncs.idle() && (scheduler?.idle() ?? true),
+            }).catch((error) => {
+              if (store.databases().includes(db))
+                diagnostics.write('model-move-failed', Diagnostics.error(error));
+            });
+          }
+        })();
   // Copies and work folders left by earlier runs (T-087): older than a day and not in use.
   // Only folders inside this engine's own data folder are swept.
   const own = (path: string) => (within(dirname(filename), path) ? path : undefined);
@@ -2725,7 +2756,7 @@ export async function startServer({
         sdkOptions.connectionDirectory || join(dirname(sdkOptions.directory), 'rhino-connections'),
       ),
       models: own(sdkOptions.directory),
-      keep: unsettledCopies(store.db),
+      keep: store.databases().flatMap(unsettledCopies),
     })
       .then((swept) => {
         if (swept.captures || swept.directories || swept.sessions)

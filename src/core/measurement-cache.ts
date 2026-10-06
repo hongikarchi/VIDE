@@ -52,7 +52,7 @@ export function previousMeasurements(
   projectId: string,
   target: HostTarget,
 ): GeometryMeasurement[] {
-  const db = workspace.store.db;
+  const db = workspace.store.db(projectId);
   const row = db
     .prepare(
       `SELECT id FROM workspace_requests WHERE projectId=? AND state='succeeded'

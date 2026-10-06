@@ -164,7 +164,7 @@ test('[수정하기] forks the pinned jig by route; re-pin moves the list; [올�
   const repinned = await call('POST', `${base}/${forked.data.id}/pin`, { confirm: true });
   assert.equal(repinned.status, 200, JSON.stringify(repinned.data));
   assert.deepEqual(
-    new JigStore(workspace.store.db).pinned(project.id).map((row) => [row.jigId, row.version]),
+    new JigStore(workspace.store).pinned(project.id).map((row) => [row.jigId, row.version]),
     [['project/upgrade-me', '0.1.1']],
   );
   // The instance keeps its version until [올리기].
@@ -177,11 +177,11 @@ test('[수정하기] forks the pinned jig by route; re-pin moves the list; [올�
   assert.deepEqual([count.value, count.by], [2, 'default']);
   // An older version pinned again (an imported older pack pins itself) is no 올리기: refused, and
   // the instance keeps its version and its runs.
-  new JigStore(workspace.store.db).pin(project.id, 'project/upgrade-me', '0.1.0');
+  new JigStore(workspace.store).pin(project.id, 'project/upgrade-me', '0.1.0');
   await assert.rejects(runtime.upgrade(project.id, instance.id), /JIG_VERSION_NOT_NEWER/);
   assert.equal((await runtime.view(project.id, instance.id)).jig.version, '0.1.1');
   // An instance of a jig no longer on the project's list cannot move.
-  new JigStore(workspace.store.db).unpin(project.id, 'project/upgrade-me');
+  new JigStore(workspace.store).unpin(project.id, 'project/upgrade-me');
   await assert.rejects(runtime.upgrade(project.id, instance.id), /NOT_FOUND/);
 });
 
@@ -251,7 +251,7 @@ test('drafts are created, checked in the compute box, previewed and pinned by co
   const pinned = await call('POST', `${base}/${draft.id}/pin`, { confirm: true });
   assert.equal(pinned.status, 200);
   assert.equal(pinned.data.id, 'project/grid-make');
-  const jigs = new JigStore(store.db);
+  const jigs = new JigStore(store);
   assert.equal(jigs.package('project/grid-make', '0.1.0').source, 'ai-draft');
   assert.deepEqual(
     jigs.pinned(project.id).map((row) => row.jigId),

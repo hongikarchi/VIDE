@@ -11,6 +11,7 @@ import { storedWorkSchema, storedResultSchema } from '../contracts/stored-work.t
 import type { StoredWork } from '../contracts/stored-work.ts';
 import { z } from 'zod';
 import { BIG_JSON, breadcrumb } from './breadcrumbs.ts';
+import type { DatabaseSync } from 'node:sqlite';
 import { ModelStore, type ModelDelta, type ModelView, type StoredModel } from './model-store.ts';
 
 function fail(code: string): never {
@@ -54,12 +55,19 @@ function withoutGeometry(work: StoredWork): StoredWork {
 export class Workspace {
   readonly store: Store;
   /** Display geometry of results stored per object (ARCH-01 §5 「Sync 표시 형상의 객체 단위 저장」). */
-  readonly models: ModelStore;
+  private readonly modelStores = new WeakMap<DatabaseSync, ModelStore>();
   constructor(store: Store) {
     this.store = store;
-    this.models = new ModelStore(store.db);
-    store.db.exec(`
+    for (const db of store.databases())
+      db.exec(`
       UPDATE workspace_requests SET state=CASE WHEN state='running' AND json_extract(result,'$.phase')='host' THEN 'unknown' ELSE 'interrupted' END WHERE state IN ('queued','running');`);
+  }
+  /** The project's per-object model storage (one ModelStore per project DB). */
+  models(projectId: string): ModelStore {
+    const db = this.store.db(projectId);
+    let models = this.modelStores.get(db);
+    if (!models) this.modelStores.set(db, (models = new ModelStore(db)));
+    return models;
   }
   /**
    * Writes that run outside the request table while they last: a jig's direct bake on an attached
@@ -110,11 +118,13 @@ export class Workspace {
   list(projectId: string, options: { full?: boolean } = {}): StoredWork[] {
     this.store.project(projectId);
     if (options.full)
-      return this.store.db
+      return this.store
+        .db(projectId)
         .prepare('SELECT * FROM workspace_requests WHERE projectId=? ORDER BY rowid')
         .all(projectId)
         .map((row) => this.expand(decode(row)!));
-    const rows = this.store.db
+    const rows = this.store
+      .db(projectId)
       .prepare(`SELECT ${LIGHT_COLUMNS} WHERE w.projectId=? ORDER BY w.rowid`)
       .all(projectId) as LightRow[];
     return rows.map((row) => this.#light(projectId, row));
@@ -141,7 +151,8 @@ export class Workspace {
    * is shared with `list`.
    */
   summary(projectId: string, id: string): StoredWork {
-    const row = this.store.db
+    const row = this.store
+      .db(projectId)
       .prepare(`SELECT ${LIGHT_COLUMNS} WHERE w.projectId=? AND w.id=?`)
       .get(projectId, id) as LightRow | undefined;
     return row ? this.#light(projectId, row) : fail('NOT_FOUND');
@@ -150,7 +161,8 @@ export class Workspace {
   hide(projectId: string, id: string) {
     const request = this.get(projectId, id);
     if (['queued', 'running'].includes(request.state)) fail('PROJECT_BUSY');
-    this.store.db
+    this.store
+      .db(projectId)
       .prepare('INSERT OR IGNORE INTO hidden_requests VALUES(?,?,?)')
       .run(projectId, id, new Date().toISOString());
   }
@@ -159,8 +171,8 @@ export class Workspace {
    * publication or shared feedback points at is hidden instead. Returns the deleted requests.
    */
   purge(projectId: string, ids: string[]): StoredWork[] {
-    const db = this.store.db;
-    return this.store.tx(() => {
+    const db = this.store.db(projectId);
+    return this.store.tx(this.store.db(projectId), () => {
       const deleted: StoredWork[] = [];
       for (const id of ids) {
         // The stored row without its model: callers read small fields (work folders, inputs).
@@ -182,13 +194,15 @@ export class Workspace {
         deleted.push(request);
       }
       // Object versions only the deleted Syncs used (their manifests went with the rows).
-      if (deleted.length) this.models.sweep(projectId);
+      if (deleted.length) this.models(projectId).sweep(projectId);
+      this.store.unindexRequests(deleted.map((request) => request.id));
       return deleted;
     });
   }
   hiddenIds(projectId: string) {
     return new Set(
-      this.store.db
+      this.store
+        .db(projectId)
         .prepare('SELECT requestId FROM hidden_requests WHERE projectId=?')
         .all(projectId)
         .map((row) => String(row.requestId)),
@@ -201,7 +215,8 @@ export class Workspace {
   private raw(projectId: string, id: string): StoredWork {
     return (
       decode(
-        this.store.db
+        this.store
+          .db(projectId)
           .prepare('SELECT * FROM workspace_requests WHERE projectId=? AND id=?')
           .get(projectId, id),
       ) ?? fail('NOT_FOUND')
@@ -216,7 +231,8 @@ export class Workspace {
     const marker = modelStoreOf(work);
     if (!marker) return work;
     const { modelStore: _marker, ...rest } = work.result as Record<string, unknown>;
-    const model = marker === 'manifest' ? this.models.load(work.projectId, work.id) : undefined;
+    const model =
+      marker === 'manifest' ? this.models(work.projectId).load(work.projectId, work.id) : undefined;
     return {
       ...work,
       result: (model
@@ -230,8 +246,8 @@ export class Workspace {
     const marker = modelStoreOf(work);
     if (!marker) return withoutGeometry(work);
     const { modelStore: _marker, ...rest } = work.result as Record<string, unknown>;
-    const header = marker === 'manifest' ? this.models.header(projectId, id) : undefined;
-    const view = header && this.models.view(projectId, id);
+    const header = marker === 'manifest' ? this.models(projectId).header(projectId, id) : undefined;
+    const view = header && this.models(projectId).view(projectId, id);
     return {
       ...work,
       result: {
@@ -247,7 +263,7 @@ export class Workspace {
    * undefined for a result kept as JSON (not moved yet, without a scene, or pruned).
    */
   model(projectId: string, id: string): ModelView | undefined {
-    return this.models.view(projectId, id);
+    return this.models(projectId).view(projectId, id);
   }
   /** One request with only the result fields kept as JSON (no `objects`, `scene`, `definitions`). */
   brief(projectId: string, id: string): StoredWork {
@@ -269,7 +285,7 @@ export class Workspace {
     patch: Record<string, unknown>,
     into?: string,
   ) {
-    const db = this.store.db;
+    const db = this.store.db(projectId);
     db.exec('SAVEPOINT workspace_delta');
     try {
       let target = id;
@@ -278,10 +294,10 @@ export class Workspace {
         db.prepare(
           "UPDATE workspace_requests SET state='succeeded', result=? WHERE id=? AND projectId=?",
         ).run(JSON.stringify(basis.result), into, projectId);
-        this.models.copyManifest(projectId, id, into);
+        this.models(projectId).copyManifest(projectId, id, into);
         target = into;
       }
-      const applied = this.models.applyDelta(projectId, target, delta, patch);
+      const applied = this.models(projectId).applyDelta(projectId, target, delta, patch);
       db.exec('RELEASE workspace_delta');
       this.light.delete(target);
       return { ...applied, requestId: target };
@@ -385,9 +401,12 @@ export class Workspace {
     // Keep the original serialization for existing idempotency records.
     // No size cap of its own (ADR-031 7): the HTTP body guard is the only one.
     const serialized = JSON.stringify(value);
-    const existing = this.store.db
-      .prepare('SELECT * FROM workspace_requests WHERE id=?')
-      .get(input.id);
+    // Request ids are unique across every project: the request index finds the owner.
+    const owner = this.store.projectOfRequest(input.id);
+    const existing =
+      owner === undefined
+        ? undefined
+        : this.store.db(owner).prepare('SELECT * FROM workspace_requests WHERE id=?').get(input.id);
     if (existing) {
       if (existing.projectId !== projectId || existing.input !== serialized)
         fail('REVISION_CONFLICT');
@@ -493,7 +512,8 @@ export class Workspace {
       { aiTurns: this.aiTurns },
     );
     if (admission.code) fail(admission.code);
-    this.store.db
+    this.store
+      .db(projectId)
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
       .run(
         input.id,
@@ -507,6 +527,7 @@ export class Workspace {
             : null,
         new Date().toISOString(),
       );
+    this.store.indexRequest(input.id, projectId);
     return { request: this.get(projectId, input.id), created: true };
   }
   /** AI turns running at once in a project (SPEC-02.9 4; setting 2-4). */
@@ -532,7 +553,8 @@ export class Workspace {
   }
   /** Keep a queued request waiting with its current place in line (never a running one). */
   wait(projectId: string, id: string, waitingFor: WaitingFor) {
-    this.store.db
+    this.store
+      .db(projectId)
       .prepare(
         `UPDATE workspace_requests SET result=? WHERE projectId=? AND id=? AND state='queued'`,
       )
@@ -573,7 +595,8 @@ export class Workspace {
     if (state === 'queued' || !requestStateSchema.safeParse(state).success) fail('INVALID_INPUT');
     // Existence only: decoding the stored result (a whole model for a Sync) is not needed here.
     if (
-      !this.store.db
+      !this.store
+        .db(projectId)
         .prepare('SELECT 1 FROM workspace_requests WHERE projectId=? AND id=?')
         .get(projectId, id)
     )
@@ -601,7 +624,8 @@ export class Workspace {
               : row,
           ),
         };
-        this.store.db
+        this.store
+          .db(projectId)
           .prepare('UPDATE workspace_requests SET result=? WHERE id=? AND projectId=?')
           .run(JSON.stringify(next), parent.id, projectId);
         this.light.delete(parent.id);
@@ -620,7 +644,7 @@ export class Workspace {
     state: RequestState,
     result: Record<string, unknown> | null,
   ) {
-    const db = this.store.db;
+    const db = this.store.db(projectId);
     const plain = (value: Record<string, unknown> | null) => {
       const text = value === null ? null : JSON.stringify(value);
       const big = text !== null && text.length >= BIG_JSON;
@@ -645,7 +669,7 @@ export class Workspace {
         db.exec('SAVEPOINT workspace_model');
         try {
           plain({ ...rest, modelStore: 'manifest' });
-          this.models.store(projectId, id, model, {
+          this.models(projectId).store(projectId, id, model, {
             parentId: this.previousSync(projectId, id),
             documentRevision: typeof source?.revision === 'number' ? source.revision : null,
           });
@@ -668,20 +692,22 @@ export class Workspace {
   }
   /** A result written without a model leaves no manifest behind (nor versions only it used). */
   private dropModel(projectId: string, id: string) {
-    if (!this.models.header(projectId, id)) return;
-    const versions = this.store.db
+    if (!this.models(projectId).header(projectId, id)) return;
+    const versions = this.store
+      .db(projectId)
       .prepare('SELECT versionId FROM sync_manifest_items WHERE requestId=?')
       .all(id)
       .map((row) => String(row.versionId));
-    this.store.db.prepare('DELETE FROM sync_manifests WHERE requestId=?').run(id);
-    this.models.sweep(projectId, versions);
+    this.store.db(projectId).prepare('DELETE FROM sync_manifests WHERE requestId=?').run(id);
+    this.models(projectId).sweep(projectId, versions);
   }
   /**
    * The Sync this one follows (`sync_manifests.parentId`): the newest other successful stored
    * Sync of the same linked file, or without a link of the same open document.
    */
   private previousSync(projectId: string, id: string): string | null {
-    const row = this.store.db
+    const row = this.store
+      .db(projectId)
       .prepare('SELECT input FROM workspace_requests WHERE id=? AND projectId=?')
       .get(id, projectId) as { input: string } | undefined;
     if (!row) return null;
@@ -696,10 +722,12 @@ export class Workspace {
         AND json_extract(w.input,'$.source')='document'`;
     const found =
       typeof input.linkId === 'string'
-        ? this.store.db
+        ? this.store
+            .db(projectId)
             .prepare(`${base} AND json_extract(w.input,'$.linkId')=? ORDER BY w.rowid DESC LIMIT 1`)
             .get(projectId, id, input.linkId)
-        : this.store.db
+        : this.store
+            .db(projectId)
             .prepare(
               `${base} AND json_extract(w.input,'$.sourceDocument.instance')=?
                 AND json_extract(w.input,'$.sourceDocument.documentId')=?
@@ -724,7 +752,8 @@ export class Workspace {
       parentRequestId: parent.id,
       body: `${target.host} · ${parent.input.body}`,
     });
-    this.store.db
+    this.store
+      .db(parent.projectId)
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
       .run(
         childId,
@@ -734,6 +763,7 @@ export class Workspace {
         null,
         new Date().toISOString(),
       );
+    this.store.indexRequest(childId, parent.projectId);
     return this.get(parent.projectId, childId);
   }
 }

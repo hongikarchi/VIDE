@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { PinCarryError, carryPins } from '../../src/server/pin-carry.ts';
 import { startServer } from '../../src/server/server.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 // SPEC-02.16 (user decision 2026-10-02): pins on a Sync of a closed Rhino window move to the newest
 // Sync of the same link in the reopened window; only pinned objects missing there refuse the request.
 const OLD = '1:1:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -121,22 +122,24 @@ test('POST requests answers PINS_NOT_FOUND with the Korean reason', async () => 
     const project = (await api('/projects', 'POST', { name: 'P' })).body;
     const now = Date.now();
     for (const [i, row] of [sync('s-old', OLD, ['a', 'b']), sync('s-new', NEW, ['a'])].entries())
-      app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-        row.id,
-        project.id,
-        JSON.stringify({
-          ...row.input,
-          id: row.id,
-          provider: 'codex-cli',
-          source: 'document',
-          permission: 'candidate',
-          sketches: [],
-          files: [],
-        }),
-        row.state,
-        JSON.stringify(row.result),
-        new Date(now + i).toISOString(),
-      );
+      soleDb(app.store)
+        .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+        .run(
+          row.id,
+          project.id,
+          JSON.stringify({
+            ...row.input,
+            id: row.id,
+            provider: 'codex-cli',
+            source: 'document',
+            permission: 'candidate',
+            sketches: [],
+            files: [],
+          }),
+          row.state,
+          JSON.stringify(row.result),
+          new Date(now + i).toISOString(),
+        );
     const refused = await api(`/projects/${project.id}/requests`, 'POST', {
       host: 'rhino',
       baseRequestId: 's-old',

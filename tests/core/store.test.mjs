@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../../src/core/store.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'vide-store-test-'));
   const filename = join(root, 'test.sqlite');
@@ -238,7 +239,7 @@ test('대화·공급자 세션·원장 행은 재열기 뒤 보존되고 다른 
   let s = f.open();
   const p = s.createProject('대화'),
     other = s.createProject('다른');
-  let conversations = new ConversationStore(s.db);
+  let conversations = new ConversationStore(s);
   const c = conversations.create(p.id, {
     kind: 'model-edit',
     title: '기둥 옮기기',
@@ -274,12 +275,12 @@ test('대화·공급자 세션·원장 행은 재열기 뒤 보존되고 다른 
   });
   conversations.supersede(c.id, q.id, a.id);
   // Requests carry their conversation in the input; the others are the default conversation.
-  const insert = s.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)');
+  const insert = soleDb(s).prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)');
   insert.run('r0', p.id, '{}', 'succeeded', null, 't0');
   insert.run('r1', p.id, JSON.stringify({ conversationId: c.id }), 'succeeded', null, 't1');
   s.close();
   s = f.open();
-  conversations = new ConversationStore(s.db);
+  conversations = new ConversationStore(s);
   const saved = conversations.get(p.id, c.id);
   assert.equal(saved.effort, 'high');
   assert.equal(saved.targets, null);
@@ -308,7 +309,7 @@ test('jig 설치·고정·작업본·설정값 기록·단계·읽기·만들기
   let s = f.open();
   const p = s.createProject('jig'),
     other = s.createProject('다른');
-  let jigs = new JigStore(s.db);
+  let jigs = new JigStore(s);
   const pack = {
     id: 'project/s06-frame',
     version: '0.1.0',
@@ -370,7 +371,7 @@ test('jig 설치·고정·작업본·설정값 기록·단계·읽기·만들기
   jigs.updateInstance(p.id, instance.id, { status: 'computed', body: { layerRoot: 'VIDE' } });
   s.close();
   s = f.open();
-  jigs = new JigStore(s.db);
+  jigs = new JigStore(s);
   assert.deepEqual(jigs.package('project/s06-frame', '0.1.0').approvedCaps, ['host.read']);
   const saved = jigs.instance(p.id, instance.id);
   assert.equal(saved.status, 'computed');
@@ -415,7 +416,7 @@ test('자료 검토·제외 규칙·프로젝트 루트는 프로젝트별 한 �
   const s = fixture(t).open();
   const p = s.createProject('자료'),
     other = s.createProject('다른');
-  const reviews = new KnowledgeReviewStore(s.db);
+  const reviews = new KnowledgeReviewStore(s);
   reviews.setReview(p.id, 17, { verdict: 'confirmed', by: 'user' });
   const replaced = reviews.setReview(p.id, 17, {
     verdict: 'contaminated',

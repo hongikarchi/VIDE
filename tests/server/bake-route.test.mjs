@@ -17,6 +17,7 @@ import { importPack, packJig } from '../../src/jigs/runtime/pack.ts';
 import { decodeDataBlock } from '../../src/jigs/bake/data-block.ts';
 import { bakeJobOf, pendingBakeJobs } from '../../src/jigs/bake/bake.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 // T-055 (PLAN-22): the bake route with a fake Rhino — forced read before every bake, gates,
 // the jig-bake request that runs the fixed bodies without a provider, the bake record, the
 // baseline read after application, replacement by recorded GUIDs and fingerprints only, and the
@@ -248,8 +249,8 @@ function fixture(t, options = {}) {
   mkdirSync(dataDir, { recursive: true });
   const store = new Store(join(root, 'workspace.sqlite'));
   const workspace = new Workspace(store);
-  const jigStore = new JigStore(store.db);
-  const links = new DocumentLinks(store.db);
+  const jigStore = new JigStore(store);
+  const links = new DocumentLinks(store);
   const project = store.createProject('만들기 시험');
   const document = fakeDocument();
   const calls = { reads: [], fixed: [], direct: [], undo: [] };
@@ -357,20 +358,22 @@ async function ready(f, { root: layerRoot = ROOT } = {}) {
     source: 'document',
     linkId: link.id,
   };
-  workspace.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-    sync.id,
-    project.id,
-    JSON.stringify(sync),
-    'succeeded',
-    JSON.stringify({
-      ...document.model(),
-      displayOnly: true,
-      hostExecuted: true,
-      host: 'rhino',
-      executionMode: 'sdk',
-    }),
-    new Date().toISOString(),
-  );
+  soleDb(workspace.store)
+    .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+    .run(
+      sync.id,
+      project.id,
+      JSON.stringify(sync),
+      'succeeded',
+      JSON.stringify({
+        ...document.model(),
+        displayOnly: true,
+        hostExecuted: true,
+        host: 'rhino',
+        executionMode: 'sdk',
+      }),
+      new Date().toISOString(),
+    );
   const base = `/api/v1/projects/${project.id}/jig-instances`;
   const created = await call('POST', base, {
     jig: 'project/bake-test',

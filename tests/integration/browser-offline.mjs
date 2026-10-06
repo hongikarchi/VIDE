@@ -21,7 +21,7 @@ try {
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
   const projectId = await page.locator('#project-picker').inputValue();
-  const link = new DocumentLinks(app.store.db).link(projectId, {
+  const link = new DocumentLinks(app.store).link(projectId, {
     host: 'zwcad',
     name: 'plan.dwg',
     path: 'C:/work/plan.dwg',

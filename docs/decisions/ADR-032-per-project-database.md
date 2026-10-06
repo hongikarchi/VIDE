@@ -2,7 +2,7 @@
 id: ADR-032
 title: 프로젝트마다 DB를 나눈다
 status: review
-version: 0.2
+version: 0.3
 updated: 2026-10-06
 owner: user
 related: [ADR-031, ARCH-01, PLAN-08, PLAN-27, PLAN-28]
@@ -44,7 +44,7 @@ related: [ADR-031, ARCH-01, PLAN-08, PLAN-27, PLAN-28]
 - `shared_feedback.identity`의 UNIQUE는 프로젝트 안에서만 보장된다.
 - 한 문서의 마지막 저장 표시 Sync를 모든 프로젝트에서 찾는 `query`의 `storedDisplay`(`src/server/execution.ts`, T-123)와 Live Sync가 기준을 다른 요청이 가리키는지 보는 SQL(`src/server/live-sync.ts`의 `referenced`, 한 DB의 `workspace_requests`를 가정)(2026-10-06 T-123 검토).
 
-## 이행 (1단계 구현 2026-10-06, 엔진에는 아직 연결하지 않음)
+## 이행 (1단계 구현 2026-10-06, 2단계에서 엔진 시작에 연결)
 
 `splitProjectDatabase(dataDirectory, { dryRun })`(`src/core/project-split.ts`), 손으로 돌리는 `node tools/db/split.mjs --data <폴더> [--dry-run]`.
 
@@ -58,7 +58,7 @@ related: [ADR-031, ARCH-01, PLAN-08, PLAN-27, PLAN-28]
 
 **검증.** `tests/core/project-split.test.mjs`: 프로젝트 3개·모든 표의 합성 DB를 나눈 뒤 표별 행 수·`integrity_check`·외래 키, 두 번째 실행은 `already-split`; 복사 중 오류·행 수 불일치·옮기는 중 오류에서 원본 바이트가 같고 남은 파일이 없음; 실행 중 잠금 거절; 체크포인트되지 않은 WAL 행 포함. 2026-10-06 설치본 DB 사본(212 MB, 프로젝트 1개)에서 미리 보기·실제 실행 각 약 12초, `project.sqlite` 213 MB(요청 70, 객체 판 16,324, Sync 목록 줄 137,962), `app.sqlite` 0.3 MB, 지식 DB 50 MB. 나눈 `project.sqlite`를 기존 `Store`로 열 수 있음을 확인했다.
 
-**2단계(T-123 뒤).** 엔진 시작 때 이 함수를 부르고 `Store`를 공용·프로젝트별 연결로 나눈다. 바꿀 곳: `src/server/main.ts`(파일 경로·시작 순서), `src/core/store.ts`·`src/core/workspace.ts`·`src/core/model-store.ts`·`src/server/live-sync.ts`·`src/server/server.ts`(프로젝트별 연결 선택, 위 가로지르는 조회), `src/core/backup.ts`(여러 파일 백업), `src/server/project-removal.ts`(폴더 삭제), `src/jigs/knowledge.ts`의 `knowledgeFile`과 지식 수집 도구(`tools/spikes/2026-09-29-knowledge-crawl/db.mjs`), AI 턴의 읽기 권한(위 2).
+**2단계(2026-10-06 구현, 정본은 [ARCH-01](../architecture/ARCH-01-system.md) §5 「프로젝트별 DB」).** 엔진 시작(`openStore`)이 이 함수를 부르고, 실패하면 `vide.sqlite` 하나로 이전과 같이 계속 쓰며 `db-split-failed`를 기록한다. 프로젝트를 가로지르는 검사는 `app.sqlite`의 요청 색인과 모든 프로젝트 DB 조회로 그대로 지킨다(사용자 결정 "지금 동작 유지"). AI 턴의 자기 프로젝트 폴더 읽기도 구현했다. 계획 당시 바꿀 곳: 엔진 시작 때 이 함수를 부르고 `Store`를 공용·프로젝트별 연결로 나눈다. 바꿀 곳: `src/server/main.ts`(파일 경로·시작 순서), `src/core/store.ts`·`src/core/workspace.ts`·`src/core/model-store.ts`·`src/server/live-sync.ts`·`src/server/server.ts`(프로젝트별 연결 선택, 위 가로지르는 조회), `src/core/backup.ts`(여러 파일 백업), `src/server/project-removal.ts`(폴더 삭제), `src/jigs/knowledge.ts`의 `knowledgeFile`과 지식 수집 도구(`tools/spikes/2026-09-29-knowledge-crawl/db.mjs`), AI 턴의 읽기 권한(위 2).
 
 ## 맥락
 

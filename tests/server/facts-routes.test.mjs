@@ -50,7 +50,7 @@ test('facts routes: brief, search, fact window, people-only reviews, source rule
     factSummarySchema.parse((await api(base)).body);
 
     await mkdir(join(directory, 'knowledge'));
-    buildFactsDb(join(directory, 'knowledge', project.id + '.sqlite'));
+    buildFactsDb(join(directory, 'projects', project.id, 'knowledge.sqlite'));
     const brief = factSummarySchema.parse((await api(base)).body);
     assert.equal(brief.available, true);
     assert.equal(brief.counts.statements, 5);
@@ -145,7 +145,7 @@ test('project_* tools: read-only, excluded statements refused, numbers compared 
     const file = join(directory, 'kdb.sqlite');
     buildFactsDb(file);
     const project = store.createProject('자료');
-    const reviews = new KnowledgeReviewStore(store.db);
+    const reviews = new KnowledgeReviewStore(store);
     reviews.setReview(project.id, 1, { verdict: 'confirmed', by: 'user' });
     reviews.setReview(project.id, 3, { verdict: 'rejected', reason: '오독', by: 'user' });
     const returned = new Map();

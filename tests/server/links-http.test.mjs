@@ -53,7 +53,8 @@ test('plugins link documents to a chosen project; links stay per project with th
     );
     // A linked file (as the plugin would register it) lists with its last Sync.
     const now = new Date().toISOString();
-    app.store.db
+    app.store
+      .db(a.id)
       .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
       .run('l1', a.id, 'zwcad', 'plan.dwg', 'C:\\p\\plan.dwg', '1:2:x', 1, now, now);
     const sync = {
@@ -68,7 +69,8 @@ test('plugins link documents to a chosen project; links stay per project with th
       sketches: [],
       files: [],
     };
-    app.store.db
+    app.store
+      .db(a.id)
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
       .run(
         sync.id,

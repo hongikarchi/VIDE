@@ -53,8 +53,9 @@ test('a request pinning 8 objects of a large Sync decodes that Sync at most once
   // Stored per object (PLAN-27 1단계): pins and checks never rebuild the whole model.
   assert.ok(workspace.model(project.id, 'sync'));
   let loads = 0;
-  const load = workspace.models.load.bind(workspace.models);
-  workspace.models.load = (...args) => (loads++, load(...args));
+  const models = workspace.models(project.id);
+  const load = models.load.bind(models);
+  models.load = (...args) => (loads++, load(...args));
   let task;
   const execution = new Execution(workspace, {
     sdk: {
@@ -129,8 +130,9 @@ test('a turn on a large display Sync rebuilds no model and summarizes from the s
     },
   });
   let loads = 0;
-  const load = workspace.models.load.bind(workspace.models);
-  workspace.models.load = (...args) => (loads++, load(...args));
+  const models = workspace.models(project.id);
+  const load = models.load.bind(models);
+  models.load = (...args) => (loads++, load(...args));
   let task;
   const execution = new Execution(workspace, {
     sdk: {

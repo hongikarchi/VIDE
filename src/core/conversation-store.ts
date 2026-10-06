@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import type { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
-import { DomainError } from './store.ts';
+import { DomainError, type Store } from './store.ts';
 
 // Rows of conversations, provider_sessions and ledger_items (ARCH-03 §10.2, schema v5). Data access
 // only: when a conversation starts, resumes, hands off or closes is decided by the conversation
@@ -121,9 +121,26 @@ export interface LedgerItem {
 type LedgerRow = Omit<LedgerItem, 'body'> & { body: string };
 
 export class ConversationStore {
-  private readonly db: DatabaseSync;
-  constructor(db: DatabaseSync) {
-    this.db = db;
+  private readonly source: DatabaseSync | Store;
+  private readonly conversationDbs = new Map<string, DatabaseSync>();
+  /** One DB (tests, a single file), or a Store: each project's conversations live in its own DB. */
+  constructor(source: DatabaseSync | Store) {
+    this.source = source;
+  }
+  private of(projectId: string) {
+    return this.source instanceof DatabaseSync ? this.source : this.source.db(projectId);
+  }
+  /** The DB of the project a conversation belongs to (conversation ids are unique across projects). */
+  private ofConversation(conversationId: string) {
+    const source = this.source;
+    if (source instanceof DatabaseSync) return source;
+    let db = this.conversationDbs.get(conversationId);
+    if (!db || !source.databases().includes(db)) {
+      db = source.findDb('SELECT 1 FROM conversations WHERE id=?', conversationId);
+      if (!db) return source.app; // No such conversation: reads find nothing, writes fail.
+      this.conversationDbs.set(conversationId, db);
+    }
+    return db;
   }
 
   /** `row` names the conversation (the project's default one has a fixed ID); else a new UUID. */
@@ -131,7 +148,7 @@ export class ConversationStore {
     const input = newConversation.parse(value);
     const now = new Date().toISOString();
     id.parse(row);
-    this.db
+    this.of(projectId)
       .prepare(
         `INSERT INTO conversations(id,projectId,kind,title,provider,model,effort,accountProfileId,mode,
           jigInstanceId,draftId,targets,state,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'open',?,?)`,
@@ -155,7 +172,7 @@ export class ConversationStore {
     return this.get(projectId, row);
   }
   get(projectId: string, conversationId: string): Conversation {
-    const row = this.db
+    const row = this.of(projectId)
       .prepare('SELECT * FROM conversations WHERE projectId=? AND id=?')
       .get(projectId, conversationId) as unknown as ConversationRow | undefined;
     if (!row) throw new DomainError('NOT_FOUND');
@@ -163,30 +180,35 @@ export class ConversationStore {
   }
   list(projectId: string, state?: Conversation['state']): Conversation[] {
     const rows = (state
-      ? this.db
+      ? this.of(projectId)
           .prepare('SELECT * FROM conversations WHERE projectId=? AND state=? ORDER BY createdAt')
           .all(projectId, state)
-      : this.db
+      : this.of(projectId)
           .prepare('SELECT * FROM conversations WHERE projectId=? ORDER BY createdAt')
           .all(projectId)) as unknown as ConversationRow[];
     return rows.map(toConversation);
   }
   /** Closed conversations of every project whose `closedAt` is before `at` (transcript retention). */
   closedBefore(at: string): Conversation[] {
-    return (
-      this.db
-        .prepare(
-          "SELECT * FROM conversations WHERE state='closed' AND closedAt<? ORDER BY closedAt",
-        )
-        .all(at) as unknown as ConversationRow[]
-    ).map(toConversation);
+    const dbs = this.source instanceof DatabaseSync ? [this.source] : this.source.databases();
+    return dbs
+      .flatMap(
+        (db) =>
+          db
+            .prepare(
+              "SELECT * FROM conversations WHERE state='closed' AND closedAt<? ORDER BY closedAt",
+            )
+            .all(at) as unknown as ConversationRow[],
+      )
+      .map(toConversation)
+      .sort((a, b) => (a.closedAt ?? '').localeCompare(b.closedAt ?? ''));
   }
   update(projectId: string, conversationId: string, value: ConversationPatch): Conversation {
     const patch = conversationPatch.parse(value);
     this.get(projectId, conversationId);
     const fields = Object.entries(patch).filter(([, v]) => v !== undefined);
     if (fields.length)
-      this.db
+      this.of(projectId)
         .prepare(
           `UPDATE conversations SET ${fields.map(([key]) => key + '=?').join(',')},updatedAt=?
             WHERE projectId=? AND id=?`,
@@ -203,14 +225,14 @@ export class ConversationStore {
   setState(projectId: string, conversationId: string, state: Conversation['state']) {
     this.get(projectId, conversationId);
     const now = new Date().toISOString();
-    this.db
+    this.of(projectId)
       .prepare('UPDATE conversations SET state=?,closedAt=?,updatedAt=? WHERE projectId=? AND id=?')
       .run(state, state === 'closed' ? now : null, now, projectId, conversationId);
     return this.get(projectId, conversationId);
   }
   /** Request IDs of one conversation in submission order; `null` is the project's default one. */
   requestIds(projectId: string, conversationId: string | null): string[] {
-    return this.db
+    return this.of(projectId)
       .prepare(
         'SELECT id FROM workspace_requests WHERE projectId=? AND conversationId IS ? ORDER BY rowid',
       )
@@ -220,7 +242,7 @@ export class ConversationStore {
 
   addSession(value: z.input<typeof newSession>): ProviderSession {
     const input = newSession.parse(value);
-    this.db
+    this.ofConversation(input.conversationId)
       .prepare(
         `INSERT INTO provider_sessions(conversationId,provider,accountProfileId,sessionId,promptMode,
           cliVersion,state) VALUES(?,?,?,?,?,?,'active')`,
@@ -237,7 +259,7 @@ export class ConversationStore {
   }
   session(key: ProviderSessionKey): ProviderSession {
     const k = sessionKey.parse(key);
-    const row = this.db
+    const row = this.ofConversation(k.conversationId)
       .prepare(
         'SELECT * FROM provider_sessions WHERE conversationId=? AND provider=? AND accountProfileId=? AND sessionId=?',
       )
@@ -248,12 +270,12 @@ export class ConversationStore {
   sessions(conversationId: string, state?: SessionState): ProviderSession[] {
     return (
       state
-        ? this.db
+        ? this.ofConversation(conversationId)
             .prepare(
               'SELECT * FROM provider_sessions WHERE conversationId=? AND state=? ORDER BY rowid',
             )
             .all(conversationId, state)
-        : this.db
+        : this.ofConversation(conversationId)
             .prepare('SELECT * FROM provider_sessions WHERE conversationId=? ORDER BY rowid')
             .all(conversationId)
     ).map((row) => ({ ...row }) as unknown as ProviderSession);
@@ -262,7 +284,7 @@ export class ConversationStore {
   recordTurn(key: ProviderSessionKey, inputTokens: number, at = new Date().toISOString()) {
     const k = sessionKey.parse(key);
     this.session(k);
-    this.db
+    this.ofConversation(k.conversationId)
       .prepare(
         `UPDATE provider_sessions SET turns=turns+1,inputTokens=inputTokens+?,lastTurnAt=?
           WHERE conversationId=? AND provider=? AND accountProfileId=? AND sessionId=?`,
@@ -280,7 +302,7 @@ export class ConversationStore {
   setSessionState(key: ProviderSessionKey, state: SessionState) {
     const k = sessionKey.parse(key);
     this.session(k);
-    this.db
+    this.ofConversation(k.conversationId)
       .prepare(
         `UPDATE provider_sessions SET state=?
           WHERE conversationId=? AND provider=? AND accountProfileId=? AND sessionId=?`,
@@ -298,7 +320,7 @@ export class ConversationStore {
   addLedgerItem(conversationId: string, value: z.input<typeof newLedgerItem>): LedgerItem {
     const input = newLedgerItem.parse(value);
     const row = randomUUID();
-    this.db
+    this.ofConversation(conversationId)
       .prepare('INSERT INTO ledger_items VALUES(?,?,?,?,?,?,NULL)')
       .run(
         row,
@@ -311,7 +333,7 @@ export class ConversationStore {
     return this.ledgerItem(conversationId, row);
   }
   ledgerItem(conversationId: string, itemId: string): LedgerItem {
-    const row = this.db
+    const row = this.ofConversation(conversationId)
       .prepare('SELECT * FROM ledger_items WHERE conversationId=? AND id=?')
       .get(conversationId, itemId) as unknown as LedgerRow | undefined;
     if (!row) throw new DomainError('NOT_FOUND');
@@ -323,7 +345,7 @@ export class ConversationStore {
     { current = false, since }: { current?: boolean; since?: string } = {},
   ): LedgerItem[] {
     return (
-      this.db
+      this.ofConversation(conversationId)
         .prepare(
           `SELECT * FROM ledger_items WHERE conversationId=?${current ? ' AND supersededBy IS NULL' : ''}${since ? ' AND createdAt>=?' : ''}
             ORDER BY createdAt, rowid`,
@@ -334,7 +356,7 @@ export class ConversationStore {
   supersede(conversationId: string, itemId: string, by: string) {
     this.ledgerItem(conversationId, itemId);
     this.ledgerItem(conversationId, by);
-    this.db
+    this.ofConversation(conversationId)
       .prepare('UPDATE ledger_items SET supersededBy=? WHERE conversationId=? AND id=?')
       .run(by, conversationId, itemId);
     return this.ledgerItem(conversationId, itemId);

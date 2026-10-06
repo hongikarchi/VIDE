@@ -32,7 +32,7 @@ function setup() {
   const dir = mkdtempSync(join(tmpdir(), 'vide-drafts-'));
   const store = new Store(join(dir, 'vide.sqlite'));
   const project = store.createProject('합성 프로젝트');
-  const drafts = new JigDrafts({ db: store.db, dataDir: dir });
+  const drafts = new JigDrafts({ db: store, dataDir: dir });
   return {
     dir,
     store,
@@ -170,7 +170,7 @@ test('pinning installs a read-only ai-draft package and pins it; discarding remo
     assert.equal(pinned.id, 'project/pin-me');
     assert.equal(pinned.version, '0.2.0');
     assert.equal(pinned.installed, true);
-    const jigs = new JigStore(t.store.db);
+    const jigs = new JigStore(t.store);
     const row = jigs.package('project/pin-me', '0.2.0');
     assert.equal(row.source, 'ai-draft');
     assert.equal(row.signer, null);
@@ -203,7 +203,7 @@ test('[수정하기] copies a pinned jig into a writable draft with the same id 
     const first = t.drafts.create(t.projectId, { name: 'fork me', from: 'blank' });
     const pinned = await t.drafts.pin(t.projectId, first.id);
     assert.equal(pinned.version, '0.1.0');
-    const jigs = new JigStore(t.store.db);
+    const jigs = new JigStore(t.store);
     const installed = jigs.package('project/fork-me', '0.1.0');
     const source = {
       dir: installed.path,

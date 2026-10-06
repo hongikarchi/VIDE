@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { savedReviews } from './browser-support.mjs';
+import { soleDb } from '../fixtures/store.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'vide-react-'));
 let app, browser;
 try {
@@ -116,7 +117,7 @@ try {
       },
     ],
   };
-  app.store.db
+  soleDb(app.store)
     .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
     .run(
       fixtureInput.id,
@@ -258,7 +259,7 @@ try {
     body: 'Restore exact original',
     baseRequestId: null,
   };
-  app.store.db
+  soleDb(app.store)
     .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
     .run(
       failed.id,
@@ -274,7 +275,7 @@ try {
     body: 'Uncertain host action',
     permission: 'candidate',
   };
-  app.store.db
+  soleDb(app.store)
     .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
     .run(
       unknown.id,
@@ -310,7 +311,7 @@ try {
       },
     ],
   };
-  app.store.db
+  soleDb(app.store)
     .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
     .run(
       attached.id,
@@ -375,7 +376,7 @@ try {
       { id: 'object-1', name: 'Fixture box', kind: 'box', origin: [0, 0, 0], size: [2, 3, 4] },
     ],
   };
-  app.store.db
+  soleDb(app.store)
     .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
     .run(
       applicable.id,
@@ -512,7 +513,9 @@ try {
   await savedReview.getByRole('status').filter({ hasText: '의견을 저장했습니다.' }).waitFor();
   assert.deepEqual(notesSent[0], notesSent[1]);
   assert.equal(
-    app.store.db.prepare('SELECT count(*) AS n FROM review_notes WHERE projectId=?').get(second).n,
+    soleDb(app.store)
+      .prepare('SELECT count(*) AS n FROM review_notes WHERE projectId=?')
+      .get(second).n,
     1,
   );
   await savedReview.getByRole('button', { name: '요청 초안에 첨부', exact: true }).click();
@@ -539,7 +542,7 @@ try {
     objects: [{ ...applicableResult.objects[0], size: [2, 3, 5] }],
     scene: [{ ...applicableResult.scene[0], volume: 30 }],
   };
-  app.store.db
+  soleDb(app.store)
     .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
     .run(
       nextInput.id,
@@ -549,7 +552,7 @@ try {
       JSON.stringify(nextResult),
       new Date().toISOString(),
     );
-  const firstReview = app.store.db
+  const firstReview = soleDb(app.store)
     .prepare('SELECT * FROM review_snapshots WHERE projectId=?')
     .get(second);
   const snapshot = JSON.parse(firstReview.payload);

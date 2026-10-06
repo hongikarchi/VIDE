@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import type { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
-import { DomainError } from './store.ts';
+import { DomainError, type Store } from './store.ts';
 
 // Project link files (SPEC-01.11): the documents a user linked to a project from a host plugin.
 // A link survives the host window closing; its display comes from the latest Sync of that link.
@@ -161,19 +161,23 @@ export function matchOpenDocuments<D extends OpenDocument>(rows: DocumentLink[],
 }
 
 export class DocumentLinks {
-  private readonly db: DatabaseSync;
-  constructor(db: DatabaseSync) {
-    this.db = db;
+  private readonly source: DatabaseSync | Store;
+  /** One DB (tests, a single file), or a Store: each project's links live in its own DB. */
+  constructor(source: DatabaseSync | Store) {
+    this.source = source;
+  }
+  private of(projectId: string) {
+    return this.source instanceof DatabaseSync ? this.source : this.source.db(projectId);
   }
   list(projectId: string): DocumentLink[] {
     return (
-      this.db
+      this.of(projectId)
         .prepare('SELECT * FROM document_links WHERE projectId=? ORDER BY linkedAt')
         .all(projectId) as unknown as Row[]
     ).map(toLink);
   }
   get(projectId: string, id: string): DocumentLink {
-    const row = this.db
+    const row = this.of(projectId)
       .prepare('SELECT * FROM document_links WHERE projectId=? AND id=?')
       .get(projectId, id) as unknown as Row | undefined;
     if (!row) throw new DomainError('NOT_FOUND');
@@ -299,7 +303,7 @@ export class DocumentLinks {
       // Another row of this window stays with its file: it no longer reads as this window's.
       if (existing.instance !== input.instance || existing.documentId !== input.documentId)
         this.detachWindow(projectId, input.host, input.instance, input.documentId, existing.id);
-      this.db
+      this.of(projectId)
         .prepare(
           'UPDATE document_links SET name=?, path=?, instance=?, documentId=?, hidden=0, updatedAt=? WHERE id=?',
         )
@@ -309,7 +313,7 @@ export class DocumentLinks {
     if (input.replace === 'new')
       this.detachWindow(projectId, input.host, input.instance, input.documentId);
     const id = randomUUID();
-    this.db
+    this.of(projectId)
       .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
       .run(id, projectId, input.host, input.name, path, input.instance, input.documentId, now, now);
     return this.get(projectId, id);
@@ -334,7 +338,7 @@ export class DocumentLinks {
         row.instance === instance &&
         row.documentId === documentId
       )
-        this.db
+        this.of(projectId)
           .prepare('UPDATE document_links SET instance=? WHERE projectId=? AND id=?')
           .run(closedInstance(), projectId, row.id);
   }
@@ -407,7 +411,7 @@ export class DocumentLinks {
     }
     const now = Date.now();
     const at = new Date(sibling ? Math.max(now, Date.parse(sibling) + 1) : now).toISOString();
-    this.db
+    this.of(projectId)
       .prepare(
         'UPDATE document_links SET name=?, path=?, instance=?, documentId=?, updatedAt=? WHERE projectId=? AND id=?',
       )
@@ -426,7 +430,7 @@ export class DocumentLinks {
     const { previous } = notice;
     const now = new Date().toISOString();
     const created = randomUUID();
-    this.db
+    this.of(projectId)
       .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,?,?,?)')
       .run(
         created,
@@ -442,7 +446,7 @@ export class DocumentLinks {
       );
     const sameWindow =
       previous.instance === link.instance && previous.documentId === link.documentId;
-    this.db
+    this.of(projectId)
       .prepare(
         'UPDATE document_links SET name=?, path=?, instance=?, documentId=? WHERE projectId=? AND id=?',
       )
@@ -469,24 +473,24 @@ export class DocumentLinks {
     const target = this.get(projectId, into);
     if (from === into || isFileLink(source) || isFileLink(target) || source.host !== target.host)
       throw new DomainError('INVALID_INPUT');
-    this.db.exec('BEGIN IMMEDIATE');
+    this.of(projectId).exec('BEGIN IMMEDIATE');
     try {
       const movedIds = (
-        this.db
+        this.of(projectId)
           .prepare(
             "SELECT id FROM workspace_requests WHERE projectId=? AND json_extract(input, '$.linkId')=?",
           )
           .all(projectId, from) as { id: string }[]
       ).map((row) => row.id);
-      const moved = this.db
+      const moved = this.of(projectId)
         .prepare(
           "UPDATE workspace_requests SET input=json_set(input, '$.linkId', ?) WHERE projectId=? AND json_extract(input, '$.linkId')=?",
         )
         .run(into, projectId, from).changes;
       for (const table of ['jig_reads', 'jig_bakes'])
-        this.db.prepare(`UPDATE ${table} SET linkId=? WHERE linkId=?`).run(into, from);
+        this.of(projectId).prepare(`UPDATE ${table} SET linkId=? WHERE linkId=?`).run(into, from);
       // A conversation that names `from` as a target file names `into` instead (once).
-      const named = this.db
+      const named = this.of(projectId)
         .prepare(
           'SELECT id, targets FROM conversations WHERE projectId=? AND targets IS NOT NULL AND EXISTS (SELECT 1 FROM json_each(conversations.targets) WHERE value=?)',
         )
@@ -495,24 +499,26 @@ export class DocumentLinks {
         const targets = [
           ...new Set((JSON.parse(row.targets) as string[]).map((t) => (t === from ? into : t))),
         ];
-        this.db
+        this.of(projectId)
           .prepare('UPDATE conversations SET targets=? WHERE id=?')
           .run(JSON.stringify(targets), row.id);
       }
-      this.db.prepare('DELETE FROM document_links WHERE projectId=? AND id=?').run(projectId, from);
+      this.of(projectId)
+        .prepare('DELETE FROM document_links WHERE projectId=? AND id=?')
+        .run(projectId, from);
       forget?.(movedIds);
-      this.db.exec('COMMIT');
+      this.of(projectId).exec('COMMIT');
       this.notices.delete(from);
       return { link: this.get(projectId, into), moved: Number(moved) };
     } catch (error) {
-      this.db.exec('ROLLBACK');
+      this.of(projectId).exec('ROLLBACK');
       throw error;
     }
   }
   /** Showing or hiding is no match: it leaves updatedAt, which decides the live row (T-095). */
   setHidden(projectId: string, id: string, hidden: boolean) {
     this.get(projectId, id);
-    this.db
+    this.of(projectId)
       .prepare('UPDATE document_links SET hidden=? WHERE projectId=? AND id=?')
       .run(hidden ? 1 : 0, projectId, id);
     return this.get(projectId, id);
@@ -523,7 +529,7 @@ export class DocumentLinks {
    */
   fileLink(projectId: string, host: 'rhino' | 'zwcad', name: string, hidden = false) {
     const instance = fileInstance(name);
-    const existing = this.db
+    const existing = this.of(projectId)
       .prepare('SELECT id FROM document_links WHERE projectId=? AND host=? AND instance=?')
       .get(projectId, host, instance) as { id: string } | undefined;
     if (existing) return this.get(projectId, existing.id);
@@ -533,7 +539,9 @@ export class DocumentLinks {
   /** Removes the file from the project's list; its Sync records and results are kept. */
   remove(projectId: string, id: string) {
     this.get(projectId, id);
-    this.db.prepare('DELETE FROM document_links WHERE projectId=? AND id=?').run(projectId, id);
+    this.of(projectId)
+      .prepare('DELETE FROM document_links WHERE projectId=? AND id=?')
+      .run(projectId, id);
     this.notices.delete(id);
   }
 }

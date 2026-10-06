@@ -91,7 +91,8 @@ export class OfflineView {
   }
   /** The file's last Sync and its list revision (a Live Sync updates a Sync in place). */
   private lastSync(projectId: string, linkId: string) {
-    const row = this.options.store.db
+    const row = this.options.store
+      .db(projectId)
       .prepare(
         `SELECT w.id, m.revision FROM workspace_requests w
          LEFT JOIN sync_manifests m ON m.requestId=w.id

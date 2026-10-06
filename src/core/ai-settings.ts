@@ -16,7 +16,7 @@ export class AiSettings {
     this.checkFile = checkFile;
   }
   get(): AiConfiguration {
-    const row = this.store.db.prepare('SELECT revision,paths FROM ai_settings WHERE id=1').get();
+    const row = this.store.app.prepare('SELECT revision,paths FROM ai_settings WHERE id=1').get();
     if (!row) return { revision: 0, paths: { 'claude-cli': null, 'codex-cli': null } };
     try {
       if (typeof row.paths !== 'string') throw new Error('Invalid stored paths');
@@ -51,7 +51,7 @@ export class AiSettings {
       }
       paths[provider] = path;
     }
-    this.store.db
+    this.store.app
       .prepare(
         'INSERT INTO ai_settings VALUES(1,?,?) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,paths=excluded.paths',
       )

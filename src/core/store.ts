@@ -2,8 +2,8 @@ import { migrateDatabase } from './migrations.ts';
 import { z } from 'zod';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { mkdirSync, rmSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { checkDatabase } from './database-check.ts';
 
 import { DomainError } from '../contracts/errors.ts';
@@ -114,17 +114,74 @@ function decodeRun(row: unknown) {
   return { ...value, targets: z.array(z.string()).parse(JSON.parse(value.targets)) };
 }
 
-/** Single local controller. Every network caller must authenticate before reaching this layer. */
+/** Where a Store keeps its data (ADR-032, ARCH-01 §5). */
+export type StoreLocation =
+  /**
+   * `':memory:'`: the split layout in memory (one in-memory DB per project). A file path: one DB
+   * for everything (the old `vide.sqlite`, used while it cannot be split).
+   */
+  | string
+  /** The split layout on disk: `<directory>/app.sqlite`, `<directory>/projects/<id>/project.sqlite`. */
+  | { directory: string };
+const safeProjectId = (id: string) => /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(id);
+/** A project's data folder in the split layout (its DB and knowledge DB). */
+export const projectFolder = (directory: string, projectId: string) =>
+  safeProjectId(projectId) ? join(directory, 'projects', projectId) : fail('INVALID_INPUT');
+/**
+ * Request id → project, so a lookup by request id alone opens one project DB (split layout). A
+ * cache of the project DBs, rebuilt at each start; not part of the versioned schema.
+ */
+const REQUEST_INDEX =
+  'CREATE TABLE IF NOT EXISTS request_index(id TEXT PRIMARY KEY, projectId TEXT NOT NULL) WITHOUT ROWID';
+
+function openDatabase(filename: string) {
+  if (filename !== ':memory:') mkdirSync(dirname(filename), { recursive: true });
+  const version = checkDatabase(filename);
+  const db = new DatabaseSync(filename);
+  try {
+    migrateDatabase(db, filename, version);
+    db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
+    db.exec(`
+        UPDATE commands SET state='unknown' WHERE state='running';
+        UPDATE connections SET connected=0;
+        UPDATE commands SET state='cancelled' WHERE state='queued';`);
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
+}
+
+/**
+ * Single local controller. Every network caller must authenticate before reaching this layer.
+ *
+ * Split layout (ADR-032, ARCH-01 §5): `app` holds what belongs to no project (projects, AI
+ * settings, extension registrations, jig packages) and each project's rows live in its own DB,
+ * `db(projectId)`; all are opened at start and kept open. Every DB has the full schema, and a
+ * project DB keeps its own `projects` row so foreign keys and the existing SQL work unchanged.
+ * Checks that span projects (a request id, a command id, an open document connected once, a
+ * feedback identity) look through `databases()` or the request index in `app`. In the single
+ * layout one DB plays every part, exactly as before the split.
+ */
 export class Store {
   closed = false;
-  db!: DatabaseSync;
+  readonly layout: 'single' | 'split';
+  /** The data folder of the split layout on disk (undefined in memory or for a single file). */
+  readonly directory?: string;
+  /** The shared DB (app.sqlite); in the single layout, the one DB. */
+  app!: DatabaseSync;
   controller?: DatabaseSync | null;
-  constructor(filename: string) {
-    this.closed = false;
+  private readonly projectDbs = new Map<string, DatabaseSync>();
+  constructor(location: StoreLocation) {
+    const memory = location === ':memory:';
+    this.layout = typeof location === 'string' && !memory ? 'single' : 'split';
+    this.directory = typeof location === 'string' ? undefined : resolve(location.directory);
     try {
-      if (filename !== ':memory:') {
-        mkdirSync(dirname(filename), { recursive: true });
-        this.controller = new DatabaseSync(filename + '.controller');
+      if (!memory) {
+        // One lock per data folder: the same file in both layouts and for the split and backup tools.
+        const lock = this.directory ? join(this.directory, 'vide.sqlite') : (location as string);
+        mkdirSync(dirname(lock), { recursive: true });
+        this.controller = new DatabaseSync(lock + '.controller');
         try {
           this.controller.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE');
         } catch {
@@ -133,14 +190,14 @@ export class Store {
           fail('CONTROLLER_BUSY');
         }
       }
-      const version = checkDatabase(filename);
-      this.db = new DatabaseSync(filename);
-      migrateDatabase(this.db, filename, version);
-      this.db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
-      this.db.exec(`
-        UPDATE commands SET state='unknown' WHERE state='running';
-        UPDATE connections SET connected=0;
-        UPDATE commands SET state='cancelled' WHERE state='queued';`);
+      this.app = openDatabase(
+        this.directory ? join(this.directory, 'app.sqlite') : (location as string),
+      );
+      if (this.layout === 'split') {
+        this.app.exec(REQUEST_INDEX);
+        for (const project of this.listProjects()) this.openProject(project.id, project.name);
+        this.reindexRequests();
+      }
     } catch (error) {
       this.close();
       throw error;
@@ -150,65 +207,186 @@ export class Store {
     if (this.closed) return;
     this.closed = true;
     try {
-      this.db?.close();
+      for (const db of this.projectDbs.values()) db.close();
+      this.projectDbs.clear();
+      this.app?.close();
     } finally {
       this.controller?.close();
     }
   }
-  tx<T>(fn: () => T): T {
-    this.db.exec('BEGIN IMMEDIATE');
+  /** The DB holding a project's rows. NOT_FOUND for a project this PC does not have. */
+  db(projectId: string): DatabaseSync {
+    if (this.layout === 'single') return this.app;
+    return this.projectDbs.get(projectId) ?? fail('NOT_FOUND');
+  }
+  /** Every DB that holds project rows, in project order (the one DB in the single layout). */
+  databases(): DatabaseSync[] {
+    return this.layout === 'single' ? [this.app] : [...this.projectDbs.values()];
+  }
+  /** The data folder: the split layout's, or the single file's folder (undefined in memory). */
+  dataDirectory(): string | undefined {
+    if (this.directory) return this.directory;
+    const file = this.layout === 'single' ? this.app.location() : null;
+    return file ? dirname(file) : undefined;
+  }
+  /** A project's data folder (split layout on disk only). */
+  folder(projectId: string) {
+    return this.directory && safeProjectId(projectId)
+      ? projectFolder(this.directory, projectId)
+      : undefined;
+  }
+  /** Opens (creating when new) a project's DB and keeps its `projects` row in step with app's. */
+  private openProject(id: string, name: string) {
+    if (this.layout === 'single') return;
+    let db = this.projectDbs.get(id);
+    if (!db) {
+      db = openDatabase(
+        this.directory ? join(projectFolder(this.directory, id), 'project.sqlite') : ':memory:',
+      );
+      this.projectDbs.set(id, db);
+    }
+    const row = db.prepare('SELECT name FROM projects WHERE id=?').get(id);
+    if (!row) db.prepare('INSERT INTO projects VALUES(?,?)').run(id, name);
+    else if (row.name !== name) db.prepare('UPDATE projects SET name=? WHERE id=?').run(name, id);
+  }
+  /** The project a request belongs to, by its id alone: the request index, else every project. */
+  projectOfRequest(requestId: string): string | undefined {
+    const has = (db: DatabaseSync) =>
+      db.prepare('SELECT projectId FROM workspace_requests WHERE id=?').get(requestId);
+    if (this.layout === 'single') {
+      const row = has(this.app);
+      return row ? String(row.projectId) : undefined;
+    }
+    const indexed = this.app
+      .prepare('SELECT projectId FROM request_index WHERE id=?')
+      .get(requestId);
+    const known = indexed && this.projectDbs.get(String(indexed.projectId));
+    if (known && has(known)) return String(indexed.projectId);
+    // Not indexed (a row written straight into a project DB) or stale: look and repair.
+    for (const [projectId, db] of this.projectDbs)
+      if (has(db)) {
+        this.indexRequest(requestId, projectId);
+        return projectId;
+      }
+    if (indexed) this.app.prepare('DELETE FROM request_index WHERE id=?').run(requestId);
+    return undefined;
+  }
+  /** Records a new request's project in the request index (split layout). */
+  indexRequest(requestId: string, projectId: string) {
+    if (this.layout === 'split')
+      this.app
+        .prepare('INSERT OR REPLACE INTO request_index VALUES(?,?)')
+        .run(requestId, projectId);
+  }
+  /** Drops deleted requests from the request index (split layout). */
+  unindexRequests(requestIds: readonly string[]) {
+    if (this.layout !== 'split') return;
+    const drop = this.app.prepare('DELETE FROM request_index WHERE id=?');
+    for (const id of requestIds) drop.run(id);
+  }
+  /** Rebuilds the request index from the project DBs (at each start: it only caches them). */
+  private reindexRequests() {
+    this.tx(this.app, () => {
+      this.app.exec('DELETE FROM request_index');
+      const insert = this.app.prepare('INSERT OR IGNORE INTO request_index VALUES(?,?)');
+      for (const [projectId, db] of this.projectDbs)
+        for (const row of db.prepare('SELECT id FROM workspace_requests').iterate())
+          insert.run(String(row.id), projectId);
+    });
+  }
+  /** The first project DB where `sql` finds a row (checks that span every project). */
+  findDb(sql: string, ...args: (string | number)[]) {
+    for (const db of this.databases()) if (db.prepare(sql).get(...args)) return db;
+    return undefined;
+  }
+  tx<T>(db: DatabaseSync, fn: () => T): T {
+    db.exec('BEGIN IMMEDIATE');
     try {
       const value = fn();
-      this.db.exec('COMMIT');
+      db.exec('COMMIT');
       return value;
     } catch (error) {
-      this.db.exec('ROLLBACK');
+      db.exec('ROLLBACK');
       throw error;
     }
   }
   project(id: string) {
-    const row = this.db.prepare('SELECT * FROM projects WHERE id=?').get(id);
+    const row = this.app.prepare('SELECT * FROM projects WHERE id=?').get(id);
     return row ? projectRow.parse(row) : fail('NOT_FOUND');
   }
   createProject(name: unknown) {
     const row = { id: randomUUID(), name: text(name, 200) };
-    this.db.prepare('INSERT INTO projects VALUES(?,?)').run(row.id, row.name);
+    this.app.prepare('INSERT INTO projects VALUES(?,?)').run(row.id, row.name);
+    this.openProject(row.id, row.name);
     return row;
   }
   renameProject(id: string, name: unknown) {
     this.project(id);
     const row = { id, name: text(name, 200) };
-    this.db.prepare('UPDATE projects SET name=? WHERE id=?').run(row.name, id);
+    this.app.prepare('UPDATE projects SET name=? WHERE id=?').run(row.name, id);
+    this.openProject(id, row.name);
     return row;
   }
   /** A project listed for this PC on the account site: create it here, or follow its name. */
   ensureProject(id: string, name: string) {
     const row = { id, name: text(name, 200) };
-    const current = this.db.prepare('SELECT name FROM projects WHERE id=?').get(id);
-    if (!current) this.db.prepare('INSERT INTO projects VALUES(?,?)').run(id, row.name);
+    if (this.layout === 'split' && this.directory && !safeProjectId(id)) fail('INVALID_INPUT');
+    const current = this.app.prepare('SELECT name FROM projects WHERE id=?').get(id);
+    if (!current) this.app.prepare('INSERT INTO projects VALUES(?,?)').run(id, row.name);
     else if (current.name !== row.name)
-      this.db.prepare('UPDATE projects SET name=? WHERE id=?').run(row.name, id);
+      this.app.prepare('UPDATE projects SET name=? WHERE id=?').run(row.name, id);
+    this.openProject(id, row.name);
     return !current || current.name !== row.name;
   }
   /** Last request time per project (ms), for recent-first listing on the account site. */
   projectActivity() {
     const activity: Record<string, number> = {};
-    for (const row of this.db
-      .prepare('SELECT projectId, MAX(createdAt) AS at FROM workspace_requests GROUP BY projectId')
-      .all()) {
-      const at = Date.parse(String(row.at));
-      if (Number.isFinite(at)) activity[String(row.projectId)] = at;
-    }
+    for (const db of this.databases())
+      for (const row of db
+        .prepare(
+          'SELECT projectId, MAX(createdAt) AS at FROM workspace_requests GROUP BY projectId',
+        )
+        .all()) {
+        const at = Date.parse(String(row.at));
+        if (Number.isFinite(at)) activity[String(row.projectId)] = at;
+      }
     return activity;
   }
   /**
-   * Delete a project and every row it owns, children first (foreign keys are on). Files are the
-   * caller's (see server/project-removal.ts). Refuses while one of its requests is still running.
+   * Delete a project and every row it owns. Split layout: its DB is closed and its data folder
+   * removed (ADR-032). Single layout: its rows, children first (foreign keys are on). Other files
+   * are the caller's (see server/project-removal.ts). Refuses while one of its requests runs.
    */
   deleteProject(id: string) {
     this.project(id);
-    return this.tx(() => {
-      const busy = this.db
+    if (this.layout === 'split') {
+      const db = this.db(id);
+      if (
+        db
+          .prepare(
+            "SELECT 1 FROM workspace_requests WHERE projectId=? AND state IN ('queued','running') LIMIT 1",
+          )
+          .get(id)
+      )
+        fail('PROJECT_BUSY');
+      this.tx(this.app, () => {
+        this.app.prepare('DELETE FROM request_index WHERE projectId=?').run(id);
+        this.app.prepare('DELETE FROM projects WHERE id=?').run(id);
+      });
+      this.projectDbs.delete(id);
+      db.close();
+      const folder = this.folder(id);
+      // A file still open elsewhere (an AI's read) may refuse; the project is gone either way.
+      if (folder)
+        try {
+          rmSync(folder, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+        } catch {
+          /* Left behind: an unknown project folder is never opened again. */
+        }
+      return { id };
+    }
+    return this.tx(this.app, () => {
+      const busy = this.app
         .prepare(
           "SELECT 1 FROM workspace_requests WHERE projectId=? AND state IN ('queued','running') LIMIT 1",
         )
@@ -249,39 +427,57 @@ export class Store {
         'DELETE FROM connections WHERE projectId=?',
         'DELETE FROM projects WHERE id=?',
       ])
-        this.db.prepare(sql).run(id);
+        this.app.prepare(sql).run(id);
       return { id };
     });
   }
   /**
    * Gives the space of deleted rows back to the disk (VACUUM) once free pages are a large share of
-   * the file: deleting rows alone leaves the file as big as before. False when skipped or busy.
+   * a file: deleting rows alone leaves the file as big as before. Each DB is weighed on its own.
+   * False when every one was skipped or busy.
    */
   compact({ minShare = 0.25, minPages = 1024 } = {}) {
-    const pragma = (name: string) =>
-      Number(Object.values(this.db.prepare(`PRAGMA ${name}`).get() ?? {})[0] ?? 0);
-    const pages = pragma('page_count'),
-      free = pragma('freelist_count');
-    if (free < minPages || free < pages * minShare) return false;
-    try {
-      this.db.exec('VACUUM');
-      return true;
-    } catch {
-      // Another reader or an open transaction: the next deletion tries again.
-      return false;
+    let done = false;
+    for (const db of new Set([this.app, ...this.databases()])) {
+      const pragma = (name: string) =>
+        Number(Object.values(db.prepare(`PRAGMA ${name}`).get() ?? {})[0] ?? 0);
+      const pages = pragma('page_count'),
+        free = pragma('freelist_count');
+      if (free < minPages || free < pages * minShare) continue;
+      try {
+        db.exec('VACUUM');
+        done = true;
+      } catch {
+        // Another reader or an open transaction: the next deletion tries again.
+      }
     }
+    return done;
   }
   listProjects() {
-    return this.db
+    return this.app
       .prepare('SELECT * FROM projects ORDER BY rowid')
       .all()
       .map((row) => projectRow.parse(row));
   }
   connection(projectId: string, id: string) {
-    const row = this.db
+    const row = this.db(projectId)
       .prepare('SELECT * FROM connections WHERE id=? AND projectId=?')
       .get(id, projectId);
     return row ? connectionRow.parse(row) : fail('TARGET_MISMATCH');
+  }
+  /** The connected row of one open host document, in whichever project holds it. */
+  connectedDocument(host: string, instanceId: string, documentId: string) {
+    const sql =
+      'SELECT * FROM connections WHERE host=? AND instanceId=? AND documentId=? AND connected=1';
+    for (const db of this.databases()) {
+      const row = db.prepare(sql).get(host, instanceId, documentId);
+      if (row) return connectionRow.parse(row);
+    }
+    return undefined;
+  }
+  /** The DB holding a host connection row (connection ids are unique across projects). */
+  private connectionDb(connectionId: string) {
+    return this.findDb('SELECT 1 FROM connections WHERE id=?', connectionId);
   }
   registerConnection(
     projectId: string,
@@ -297,28 +493,32 @@ export class Store {
       documentId: text(source.documentId, 200),
       connected: 1,
     };
-    return this.tx(() => {
-      const duplicate = this.db
-        .prepare(
-          `SELECT id FROM connections WHERE host=? AND instanceId=? AND documentId=? AND connected=1`,
-        )
-        .get(row.host, row.instanceId, row.documentId);
-      if (duplicate) fail('DOCUMENT_ALREADY_CONNECTED');
-      this.db
-        .prepare('INSERT INTO connections VALUES(?,?,?,?,?,1)')
-        .run(row.id, projectId, row.host, row.instanceId, row.documentId);
+    const db = this.db(projectId);
+    return this.tx(db, () => {
+      // One open document is connected to one project at a time, across every project DB.
+      if (this.connectedDocument(row.host, row.instanceId, row.documentId))
+        fail('DOCUMENT_ALREADY_CONNECTED');
+      db.prepare('INSERT INTO connections VALUES(?,?,?,?,?,1)').run(
+        row.id,
+        projectId,
+        row.host,
+        row.instanceId,
+        row.documentId,
+      );
       return row;
     });
   }
   disconnect(connectionId: string) {
-    this.tx(() => {
-      this.db.prepare('UPDATE connections SET connected=0 WHERE id=?').run(connectionId);
-      this.db
-        .prepare("UPDATE commands SET state='unknown' WHERE connectionId=? AND state='running'")
-        .run(connectionId);
-      this.db
-        .prepare("UPDATE commands SET state='cancelled' WHERE connectionId=? AND state='queued'")
-        .run(connectionId);
+    const db = this.connectionDb(connectionId);
+    if (!db) return;
+    this.tx(db, () => {
+      db.prepare('UPDATE connections SET connected=0 WHERE id=?').run(connectionId);
+      db.prepare(
+        "UPDATE commands SET state='unknown' WHERE connectionId=? AND state='running'",
+      ).run(connectionId);
+      db.prepare(
+        "UPDATE commands SET state='cancelled' WHERE connectionId=? AND state='queued'",
+      ).run(connectionId);
     });
   }
   validateInput(projectId: string, body: unknown) {
@@ -335,11 +535,11 @@ export class Store {
   saveInput(projectId: string, body: unknown) {
     this.validateInput(projectId, body);
     const id = randomUUID();
-    this.db.prepare('INSERT INTO inputs VALUES(?,?,1,?)').run(id, projectId, json(body));
+    this.db(projectId).prepare('INSERT INTO inputs VALUES(?,?,1,?)').run(id, projectId, json(body));
     return this.getInput(projectId, id);
   }
   getInput(projectId: string, id: string) {
-    const row = this.db
+    const row = this.db(projectId)
       .prepare('SELECT * FROM inputs WHERE id=? AND projectId=?')
       .get(id, projectId);
     if (!row) fail('NOT_FOUND');
@@ -347,18 +547,21 @@ export class Store {
   }
   listInputs(projectId: string) {
     this.project(projectId);
-    return this.db
+    return this.db(projectId)
       .prepare('SELECT * FROM inputs WHERE projectId=? ORDER BY rowid DESC')
       .all(projectId)
       .map(decodeInput);
   }
   updateInput(projectId: string, id: string, revision: number, body: unknown) {
     this.validateInput(projectId, body);
-    return this.tx(() => {
+    const db = this.db(projectId);
+    return this.tx(db, () => {
       if (this.getInput(projectId, id).revision !== revision) fail('REVISION_CONFLICT');
-      this.db
-        .prepare('UPDATE inputs SET revision=revision+1,body=? WHERE id=? AND projectId=?')
-        .run(json(body), id, projectId);
+      db.prepare('UPDATE inputs SET revision=revision+1,body=? WHERE id=? AND projectId=?').run(
+        json(body),
+        id,
+        projectId,
+      );
       return this.getInput(projectId, id);
     });
   }
@@ -371,24 +574,31 @@ export class Store {
       if (!this.connection(projectId, id).connected) fail('DISCONNECTED');
     }
     const id = randomUUID();
-    this.db.prepare('INSERT INTO runs VALUES(?,?,1,?,?)').run(id, projectId, goal, json(targets));
+    this.db(projectId)
+      .prepare('INSERT INTO runs VALUES(?,?,1,?,?)')
+      .run(id, projectId, goal, json(targets));
     return this.getRun(projectId, id);
   }
   getRun(projectId: string, id: string) {
-    const row = this.db.prepare('SELECT * FROM runs WHERE projectId=? AND id=?').get(projectId, id);
+    const row = this.db(projectId)
+      .prepare('SELECT * FROM runs WHERE projectId=? AND id=?')
+      .get(projectId, id);
     if (!row) fail('NOT_FOUND');
     return decodeRun(row);
   }
   reviseRun(projectId: string, id: string, revision: number, goal: string) {
     text(goal);
-    return this.tx(() => {
+    const db = this.db(projectId);
+    return this.tx(db, () => {
       if (this.getRun(projectId, id).revision !== revision) fail('REVISION_CONFLICT');
-      this.db
-        .prepare('UPDATE runs SET revision=revision+1,goal=? WHERE id=? AND projectId=?')
-        .run(goal, id, projectId);
-      this.db
-        .prepare("UPDATE commands SET state='cancelled',stale=1 WHERE runId=? AND state='queued'")
-        .run(id);
+      db.prepare('UPDATE runs SET revision=revision+1,goal=? WHERE id=? AND projectId=?').run(
+        goal,
+        id,
+        projectId,
+      );
+      db.prepare(
+        "UPDATE commands SET state='cancelled',stale=1 WHERE runId=? AND state='queued'",
+      ).run(id);
       return this.getRun(projectId, id);
     });
   }
@@ -404,33 +614,40 @@ export class Store {
     if (authority !== 'local-controller') fail('FORBIDDEN');
     const command = request(raw);
     this.validateTarget(projectId, command);
-    this.db
+    this.db(projectId)
       .prepare(
         'INSERT INTO approvals VALUES(?,?,?) ON CONFLICT(commandId) DO UPDATE SET hash=excluded.hash WHERE approvals.projectId=excluded.projectId',
       )
       .run(command.id, projectId, digest(command));
   }
   hasUncertainWrite(connectionId: string) {
-    // A fresh transport connection is not evidence that an earlier native write failed.
-    return Boolean(
-      this.db
-        .prepare(
-          `SELECT 1 FROM commands command
+    // A fresh transport connection is not evidence that an earlier native write failed. The same
+    // host document may have been connected from another project: every project DB is asked.
+    const db = this.connectionDb(connectionId);
+    const current = db?.prepare('SELECT * FROM connections WHERE id=?').get(connectionId);
+    if (!current) return false;
+    return this.databases().some((other) =>
+      Boolean(
+        other
+          .prepare(
+            `SELECT 1 FROM commands command
       JOIN connections previous ON command.connectionId=previous.id
-      JOIN connections current ON current.id=?
       WHERE command.state='unknown' AND command.kind!='sync'
-      AND previous.host=current.host AND previous.instanceId=current.instanceId
-      AND previous.documentId=current.documentId`,
-        )
-        .get(connectionId),
+      AND previous.host=? AND previous.instanceId=? AND previous.documentId=?`,
+          )
+          .get(String(current.host), String(current.instanceId), String(current.documentId)),
+      ),
     );
   }
   enqueue(projectId: string, raw: unknown) {
     const command = request(raw),
       hash = digest(command);
-    return this.tx(() => {
-      this.project(projectId);
-      const existing = this.db.prepare('SELECT * FROM commands WHERE id=?').get(command.id);
+    this.project(projectId);
+    const db = this.db(projectId);
+    return this.tx(db, () => {
+      // Command ids are unique across every project.
+      const owner = this.findDb('SELECT 1 FROM commands WHERE id=?', command.id);
+      const existing = owner?.prepare('SELECT * FROM commands WHERE id=?').get(command.id);
       if (existing) {
         if (existing.projectId !== projectId || existing.hash !== hash)
           fail('IDEMPOTENCY_CONFLICT');
@@ -440,57 +657,57 @@ export class Store {
       if (isWrite(command.kind) && this.hasUncertainWrite(command.connectionId))
         fail('WRITE_UNCERTAIN');
       if (command.kind === 'applyCandidate') {
-        const approval = this.db
+        const approval = db
           .prepare('SELECT hash FROM approvals WHERE commandId=? AND projectId=?')
           .get(command.id, projectId);
         if (approval?.hash !== hash) fail('APPROVAL_REQUIRED');
       }
-      this.db
-        .prepare(
-          `INSERT INTO commands(id,projectId,runId,connectionId,revision,kind,payload,hash,state)
+      db.prepare(
+        `INSERT INTO commands(id,projectId,runId,connectionId,revision,kind,payload,hash,state)
         VALUES(?,?,?,?,?,?,?,?,'queued')`,
-        )
-        .run(
-          command.id,
-          projectId,
-          command.runId,
-          command.connectionId,
-          command.revision,
-          command.kind,
-          json(command.payload),
-          hash,
-        );
+      ).run(
+        command.id,
+        projectId,
+        command.runId,
+        command.connectionId,
+        command.revision,
+        command.kind,
+        json(command.payload),
+        hash,
+      );
       return this.getCommand(projectId, command.id);
     });
   }
   getCommand(projectId: string, id: string) {
-    const row = this.db
+    const row = this.db(projectId)
       .prepare('SELECT * FROM commands WHERE projectId=? AND id=?')
       .get(projectId, id);
     return decode(row) ?? fail('NOT_FOUND');
   }
   lease(connectionId: string) {
-    return this.tx(() => {
-      const connection = this.db.prepare('SELECT * FROM connections WHERE id=?').get(connectionId);
+    const db = this.connectionDb(connectionId);
+    if (!db) return null;
+    return this.tx(db, () => {
+      const connection = db.prepare('SELECT * FROM connections WHERE id=?').get(connectionId);
       if (!connection?.connected) return null;
       if (
-        this.db
+        db
           .prepare("SELECT 1 FROM commands WHERE connectionId=? AND state='running'")
           .get(connectionId)
       )
         return null;
       const uncertain = this.hasUncertainWrite(connectionId);
-      const rows = this.db
+      const rows = db
         .prepare("SELECT * FROM commands WHERE connectionId=? AND state='queued' ORDER BY rowid")
         .all(connectionId);
       for (const raw of rows) {
         const row = commandRow.parse(raw);
         if (uncertain && isWrite(row.kind)) continue;
         if (this.getRun(row.projectId, row.runId).revision !== row.revision) {
-          this.db.prepare("UPDATE commands SET state='cancelled',stale=1 WHERE id=?").run(row.id);
+          db.prepare("UPDATE commands SET state='cancelled',stale=1 WHERE id=?").run(row.id);
           continue;
         }
-        this.db.prepare("UPDATE commands SET state='running' WHERE id=?").run(row.id);
+        db.prepare("UPDATE commands SET state='running' WHERE id=?").run(row.id);
         return this.getCommand(row.projectId, row.id);
       }
       return null;
@@ -499,8 +716,10 @@ export class Store {
   complete(connectionId: string, commandId: string, outcome: { state: string; result?: unknown }) {
     if (!['succeeded', 'failed', 'unknown'].includes(outcome?.state)) fail('INVALID_RESULT');
     const encoded = json(outcome.result ?? null);
-    return this.tx(() => {
-      const raw = this.db.prepare('SELECT * FROM commands WHERE id=?').get(commandId);
+    const db = this.findDb('SELECT 1 FROM commands WHERE id=?', commandId);
+    if (!db) fail('TARGET_MISMATCH');
+    return this.tx(db, () => {
+      const raw = db.prepare('SELECT * FROM commands WHERE id=?').get(commandId);
       if (!raw) fail('TARGET_MISMATCH');
       const row = commandRow.parse(raw);
       if (row.connectionId !== connectionId) fail('TARGET_MISMATCH');
@@ -509,9 +728,12 @@ export class Store {
         fail('INVALID_TRANSITION');
       }
       const stale = this.getRun(row.projectId, row.runId).revision !== row.revision;
-      this.db
-        .prepare('UPDATE commands SET state=?,result=?,stale=? WHERE id=?')
-        .run(outcome.state, encoded, Number(stale), row.id);
+      db.prepare('UPDATE commands SET state=?,result=?,stale=? WHERE id=?').run(
+        outcome.state,
+        encoded,
+        Number(stale),
+        row.id,
+      );
       return this.getCommand(row.projectId, row.id);
     });
   }

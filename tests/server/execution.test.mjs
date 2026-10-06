@@ -4,6 +4,7 @@ import { Store } from '../../src/core/store.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 import { Execution } from '../../src/server/execution.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 function fixture() {
   const store = new Store(':memory:'),
     workspace = new Workspace(store),
@@ -415,7 +416,7 @@ test('[확인함] closes an unresolved request and keeps its record (T-102)', ()
     workspace.submit(project.id, { ...input, id: 'linked-parent', permission: 'candidate' });
     workspace.update(project.id, 'linked-parent', 'failed', { code: 'HOST_RESULT_UNKNOWN' });
     // Children are stored by the linked executor, not submitted.
-    store.db
+    soleDb(store)
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
       .run(
         'linked-child',

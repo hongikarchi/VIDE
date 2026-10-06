@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
+import { soleDb } from '../fixtures/store.mjs';
 const root = await mkdtemp(join(tmpdir(), 'vide-limits-'));
 let app, browser, actualTimeout;
 try {
@@ -49,7 +50,7 @@ try {
   const deadline = Date.now() + 10000;
   let saved;
   while (Date.now() < deadline) {
-    saved = app.store.db
+    saved = soleDb(app.store)
       .prepare('SELECT * FROM workspace_requests ORDER BY rowid DESC LIMIT 1')
       .get();
     if (saved?.state === 'succeeded') break;

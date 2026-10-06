@@ -8,6 +8,7 @@ import { canonicalJson } from '../../src/core/model-store.ts';
 import { storedForm } from '../../src/core/model-move.ts';
 import { captureInput } from '../../src/server/import-model.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 const target = { instance: '1:2:356ff01d-b586-460c-8e2b-8c9f3c083e96', documentId: 7 };
 const item = (key, x = 0) => ({
   object: { id: key, nativeId: key, kind: 'native', name: key },
@@ -43,7 +44,7 @@ function setup(t) {
     workspace.submit(project.id, captureInput({ id, ...target, linkId }));
     return workspace.update(project.id, id, 'succeeded', value);
   };
-  return { store, db: store.db, workspace, projectId: project.id, sync };
+  return { store, db: soleDb(store), workspace, projectId: project.id, sync };
 }
 const count = (db, table) => db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n;
 const raw = (db, id) =>
@@ -60,7 +61,7 @@ test('a result with a scene is stored per object and read back in the same shape
   assert.equal(stored.objects, undefined);
   assert.equal(stored.sourceDocument.revision, 1);
   assert.equal(count(db, 'sync_manifest_items'), 2);
-  assert.equal(workspace.models.header(projectId, 's1').documentRevision, 1);
+  assert.equal(workspace.models(projectId).header(projectId, 's1').documentRevision, 1);
   // `get` (and update's answer) rebuild objects and scene in their float32 form.
   const expected = storedForm({ objects: written.objects, scene: written.scene });
   for (const work of [saved, workspace.get(projectId, 's1')]) {
@@ -91,8 +92,8 @@ test('a second Sync of the same file follows the first and writes no new version
   const versions = count(db, 'object_versions');
   sync('s2', result(['a', 'b', 'c'], 2), linkId);
   assert.equal(count(db, 'object_versions'), versions);
-  assert.equal(workspace.models.header(projectId, 's2').parentId, 's1');
-  assert.equal(workspace.models.header(projectId, 's2').documentRevision, 2);
+  assert.equal(workspace.models(projectId).header(projectId, 's2').parentId, 's1');
+  assert.equal(workspace.models(projectId).header(projectId, 's2').documentRevision, 2);
 });
 
 test('the list cache sees an in-place change of the manifest even at the same result size', (t) => {

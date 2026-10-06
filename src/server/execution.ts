@@ -29,6 +29,7 @@ import {
 } from './agent-tools.ts';
 import {
   WorkFolderGate,
+  ownProjectData,
   turnGrants,
   type FileContext,
   type PermissionAction,
@@ -511,6 +512,10 @@ export class Execution {
         dirs: [...scope.write.slice(1), ...scope.read],
         attachments,
         ...(readOnly ? { readOnly: true } : {}),
+        // The project's own records, read without a question (ADR-031 6, ADR-032).
+        ...(ownProjectData(projectId, this.fileContext)
+          ? { records: ownProjectData(projectId, this.fileContext) }
+          : {}),
       },
       permission: (request: Parameters<WorkFolderGate['decide']>[0], signal: AbortSignal) =>
         gate.decide(request, signal),
@@ -1745,20 +1750,28 @@ export class Execution {
    * same), with its lazy view and the document revision it shows (T-123 `query`).
    */
   private storedDisplay(target: { instance: string; documentId: number }) {
-    const row = this.workspace.store.db
-      // Only requests stored per object are looked at (one manifest per Sync, newest first):
-      // CROSS JOIN keeps sync_manifests the outer loop.
-      .prepare(
-        `SELECT w.id, w.projectId, json_extract(w.result,'$.sourceDocument') AS source
+    // Each project DB gives its newest; the newest of those (by creation time) is the one.
+    const [row] = this.workspace.store
+      .databases()
+      .map(
+        (db) =>
+          db
+            // Only requests stored per object are looked at (one manifest per Sync, newest first):
+            // CROSS JOIN keeps sync_manifests the outer loop.
+            .prepare(
+              `SELECT w.id, w.projectId, w.createdAt, json_extract(w.result,'$.sourceDocument') AS source
           FROM sync_manifests m CROSS JOIN workspace_requests w ON w.id=m.requestId
           WHERE w.state='succeeded' AND json_extract(w.result,'$.displayOnly')=1
             AND json_extract(w.result,'$.sourceDocument.instance')=?
             AND json_extract(w.result,'$.sourceDocument.documentId')=?
           ORDER BY w.rowid DESC LIMIT 1`,
+            )
+            .get(target.instance, target.documentId) as
+            | { id: string; projectId: string; createdAt: string; source: string }
+            | undefined,
       )
-      .get(target.instance, target.documentId) as
-      | { id: string; projectId: string; source: string }
-      | undefined;
+      .filter((found) => found !== undefined)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     if (!row) return undefined;
     const sourceDocument = JSON.parse(row.source) as Record<string, unknown>;
     const view = this.workspace.model(row.projectId, row.id);
@@ -1905,7 +1918,7 @@ export class Execution {
     prefer?: { host: string; instance: string; documentId: number },
   ): Promise<LiveLink[]> {
     if (this.injectedLinks) return this.injectedLinks(projectId);
-    const documentLinks = new DocumentLinks(this.workspace.store.db);
+    const documentLinks = new DocumentLinks(this.workspace.store);
     const links = documentLinks.list(projectId);
     const hosts = new Set(links.filter((link) => !isFileLink(link)).map((link) => link.host));
     const [rhino, zwcad] = await Promise.all([

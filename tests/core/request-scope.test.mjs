@@ -9,11 +9,12 @@ import {
   unresolvedFor,
 } from '../../src/contracts/request-scope.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 const instance = '1:2:356ff01d-b586-460c-8e2b-8c9f3c083e96';
 
 function fixture(t) {
   const store = new Store(':memory:');
-  t.after(() => store.db.close());
+  t.after(() => store.close());
   const workspace = new Workspace(store),
     project = store.createProject('scope');
   const submit = (id, fields = {}) =>

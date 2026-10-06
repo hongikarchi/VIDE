@@ -6,6 +6,7 @@ import { startServer } from '../../src/server/server.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { runDirectory } from './run-directory.mjs';
 
+import { soleDb } from '../fixtures/store.mjs';
 const fixture = JSON.parse(await readFile(process.argv[2], 'utf8'));
 assert.equal(fixture.passed, true);
 const directory = runDirectory('browser-large-native');
@@ -63,7 +64,7 @@ try {
       await page.locator('#objects .object').last().getAttribute('aria-pressed'),
       'true',
     );
-    const row = app.store.db
+    const row = soleDb(app.store)
       .prepare('SELECT state,result FROM workspace_requests ORDER BY rowid DESC LIMIT 1')
       .get();
     assert.equal(row.state, 'succeeded');

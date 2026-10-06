@@ -1,4 +1,5 @@
-import type { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
+import type { Store } from './store.ts';
 
 /**
  * A project's folders on this PC (SPEC-01.13, ARCH-01 §3 「프로젝트 폴더와 파일 읽기 도구」, schema
@@ -13,13 +14,17 @@ export interface ProjectFolder {
 }
 
 export class ProjectFolders {
-  private readonly db: DatabaseSync;
-  constructor(db: DatabaseSync) {
-    this.db = db;
+  private readonly source: DatabaseSync | Store;
+  /** One DB (tests, a single file), or a Store: each project's rows live in its own DB. */
+  constructor(source: DatabaseSync | Store) {
+    this.source = source;
+  }
+  private of(projectId: string) {
+    return this.source instanceof DatabaseSync ? this.source : this.source.db(projectId);
   }
   /** Project folders first, then read folders; each in the order they were added. */
   list(projectId: string): ProjectFolder[] {
-    return this.db
+    return this.of(projectId)
       .prepare(
         `SELECT path, kind, addedAt FROM project_folders WHERE projectId=?
           ORDER BY kind='read', addedAt, path`,
@@ -33,7 +38,7 @@ export class ProjectFolders {
   }
   /** A `project` row replaces a `read` row of the same path; a `read` row never demotes one. */
   add(projectId: string, path: string, kind: FolderKind) {
-    this.db
+    this.of(projectId)
       .prepare(
         `INSERT INTO project_folders VALUES(?,?,?,?) ON CONFLICT(projectId, path)
           DO UPDATE SET kind='project' WHERE excluded.kind='project'`,
@@ -42,7 +47,7 @@ export class ProjectFolders {
     return this.list(projectId);
   }
   remove(projectId: string, path: string) {
-    this.db
+    this.of(projectId)
       .prepare('DELETE FROM project_folders WHERE projectId=? AND path=?')
       .run(projectId, path);
     return this.list(projectId);

@@ -8,6 +8,7 @@ import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 import { runDirectory } from './run-directory.mjs';
+import { soleDb } from '../fixtures/store.mjs';
 // The links list, with or without a page's draft lease (`?page=&hold=`, T-084).
 const linksUrl = /\/api\/v1\/projects\/[^/]+\/links(\?.*)?$/;
 
@@ -95,7 +96,7 @@ try {
   // The Rhino document is linked to the project; its first Sync needs no click.
   const projectId = await page.locator('#project-picker').inputValue();
   const now = new Date().toISOString();
-  app.store.db
+  soleDb(app.store)
     .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
     .run('link-a', projectId, 'rhino', 'Attached test', null, instance, 7, now, now);
   await page.route(linksUrl, async (route) => {

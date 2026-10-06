@@ -11,6 +11,7 @@ import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { installBrowserSupport } from './browser-support.mjs';
 import { runDirectory } from './run-directory.mjs';
 
+import { soleDb } from '../fixtures/store.mjs';
 const directory = runDirectory('native-concurrent-work');
 const config = sdkOptions(directory);
 const cancelRhino = process.argv.includes('--cancel-rhino');
@@ -109,7 +110,7 @@ try {
   assert.equal(targets.size, 2, 'Both actual hosts must be available before either may finish');
   const rows = () =>
     requests.map(({ id }) =>
-      app.store.db.prepare('SELECT * FROM workspace_requests WHERE id=?').get(id),
+      soleDb(app.store).prepare('SELECT * FROM workspace_requests WHERE id=?').get(id),
     );
   assert.deepEqual(
     rows().map((row) => row.state),

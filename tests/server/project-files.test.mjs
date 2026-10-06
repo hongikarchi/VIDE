@@ -55,7 +55,7 @@ function db(t) {
   const store = new Store(':memory:');
   t.after(() => store.close());
   store.ensureProject('p1', '합성');
-  return new ProjectFolders(store.db);
+  return new ProjectFolders(store);
 }
 
 test('a project folder is an existing folder that is not a drive root, VIDE data or a key folder', async (t) => {

@@ -18,6 +18,7 @@ import {
 } from '../../extensions/jigs/s06-frame/fixtures/cases.ts';
 import { HOME, LAYERS, buildCase } from '../../extensions/jigs/s06-frame/fixtures/synthetic.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 const shot = process.env.VIDE_SHOT_DIR;
 const directory = await mkdtemp(join(tmpdir(), 'vide-s06-jig-'));
 let app, browser;
@@ -60,25 +61,27 @@ try {
       .filter(([, home]) => home === document)
       .map(([role]) => LAYERS[role]);
   const insert = (id, result, layers, createdAt) =>
-    app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-      id,
-      projectId,
-      JSON.stringify({
+    soleDb(app.store)
+      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+      .run(
         id,
-        body: 'rhino sync',
-        pins: [],
-        sketches: [],
-        files: [],
-        provider: 'codex-cli',
-        model: 'codex-cli',
-        effort: 'default',
-        permission: 'review',
-        host: 'rhino',
-      }),
-      'succeeded',
-      JSON.stringify({ ...result, layers: layerTable(layers) }),
-      createdAt,
-    );
+        projectId,
+        JSON.stringify({
+          id,
+          body: 'rhino sync',
+          pins: [],
+          sketches: [],
+          files: [],
+          provider: 'codex-cli',
+          model: 'codex-cli',
+          effort: 'default',
+          permission: 'review',
+          host: 'rhino',
+        }),
+        'succeeded',
+        JSON.stringify({ ...result, layers: layerTable(layers) }),
+        createdAt,
+      );
   insert(
     'structure-sync',
     built.structure,

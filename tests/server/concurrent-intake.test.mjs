@@ -6,6 +6,7 @@ import { Execution } from '../../src/server/execution.ts';
 import { captureInput } from '../../src/server/import-model.ts';
 import { requestConflict } from '../../src/contracts/request-scope.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 // SPEC-02.9 concurrent intake with the executor (PLAN-24 T-060).
 const instance = '1:2:356ff01d-b586-460c-8e2b-8c9f3c083e96';
 
@@ -55,7 +56,7 @@ function setup(t) {
   t.after(async () => {
     for (const entry of gates.values()) entry.release();
     await execution.close();
-    store.db.close();
+    store.close();
   });
   const submit = (id, fields = {}) =>
     workspace.submit(project.id, {

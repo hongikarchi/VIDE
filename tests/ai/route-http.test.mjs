@@ -40,7 +40,7 @@ test('/route sends only the fixed items, honours the switch and decides rule wor
       return { status: response.status, json: await response.json().catch(() => null) };
     };
     const project = (await api('/projects', 'POST', { name: 'route' })).json;
-    const links = new DocumentLinks(app.store.db);
+    const links = new DocumentLinks(app.store);
     links.link(project.id, {
       host: 'zwcad',
       name: 'S06-plan.dwg',

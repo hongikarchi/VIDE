@@ -43,7 +43,7 @@ export async function skillCatalog(
   projectId: string,
 ): Promise<SkillEntry[]> {
   const runtime = jigRuntimeFor(workspace, dataDirectory);
-  const pins = new JigStore(workspace.store.db).pinned(projectId);
+  const pins = new JigStore(workspace.store).pinned(projectId);
   const pinned = new Map(pins.map((row) => [row.jigId, row.version]));
   const used = new Set(runtime.list(projectId).map((row) => row.jigId));
   const out: SkillEntry[] = [];

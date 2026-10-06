@@ -8,6 +8,7 @@ import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { launchZwcadWorker } from '../../hosts/zwcad/worker-client.ts';
 import { inspectWindowsProcess } from '../../hosts/common/owned-process.ts';
 import { runDirectory } from './run-directory.mjs';
+import { soleDb } from '../fixtures/store.mjs';
 const directory = runDirectory('browser-zwcad-editor');
 await mkdir(join(directory, 'zwcad-sdk-models'), { recursive: true });
 const original = JSON.parse(await readFile(process.argv[2], 'utf8')).result;
@@ -33,7 +34,7 @@ try {
     files: [],
   };
   const save = (id, input, result) =>
-    app.store.db
+    soleDb(app.store)
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
       .run(
         id,
@@ -99,7 +100,7 @@ try {
   await page
     .getByText('문서 반영 완료 · 파일은 아직 저장하지 않았습니다.', { exact: true })
     .waitFor();
-  const connection = app.store.db.prepare('SELECT host FROM connections').get();
+  const connection = soleDb(app.store).prepare('SELECT host FROM connections').get();
   assert.equal(connection.host, 'zwcad');
   await page.screenshot({ path: join(directory, 'applied.png') });
   await writeFile(

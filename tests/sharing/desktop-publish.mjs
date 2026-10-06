@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { nativeSharingFixture } from './host-roundtrip.mjs';
 import { startServer } from '../../src/server/server.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 export async function verifyDesktopPublish({
   browser,
   origin,
@@ -61,7 +62,7 @@ export async function verifyDesktopPublish({
       ],
     };
     const objectId = result.objects[0].id;
-    app.store.db
+    soleDb(app.store)
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
       .run(
         id,
@@ -213,8 +214,8 @@ export async function verifyDesktopPublish({
     );
     assert.deepEqual(original.original.comment.input.pin, noteInput.pin);
     assert.equal(original.original.publicationId, publication.id);
-    assert.equal(app.store.db.prepare('SELECT count(*) n FROM shared_feedback').get().n, 1);
-    assert.equal(app.store.db.prepare('SELECT count(*) n FROM workspace_requests').get().n, 1);
+    assert.equal(soleDb(app.store).prepare('SELECT count(*) n FROM shared_feedback').get().n, 1);
+    assert.equal(soleDb(app.store).prepare('SELECT count(*) n FROM workspace_requests').get().n, 1);
     await desktop.screenshot({ path: join(directory, 'feedback-adopted.png'), fullPage: true });
     await desktop.reload();
     await desktop

@@ -29,7 +29,8 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
+import type { Store } from '../../core/store.ts';
 import { DomainError } from '../../contracts/errors.ts';
 import { JigStore, type JigDraft } from '../../core/jig-store.ts';
 import { draftPathRefusal } from '../../ai/agent-connection.ts';
@@ -252,7 +253,8 @@ export interface PinResult {
   capabilities: { name: string; reason: string }[];
 }
 export interface DraftOptions {
-  db: DatabaseSync;
+  /** One DB, or a Store (drafts live in their project's DB). */
+  db: DatabaseSync | Store;
   dataDir: string;
   /** Test seam: the drafts folder (default: `draftsRoot(dataDir)`). */
   root?: string;
@@ -289,15 +291,18 @@ const slug = (name: string) =>
 export class JigDrafts {
   readonly store: JigStore;
   readonly root: string;
-  private readonly db: DatabaseSync;
+  private readonly source: DatabaseSync | Store;
   private readonly dataDir: string;
   private readonly options: DraftOptions;
   constructor(options: DraftOptions) {
     this.options = options;
-    this.db = options.db;
+    this.source = options.db;
     this.store = new JigStore(options.db);
     this.dataDir = options.dataDir;
     this.root = resolve(options.root ?? draftsRoot(options.dataDir));
+  }
+  private of(projectId: string) {
+    return this.source instanceof DatabaseSync ? this.source : this.source.db(projectId);
   }
 
   private resultsFile(draftId: string) {
@@ -344,7 +349,7 @@ export class JigDrafts {
       }
     }
     // The open make-conversation of the draft, if any (the row's own column is not kept).
-    const conversation = this.db
+    const conversation = this.of(draft.projectId)
       .prepare(
         "SELECT id FROM conversations WHERE projectId=? AND draftId=? AND state='open' ORDER BY createdAt DESC LIMIT 1",
       )
@@ -401,7 +406,7 @@ export class JigDrafts {
           this.writeIn(dir, path, text);
       }
       const at = new Date().toISOString();
-      this.db
+      this.of(projectId)
         .prepare("INSERT INTO jig_drafts VALUES(?,?,?,?,'open',?,?)")
         .run(draftId, projectId, null, dir, at, at);
     } catch (error) {
@@ -455,7 +460,7 @@ export class JigDrafts {
         JSON.stringify({ ...raw, id: source.id, version }, null, 2) + '\n',
       );
       const at = new Date().toISOString();
-      this.db
+      this.of(projectId)
         .prepare("INSERT INTO jig_drafts VALUES(?,?,?,?,'open',?,?)")
         .run(draftId, projectId, null, dir, at, at);
       this.keep(draftId, 'origin', {

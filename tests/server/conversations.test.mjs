@@ -20,6 +20,7 @@ import {
 } from '../../src/server/conversations.ts';
 import { startServer } from '../../src/server/server.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 // Conversation threads and session execution (PLAN-24 T-061, SPEC-02.19, ADR-021): the CLI is a
 // fake transport that records every spawn, so each turn's arguments and packet are asserted.
 
@@ -357,7 +358,7 @@ test('turns run on the default login: an older request account is ignored, a for
   assert.ok(runs[1].args.includes('--resume'));
   // A session an older VIDE opened on one of its own account profiles lived in that profile's
   // folder: it is not resumed; the next turn opens a new one on the default login with the ledger.
-  store.db
+  soleDb(store)
     .prepare(
       "UPDATE provider_sessions SET accountProfileId='11111111-2222-4333-8444-555555555555' WHERE conversationId=?",
     )
@@ -779,7 +780,7 @@ test('transcripts go on discard at once and 30 days after closing; other session
   // Only what closed more than 30 days ago is swept.
   const closedAt = new Date(Date.now() - 31 * 86_400_000).toISOString();
   removed.length = 0;
-  store.db.prepare('UPDATE conversations SET closedAt=? WHERE id=?').run(closedAt, old.id);
+  soleDb(store).prepare('UPDATE conversations SET closedAt=? WHERE id=?').run(closedAt, old.id);
   assert.equal(await conversations.sweep(new Date()), 1);
   assert.deepEqual(
     removed.map((entry) => entry.sessionId),

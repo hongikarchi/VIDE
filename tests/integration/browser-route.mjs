@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'vide-route-'));
 let app, browser;
 try {
@@ -72,7 +73,7 @@ try {
       documentId: 1,
     },
   };
-  app.store.db
+  soleDb(app.store)
     .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
     .run(
       input.id,

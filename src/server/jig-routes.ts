@@ -225,7 +225,7 @@ const runtimes = new WeakMap<Workspace, JigRuntime>();
 export function jigRuntimeFor(workspace: Workspace, dataDirectory: string): JigRuntime {
   let runtime = runtimes.get(workspace);
   if (!runtime) {
-    const store = new JigStore(workspace.store.db);
+    const store = new JigStore(workspace.store);
     const devRoot = repositoryJigRoot();
     const registry = new JigRegistry({
       store,
@@ -264,7 +264,7 @@ export async function jigRoutes(
   const { workspace, body, send, remote = false } = context;
   const method = request.method ?? 'GET';
   const runtime = () => jigRuntimeFor(workspace, context.dataDirectory);
-  const store = () => new JigStore(workspace.store.db);
+  const store = () => new JigStore(workspace.store);
 
   // --- registry, import, pin -------------------------------------------------------------------
   if (url.pathname === '/api/v1/jigs/packages' && method === 'GET') {
@@ -1009,7 +1009,7 @@ async function instanceReport(
   }
   const reads = rt.reads(projectId, instanceId);
   // Question cards and answers of the conversations bound to this instance (the open items).
-  const conversations = new ConversationStore(workspace.store.db);
+  const conversations = new ConversationStore(workspace.store);
   const ledger: JigReportLedgerRow[] = conversations
     .list(projectId)
     .filter((c) => c.jigInstanceId === instanceId)

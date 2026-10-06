@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { Store } from '../../src/core/store.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 // T-103 (SPEC-01.11 5): every pin is a change pin and the AI picks which linked file it edits, so
 // a change pin in another linked file of the same host is not stale for the starting document.
 test('change pins in two linked files of one host are accepted; an older Sync of the same file is stale', (t) => {
@@ -26,31 +27,33 @@ test('change pins in two linked files of one host are accepted; an older Sync of
     files: [],
   };
   const sync = (id, instance, object, at) =>
-    store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-      id,
-      project.id,
-      JSON.stringify({
-        ...base,
+    soleDb(store)
+      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+      .run(
         id,
-        body: 'sync',
-        source: 'document',
-        sourceDocument: { instance, documentId: 1 },
-      }),
-      'succeeded',
-      JSON.stringify({
-        host: 'rhino',
-        hostExecuted: true,
-        text: '끝',
-        objects: [{ id: object }],
-        sourceDocument: {
-          connection: 'attached-editor',
-          instance,
-          documentId: 1,
-          documentHash: 'h',
-        },
-      }),
-      at,
-    );
+        project.id,
+        JSON.stringify({
+          ...base,
+          id,
+          body: 'sync',
+          source: 'document',
+          sourceDocument: { instance, documentId: 1 },
+        }),
+        'succeeded',
+        JSON.stringify({
+          host: 'rhino',
+          hostExecuted: true,
+          text: '끝',
+          objects: [{ id: object }],
+          sourceDocument: {
+            connection: 'attached-editor',
+            instance,
+            documentId: 1,
+            documentHash: 'h',
+          },
+        }),
+        at,
+      );
   sync('sync-a-old', 'win-a', 'a1', '2026-10-01T00:00:00.000Z');
   sync('sync-a', 'win-a', 'a1', '2026-10-01T00:00:01.000Z');
   sync('sync-b', 'win-b', 'b1', '2026-10-01T00:00:02.000Z');

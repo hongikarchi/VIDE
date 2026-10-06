@@ -15,6 +15,7 @@ import {
   vacuumWhenIdle,
 } from '../../src/core/model-move.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 // A display Sync row as releases before schema 9 stored it (synthetic, not a user database).
 const legacy = (keys) => ({
   displayOnly: true,
@@ -68,7 +69,7 @@ function fixture(t, file = ':memory:') {
   t.after(() => store.close());
   const project = store.createProject('p');
   const insert = (id, result, state = 'succeeded') =>
-    store.db
+    soleDb(store)
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
       .run(
         id,
@@ -78,7 +79,7 @@ function fixture(t, file = ':memory:') {
         JSON.stringify(result),
         't',
       );
-  return { store, db: store.db, projectId: project.id, insert };
+  return { store, db: soleDb(store), projectId: project.id, insert };
 }
 const resultOf = (db, id) =>
   JSON.parse(db.prepare('SELECT result FROM workspace_requests WHERE id=?').get(id).result);

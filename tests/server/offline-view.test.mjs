@@ -13,13 +13,14 @@ import { DocumentLinks } from '../../src/core/document-links.ts';
 import { OfflineView } from '../../src/server/offline-view.ts';
 import { decodeSnapshot } from '../../src/contracts/offline-snapshot.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 test('offline view uploads changed linked files of enabled projects and keeps an inbox', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'vide-offline-'));
   const app = await startServer({ filename: join(directory, 'test.sqlite') });
   try {
     const store = app.store;
     const project = store.createProject('Tower');
-    const links = new DocumentLinks(store.db);
+    const links = new DocumentLinks(store);
     const link = links.link(project.id, {
       host: 'zwcad',
       name: 'plan.dwg',
@@ -69,7 +70,7 @@ test('offline view uploads changed linked files of enabled projects and keeps an
         scene: [{ id: 'a', segments: [x, 0, 0, x + 1, 0, 0], layer64: 'QQ==' }],
         sourceDocument: { name: 'plan.dwg', capturedAt: new Date(clock).toISOString() },
       };
-      store.db
+      soleDb(store)
         .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
         .run(
           id,
@@ -103,9 +104,11 @@ test('offline view uploads changed linked files of enabled projects and keeps an
     await offline.tick();
     assert.equal(uploads.length, 2);
     // A Live Sync fixes s2 in place (same id, a higher list revision): sent again after the interval.
-    const manifest = store.db.prepare(
-      'INSERT INTO sync_manifests(requestId,projectId,revision,updatedAt) VALUES(?,?,?,?) ON CONFLICT(requestId) DO UPDATE SET revision=excluded.revision',
-    );
+    const manifest = store
+      .db(project.id)
+      .prepare(
+        'INSERT INTO sync_manifests(requestId,projectId,revision,updatedAt) VALUES(?,?,?,?) ON CONFLICT(requestId) DO UPDATE SET revision=excluded.revision',
+      );
     manifest.run('s2', project.id, 2, new Date(clock).toISOString());
     assert.equal((await offline.status(project.id)).files[0].upToDate, false);
     clock += 11 * 60_000;

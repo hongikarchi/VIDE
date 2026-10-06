@@ -1,7 +1,8 @@
 // Spike schema for one project's knowledge DB (PLAN-08 K0). Product schema belongs to ARCH-01.
-// The file lives outside the repository: %LOCALAPPDATA%\VIDE\knowledge\<projectId>.sqlite.
+// The file lives outside the repository: %LOCALAPPDATA%\VIDE\projects\<projectId>\knowledge.sqlite
+// (ADR-032), or %LOCALAPPDATA%\VIDE\knowledge\<projectId>.sqlite before the data folder is split.
 import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -10,14 +11,21 @@ export const dataDir = () =>
 
 export function knowledgePath(projectId) {
   if (!/^[0-9a-f-]{36}$/.test(projectId)) throw new Error('project id must be a UUID');
-  return join(dataDir(), 'knowledge', projectId + '.sqlite');
+  return existsSync(join(dataDir(), 'app.sqlite'))
+    ? join(dataDir(), 'projects', projectId, 'knowledge.sqlite')
+    : join(dataDir(), 'knowledge', projectId + '.sqlite');
 }
 
 /** Resolve a VIDE project by id or exact name from the work engine DB (read-only). */
 export function findProject(value) {
-  const db = new DatabaseSync(join(dataDir(), 'vide.sqlite'), { readOnly: true });
+  const shared = join(dataDir(), 'app.sqlite');
+  const db = new DatabaseSync(existsSync(shared) ? shared : join(dataDir(), 'vide.sqlite'), {
+    readOnly: true,
+  });
   try {
-    const row = db.prepare('select id, name from projects where id = ? or name = ?').get(value, value);
+    const row = db
+      .prepare('select id, name from projects where id = ? or name = ?')
+      .get(value, value);
     if (!row) throw new Error('VIDE project not found: ' + value);
     return row;
   } finally {

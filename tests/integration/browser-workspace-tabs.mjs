@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 const shot = process.env.VIDE_SHOT_DIR;
 const directory = await mkdtemp(join(tmpdir(), 'vide-workspace-tabs-'));
 let app, browser;
@@ -64,25 +65,27 @@ try {
     layer64: b64(i === 3 ? 'X-GRID' : 'S-BEAM'),
   }));
   const insert = (id, host, result) =>
-    app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-      id,
-      projectId,
-      JSON.stringify({
+    soleDb(app.store)
+      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+      .run(
         id,
-        body: host + ' sync',
-        pins: [],
-        sketches: [],
-        files: [],
-        provider: 'codex-cli',
-        model: 'codex-cli',
-        effort: 'default',
-        permission: 'review',
-        host,
-      }),
-      'succeeded',
-      JSON.stringify({ hostExecuted: true, executionMode: 'sdk', host, ...result }),
-      new Date().toISOString(),
-    );
+        projectId,
+        JSON.stringify({
+          id,
+          body: host + ' sync',
+          pins: [],
+          sketches: [],
+          files: [],
+          provider: 'codex-cli',
+          model: 'codex-cli',
+          effort: 'default',
+          permission: 'review',
+          host,
+        }),
+        'succeeded',
+        JSON.stringify({ hostExecuted: true, executionMode: 'sdk', host, ...result }),
+        new Date().toISOString(),
+      );
   insert('rhino-sync', 'rhino', {
     scene: rhinoScene,
     objects: rhinoScene.map((row, i) => ({

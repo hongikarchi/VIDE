@@ -27,7 +27,8 @@ export class TableViews {
   }
   list(projectId: string): TableView[] {
     this.store.project(projectId);
-    return this.store.db
+    return this.store
+      .db(projectId)
       .prepare('SELECT * FROM table_views WHERE projectId=? ORDER BY name,id')
       .all(projectId)
       .map(decode);
@@ -41,12 +42,14 @@ export class TableViews {
       name = input.name.trim(),
       updatedAt = new Date().toISOString();
     if (id) {
-      const previous = this.store.db
+      const previous = this.store
+        .db(projectId)
         .prepare('SELECT * FROM table_views WHERE projectId=? AND id=?')
         .get(projectId, id);
       if (!previous) throw new DomainError('NOT_FOUND');
       if (input.revision !== previous.revision) throw new DomainError('REVISION_CONFLICT');
-      this.store.db
+      this.store
+        .db(projectId)
         .prepare(
           'UPDATE table_views SET name=?,query=?,revision=revision+1,updatedAt=? WHERE projectId=? AND id=?',
         )
@@ -54,24 +57,30 @@ export class TableViews {
     } else {
       // No count cap per project (ADR-031 7).
       id = randomUUID();
-      this.store.db
+      this.store
+        .db(projectId)
         .prepare('INSERT INTO table_views VALUES(?,?,?,?,1,?)')
         .run(id, projectId, name, query, updatedAt);
     }
     return decode(
-      this.store.db
+      this.store
+        .db(projectId)
         .prepare('SELECT * FROM table_views WHERE projectId=? AND id=?')
         .get(projectId, id),
     );
   }
   remove(projectId: string, id: string, revision: unknown) {
     this.store.project(projectId);
-    const row = this.store.db
+    const row = this.store
+      .db(projectId)
       .prepare('SELECT revision FROM table_views WHERE projectId=? AND id=?')
       .get(projectId, id);
     if (!row) throw new DomainError('NOT_FOUND');
     if (row.revision !== revision) throw new DomainError('REVISION_CONFLICT');
-    this.store.db.prepare('DELETE FROM table_views WHERE projectId=? AND id=?').run(projectId, id);
+    this.store
+      .db(projectId)
+      .prepare('DELETE FROM table_views WHERE projectId=? AND id=?')
+      .run(projectId, id);
     return { deleted: true };
   }
 }

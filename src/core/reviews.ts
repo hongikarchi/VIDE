@@ -63,7 +63,8 @@ export class Reviews {
   }
   list(projectId: string) {
     this.store.project(projectId);
-    return this.store.db
+    return this.store
+      .db(projectId)
       .prepare(
         'SELECT id,requestId,title,createdAt FROM review_snapshots WHERE projectId=? ORDER BY rowid DESC',
       )
@@ -72,7 +73,8 @@ export class Reviews {
   }
   get(projectId: string, id: string) {
     this.store.project(projectId);
-    const row = this.store.db
+    const row = this.store
+      .db(projectId)
       .prepare('SELECT * FROM review_snapshots WHERE projectId=? AND id=?')
       .get(projectId, id);
     if (!row) throw new DomainError('NOT_FOUND');
@@ -161,7 +163,8 @@ export class Reviews {
       createdAt,
     });
     if (Buffer.byteLength(payload) > 2000000) throw new DomainError('INPUT_TOO_LARGE');
-    this.store.db
+    this.store
+      .db(projectId)
       .prepare('INSERT INTO review_snapshots VALUES(?,?,?,?,?,?)')
       .run(id, projectId, request.id, title, createdAt, payload);
     return { id, requestId: request.id, title, createdAt };

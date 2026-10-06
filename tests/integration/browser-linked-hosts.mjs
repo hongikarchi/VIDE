@@ -7,6 +7,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { pathToFileURL } from 'node:url';
 import { runDirectory } from './run-directory.mjs';
+import { soleDb } from '../fixtures/store.mjs';
 const appRoot = resolve(process.env.VIDE_TEST_PACKAGE_APP || '.');
 const { startServer } = await import(pathToFileURL(join(appRoot, 'src/server/server.ts')).href);
 const { sdkOptions } = await import(pathToFileURL(join(appRoot, 'src/server/sdk-options.ts')).href);
@@ -179,7 +180,7 @@ try {
     files: [],
   };
   const save = (id, host, result) =>
-    app.store.db
+    soleDb(app.store)
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
       .run(
         id,
@@ -248,7 +249,7 @@ try {
     const deadline = Date.now() + 180000;
     let started = false;
     while (Date.now() < deadline) {
-      const rows = app.store.db.prepare('SELECT * FROM workspace_requests').all();
+      const rows = soleDb(app.store).prepare('SELECT * FROM workspace_requests').all();
       const child = rows.find((row) => {
         const input = JSON.parse(row.input);
         return input.parentRequestId === parent.id && input.host === 'rhino';
@@ -292,7 +293,7 @@ try {
     assert.equal(held.state, 'queued');
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.equal(providerCalls, 1);
-    const pending = app.store.db
+    const pending = soleDb(app.store)
       .prepare('SELECT state FROM workspace_requests WHERE id=?')
       .get(parent.id);
     assert.equal(pending.state, 'running', 'Native completion must still be awaited');
@@ -300,7 +301,7 @@ try {
   let done;
   const deadline = Date.now() + 240000;
   while (Date.now() < deadline) {
-    done = app.store.db.prepare('SELECT * FROM workspace_requests WHERE id=?').get(parent.id);
+    done = soleDb(app.store).prepare('SELECT * FROM workspace_requests WHERE id=?').get(parent.id);
     if (!['queued', 'running'].includes(done.state)) break;
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
@@ -323,7 +324,9 @@ try {
       assert.equal(value.result.recovered, true);
       assert.equal(value.result.progress.attempts, 1);
     }
-    const saved = app.store.db.prepare('SELECT * FROM workspace_requests WHERE id=?').get(held.id);
+    const saved = soleDb(app.store)
+      .prepare('SELECT * FROM workspace_requests WHERE id=?')
+      .get(held.id);
     assert.equal(saved.state, 'interrupted');
     assert.equal(JSON.parse(saved.result).code, 'INTERVENTION_REVIEW_REQUIRED');
     assert.match(JSON.parse(saved.input).body, /4.5 m/);
@@ -352,8 +355,9 @@ try {
   }
   const results = outcomes.map((row) =>
     JSON.parse(
-      app.store.db.prepare('SELECT result FROM workspace_requests WHERE id=?').get(row.requestId)
-        .result,
+      soleDb(app.store)
+        .prepare('SELECT result FROM workspace_requests WHERE id=?')
+        .get(row.requestId).result,
     ),
   );
   assert.equal(results[0].scene[0].area, 260);

@@ -50,7 +50,8 @@ export class SharedFeedback {
   record(projectId: string, requestId: string, manifest: unknown) {
     const request = this.workspace.get(projectId, requestId),
       id = randomUUID();
-    this.store.db
+    this.store
+      .db(projectId)
       .prepare('INSERT INTO publication_exports VALUES(?,?,?,?,?)')
       .run(id, projectId, requestId, hash(manifest), hash(request.result));
     return id;
@@ -60,7 +61,8 @@ export class SharedFeedback {
     const parsed = feedbackFileSchema.safeParse(raw);
     if (!parsed.success) throw new DomainError('INVALID_INPUT');
     const original = parsed.data;
-    const row = this.store.db
+    const row = this.store
+      .db(projectId)
       .prepare('SELECT * FROM publication_exports WHERE id=? AND projectId=?')
       .get(original.exportId, projectId);
     if (!row) throw new DomainError('PUBLICATION_BASIS_NOT_FOUND');
@@ -81,8 +83,10 @@ export class SharedFeedback {
       original.publicationId,
       original.comment.id,
     ]);
-    const existing = this.store.db
-      .prepare('SELECT * FROM shared_feedback WHERE identity=?')
+    // The identity is unique across every project (one DB per project: each is asked).
+    const existing = this.store
+      .findDb('SELECT 1 FROM shared_feedback WHERE identity=?', identity)
+      ?.prepare('SELECT * FROM shared_feedback WHERE identity=?')
       .get(identity);
     if (existing) {
       const prior = decode(existing);
@@ -92,14 +96,18 @@ export class SharedFeedback {
     }
     const id = randomUUID(),
       receivedAt = new Date().toISOString();
-    this.store.db
+    this.store
+      .db(projectId)
       .prepare('INSERT INTO shared_feedback VALUES(?,?,?,?,?,?)')
       .run(id, projectId, basis.requestId, identity, JSON.stringify(original), receivedAt);
-    return decode(this.store.db.prepare('SELECT * FROM shared_feedback WHERE id=?').get(id));
+    return decode(
+      this.store.db(projectId).prepare('SELECT * FROM shared_feedback WHERE id=?').get(id),
+    );
   }
   list(projectId: string) {
     this.store.project(projectId);
-    return this.store.db
+    return this.store
+      .db(projectId)
       .prepare('SELECT * FROM shared_feedback WHERE projectId=? ORDER BY rowid DESC')
       .all(projectId)
       .map(decode);

@@ -87,6 +87,8 @@ export interface WorkFolders {
   readonly dirs: readonly string[];
   readonly attachments: readonly string[];
   readonly readOnly?: boolean;
+  /** The project's own data folder (project.sqlite, knowledge.sqlite): read only, no question. */
+  readonly records?: string;
 }
 /** Claude's built-in file and shell tools of a turn with a work folder (never pre-allowed). */
 export const CLAUDE_FILE_TOOLS = ['Read', 'Glob', 'Grep', 'Edit', 'Write', 'Bash'] as const;
@@ -96,6 +98,7 @@ const workFoldersSchema = z
     dirs: z.array(z.string().min(1).max(1024)).max(64),
     attachments: z.array(z.string().min(1).max(1024)).max(200),
     readOnly: z.boolean().optional(),
+    records: z.string().min(1).max(1024).optional(),
   })
   .strict();
 /** A checked, frozen work folder value (absolute paths), or undefined. */
@@ -103,9 +106,12 @@ export function workFolders(value: unknown): WorkFolders | undefined {
   if (value === undefined) return undefined;
   const parsed = workFoldersSchema.safeParse(value);
   const paths = parsed.success
-    ? [parsed.data.cwd, ...parsed.data.dirs, ...parsed.data.attachments].filter(
-        (path): path is string => path !== undefined,
-      )
+    ? [
+        parsed.data.cwd,
+        ...parsed.data.dirs,
+        ...parsed.data.attachments,
+        parsed.data.records,
+      ].filter((path): path is string => path !== undefined)
     : [];
   if (!parsed.success || paths.some((path) => !isAbsolute(path) || path.includes('\0')))
     throw Object.assign(new Error('INVALID_WORK_FOLDERS'), { code: 'INVALID_WORK_FOLDERS' });
@@ -114,6 +120,7 @@ export function workFolders(value: unknown): WorkFolders | undefined {
     dirs: Object.freeze(parsed.data.dirs.map((dir) => resolve(dir))),
     attachments: Object.freeze(parsed.data.attachments.map((file) => resolve(file))),
     ...(parsed.data.readOnly ? { readOnly: true } : {}),
+    ...(parsed.data.records ? { records: resolve(parsed.data.records) } : {}),
   });
 }
 /** The rule of a turn's work folder tools (the base rules forbid every tool but VIDE's). */
@@ -137,7 +144,10 @@ export function workFolderRule(folders: WorkFolders, format: AgentFormat = 'clau
     ` Exception to the tool rules: the provider tools ${tools} work in ${where}.` +
     (folders.readOnly ? ' This is a Plan turn: read and search files, write none.' : '') +
     ' Reading, writing or running anything outside those folders asks the user each time: make the call and VIDE shows the question (do not ask for it in your reply first); when the user refuses, do not try that again in this turn and say which file or folder you needed.' +
-    " Keys, logins and VIDE's own data are never read." +
+    (folders.records
+      ? ` This project's own records are readable without a question at ${JSON.stringify(folders.records)} (project.sqlite; knowledge.sqlite): open them read-only and change nothing.` +
+        " Keys, logins and VIDE's other data are never read."
+      : " Keys, logins and VIDE's own data are never read.") +
     (folders.attachments.length
       ? " The user's attached files are read at the path of their 'file' item."
       : '') +

@@ -186,13 +186,13 @@ async function workspace(t, counts = [3, 1, 2]) {
   await mkdir(data);
   const store = new Store(join(data, 'vide.sqlite'));
   const ids = counts.map((_, i) => store.createProject(`project ${i}`).id);
-  store.db.exec('PRAGMA foreign_keys=ON');
-  store.db.prepare('INSERT INTO ai_settings VALUES(1,1,?)').run('{}');
-  store.db.prepare('INSERT INTO extension_registrations VALUES(?,?,1,1)').run('ext', '1');
-  store.db
+  store.app.exec('PRAGMA foreign_keys=ON');
+  store.app.prepare('INSERT INTO ai_settings VALUES(1,1,?)').run('{}');
+  store.app.prepare('INSERT INTO extension_registrations VALUES(?,?,1,1)').run('ext', '1');
+  store.app
     .prepare('INSERT INTO jig_packages VALUES(?,?,?,?,?,?,?,?,?)')
     .run('sync', '1.0.0', 'stable', 'builtin', 'd', null, 'p', '[]', at);
-  store.tx(() => ids.forEach((id, i) => fill(store.db, id, counts[i])));
+  store.tx(store.app, () => ids.forEach((id, i) => fill(store.app, id, counts[i])));
   store.close();
   return { root, data, ids };
 }
@@ -212,7 +212,7 @@ test('every table of the current schema is classified as app or project', async 
   const root = await mkdtemp(join(tmpdir(), 'vide-split-schema-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const store = new Store(join(root, 'vide.sqlite'));
-  const names = store.db
+  const names = store.app
     .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
     .all()
     .map((row) => row.name);
@@ -329,8 +329,8 @@ test('refuses while the engine holds the lock, and reads uncheckpointed WAL page
   const store = new Store(join(data, 'vide.sqlite'));
   await assert.rejects(splitProjectDatabase(data), { code: 'CONTROLLER_BUSY' });
   // Rows written after the last checkpoint, then the files copied as a killed engine leaves them.
-  store.db.exec('PRAGMA wal_autocheckpoint=0');
-  store.db
+  store.app.exec('PRAGMA wal_autocheckpoint=0');
+  store.app
     .prepare('INSERT INTO workspace_requests(id,projectId,input,state,createdAt) VALUES(?,?,?,?,?)')
     .run('late', ids[2], '{}', 'succeeded', at);
   const copy = join(root, 'copy');

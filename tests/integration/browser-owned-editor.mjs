@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { startServer } from '../../src/server/server.ts';
+import { soleDb } from '../fixtures/store.mjs';
 // The work history opens a work; the linked files list forces a Sync of the work copy.
 const openWork = async (page, id) => {
   await page.locator('button[data-section="task-list"]').click();
@@ -55,22 +56,24 @@ try {
     sketches: [],
     files: [],
   };
-  app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-    id,
-    project.id,
-    JSON.stringify(input),
-    'succeeded',
-    JSON.stringify({
-      ...model,
-      hostExecuted: true,
-      executionMode: 'sdk',
-      host: 'rhino',
-      verified: true,
-      filename: receipt.filename,
-      fileHash: receipt.fileHash,
-    }),
-    new Date().toISOString(),
-  );
+  soleDb(app.store)
+    .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+    .run(
+      id,
+      project.id,
+      JSON.stringify(input),
+      'succeeded',
+      JSON.stringify({
+        ...model,
+        hostExecuted: true,
+        executionMode: 'sdk',
+        host: 'rhino',
+        verified: true,
+        filename: receipt.filename,
+        fileHash: receipt.fileHash,
+      }),
+      new Date().toISOString(),
+    );
   browser = await chromium.launch({ channel: 'chrome', headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   page.setDefaultTimeout(90000);
@@ -160,29 +163,31 @@ try {
     const nextModel = await changing.exportModel();
     await changing.stop();
     nextId = randomUUID();
-    app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-      nextId,
-      project.id,
-      JSON.stringify({
-        ...input,
-        id: nextId,
-        body: 'Synthetic height edit',
-        baseRequestId: result.id,
-      }),
-      'succeeded',
-      JSON.stringify({
-        ...nextModel,
-        hostExecuted: true,
-        executionMode: 'sdk',
-        host: 'rhino',
-        verified: true,
-        filename: nextReceipt.filename,
-        fileHash: nextReceipt.fileHash,
-        baseRequestId: result.id,
-        sourceDocument: result.result.sourceDocument,
-      }),
-      new Date().toISOString(),
-    );
+    soleDb(app.store)
+      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+      .run(
+        nextId,
+        project.id,
+        JSON.stringify({
+          ...input,
+          id: nextId,
+          body: 'Synthetic height edit',
+          baseRequestId: result.id,
+        }),
+        'succeeded',
+        JSON.stringify({
+          ...nextModel,
+          hostExecuted: true,
+          executionMode: 'sdk',
+          host: 'rhino',
+          verified: true,
+          filename: nextReceipt.filename,
+          fileHash: nextReceipt.fileHash,
+          baseRequestId: result.id,
+          sourceDocument: result.result.sourceDocument,
+        }),
+        new Date().toISOString(),
+      );
   }
   await app.close();
   app = await startServer({

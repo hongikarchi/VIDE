@@ -188,22 +188,26 @@ test('deleting a project removes it, its rows and its files in the data folder o
   // Two projects with the same name: the old one is deleted, the new one stays.
   const a = (await api('/projects', 'POST', { name: '나진상가' })).body;
   const b = (await api('/projects', 'POST', { name: '나진상가' })).body;
-  const db = app.store.db;
+  // Each project's rows are in its own DB (ADR-032).
+  const db = app.store.db(a.id);
   seed(db, a.id, directory, outside);
-  db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-    'r-b1',
-    b.id,
-    input('r-b1'),
-    'succeeded',
-    JSON.stringify({ filename: join(directory, 'shared', 'model.3dm') }),
-    '2026-09-30T00:00:00.000Z',
-  );
+  app.store
+    .db(b.id)
+    .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+    .run(
+      'r-b1',
+      b.id,
+      input('r-b1'),
+      'succeeded',
+      JSON.stringify({ filename: join(directory, 'shared', 'model.3dm') }),
+      '2026-09-30T00:00:00.000Z',
+    );
   const files = {
     work: join(directory, 'work', 'r-a1', 'out.3dm'),
     upload: join(directory, 'models', a.id, 'r-a1.upload.3dm'),
     structure: join(directory, 'structure', `${a.id}.json`),
     instructions: join(directory, 'ai-instructions', `${a.id}.json`),
-    knowledge: join(directory, 'knowledge', `${a.id}.sqlite`),
+    knowledge: join(directory, 'projects', a.id, 'knowledge.sqlite'),
     draft: join(directory, 'jig-drafts', 'd-a', 'jig.json'),
   };
   const kept = {
@@ -227,8 +231,13 @@ test('deleting a project removes it, its rows and its files in the data folder o
     (await api('/projects')).body.map((project) => project.id),
     [b.id],
   );
-  for (const table of Object.keys(owned)) assert.equal(count(db, table, a.id), 0, table);
-  assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0);
+  // Its DB is closed and its data folder removed; the other project's DB stays.
+  assert.equal(db.isOpen, false);
+  assert.equal(existsSync(join(directory, 'projects', a.id)), false);
+  assert.ok(existsSync(join(directory, 'projects', b.id, 'project.sqlite')));
+  const other = app.store.db(b.id);
+  for (const table of Object.keys(owned)) assert.equal(count(other, table, a.id), 0, table);
+  assert.equal(other.prepare('PRAGMA foreign_key_check').all().length, 0);
   for (const [name, path] of Object.entries(files)) assert.equal(existsSync(path), false, name);
   for (const [name, path] of Object.entries(kept)) assert.equal(existsSync(path), true, name);
   assert.equal((await api(`/projects/${b.id}/requests`)).body.length, 1);
@@ -241,14 +250,10 @@ test('deleting a project removes it, its rows and its files in the data folder o
 
   // A project with work in progress is not deleted.
   const busy = (await api('/projects', 'POST', { name: '진행 중' })).body;
-  db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-    'r-c1',
-    busy.id,
-    input('r-c1'),
-    'running',
-    null,
-    '2026-09-30T00:00:00.000Z',
-  );
+  app.store
+    .db(busy.id)
+    .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+    .run('r-c1', busy.id, input('r-c1'), 'running', null, '2026-09-30T00:00:00.000Z');
   assert.equal((await api(`/projects/${busy.id}`, 'DELETE')).body.code, 'PROJECT_BUSY');
   assert.ok((await api('/projects')).body.some((project) => project.id === busy.id));
 });
@@ -344,8 +349,8 @@ test('a project deleted on the account site is deleted here after its work ends,
   });
   const busy = (await api('/projects', 'POST', { name: '진행 중' })).body;
   const kept = (await api('/projects', 'POST', { name: '남김' })).body;
-  const db = () => app.store.db;
-  db()
+  const db = (id) => app.store.db(id);
+  db(busy.id)
     .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
     .run('r-busy', busy.id, input('r-busy'), 'running', null, '2026-09-30T00:00:00.000Z');
   const knowledge = join(directory, 'knowledge', `${busy.id}.structural-conditions.md`);
@@ -363,7 +368,7 @@ test('a project deleted on the account site is deleted here after its work ends,
     [kept.id],
   );
   assert.equal(app.store.project(busy.id).name, '진행 중');
-  db().prepare("UPDATE workspace_requests SET state='succeeded' WHERE id='r-busy'").run();
+  db(busy.id).prepare("UPDATE workspace_requests SET state='succeeded' WHERE id='r-busy'").run();
   await app.remoteAccess.heartbeat();
   for (let i = 0; i < 100 && existsSync(knowledge); i++)
     await new Promise((r) => setTimeout(r, 10));
@@ -373,23 +378,21 @@ test('a project deleted on the account site is deleted here after its work ends,
   // Hidden by an older version (removed-projects.json only) with ~12 MB of results left behind.
   const old = (await api('/projects', 'POST', { name: '옛 프로젝트' })).body;
   const mesh = JSON.stringify({ scene: [{ vertices: 'v'.repeat(12 * 1024 * 1024) }] });
-  db()
+  db(old.id)
     .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
     .run('r-old', old.id, input('r-old'), 'succeeded', mesh, '2026-09-30T00:00:00.000Z');
   await app.close();
   const listed = JSON.parse(await readFile(join(directory, 'removed-projects.json'), 'utf8'));
   await writeFile(join(directory, 'removed-projects.json'), JSON.stringify([...listed, old.id]));
-  const file = join(directory, 'workspace.sqlite');
-  const pages = (store) =>
-    Number(Object.values(store.db.prepare('PRAGMA page_count').get())[0]) *
-    Number(Object.values(store.db.prepare('PRAGMA page_size').get())[0]);
+  // Its DB goes with its data folder: the ~12 MB leave the disk (ADR-032).
+  const folder = join(directory, 'projects', old.id);
+  assert.ok(existsSync(join(folder, 'project.sqlite')));
   cloud = [{ id: kept.id, name: '남김', deleted: false }];
   ({ app, api } = await open({ device, remoteOptions, directory }));
-  for (let i = 0; i < 200 && pages(app.store) > 8 * 1024 * 1024; i++)
-    await new Promise((r) => setTimeout(r, 10));
+  for (let i = 0; i < 200 && existsSync(folder); i++) await new Promise((r) => setTimeout(r, 10));
   assert.throws(() => app.store.project(old.id), { code: 'NOT_FOUND' });
-  assert.ok(pages(app.store) < 8 * 1024 * 1024, `database still ${pages(app.store)} bytes`);
-  assert.ok(existsSync(file));
+  assert.equal(existsSync(folder), false);
+  assert.ok(existsSync(join(directory, 'app.sqlite')));
   assert.deepEqual(
     (await api('/projects')).body.map((project) => project.id),
     [kept.id],

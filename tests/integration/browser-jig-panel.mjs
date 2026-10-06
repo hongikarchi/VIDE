@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 const shot = process.env.VIDE_SHOT_DIR;
 const directory = await mkdtemp(join(tmpdir(), 'vide-jig-panel-'));
 let app, browser;
@@ -57,38 +58,40 @@ try {
     order: n,
     objectCount,
   });
-  app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-    'rhino-sync',
-    projectId,
-    JSON.stringify({
-      id: 'rhino-sync',
-      body: 'rhino sync',
-      pins: [],
-      sketches: [],
-      files: [],
-      provider: 'codex-cli',
-      model: 'codex-cli',
-      effort: 'default',
-      permission: 'review',
-      host: 'rhino',
-    }),
-    'succeeded',
-    JSON.stringify({
-      hostExecuted: true,
-      executionMode: 'sdk',
-      host: 'rhino',
-      scene,
-      objects: scene.map((row) => ({
-        id: row.id,
-        name: row.id,
-        kind: 'native',
-        nativeId: row.nativeId,
-      })),
-      layers: [layer(1, '슬래브 외곽', 1), layer(2, '보이드', 1), layer(3, 'VIDE 출력', 0)],
-      sourceDocument: { name: 'slab.3dm', capturedAt: 'test', instance: '1', documentId: 1 },
-    }),
-    new Date().toISOString(),
-  );
+  soleDb(app.store)
+    .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+    .run(
+      'rhino-sync',
+      projectId,
+      JSON.stringify({
+        id: 'rhino-sync',
+        body: 'rhino sync',
+        pins: [],
+        sketches: [],
+        files: [],
+        provider: 'codex-cli',
+        model: 'codex-cli',
+        effort: 'default',
+        permission: 'review',
+        host: 'rhino',
+      }),
+      'succeeded',
+      JSON.stringify({
+        hostExecuted: true,
+        executionMode: 'sdk',
+        host: 'rhino',
+        scene,
+        objects: scene.map((row) => ({
+          id: row.id,
+          name: row.id,
+          kind: 'native',
+          nativeId: row.nativeId,
+        })),
+        layers: [layer(1, '슬래브 외곽', 1), layer(2, '보이드', 1), layer(3, 'VIDE 출력', 0)],
+        sourceDocument: { name: 'slab.3dm', capturedAt: 'test', instance: '1', documentId: 1 },
+      }),
+      new Date().toISOString(),
+    );
   await page.reload();
   await page.waitForFunction(() => document.querySelectorAll('#task-list .task-row').length === 1);
 

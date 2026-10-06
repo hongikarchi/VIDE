@@ -13,6 +13,7 @@ import {
   LAYERS,
 } from '../../extensions/jigs/s06-frame/fixtures/synthetic.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 const shot = process.env.VIDE_SHOT_DIR;
 const directory = await mkdtemp(join(tmpdir(), 'vide-s06-diagnose-'));
 let app, browser;
@@ -42,25 +43,27 @@ try {
 
   const built = buildCase(gridRot21);
   const insert = (id, result, createdAt) =>
-    app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-      id,
-      projectId,
-      JSON.stringify({
+    soleDb(app.store)
+      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+      .run(
         id,
-        body: 'rhino sync',
-        pins: [],
-        sketches: [],
-        files: [],
-        provider: 'codex-cli',
-        model: 'codex-cli',
-        effort: 'default',
-        permission: 'review',
-        host: 'rhino',
-      }),
-      'succeeded',
-      JSON.stringify(result),
-      createdAt,
-    );
+        projectId,
+        JSON.stringify({
+          id,
+          body: 'rhino sync',
+          pins: [],
+          sketches: [],
+          files: [],
+          provider: 'codex-cli',
+          model: 'codex-cli',
+          effort: 'default',
+          permission: 'review',
+          host: 'rhino',
+        }),
+        'succeeded',
+        JSON.stringify(result),
+        createdAt,
+      );
   insert('structure-sync', built.structure, '2026-09-29T01:00:00.000Z');
   insert('civil-sync', built.civil, '2026-09-29T01:01:00.000Z');
   await page.reload();

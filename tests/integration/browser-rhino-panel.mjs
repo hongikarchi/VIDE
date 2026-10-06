@@ -7,6 +7,7 @@ import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 import { runDirectory } from './run-directory.mjs';
+import { soleDb } from '../fixtures/store.mjs';
 // The links list, with or without a page's draft lease (`?page=&hold=`, T-084).
 const linksUrl = /\/api\/v1\/projects\/[^/]+\/links(\?.*)?$/;
 
@@ -108,9 +109,9 @@ try {
   });
   // The plugin linked this document to the project and opened the panel for it.
   const projectId = 'panel-project';
-  app.store.db.prepare("INSERT INTO projects(id, name) VALUES(?, 'Panel')").run(projectId);
+  soleDb(app.store).prepare("INSERT INTO projects(id, name) VALUES(?, 'Panel')").run(projectId);
   const now = new Date().toISOString();
-  app.store.db
+  soleDb(app.store)
     .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
     .run('link-panel', projectId, 'rhino', 'Panel test.3dm', null, instance, 7, now, now);
   await page.route(linksUrl, async (route) => {
@@ -233,7 +234,7 @@ try {
     projectId,
   );
   await page.waitForFunction(() => window.__actions.includes('unlink'));
-  assert.equal(app.store.db.prepare('SELECT count(*) AS n FROM document_links').get().n, 0);
+  assert.equal(soleDb(app.store).prepare('SELECT count(*) AS n FROM document_links').get().n, 0);
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ passed: true, panelOnly: true, sharedPins: true, directory }));
 } finally {

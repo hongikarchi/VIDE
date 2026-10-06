@@ -50,7 +50,7 @@ export class Extensions {
   }
   registration(id: string) {
     if (!allowed.has(id)) throw new DomainError('NOT_FOUND');
-    const row = this.store.db
+    const row = this.store.app
       .prepare('SELECT enabled,revision,version FROM extension_registrations WHERE id=?')
       .get(id);
     return {
@@ -76,7 +76,7 @@ export class Extensions {
       throw new DomainError('INVALID_INPUT');
     if (this.registration(id).revision !== input.revision)
       throw new DomainError('REVISION_CONFLICT');
-    this.store.db
+    this.store.app
       .prepare(
         'INSERT INTO extension_registrations VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET version=excluded.version,enabled=excluded.enabled,revision=excluded.revision',
       )

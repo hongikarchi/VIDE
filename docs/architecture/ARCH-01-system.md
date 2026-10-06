@@ -2,10 +2,10 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.81
+version: 0.82
 updated: 2026-10-06
 owner: agent:codex
-related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03]
+related: [ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03]
 ---
 
 # VIDE 기술 구조와 구현 계약
@@ -469,9 +469,10 @@ SPEC-01.13(2026-10-01, ADR-031 8로 2026-10-02 바뀜). 프로젝트가 가리�
 - **도구(ADR-031 8):** VIDE의 `file_list`·`file_read`는 지웠다. 턴은 CLI의 기본 도구를 받는다(위 「AI 실행 인자」의 작업 폴더 도구). 작업 폴더 값(`WorkFolders`, `src/ai/agent-connection.ts`): `cwd` = 첫 `project` 폴더(실제 경로, 없으면 없음), `dirs` = 나머지 `project` 폴더와 `read` 폴더, `attachments` = 그 턴의 보관 첨부 경로, 계획 턴은 `readOnly`. `Execution.workFolders`가 만든다.
 - **판정**(`WorkFolderGate.decide`, `src/server/project-files.ts`): 요청 하나를 경로·동작으로 푼다 — 읽기(`Read`·`Glob`·`Grep`: `file_path`·`path`, CLI가 준 `blocked_path` 우선, 없으면 작업 폴더) / 쓰기(`Edit`·`Write`·`MultiEdit`·`NotebookEdit`, Codex 파일 변경의 `paths`) / 실행(`Bash`·`PowerShell`: `cwd`와 명령 인자에 적힌 경로, `commandPaths` — 드라이브·UNC·`/c/…`·`~` 경로, 따옴표 안 스크립트도 훑고, 맨 앞 프로그램 경로는 뺀다). 경로마다: ① 읽기이고 그 턴의 첨부 경로면 허용 ② 금지 위치(입력·실제 경로)면 `FILE_FORBIDDEN` 메시지로 거절(묻지 않음) ③ 실제 경로(없는 파일은 가장 가까운 상위의 실제 경로)가 `project` 폴더 안이면 허용, 읽기면 `read` 폴더 안도 허용 ④ 계획 턴의 쓰기는 거절 ⑤ 이번 요청의 허락(읽기 `allowed`, 쓰기·실행 `written`; 쓰기 허락은 읽기도 덮음)·거절(`denied`·`refused`) ⑥ 그 밖은 권한 질문. 정션·링크로 폴더 밖을 가리키는 경로는 실제 경로로 판정하므로 밖으로 묻는다. 경로를 알 수 없는 Codex 파일 변경과 경로 없는 Codex 승인 요청(네트워크 등)은 그 변경·명령 자체를 묻는다. 셸 판정은 인자에 적힌 경로만 보며 프로그램이 스스로 여는 경로는 보지 못한다(스크립트 정책처럼 방어선이지 OS 경계가 아니다).
 - **권한 질문:** `Execution.askFilePermission`이 공급자 자체 질문과 같은 대기 경로(요청 결과 `phase: 'question'`·`questions`, 답은 `POST …/requests/:r/questions`)로 카드 하나(`id:'file-access'`)를 띄우고 CLI의 권한 요청 안에서 답을 기다린다(턴 시계는 멈춤). 읽기: `{title:'AI가 프로젝트 작업 폴더 밖의 파일을 읽으려 합니다 · <경로>', blocks:'AI 파일 읽기', options:[once 이번만, always 이 폴더는 항상, deny 거절(권장)]}`. 쓰기·실행: '…밖에 파일을 쓰려 합니다'·'…밖에서 명령을 실행하려 합니다', `blocks` 'AI 파일 쓰기'·'AI 명령 실행', `options:[once 이번만, deny 거절(권장)]`. 한 요청의 질문은 차례로 하나씩이다. 기다리는 시간은 5분(`PERMISSION_WAIT_MS`)이며, 지나거나 턴이 멈추면 카드를 거두고 거절(`FILE_ACCESS_DENIED` 메시지, 그 턴에 다시 시도하지 말라는 안내)이다. `always`는 그 폴더를 `checkFolder`로 검사해 `read` 행으로 더하고(검사에 걸리면 이번만), 원격 세션의 답이면 이번만으로 처리한다. 대화가 아닌 단일 요청(카드를 보일 곳 없음)은 묻지 않고 거절한다. 거절은 그 호출 하나만이고 턴은 계속된다.
-- **금지 위치**(`deniedPath`): VIDE 데이터 폴더(현재·설치본), 사용자 폴더의 `.ssh`·`.aws`·`.gnupg`·`.azure`·`.kube`·`.docker`·`.claude`·`.codex`, 어느 위치든 경로 조각 `.ssh`·`.gnupg`·`.aws`, `%APPDATA%\Microsoft\{Credentials,Protect,SystemCertificates}`, `%LOCALAPPDATA%\Microsoft\Credentials`, `%LOCALAPPDATA%\{Google\Chrome,Microsoft\Edge}\User Data`, `%APPDATA%\Mozilla\Firefox`, 이름 `.env`·`.env.*`, `.git-credentials`, `.netrc`·`_netrc`, `.npmrc`, `.pypirc`, `.pgpass`, `id_rsa`·`id_dsa`·`id_ecdsa`·`id_ed25519`(공개 키 `.pub`는 아님), `credentials`·`credentials.json`·`.credentials.json`, 확장자 `.pem`·`.key`·`.pfx`·`.p12`·`.kdbx`·`.ppk`·`.jks`·`.keystore`. `file_list` 결과에서도 뺀다.
+- **프로젝트 기록**(ADR-031 6, ADR-032, `ownProjectData`): 나뉜 데이터 폴더에서 그 턴 프로젝트의 `projects/<projectId>` 안은 ②보다 먼저 판정한다. 읽기는 묻지 않고 허용(`프로젝트 기록 읽기 · 경로`), 쓰기는 늘 거절(`FILE_FORBIDDEN`, 묻지 않음), 실행은 명령이 SQLite를 읽기만 할 때 허용한다(`readOnlySqlite`: 여는 DB마다 읽기 전용 표시 — `node:sqlite` `readOnly: true`, `sqlite3 -readonly`, URI `mode=ro` — 가 있고 SQL·셸의 변경 낱말(`INSERT`·`UPDATE`·`DELETE`·`DROP`·`ALTER`·`CREATE`·`VACUUM`·`ATTACH`, `PRAGMA x=`, sqlite3의 `.output`·`.save`·`.backup` 등, `writeFile`·`rm`·`del`·`Remove-Item`·`Set-Content` 등)이 없음). 그 밖의 명령은 묻지 않고 거절하며 읽기 전용으로 열라는 메시지를 준다(묻고 허락하면 쓰기가 될 수 있어서). 실제 경로가 그 폴더 밖(정션)이거나 비밀 이름이면 금지다. `app.sqlite`·다른 프로젝트 폴더·`launch.json` 등 데이터 폴더의 나머지는 ②대로 금지이고, 나뉘기 전(하나의 DB)에는 데이터 폴더 전체가 금지다. 작업 폴더 값의 `records`가 이 폴더를 턴 규칙에 알린다.
+- **금지 위치**(`deniedPath`): VIDE 데이터 폴더(현재·설치본; 위 프로젝트 기록은 예외), 사용자 폴더의 `.ssh`·`.aws`·`.gnupg`·`.azure`·`.kube`·`.docker`·`.claude`·`.codex`, 어느 위치든 경로 조각 `.ssh`·`.gnupg`·`.aws`, `%APPDATA%\Microsoft\{Credentials,Protect,SystemCertificates}`, `%LOCALAPPDATA%\Microsoft\Credentials`, `%LOCALAPPDATA%\{Google\Chrome,Microsoft\Edge}\User Data`, `%APPDATA%\Mozilla\Firefox`, 이름 `.env`·`.env.*`, `.git-credentials`, `.netrc`·`_netrc`, `.npmrc`, `.pypirc`, `.pgpass`, `id_rsa`·`id_dsa`·`id_ecdsa`·`id_ed25519`(공개 키 `.pub`는 아님), `credentials`·`credentials.json`·`.credentials.json`, 확장자 `.pem`·`.key`·`.pfx`·`.p12`·`.kdbx`·`.ppk`·`.jks`·`.keystore`. `file_list` 결과에서도 뺀다.
 - **기록:** 묻거나 거절한 사용마다 요청의 `activity`에 경로만 한 줄(`파일 읽기 허용 · 경로`, `파일 쓰기 거절 · 경로`, `명령 실행 거절 · 경로`, 금지 위치는 `파일 거절 · 경로`)을 더한다. 작업 폴더 안의 사용은 CLI 진행 이벤트(도구 이름)로만 보인다. 내용은 남기지 않는다.
-- **지시:** 턴 규칙 끝에 `workFolderRule`(작업 폴더 경로, 밖은 호출하면 VIDE가 묻는다, 거절되면 다시 시도하지 말 것, 키·로그인·VIDE 데이터는 읽지 않음, Rhino·CAD 문서는 이 도구나 파일로 열거나 고치지 않고 `execute`로만)이 붙고, 공통 지침(`src/ai/instructions/common.md`)도 같은 내용을 적는다.
+- **지시:** 턴 규칙 끝에 `workFolderRule`(작업 폴더 경로, 밖은 호출하면 VIDE가 묻는다, 거절되면 다시 시도하지 말 것, 프로젝트 기록 폴더(`records`)는 묻지 않고 읽기 전용, 키·로그인·그 밖의 VIDE 데이터는 읽지 않음, Rhino·CAD 문서는 이 도구나 파일로 열거나 고치지 않고 `execute`로만)이 붙고, 공통 지침(`src/ai/instructions/common.md`)도 같은 내용을 적는다.
 
 ### 참고 이미지 확인 보드
 
@@ -629,9 +630,17 @@ Git에서 스냅샷·부모 참조·변경되지 않은 자료 재사용을 차�
 
 현재 전체 문서 지문과 호스트별 객체 제한은 이벤트 추적으로 자동 대체되지 않는다. 애드인의 이벤트 구독이 누락되었거나 연속성이 끊기면 캐시를 신뢰하지 않고 문서 재조회·강한 비교를 수행한다. 이벤트와 지문이 충돌하면 오래된 이벤트 기록을 우선하지 않는다. 자체 SDK 객체 상한의 실측 지원 여부는 호스트 지원표와 L5 검수로 확인한다.
 
-### 프로젝트별 DB 나누기(T-124 1단계, 검토 중)
+### 프로젝트별 DB(T-124, ADR-032)
 
-[ADR-032](../decisions/ADR-032-per-project-database.md)(`status: review`)의 구현 1단계다. 엔진은 아직 위의 `vide.sqlite` 하나를 쓴다. `src/core/project-split.ts`가 `<data>/vide.sqlite`를 공용 `app.sqlite`와 `projects/<projectId>/project.sqlite`로 나누고 지식 DB를 `projects/<projectId>/knowledge.sqlite`로 옮긴다. 두 파일은 같은 마이그레이션의 전체 schema를 갖고 자기 표에만 행이 있으며, 프로젝트 DB의 `projects`에는 외래 키 기준으로 그 프로젝트 한 행만 둔다. 표 분류·이행 순서·검사·실패 시 되돌리기는 ADR-032 「표 분류」·「이행」이 정한다. 엔진 시작 때 호출하고 `Store`를 나누는 연결은 T-123 뒤 2단계다.
+[ADR-032](../decisions/ADR-032-per-project-database.md)(`status: review`)의 저장 계약이다(2026-10-06 2단계 구현). 데이터 폴더(`%LOCALAPPDATA%\VIDE`, 개발 엔진은 `.vide/dev-data`)에 두 배치 중 하나가 있다.
+
+- **나뉜 배치(정본):** 공용 `app.sqlite`와 프로젝트마다 `projects/<projectId>/project.sqlite`, 지식 DB `projects/<projectId>/knowledge.sqlite`. 모든 DB는 같은 마이그레이션의 전체 schema(같은 `schema_version`)를 갖고 자기 표에만 행이 있다. 표 분류는 ADR-032 「표 분류」(`src/core/project-split.ts`의 `appTables`·`projectTables`)다. 프로젝트 DB의 `projects`에는 외래 키를 위해 그 프로젝트 한 행만 두며 이름의 정본은 `app.sqlite`다.
+- **하나의 DB(이전 배치):** `vide.sqlite` 하나에 모든 행. 나누기가 실패한 동안만 쓴다(아래 「시작」).
+- **`Store`(`src/core/store.ts`):** `new Store({ directory })`는 나뉜 배치, `new Store(file)`은 하나의 DB, `new Store(':memory:')`는 메모리의 나뉜 배치(프로젝트마다 메모리 DB, 시험용)다. `store.app`은 공용 DB(하나의 DB 배치에서는 그 DB), `store.db(projectId)`는 그 프로젝트의 DB(모르는 프로젝트는 `NOT_FOUND`), `store.databases()`는 프로젝트 DB 전부(하나의 DB 배치에서는 그 하나)다. 프로젝트 DB는 시작 때 모두 열고 계속 연다. 프로젝트를 만들면(`createProject`·`ensureProject`) 폴더와 DB를 만들고, 지우면(`deleteProject`, 진행 중 요청이 있으면 `PROJECT_BUSY`) DB를 닫고 폴더를 지운다. 프로젝트 행을 다루는 클래스(`DocumentLinks`·`JigStore`·`ConversationStore`·`KnowledgeReviewStore`·`ProjectFolders`·`JigDrafts`)는 `Store`를 받아 메서드의 `projectId`로 DB를 고르며 SQL은 그대로다. 인스턴스 ID·대화 ID만으로 찾는 메서드는 그 행이 있는 프로젝트 DB를 찾아 기억한다. `ModelStore`는 DB마다 하나(`Workspace.models(projectId)`)다. `jig_packages`는 `app.sqlite`에서 읽는다. 트랜잭션은 DB 하나 안에서만 연다(`store.tx(db, fn)`).
+- **프로젝트를 가로지르는 검사:** 엔진은 한 프로세스이고 SQLite 호출이 동기이므로 확인과 쓰기 사이에 다른 쓰기가 끼지 않는다. 요청 ID는 `app.sqlite`의 `request_index(id, projectId)`로 찾는다(만들 때 기록, 지울 때 삭제, 시작 때 프로젝트 DB에서 다시 만듦; 색인에 없거나 낡으면 프로젝트 DB를 차례로 찾고 고침; 버전 schema 밖의 캐시 표). 같은 ID의 요청이 다른 프로젝트에 있으면 `REVISION_CONFLICT`다. 한 열린 문서는 한 프로젝트에만 연결(`DOCUMENT_ALREADY_CONNECTED`, `connectedDocument`), 불확실한 쓰기(`hasUncertainWrite`)는 같은 호스트 문서의 다른 프로젝트 기록까지, 명령 ID·검토 메모 ID·`shared_feedback.identity`는 모든 프로젝트에서 하나다 — 이 검사들은 `store.databases()`를 차례로 묻는다(`findDb`). 최근 활동, 닫힌 대화 정리, 작업 사본 정리의 사용 중 경로, 시작 때 요청 복구, 저장 정리(`maintainModels`, DB마다 차례로), `compact`(DB마다)도 프로젝트 DB 전부를 본다. `query`의 `storedDisplay`는 DB마다 가장 새 표시 Sync를 찾고 그중 `createdAt`이 가장 늦은 것을 쓴다.
+- **시작(`openStore`, `src/core/store-open.ts`):** `app.sqlite`가 있으면 나뉜 배치. `vide.sqlite`만 있으면 한 번 열어 schema를 올린 뒤(이전과 같은 오류로 실패할 수 있음) `splitProjectDatabase`(ADR-032 「이행」: 백업·검사·실패 시 되돌리기)를 돌리고, 성공하면 나뉜 배치로 연다. 나누기가 실패하면 이전과 똑같이 `vide.sqlite` 하나로 열고 진단 기록에 `db-split-failed {code, layout:'single'}`을 남기며, 다음 시작이 다시 시도한다. 성공은 `db-split {ms, bytes, projects, knowledge, layout}`, 두 배치가 함께 있으면 `db-split-conflict`(나뉜 배치를 쓰고 `vide.sqlite`는 건드리지 않음). 둘 다 없으면(새 설치) 나뉜 배치로 만든다. 잠금은 두 배치 모두 `vide.sqlite.controller`다. 이전 설치본은 나뉜 데이터 폴더를 모른다; 되돌릴 때는 `vide.sqlite.migrated`(·`-wal`)를 `vide.sqlite`로 되돌린다.
+- **백업:** 마이그레이션 전 백업은 DB 파일마다 `<파일>.backups`에 만든다. `backupWorkspace`(`src/core/backup.ts`)는 나뉜 배치에서 `app.sqlite`와 프로젝트마다 `project.sqlite`·`knowledge.sqlite`를 같은 상대 경로로 복사하고, `verifyBackup`은 `app.sqlite`(또는 `vide.sqlite`)와 각 `project.sqlite`의 schema를 확인한다.
+- **AI 읽기:** §3 「프로젝트 폴더와 파일 도구」의 프로젝트 기록 규칙.
 
 ### 첫 구현의 세 가지 기록
 

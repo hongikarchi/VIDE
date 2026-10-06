@@ -10,6 +10,7 @@ import { startServer } from '../../src/server/server.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { runDirectory } from './run-directory.mjs';
 
+import { soleDb } from '../fixtures/store.mjs';
 // Use only the owned synthetic result from browser-linked-hosts --intervene.
 const sourceDirectory = resolve(process.argv[2]);
 const proof = JSON.parse(await readFile(join(sourceDirectory, 'passed.json'), 'utf8'));
@@ -86,7 +87,7 @@ try {
       sourceHashes.push({ filename: result.filename, fileHash: result.fileHash });
       result.filename = filename;
     }
-    app.store.db
+    soleDb(app.store)
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
       .run(row.id, project.id, row.input, row.state, JSON.stringify(result), row.createdAt);
   }
@@ -113,13 +114,13 @@ try {
   let saved;
   const deadline = Date.now() + 180000;
   while (Date.now() < deadline) {
-    saved = app.store.db.prepare('SELECT * FROM workspace_requests WHERE id=?').get(parent.id);
+    saved = soleDb(app.store).prepare('SELECT * FROM workspace_requests WHERE id=?').get(parent.id);
     if (!['queued', 'running'].includes(saved.state)) break;
     await new Promise((r) => setTimeout(r, 200));
   }
   assert.equal(saved.state, 'succeeded', JSON.stringify(saved));
   const results = JSON.parse(saved.result).targetResults.map((r) => {
-    const row = app.store.db
+    const row = soleDb(app.store)
       .prepare('SELECT * FROM workspace_requests WHERE id=?')
       .get(r.requestId);
     return { ...row, input: JSON.parse(row.input), result: JSON.parse(row.result) };
@@ -129,7 +130,7 @@ try {
   assert.equal(cad.result.unchanged, true);
   assert.equal(cad.result.scene[0].area, 260);
   const basis = JSON.parse(
-    app.store.db
+    soleDb(app.store)
       .prepare('SELECT result FROM workspace_requests WHERE id=?')
       .get(cad.input.baseRequestId).result,
   );

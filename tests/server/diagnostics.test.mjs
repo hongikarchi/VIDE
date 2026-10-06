@@ -77,7 +77,7 @@ test('an internal error is logged with the request number shown to the user; run
     const project = await (await api('/projects', 'POST', { name: 'diag' })).json();
     // A damaged knowledge DB makes the reader throw an unexpected error.
     await mkdir(join(directory, 'knowledge'));
-    await writeFile(join(directory, 'knowledge', project.id + '.sqlite'), 'not a database');
+    await writeFile(join(directory, 'projects', project.id, 'knowledge.sqlite'), 'not a database');
     const failed = await api(`/projects/${project.id}/facts`);
     assert.equal(failed.status, 500);
     const { code, requestId } = await failed.json();

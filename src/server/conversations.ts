@@ -400,14 +400,14 @@ export class ConversationService {
   private cachedLimits?: SessionLimits;
   constructor(store: Store, options: Options = {}) {
     this.db = store;
-    this.store = new ConversationStore(store.db);
+    this.store = new ConversationStore(store);
     this.options = options;
-    const location = store.db.location();
+    const location = store.dataDirectory();
     this.settingsFile =
       options.settingsFile !== undefined
         ? options.settingsFile
         : location
-          ? join(dirname(location), 'conversation-settings.json')
+          ? join(location, 'conversation-settings.json')
           : null;
     this.recover();
   }
@@ -440,17 +440,19 @@ export class ConversationService {
    * interrupted request that had started, with no completed turn after it, marks it lost.
    */
   private recover() {
-    const lost = this.db.db
-      .prepare(
-        `SELECT conversationId, provider, accountProfileId, sessionId FROM provider_sessions s
+    const lost = this.db.databases().flatMap((db) =>
+      db
+        .prepare(
+          `SELECT conversationId, provider, accountProfileId, sessionId FROM provider_sessions s
           WHERE s.state='active' AND EXISTS(
             SELECT 1 FROM workspace_requests r WHERE r.conversationId=s.conversationId
               AND r.state='interrupted'
               AND (r.result IS NULL OR json_extract(r.result,'$.phase') NOT IN ('queue','waiting'))
               AND NOT EXISTS(SELECT 1 FROM workspace_requests r2 WHERE r2.conversationId=r.conversationId
                 AND r2.state='succeeded' AND r2.rowid>r.rowid))`,
-      )
-      .all() as unknown as ProviderSessionKey[];
+        )
+        .all(),
+    ) as unknown as ProviderSessionKey[];
     for (const key of lost) this.store.setSessionState(key, 'lost');
   }
   private defaultConversation(projectId: string): DefaultConversation {
@@ -533,7 +535,9 @@ export class ConversationService {
       (active.turns < limits.maxTurns && active.inputTokens < limits.maxInputTokens)
     )
       return null;
-    const { finished, files } = this.recentWork(this.latestRows(conversation.id));
+    const { finished, files } = this.recentWork(
+      this.latestRows(conversation.projectId, conversation.id),
+    );
     return {
       kind: 'length',
       grade: 'T1',
@@ -564,8 +568,9 @@ export class ConversationService {
       }
     return { finished, files: files.size };
   }
-  private latestRows(conversationId: string) {
-    return this.db.db
+  private latestRows(projectId: string, conversationId: string) {
+    return this.db
+      .db(projectId)
       .prepare(
         `SELECT id, state, input, result FROM workspace_requests WHERE conversationId=?
           ORDER BY rowid DESC LIMIT 21`,
@@ -607,7 +612,7 @@ export class ConversationService {
     if (
       value.kind === 'jig-make' &&
       value.draftId &&
-      new JigStore(this.db.db).draft(projectId, value.draftId).state !== 'open'
+      new JigStore(this.db).draft(projectId, value.draftId).state !== 'open'
     )
       throw new DomainError('DRAFT_NOT_OPEN');
     const conversation = this.store.create(
@@ -688,7 +693,7 @@ export class ConversationService {
     const conversation = this.store.get(projectId, conversationId);
     if (conversation.state !== 'open') throw new DomainError('CONVERSATION_CLOSED');
     if (conversation.kind === 'jig-make') throw new DomainError('INVALID_INPUT');
-    new JigStore(this.db.db).instance(projectId, jigInstanceId);
+    new JigStore(this.db).instance(projectId, jigInstanceId);
     if (conversation.jigInstanceId && conversation.jigInstanceId !== jigInstanceId)
       throw new DomainError('CONVERSATION_BOUND');
     return this.summarize(this.store.update(projectId, conversationId, { jigInstanceId }));
@@ -729,7 +734,7 @@ export class ConversationService {
     if (conversation.kind === 'jig-make') {
       if (
         !conversation.draftId ||
-        new JigStore(this.db.db).draft(projectId, conversation.draftId).state !== 'open'
+        new JigStore(this.db).draft(projectId, conversation.draftId).state !== 'open'
       )
         throw new DomainError('DRAFT_NOT_OPEN');
       input.hostUse = 'none';
@@ -882,7 +887,7 @@ export class ConversationService {
       model: conversation.model,
     });
     // The account-limit stop the old conversation shows is answered by this move.
-    const stopped = this.limitStopped(from.id);
+    const stopped = this.limitStopped(projectId, from.id);
     this.store.addLedgerItem(from.id, {
       kind: 'handoff',
       ...(stopped ? { requestId: stopped } : {}),
@@ -925,8 +930,8 @@ export class ConversationService {
    * The conversation's latest request, when it stopped on the account's limit: [다른 AI로 이어 가기]
    * records the hand-over against it (that turn is not sent again).
    */
-  private limitStopped(conversationId: string) {
-    const [last] = this.latestRows(conversationId);
+  private limitStopped(projectId: string, conversationId: string) {
+    const [last] = this.latestRows(projectId, conversationId);
     if (!last || last.state !== 'failed') return undefined;
     try {
       const code = (JSON.parse(last.result ?? 'null') as { code?: unknown } | null)?.code;

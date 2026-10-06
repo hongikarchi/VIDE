@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { Store } from '../../src/core/store.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 // The request list leaves out display geometry and reuses decoded rows (the linked-file list polls
 // it every 1.5 s; parsing every stored model each time stalled the engine).
 test('request list omits display geometry, reuses rows and follows every change', (t) => {
@@ -35,7 +36,7 @@ test('request list omits display geometry, reuses rows and follows every change'
     definitions: {},
   };
   const insert = (id, result) =>
-    store.db
+    soleDb(store)
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
       .run(
         id,
@@ -64,7 +65,7 @@ test('request list omits display geometry, reuses rows and follows every change'
   workspace.update(project.id, 's1', 'succeeded', { ...sync, text: '끗' });
   assert.equal(workspace.list(project.id)[0].result.text, '끗');
   // A change written elsewhere is seen through the state or size.
-  store.db
+  soleDb(store)
     .prepare("UPDATE workspace_requests SET result=? WHERE id='t1'")
     .run(JSON.stringify({ text: '다른 답' }));
   assert.equal(workspace.list(project.id)[1].result.text, '다른 답');

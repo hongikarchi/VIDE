@@ -28,9 +28,15 @@ export const DISCIPLINES: Record<string, string> = {
   other: '기타',
 };
 
+/**
+ * The project's knowledge DB: in its project data folder once the data folder is split
+ * (`app.sqlite` present, ADR-032), else the old `knowledge/<projectId>.sqlite`.
+ */
 export function knowledgeFile(dataDirectory: string, projectId: string) {
   if (!/^[0-9a-f-]{36}$/i.test(projectId)) throw new DomainError('INVALID_INPUT');
-  return join(dataDirectory, 'knowledge', projectId + '.sqlite');
+  return existsSync(join(dataDirectory, 'app.sqlite'))
+    ? join(dataDirectory, 'projects', projectId, 'knowledge.sqlite')
+    : join(dataDirectory, 'knowledge', projectId + '.sqlite');
 }
 
 function open(file: string) {

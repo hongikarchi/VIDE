@@ -47,11 +47,11 @@ test('migration backs up committed WAL data and preserves records and relationsh
   for (let i = 0; i < 2; i++) {
     const store = new Store(file);
     assert.equal(
-      store.db.prepare('SELECT version FROM schema_version').get().version,
+      store.app.prepare('SELECT version FROM schema_version').get().version,
       schemaVersion,
     );
     assert.equal(
-      store.db.prepare('SELECT requestId FROM publication_exports').get().requestId,
+      store.app.prepare('SELECT requestId FROM publication_exports').get().requestId,
       'w',
     );
     store.close();
@@ -84,7 +84,7 @@ test('backup failure aborts before modification and fresh database creates the c
   db.close();
   const memory = new Store(':memory:');
   assert.equal(
-    memory.db.prepare('SELECT version FROM schema_version').get().version,
+    memory.app.prepare('SELECT version FROM schema_version').get().version,
     schemaVersion,
   );
   memory.close();
@@ -120,9 +120,9 @@ test('schema 3 keeps hidden conversation entries without deleting requests', asy
 test('schema 4 keeps linked files per project, one link per file, hidden and removal', async () => {
   const { DocumentLinks } = await import('../../src/core/document-links.ts');
   const store = new Store(':memory:');
-  const links = new DocumentLinks(store.db);
-  const a = store.db.prepare("INSERT INTO projects VALUES('a','A')").run() && 'a';
-  store.db.prepare("INSERT INTO projects VALUES('b','B')").run();
+  const links = new DocumentLinks(store.app);
+  const a = store.app.prepare("INSERT INTO projects VALUES('a','A')").run() && 'a';
+  store.app.prepare("INSERT INTO projects VALUES('b','B')").run();
   const model = {
     host: 'rhino',
     name: 'm.3dm',
@@ -215,18 +215,18 @@ test('schema 5 migrates a schema 4 database after a backup without rewriting req
   const store = new Store(file);
   try {
     assert.equal(
-      store.db.prepare('SELECT version FROM schema_version').get().version,
+      store.app.prepare('SELECT version FROM schema_version').get().version,
       schemaVersion,
     );
     // Request rows keep their count, content and size; old requests belong to the default conversation.
-    assert.deepEqual(requestRows(store.db), before);
+    assert.deepEqual(requestRows(store.app), before);
     assert.equal(
-      store.db
+      store.app
         .prepare('SELECT count(*) AS n FROM workspace_requests WHERE conversationId IS NULL')
         .get().n,
       21,
     );
-    assert.equal(store.db.prepare('SELECT count(*) AS n FROM hidden_requests').get().n, 1);
+    assert.equal(store.app.prepare('SELECT count(*) AS n FROM hidden_requests').get().n, 1);
     for (const table of [
       'conversations',
       'provider_sessions',
@@ -245,10 +245,10 @@ test('schema 5 migrates a schema 4 database after a backup without rewriting req
       'project_folders',
       'agenda_items',
     ])
-      assert.ok(tableNames(store.db).includes(table), table);
+      assert.ok(tableNames(store.app).includes(table), table);
     // conversationId is not indexed (ARCH-03 §10.1).
     assert.equal(
-      store.db
+      store.app
         .prepare(
           "SELECT count(*) AS n FROM sqlite_master WHERE type='index' AND tbl_name='workspace_requests' AND sql IS NOT NULL",
         )
@@ -256,11 +256,11 @@ test('schema 5 migrates a schema 4 database after a backup without rewriting req
       0,
     );
     // Positional inserts of six values keep working, and the conversation comes from the input.
-    store.db
+    store.app
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
       .run('new', 'p', JSON.stringify({ body: 'x', conversationId: 'c1' }), 'draft', null, 't4');
     assert.equal(
-      store.db.prepare("SELECT conversationId FROM workspace_requests WHERE id='new'").get()
+      store.app.prepare("SELECT conversationId FROM workspace_requests WHERE id='new'").get()
         .conversationId,
       'c1',
     );
@@ -300,10 +300,10 @@ test('an interrupted schema 5 migration leaves schema 4 and its requests, and th
   const store = new Store(restored);
   try {
     assert.equal(
-      store.db.prepare('SELECT version FROM schema_version').get().version,
+      store.app.prepare('SELECT version FROM schema_version').get().version,
       schemaVersion,
     );
-    assert.deepEqual(requestRows(store.db), before);
+    assert.deepEqual(requestRows(store.app), before);
   } finally {
     store.close();
   }
@@ -349,14 +349,14 @@ test('schema 8 gives the 할 일 of a schema 7 database the kind task and refuse
   const store = new Store(file);
   try {
     assert.equal(
-      store.db.prepare('SELECT version FROM schema_version').get().version,
+      store.app.prepare('SELECT version FROM schema_version').get().version,
       schemaVersion,
     );
     assert.equal(
-      store.db.prepare("SELECT kind FROM agenda_items WHERE id='a1'").get().kind,
+      store.app.prepare("SELECT kind FROM agenda_items WHERE id='a1'").get().kind,
       'task',
     );
-    assert.throws(() => store.db.prepare("UPDATE agenda_items SET kind='party'").run());
+    assert.throws(() => store.app.prepare("UPDATE agenda_items SET kind='party'").run());
   } finally {
     store.close();
   }
@@ -389,29 +389,29 @@ test('schema 9 adds per-object model tables to a schema 8 database after a backu
   db.close();
   const store = new Store(file);
   try {
-    assert.equal(store.db.prepare('SELECT version FROM schema_version').get().version, 9);
+    assert.equal(store.app.prepare('SELECT version FROM schema_version').get().version, 9);
     // Existing rows are not rewritten by the migration (they move later, row by row).
-    assert.deepEqual(requestRows(store.db), before);
+    assert.deepEqual(requestRows(store.app), before);
     for (const table of [
       'object_versions',
       'sync_manifests',
       'sync_manifest_items',
       'sync_manifest_removed',
     ])
-      assert.ok(tableNames(store.db).includes(table), table);
-    store.db.exec(`INSERT INTO object_versions VALUES('p','v1','object','{}',NULL,2);
+      assert.ok(tableNames(store.app).includes(table), table);
+    store.app.exec(`INSERT INTO object_versions VALUES('p','v1','object','{}',NULL,2);
       INSERT INTO sync_manifests VALUES('sync','p',NULL,1,1,1,NULL,'t');
       INSERT INTO sync_manifest_items VALUES('sync','p','object','a',0,'v1',1);
       INSERT INTO sync_manifest_removed VALUES('sync','object','b',1);`);
     // A row must point at an existing version.
     assert.throws(() =>
-      store.db.exec(
+      store.app.exec(
         "INSERT INTO sync_manifest_items VALUES('sync','p','object','c',1,'missing',1)",
       ),
     );
-    store.db.exec("DELETE FROM workspace_requests WHERE id='sync'");
+    store.app.exec("DELETE FROM workspace_requests WHERE id='sync'");
     for (const table of ['sync_manifests', 'sync_manifest_items', 'sync_manifest_removed'])
-      assert.equal(store.db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n, 0, table);
+      assert.equal(store.app.prepare(`SELECT count(*) AS n FROM ${table}`).get().n, 0, table);
   } finally {
     store.close();
   }

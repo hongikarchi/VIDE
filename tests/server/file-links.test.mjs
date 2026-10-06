@@ -15,6 +15,7 @@ import { importModel } from '../../src/server/import-model.ts';
 import { startServer } from '../../src/server/server.ts';
 import { removeLink } from '../../src/server/link-removal.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 const upload = (bytes) =>
   Object.assign(Readable.from([bytes]), {
     headers: { 'content-type': 'application/octet-stream' },
@@ -23,7 +24,7 @@ const upload = (bytes) =>
 test('opening a file lists it as a linked file; the same name reuses the entry', async () => {
   const store = new Store(':memory:'),
     workspace = new Workspace(store),
-    links = new DocumentLinks(store.db),
+    links = new DocumentLinks(store),
     project = store.createProject('P');
   const directory = await mkdtemp(join(tmpdir(), 'vide-file-link-'));
   const cad = { directory, importFile: async () => ({ objects: [], scene: [], verified: true }) };
@@ -104,24 +105,26 @@ test('older imports join the list hidden once; removing a file deletes its recor
     await mkdir(uploads, { recursive: true });
     await writeFile(join(uploads, 'old-import.upload.3dm'), 'upload');
     const insert = (id, workerDirectory) =>
-      app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-        id,
-        project.id,
-        JSON.stringify(input(id)),
-        'succeeded',
-        JSON.stringify({
-          host: 'rhino',
-          hostExecuted: true,
-          objects: [],
-          scene: [],
-          ...(workerDirectory ? { workerDirectory } : {}),
-        }),
-        new Date().toISOString(),
-      );
+      soleDb(app.store)
+        .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+        .run(
+          id,
+          project.id,
+          JSON.stringify(input(id)),
+          'succeeded',
+          JSON.stringify({
+            host: 'rhino',
+            hostExecuted: true,
+            objects: [],
+            scene: [],
+            ...(workerDirectory ? { workerDirectory } : {}),
+          }),
+          new Date().toISOString(),
+        );
     insert('published-import');
     insert('old-import', work);
     // A web publication points at one import: that record is kept (hidden), not deleted.
-    app.store.db
+    soleDb(app.store)
       .prepare('INSERT INTO publication_exports VALUES(?,?,?,?,?)')
       .run('pub', project.id, 'published-import', 'm', 's');
     const [file] = await api(`/projects/${project.id}/links`);
@@ -136,7 +139,7 @@ test('older imports join the list hidden once; removing a file deletes its recor
     assert.deepEqual(removed.requestIds.sort(), ['old-import', 'published-import']);
     assert.equal(removed.deleted, 1);
     assert.deepEqual(await api(`/projects/${project.id}/links`), []);
-    const rows = app.store.db
+    const rows = soleDb(app.store)
       .prepare('SELECT id FROM workspace_requests WHERE projectId=?')
       .all(project.id)
       .map((row) => row.id);
@@ -157,29 +160,31 @@ test('older imports join the list hidden once; removing a file deletes its recor
 test('a file whose Sync is running is not removed', async () => {
   const store = new Store(':memory:'),
     workspace = new Workspace(store),
-    links = new DocumentLinks(store.db),
+    links = new DocumentLinks(store),
     project = store.createProject('P');
   try {
     const link = links.fileLink(project.id, 'rhino', 'a.3dm');
-    store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-      'running',
-      project.id,
-      JSON.stringify({
-        id: 'running',
-        linkId: link.id,
-        provider: 'codex-cli',
-        host: 'rhino',
-        source: 'file',
-        permission: 'candidate',
-        body: 'a.3dm 불러오기',
-        pins: [],
-        sketches: [],
-        files: [],
-      }),
-      'running',
-      null,
-      new Date().toISOString(),
-    );
+    soleDb(store)
+      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+      .run(
+        'running',
+        project.id,
+        JSON.stringify({
+          id: 'running',
+          linkId: link.id,
+          provider: 'codex-cli',
+          host: 'rhino',
+          source: 'file',
+          permission: 'candidate',
+          body: 'a.3dm 불러오기',
+          pins: [],
+          sketches: [],
+          files: [],
+        }),
+        'running',
+        null,
+        new Date().toISOString(),
+      );
     await assert.rejects(
       removeLink({
         projectId: project.id,

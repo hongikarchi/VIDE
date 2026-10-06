@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../../src/core/store.ts';
 import { AiSettings } from '../../src/core/ai-settings.ts';
+import { soleDb } from '../fixtures/store.mjs';
 test('CLI settings persist paths, enforce revisions and reject credentials, shell commands and missing files', () => {
   const store = new Store(':memory:');
   try {
@@ -57,7 +58,7 @@ test('invalid or damaged AI settings cannot silently become executable configura
     }
     assert.equal(checks, 0);
     assert.equal(settings.get().revision, 0);
-    store.db.prepare('INSERT INTO ai_settings VALUES(1,1,?)').run('{broken');
+    store.app.prepare('INSERT INTO ai_settings VALUES(1,1,?)').run('{broken');
     assert.throws(() => settings.get(), { code: 'INVALID_INPUT' });
     assert.throws(
       () => settings.save({ revision: 1, paths: { 'claude-cli': null, 'codex-cli': null } }),

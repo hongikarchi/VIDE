@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { DatabaseSync, backup } from 'node:sqlite';
 import { mkdir, readdir, lstat, realpath, copyFile, readFile, writeFile } from 'node:fs/promises';
-import { resolve, join, relative, dirname, isAbsolute } from 'node:path';
+import { resolve, join, relative, dirname, isAbsolute, sep } from 'node:path';
 import { createHash } from 'node:crypto';
 import { checkDatabase } from './database-check.ts';
 import { schemaVersion } from './migrations.ts';
@@ -31,6 +31,26 @@ async function files(root: string, path = root): Promise<string[]> {
   return result;
 }
 
+const exists = (path: string) =>
+  lstat(path).then(
+    () => true,
+    () => false,
+  );
+/** A project's knowledge DB (its own schema, not the workspace's). */
+const knowledge = (path: string) => /[\\/]knowledge\.sqlite$/.test(path);
+/** app.sqlite and each project's DBs, relative to the data folder. */
+async function splitDatabases(source: string) {
+  const list = ['app.sqlite'];
+  const root = join(source, 'projects');
+  if (!(await exists(root))) return list;
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    for (const name of ['project.sqlite', 'knowledge.sqlite'])
+      if (await exists(join(root, entry.name, name))) list.push(join('projects', entry.name, name));
+  }
+  return list;
+}
+
 /** Stopped local workspace only. Never opens Store or changes interrupted job states. */
 export async function backupWorkspace(source: string, destination: string) {
   source = await realpath(resolve(source));
@@ -40,9 +60,10 @@ export async function backupWorkspace(source: string, destination: string) {
   );
   if (source === destination || inside(source, destination) || inside(destination, source))
     fail('BACKUP_LOCATION_INVALID');
+  // The engine's lock is the same file in both layouts (see Store).
   const filename = join(source, 'vide.sqlite');
-  if (!(await lstat(filename)).isFile()) fail('BACKUP_FILE_UNSUPPORTED');
-  let controller: DatabaseSync | undefined, db: DatabaseSync | undefined;
+  const split = await exists(join(source, 'app.sqlite'));
+  let controller: DatabaseSync | undefined;
   try {
     controller = new DatabaseSync(filename + '.controller');
     try {
@@ -50,12 +71,27 @@ export async function backupWorkspace(source: string, destination: string) {
     } catch {
       fail('CONTROLLER_BUSY');
     }
-    const schema = checkDatabase(filename);
-    db = new DatabaseSync(filename, { readOnly: true });
+    // Single layout: vide.sqlite. Split layout (ADR-032): app.sqlite and every project's DBs.
+    const databases = split ? await splitDatabases(source) : ['vide.sqlite'];
+    let schema = 0;
+    for (const path of databases) {
+      if (!(await lstat(join(source, path))).isFile()) fail('BACKUP_FILE_UNSUPPORTED');
+      if (!knowledge(path)) schema = checkDatabase(join(source, path));
+    }
     await mkdir(destination); // Existing backups are never overwritten.
-    await backup(db, join(destination, 'vide.sqlite'));
-    checkDatabase(join(destination, 'vide.sqlite'));
-    const entries = [{ path: 'vide.sqlite', sha256: await hash(join(destination, 'vide.sqlite')) }];
+    const entries: { path: string; sha256: string }[] = [];
+    for (const path of databases) {
+      const target = join(destination, path);
+      await mkdir(dirname(target), { recursive: true });
+      const db = new DatabaseSync(join(source, path), { readOnly: true });
+      try {
+        await backup(db, target);
+      } finally {
+        db.close();
+      }
+      if (!knowledge(path)) checkDatabase(target);
+      entries.push({ path: path.split(sep).join('/'), sha256: await hash(target) });
+    }
     for (const folder of ['models', 'cad-models', 'sdk-models']) {
       const directory = join(source, folder);
       try {
@@ -91,7 +127,6 @@ export async function backupWorkspace(source: string, destination: string) {
     );
     return manifest;
   } finally {
-    db?.close();
     controller?.close();
   }
 }
@@ -123,7 +158,11 @@ export async function verifyBackup(directory: string) {
     if (!inside(directory, await realpath(target)) || (await hash(target)) !== file.sha256)
       fail('BACKUP_INVALID');
   }
-  if (!seen.has(join(directory, 'vide.sqlite'))) fail('BACKUP_INVALID');
-  if (checkDatabase(join(directory, 'vide.sqlite')) !== manifest.schema) fail('BACKUP_INVALID');
+  // The single DB, or app.sqlite with the project DBs of the split layout.
+  const main = seen.has(join(directory, 'app.sqlite')) ? 'app.sqlite' : 'vide.sqlite';
+  if (!seen.has(join(directory, main))) fail('BACKUP_INVALID');
+  for (const file of manifest.files)
+    if (file.path === main || /^projects\/[^/]+\/project\.sqlite$/.test(file.path))
+      if (checkDatabase(join(directory, file.path)) !== manifest.schema) fail('BACKUP_INVALID');
   return manifest;
 }

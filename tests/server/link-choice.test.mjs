@@ -14,6 +14,7 @@ import { AttachedZwcadDocuments } from '../../hosts/zwcad/attached-documents.ts'
 import { DocumentLinks, matchOpenDocuments } from '../../src/core/document-links.ts';
 import { Store } from '../../src/core/store.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 const W1 = '11:22:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const W2 = '11:22:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
@@ -94,30 +95,32 @@ async function zwcadEngine(t, windows) {
   const project = await api('/projects', 'POST', { name: 'p' });
   const insert = (id, name, path, instance, secondsAgo = 3600) => {
     const at = new Date(Date.now() - secondsAgo * 1000).toISOString();
-    app.store.db
+    soleDb(app.store)
       .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
       .run(id, project.id, 'zwcad', name, path, instance, 1, at, at);
   };
   const sync = (id, linkId, state = 'succeeded') =>
-    app.store.db.prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)').run(
-      id,
-      project.id,
-      JSON.stringify({
+    soleDb(app.store)
+      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+      .run(
         id,
-        linkId,
-        provider: 'codex-cli',
-        host: 'zwcad',
-        source: 'document',
-        permission: 'candidate',
-        body: 'Sync',
-        pins: [],
-        sketches: [],
-        files: [],
-      }),
-      state,
-      JSON.stringify({ hostExecuted: true, host: 'zwcad' }),
-      new Date().toISOString(),
-    );
+        project.id,
+        JSON.stringify({
+          id,
+          linkId,
+          provider: 'codex-cli',
+          host: 'zwcad',
+          source: 'document',
+          permission: 'candidate',
+          body: 'Sync',
+          pins: [],
+          sketches: [],
+          files: [],
+        }),
+        state,
+        JSON.stringify({ hostExecuted: true, host: 'zwcad' }),
+        new Date().toISOString(),
+      );
   return { app, api, project, insert, sync, written, base: `/projects/${project.id}/links` };
 }
 
@@ -140,7 +143,8 @@ test('Link asks only when closed rows could be this drawing; the answer picks th
   // Nothing changed before the answer (read directly: the list's own poll would reconnect day1
   // by path and say so, which the next test covers).
   assert.equal(
-    app.store.db.prepare('SELECT instance FROM document_links WHERE id=?').get('day1').instance,
+    soleDb(app.store).prepare('SELECT instance FROM document_links WHERE id=?').get('day1')
+      .instance,
     '1:1:day-one',
   );
   const replaced = await api(base, 'POST', {
@@ -377,7 +381,7 @@ test('a closed duplicate of an open window merges into it; an empty closed row i
   assert.equal(byId('dup').connection, null);
   assert.equal(byId('dup').cleanup, undefined);
   // An old duplicate of the same window (from before T-107) offers 합치기 into the open row.
-  app.store.db
+  soleDb(app.store)
     .prepare('UPDATE document_links SET instance=?, path=? WHERE id=?')
     .run(W1, 'D:\\w\\plan-old.dwg', 'dup');
   list = await api(base);
@@ -387,7 +391,7 @@ test('a closed duplicate of an open window merges into it; an empty closed row i
   assert.equal(merged.moved, 1);
   list = await api(base);
   assert.deepEqual(list.map((row) => row.id).sort(), ['day1', 'empty']);
-  const requests = app.store.db
+  const requests = soleDb(app.store)
     .prepare("SELECT id FROM workspace_requests WHERE json_extract(input,'$.linkId')='day1'")
     .all()
     .map((row) => row.id)
@@ -412,7 +416,7 @@ test('a merge between UUID rows shows the moved Syncs on the target at once', as
   // Conversations that name the source as a target file name the target instead (review
   // finding, 2026-10-02), once even when they already named both.
   const conversation = (id, targets) =>
-    app.store.db
+    soleDb(app.store)
       .prepare(
         "INSERT INTO conversations(id,projectId,kind,title,provider,targets,state,createdAt,updatedAt) VALUES(?,?,'chat','t','claude',?,'open','2026-10-02T00:00:00.000Z','2026-10-02T00:00:00.000Z')",
       )
@@ -435,7 +439,7 @@ test('a merge between UUID rows shows the moved Syncs on the target at once', as
   assert.equal(byId(target).lastSync?.requestId, 's-source');
   const targetsOf = (id) =>
     JSON.parse(
-      app.store.db.prepare('SELECT targets FROM conversations WHERE id=?').get(id).targets,
+      soleDb(app.store).prepare('SELECT targets FROM conversations WHERE id=?').get(id).targets,
     );
   assert.deepEqual(targetsOf('c-source'), [target]);
   assert.deepEqual(targetsOf('c-both'), [target]);
@@ -521,7 +525,7 @@ test('matcher: a copy listed first does not take the row from the file at its pa
 test('DocumentLinks: replace with an unknown row is NOT_FOUND; split needs a follow notice', () => {
   const store = new Store(':memory:');
   const p = store.createProject('P').id;
-  const links = new DocumentLinks(store.db);
+  const links = new DocumentLinks(store);
   assert.throws(
     () =>
       links.link(p, {
@@ -614,7 +618,7 @@ test('Rhino: the stored id comes through attachedStatus and [분리] writes the 
   const instance = `${identity.pid}:${identity.startTicks}:${identity.sessionId}`;
   // A closed row from yesterday whose id the document stores, under another path.
   const at = new Date(Date.now() - 86_400_000).toISOString();
-  app.store.db
+  soleDb(app.store)
     .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
     .run('kept', project.id, 'rhino', 'Old.3dm', 'C:\\old\\Old.3dm', '1:1:gone', 7, at, at);
   document.linkIds = ['kept'];

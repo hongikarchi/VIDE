@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 
+import { soleDb } from '../fixtures/store.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'vide-intervention-'));
 let app, browser, release;
 const gate = new Promise((resolve) => {
@@ -67,7 +68,8 @@ try {
   );
   assert.equal(received.length, 1);
   assert.equal(await page.locator('#body').inputValue(), '');
-  const rows = () => app.store.db.prepare('SELECT * FROM workspace_requests ORDER BY rowid').all();
+  const rows = () =>
+    soleDb(app.store).prepare('SELECT * FROM workspace_requests ORDER BY rowid').all();
   assert.equal(rows().length, 2);
   assert.match(JSON.parse(rows()[1].input).body, /Keep the boundary[\s\S]*Use height 4.5 m/);
   release();
