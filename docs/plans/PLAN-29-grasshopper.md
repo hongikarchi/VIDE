@@ -54,7 +54,7 @@ related: [ADR-033, ADR-031, ADR-029, ADR-027, HOST-RHINO, SPEC-02, ARCH-01]
 6. `gh_state since` → 바뀐 객체·지운 ID만. 객체 300개 이상 정의에서 `nextOffset` 페이지.
 7. `gh_capture`(전체·`ids`·`area`)가 사용자 캔버스 시점을 바꾸지 않고 이미지를 돌려줌. 보이지 않는 문서를 고르면 `GH_DOCUMENT_NOT_ACTIVE`.
 8. `gh_bake` → Rhino에 객체(레이어·`vide-gh-source`), 실행 행 하나, [되돌리기]로 사라지고 Live Sync 보기에 반영.
-9. `gh_open`(작업 폴더의 .gh) 열림, 작업 폴더 밖 경로는 `GH_OUTSIDE_WORK_FOLDER`. `gh_save`가 작업 폴더에 저장.
+9. `gh_open`(작업 폴더의 .gh) 열림, 작업 폴더 밖 경로는 승인 카드가 뜨고 허용하면 열림, 거절하면 `GH_OUTSIDE_WORK_FOLDER`. `gh_save`도 같음.
 10. Value List 항목·선택, Boolean Toggle, Panel 글, 컴포넌트 입력 값(`param`+`data`) 쓰기. Button 값 요청은 `GH_BUTTON_UNSUPPORTED`이고 대화상자가 뜨지 않음. 요청하지 않은 객체는 움직이지 않음.
 11. Disable Solver 상태에서 `gh_apply` → 계산하지 않고 `solver-disabled` 알림, 계산기를 켜지 않음.
 

@@ -30,6 +30,12 @@ export interface GrasshopperTurn {
   /** The conversation's title (or the request): it names each gh_apply's undo record. */
   title: string;
   workFolders?: () => readonly string[];
+  /** Asks the user about a path outside the work folder (left out: refused). */
+  filePermission?: (
+    action: 'read' | 'write',
+    path: string,
+    signal: AbortSignal,
+  ) => Promise<{ allow: true } | { allow: false; message: string }>;
   /** gh_bake through the turn's execute path (language `gh-bake`). */
   bake(linkId: unknown, spec: Record<string, unknown>): Promise<unknown>;
   onUse(doc: GhDocument, kind: ActivityEntry['kind'], text: string, detail?: string): void;
@@ -109,6 +115,19 @@ export function grasshopperHandlers(turn: GrasshopperTurn): Record<string, Handl
   ) => {
     if (!doc.driver.grasshopper) throw failure('GH_UNAVAILABLE');
     return doc.driver.grasshopper(method, args);
+  };
+  /**
+   * A .gh path the turn may use: inside the work folder at once; elsewhere only after the user
+   * allows it on the work folder card (ADR-031 8, SPEC-01.13), else GH_OUTSIDE_WORK_FOLDER.
+   */
+  const allowedPath = async (path: string, action: 'read' | 'write') => {
+    if (!isAbsolute(path)) throw new DomainError('INVALID_INPUT');
+    const inside = insideWorkFolder(path, turn.workFolders?.() ?? [], action === 'read');
+    if (inside) return inside;
+    if (!turn.filePermission) throw new DomainError('GH_OUTSIDE_WORK_FOLDER');
+    const answer = await turn.filePermission(action, resolvePath(path), turn.signal);
+    if (!answer.allow) throw new DomainError('GH_OUTSIDE_WORK_FOLDER');
+    return resolvePath(path);
   };
   let edits = 0;
   const handlers: Record<string, Handler> = {
@@ -217,9 +236,7 @@ export function grasshopperHandlers(turn: GrasshopperTurn): Record<string, Handl
       const doc = await turn.resolve(args.linkId);
       const options = rest(args);
       if (typeof options.path === 'string') {
-        const inside = insideWorkFolder(options.path, turn.workFolders?.() ?? [], true);
-        if (!inside) throw new DomainError('GH_OUTSIDE_WORK_FOLDER');
-        options.path = inside;
+        options.path = await allowedPath(options.path, 'read');
       }
       const answer = await call(doc, 'gh-open', options);
       turn.onUse(
@@ -232,11 +249,8 @@ export function grasshopperHandlers(turn: GrasshopperTurn): Record<string, Handl
     gh_save: async (args) => {
       const doc = await turn.resolve(args.linkId);
       const options = rest(args);
-      const inside =
-        typeof options.path === 'string'
-          ? insideWorkFolder(options.path, turn.workFolders?.() ?? [], false)
-          : undefined;
-      if (!inside) throw new DomainError('GH_OUTSIDE_WORK_FOLDER');
+      if (typeof options.path !== 'string') throw new DomainError('INVALID_INPUT');
+      const inside = await allowedPath(options.path, 'write');
       const answer = await call(doc, 'gh-save', { ...options, path: inside });
       turn.onUse(doc, 'result', `Grasshopper 정의 저장 · ${basename(inside)}`);
       return answer;

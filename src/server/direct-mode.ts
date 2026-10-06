@@ -424,6 +424,15 @@ export interface DirectTurn {
   holder?: { conversationId?: string | null; title?: string };
   /** The project work folders (gh_open and gh_save reach only these, ADR-033 6). */
   workFolders?: () => readonly string[];
+  /**
+   * The user's answer for a .gh path outside the work folder (the work folder gate's card,
+   * SPEC-01.13): allowed once or refused; left out, such a path is refused.
+   */
+  filePermission?: (
+    action: 'read' | 'write',
+    path: string,
+    signal: AbortSignal,
+  ) => Promise<{ allow: true } | { allow: false; message: string }>;
 }
 /** A document a turn works on, as its records and the request result name it. */
 export interface TurnDocument {
@@ -1272,6 +1281,7 @@ export async function runDirectTurn(turn: DirectTurn) {
             ? turn.holder.title
             : input.body,
         workFolders: turn.workFolders,
+        ...(turn.filePermission ? { filePermission: turn.filePermission } : {}),
         bake: (linkId, spec) => executeIn(linkId, 'gh-bake', JSON.stringify(spec)),
         onUse: (doc, kind, text, detail) => {
           activity.add(kind, named(doc as TurnDoc, text), detail);

@@ -316,7 +316,7 @@ const definitions = {
   },
   gh_open: {
     description:
-      'Start or show Grasshopper: with path, open that .gh/.ghx definition (only inside the project work folder; elsewhere GH_OUTSIDE_WORK_FOLDER, so ask the user to open it); without path, show the canvas and make a new document when none is open.',
+      'Start or show Grasshopper: with path, open that .gh/.ghx definition (inside the project work folder at once; elsewhere VIDE asks the user and answers GH_OUTSIDE_WORK_FOLDER if they refuse); without path, show the canvas and make a new document when none is open.',
     schema: z
       .object({ targetRef: target, linkId, path: z.string().min(1).max(1024).optional() })
       .strict(),
@@ -718,7 +718,7 @@ const errorHints: Record<string, string> = {
   GH_DOCUMENT_NOT_ACTIVE:
     "That Grasshopper document is not the one on the canvas; VIDE does not switch the user's canvas. Leave ghDocument out or ask the user.",
   GH_OUTSIDE_WORK_FOLDER:
-    'VIDE opens and saves Grasshopper files only inside the project work folder. Ask the user to open or save that file in Grasshopper.',
+    'The user did not allow that Grasshopper file outside the project work folder (or no question could be shown). Nothing was opened or saved; use a path inside the work folder or tell the user.',
 };
 /** LINK_NOT_LIVE from a turn that never reaches other files live (the file may well be open). */
 const noLinksHint =

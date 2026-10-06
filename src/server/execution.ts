@@ -1455,8 +1455,14 @@ export class Execution {
               unresolvedNote(unresolvedOn(id, document, this.workspace.claimRows(projectId)))?.data,
             intervened: () => this.intervened.has(id),
           },
-          // gh_open / gh_save reach only the project work folder (ADR-033 6, ADR-031 8).
+          // gh_open / gh_save use the project work folder at once (ADR-033 6, ADR-031 8); elsewhere
+          // the user is asked on the request's card, as for the CLI's own file tools.
           workFolders: () => workFolderScope(this.folders, projectId, this.fileContext).write,
+          filePermission: (action, path, signal) =>
+            this.fileGate(input, projectId, id, [], runMode === 'plan').decide(
+              { tool: action === 'read' ? 'Read' : 'Write', input: { file_path: path } },
+              signal,
+            ),
           protectedIds: pins
             .filter((pin) => pin.role !== 'target' && pin.basis === previous.id)
             .map((pin) => pin.id),

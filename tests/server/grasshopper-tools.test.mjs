@@ -554,3 +554,43 @@ test('gh_open and gh_save reach only the project work folder', async (t) => {
   assert.equal((await handlers.gh_save({ path: join(folder, 'b.gh') })).ok, true);
   assert.equal(canvas.calls.filter((entry) => entry.method.startsWith('gh-open')).length, 1);
 });
+
+test('gh_open and gh_save outside the work folder ask the user first', async (t) => {
+  const folder = mkdtempSync(join(tmpdir(), 'vide-gh-'));
+  const outside = mkdtempSync(join(tmpdir(), 'vide-out-'));
+  t.after(() => {
+    rmSync(folder, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  });
+  writeFileSync(join(outside, 'b.gh'), 'x');
+  const asked = [];
+  let allow = true;
+  const canvas = fakeCanvas();
+  const handlers = grasshopperHandlers({
+    mode: 'auto',
+    resolve: async () => ({ driver: mockDriver(canvas).driver, file: { name: 'm.3dm' } }),
+    signal: new AbortController().signal,
+    title: 't',
+    workFolders: () => [folder],
+    filePermission: async (action, path) => {
+      asked.push([action, path]);
+      return allow ? { allow: true } : { allow: false, message: 'no' };
+    },
+    bake: async () => ({}),
+    onUse: () => {},
+    onRecord: () => {},
+  });
+  assert.equal((await handlers.gh_open({ path: join(outside, 'b.gh') })).ok, true);
+  assert.equal((await handlers.gh_save({ path: join(outside, 'c.gh') })).ok, true);
+  assert.deepEqual(
+    asked.map(([action]) => action),
+    ['read', 'write'],
+  );
+  allow = false;
+  await assert.rejects(handlers.gh_save({ path: join(outside, 'd.gh') }), {
+    code: 'GH_OUTSIDE_WORK_FOLDER',
+  });
+  // Inside the work folder nothing is asked.
+  await handlers.gh_save({ path: join(folder, 'e.gh') });
+  assert.equal(asked.length, 3);
+});
