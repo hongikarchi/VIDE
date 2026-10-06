@@ -16,6 +16,7 @@ import { StatusBar } from './status-bar.tsx';
 import { Toast } from './toast.tsx';
 import { SettingsDialog } from './settings-dialog.tsx';
 import { RegionBoundary } from './region-boundary.tsx';
+import { TelemetryCards } from './telemetry.tsx';
 
 export const Shell = memo(function Shell() {
   return (
@@ -60,6 +61,9 @@ export const Shell = memo(function Shell() {
       {'\n\n'}
       <RegionBoundary name="settings">
         <SettingsDialog />
+      </RegionBoundary>
+      <RegionBoundary name="telemetry">
+        <TelemetryCards />
       </RegionBoundary>
     </>
   );

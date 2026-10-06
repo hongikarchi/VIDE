@@ -20,6 +20,20 @@ export interface Env {
   SNAPSHOT_QUOTA_MB?: string;
   /** Snapshot bytes the whole site may keep (MB, default 0 = off until R2 charges are accepted). */
   SNAPSHOT_TOTAL_MB?: string;
+  /** Site admins (comma-separated account IDs or e-mails): the reports page (ADR-036). */
+  ADMIN_USERS?: string;
+  /** Secret for developers' tools reading reports (tools/diagnostics/reports.mjs), 32+ characters. */
+  TELEMETRY_ADMIN_TOKEN?: string;
+  /** 'false' stops taking reports (default on: small rows in D1). */
+  TELEMETRY_REPORTS_ENABLED?: string;
+  /** 'true' takes diagnostic bundles into R2 (default off until R2 is available). */
+  TELEMETRY_BUNDLES_ENABLED?: string;
+  /** Limits: reports (bundles) per install and per address a day, sizes, days kept. */
+  TELEMETRY_INSTALL_DAILY?: string;
+  TELEMETRY_IP_DAILY?: string;
+  TELEMETRY_BUNDLE_MAX_MB?: string;
+  TELEMETRY_BUNDLE_DUMP_MAX_MB?: string;
+  TELEMETRY_KEEP_DAYS?: string;
 }
 
 export const manualApproval = (env: Env) => env.AUTH_MODE === 'manual-approval';

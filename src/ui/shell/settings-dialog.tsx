@@ -12,6 +12,7 @@ import { statusState, tabHidden, type SettingsTab } from '../store/status.ts';
 import { sessionState } from '../store/session.ts';
 import { ConnectionLines } from './status-lines.tsx';
 import { problemNotices } from './status-bar.tsx';
+import { TelemetrySection } from './telemetry.tsx';
 
 const tabs: [SettingsTab, string][] = [
   ['account', '계정 · 원격 접속'],
@@ -297,6 +298,7 @@ export const SettingsDialog = memo(function SettingsDialog() {
             </section>
             <DisplaySection />
             <ProblemsSection />
+            <TelemetrySection />
             <DiagnosticsSection />
           </Pane>
         </div>

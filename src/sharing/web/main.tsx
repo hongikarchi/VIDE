@@ -7,6 +7,8 @@ import { Home } from './home';
 import { useHosts } from './hosts';
 import { Review } from './review';
 import { OfflineProject } from './offline';
+import { Reports } from './reports';
+import { Privacy } from './privacy';
 import './style.css';
 
 const displayName = (session: Session) =>
@@ -23,6 +25,10 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
       () => new URL(location.href).searchParams.get('offline') || '',
     ),
     [offlineNotice, setOfflineNotice] = useState(''),
+    [reports, setReports] = useState(
+      () => new URL(location.href).searchParams.get('admin') === 'reports',
+    ),
+    [admin, setAdmin] = useState(false),
     [status, setStatus] = useState('');
   const { hosts, thisPc } = useHosts();
   const user = useRef(session.user.id);
@@ -50,6 +56,14 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
     if (expected === user.current) setProjects(value);
   }, []);
   useEffect(() => {
+    // Site admins see the reports page link (ADR-036).
+    void api('/me')
+      .then((value) =>
+        setAdmin(z.object({ admin: z.boolean().optional() }).parse(value).admin === true),
+      )
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
     void refresh().catch((error) => setStatus(message(error)));
     const timer = setInterval(() => void refresh().catch(() => {}), 15_000);
     return () => clearInterval(timer);
@@ -59,6 +73,7 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
       const params = new URL(location.href).searchParams;
       setReviewing(params.get('review') || '');
       setOfflineId(params.get('offline') || '');
+      setReports(params.get('admin') === 'reports');
     };
     window.addEventListener('popstate', back);
     return () => window.removeEventListener('popstate', back);
@@ -94,6 +109,7 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
           onClick={() => {
             setReviewing('');
             setOfflineId('');
+            setReports(false);
             history.pushState(null, '', '/');
           }}
         >
@@ -101,7 +117,21 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
         </button>
         {review ? <span className="crumb">/ {review.name} · 공유 검토</span> : null}
         {offline ? <span className="crumb">/ {offline.name} · PC 없이 보기</span> : null}
+        {reports ? <span className="crumb">/ 오류·성능 보고</span> : null}
         <span className="spacer" />
+        {admin && !reports ? (
+          <button
+            className="ghost"
+            onClick={() => {
+              setReviewing('');
+              setOfflineId('');
+              setReports(true);
+              history.pushState(null, '', '/?admin=reports');
+            }}
+          >
+            오류·성능 보고
+          </button>
+        ) : null}
         <span className="user">{displayName(session)}</span>
         <button className="ghost" onClick={signOut}>
           로그아웃
@@ -120,7 +150,9 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
           {status}
         </p>
       ) : null}
-      {review ? (
+      {reports && admin ? (
+        <Reports />
+      ) : review ? (
         <div className="review-page">
           <Review key={review.id} project={review} session={session} />
         </div>
@@ -153,6 +185,12 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
 }
 
 function App() {
+  // The notice page for opt-in reports is public (the PC's consent card links here).
+  if (location.pathname === '/privacy') return <Privacy />;
+  return <SignedApp />;
+}
+
+function SignedApp() {
   const [session, setSession] = useState<Session | null>(null),
     [loading, setLoading] = useState(true),
     [status, setStatus] = useState('');

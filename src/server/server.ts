@@ -9,7 +9,7 @@ import { selectContext } from '../ai/context-selector.ts';
 import { GEOMETRY_TYPE, encodeGeometry } from '../contracts/geometry-transfer.ts';
 import { applyAttachedCandidate } from './attached-application.ts';
 import { LiveSync } from './live-sync.ts';
-import { RemoteAccess } from './remote-access.ts';
+import { DEFAULT_SHARING_ORIGIN, RemoteAccess } from './remote-access.ts';
 import { OfflineView } from './offline-view.ts';
 import { Connectors, type ConnectorOptions } from './connectors.ts';
 import { appVersion, defaultRhinoPlugin, defaultZwcadConnection } from './sdk-options.ts';
@@ -41,6 +41,7 @@ import { PinCarryError, carryPins } from './pin-carry.ts';
 import { startHealthLog } from './health.ts';
 import { Diagnostics, RepeatGate, routeOf } from './diagnostics.ts';
 import { writeDiagnosticBundle } from './diagnostic-bundle.ts';
+import { Telemetry, type TelemetryOptions } from './telemetry.ts';
 import {
   BIG_JSON,
   breadcrumb,
@@ -84,6 +85,13 @@ interface ServerOptions {
   referenceOptions?: Omit<ReferenceBoardsOptions, 'outputs'>;
   /** Test seam: the one-time split of an old `vide.sqlite` (ADR-032). */
   storeSplit?: typeof splitProjectDatabase;
+  /** Test seams for the opt-in reports (ADR-036): the first-run card, the site, the clock. */
+  telemetryOptions?: Partial<
+    Pick<
+      TelemetryOptions,
+      'prompt' | 'site' | 'fetcher' | 'now' | 'startDelayMs' | 'everyMs' | 'batchMs'
+    >
+  >;
 }
 import { readWebAsset } from './web-assets.ts';
 import { Extensions } from '../core/extensions.ts';
@@ -237,6 +245,7 @@ export async function startServer({
   connectorOptions,
   referenceOptions,
   storeSplit,
+  telemetryOptions,
 }: ServerOptions) {
   const { store, event: storeEvent } = await openStore(filename, storeSplit),
     bootstrap = randomBytes(32).toString('hex'),
@@ -593,6 +602,16 @@ export async function startServer({
   const webSettings = new WebSettings(
     filename === ':memory:' ? undefined : join(dirname(filename), 'web-settings.json'),
   );
+  // Opt-in error/performance reports (ADR-036, SPEC-05.9): nothing is sent before the user agrees.
+  const telemetry = new Telemetry({
+    directory: filename === ':memory:' ? undefined : dirname(filename),
+    prompt: process.env.VIDE_DESKTOP === '1',
+    site: () => process.env.VIDE_TELEMETRY_SITE || remoteAccess.site || DEFAULT_SHARING_ORIGIN,
+    version: appVersion,
+    flush: () => diagnostics.flush(),
+    sensitive: () => listProjects().map((project) => project.name),
+    ...telemetryOptions,
+  });
   const execution = new Execution(workspace, {
     diagnostics,
     conversations,
@@ -1345,6 +1364,42 @@ export async function startServer({
           .parse(await body(request));
         diagnostics.flush();
         send(200, await writeDiagnosticBundle({ directory: dirname(filename), ...options }));
+        return;
+      }
+      // Opt-in reports (ADR-036, SPEC-05.9): the choice, what the next report holds and the answer
+      // to [진단 묶음을 보낼까요?]. Only the PC itself decides; other devices read the state.
+      if (url.pathname === '/api/v1/telemetry' && request.method === 'GET') {
+        send(200, await telemetry.view(!remote));
+        return;
+      }
+      if (url.pathname === '/api/v1/telemetry' && request.method === 'PUT') {
+        if (remote) throw new DomainError('FORBIDDEN');
+        const { consent } = z
+          .object({ consent: z.enum(['granted', 'denied']) })
+          .strict()
+          .parse(await body(request));
+        diagnostics.write('telemetry-consent', { consent });
+        send(200, await telemetry.set(consent));
+        return;
+      }
+      if (url.pathname === '/api/v1/telemetry/preview' && request.method === 'GET') {
+        if (remote || filename === ':memory:') throw new DomainError('FORBIDDEN');
+        send(200, await telemetry.preview());
+        return;
+      }
+      if (url.pathname === '/api/v1/telemetry/crash' && request.method === 'POST') {
+        if (remote || filename === ':memory:') throw new DomainError('FORBIDDEN');
+        const answer = z
+          .object({ send: z.boolean(), dumps: z.boolean().optional() })
+          .strict()
+          .parse(await body(request));
+        const result = await telemetry.answerCrash(answer.send, answer.dumps);
+        diagnostics.write('telemetry-bundle', {
+          sent: result.sent,
+          ...('reason' in result ? { reason: result.reason } : {}),
+          ...('bytes' in result ? { bytes: result.bytes } : {}),
+        });
+        send(200, result);
         return;
       }
       if (url.pathname === '/api/v1/settings/questions') {
@@ -2808,6 +2863,7 @@ export async function startServer({
     version: appVersion(),
   });
   const stopHealth = filename === ':memory:' ? () => {} : startHealthLog(diagnostics);
+  telemetry.start();
   scheduler?.start();
   // Sync results stored as whole JSON move to per-object storage in the background, then old
   // Syncs are pruned and the file compacted when idle (PLAN-27 1단계, ARCH-01 §5). One project DB
@@ -2860,6 +2916,7 @@ export async function startServer({
         new Promise((resolve) => setTimeout(resolve, 5000).unref()),
       ]);
       stopHealth();
+      await telemetry.close();
       await scheduler?.stop();
       await remoteAccess.close();
       await offlineView.close();

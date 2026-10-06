@@ -4776,3 +4776,84 @@ body.panel-mode .mode-toggle {
 .root {
   display: contents;
 }
+
+/* Opt-in reports (ADR-036, Design 「오류·성능 정보 동의」): the first-run and crash cards, the switch. */
+.telemetry-dialog {
+  width: min(560px, 94vw);
+  max-height: 88vh;
+  overflow: auto;
+  padding: 22px 24px 18px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.telemetry-dialog:focus {
+  outline: none;
+}
+.telemetry-dialog::backdrop {
+  background: var(--scrim);
+}
+.telemetry-dialog h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+.telemetry-question {
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+.telemetry-intro {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.telemetry-details {
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: normal;
+}
+.telemetry-details summary {
+  color: var(--text-1);
+}
+.telemetry-details ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+.telemetry-details p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+.telemetry-dumps {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 10px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.telemetry-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+.settings-pane .settings-telemetry {
+  margin-top: 18px;
+  white-space: normal;
+}
+.telemetry-switch {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+.telemetry-preview {
+  max-height: 240px;
+  overflow: auto;
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--bg-hover);
+  font-size: 11px;
+  white-space: pre;
+}

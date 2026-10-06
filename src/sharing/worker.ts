@@ -7,6 +7,13 @@ import { hostDeviceRoute, hostRoute } from './hosts';
 import { accountRoute, displayName } from './accounts';
 import { PROXIED, isPcPath, pcProxy } from './pc-proxy';
 import { offlineRoute, snapshotsOn } from './offline';
+import {
+  adminTelemetryRoute,
+  hasAdminToken,
+  isAdminName,
+  receiveBundle,
+  receiveReport,
+} from './telemetry';
 
 async function handle(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   try {
@@ -26,6 +33,11 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
         uploadsEnabled: !uploadsPaused,
         snapshotsEnabled: !uploadsPaused && snapshotsOn(env),
       });
+    // Opt-in reports from VIDE installs (ADR-036): public, size- and rate-limited, no account.
+    if (url.pathname === '/api/telemetry/reports' && request.method === 'POST')
+      return await receiveReport(request, env, ctx);
+    if (url.pathname === '/api/telemetry/bundles' && request.method === 'POST')
+      return await receiveBundle(request, env);
     if (
       manualApproval(env) &&
       url.pathname.startsWith('/api/auth/') &&
@@ -41,6 +53,22 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
     if (url.pathname === '/api/auth/sign-up/email')
       throw new HttpError(403, 'SIGNUP_CODE_REQUIRED');
     const auth = createAuth(env, ctx);
+    // The reports page and API: site admins (ADMIN_USERS) or the developers' admin token.
+    if (url.pathname.startsWith('/api/admin/telemetry/')) {
+      if (!(await hasAdminToken(env, request))) {
+        const session = await auth.api.getSession({ headers: request.headers });
+        if (!session?.user) throw new HttpError(401, 'LOGIN_REQUIRED');
+        if (
+          !isAdminName(env, displayName(session.user.email, session.user.name), session.user.email)
+        )
+          throw new HttpError(403, 'ADMIN_REQUIRED');
+      }
+      return await adminTelemetryRoute(
+        request,
+        env,
+        url.pathname.slice('/api/admin/telemetry/'.length).split('/'),
+      );
+    }
     if (url.pathname.startsWith('/api/account/'))
       return await accountRoute(request, env, auth, url.pathname);
     if (url.pathname.startsWith('/api/auth/')) return auth.handler(request);
@@ -86,6 +114,11 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
       return json({
         id: actor.id,
         username: displayName(session.user.email, session.user.name),
+        admin: isAdminName(
+          env,
+          displayName(session.user.email, session.user.name),
+          session.user.email,
+        ),
       });
     if (url.pathname === '/api/invitations/accept' && request.method === 'POST')
       return await acceptInvitation(request, env, actor);
