@@ -26,7 +26,7 @@ import { sessionState } from '../store/session.ts';
 import { viewportActions } from '../shell/viewport-actions.ts';
 import { isTyping, type ShortcutResult } from './shortcuts.ts';
 import { currentProject, panelMode } from './context.ts';
-import { applyActiveLayer } from './links-sync.ts';
+import { applyActiveLayer, loadFullResult } from './links-sync.ts';
 import { renderLinkPanel, mobileView } from './left.ts';
 import { render, renderMessages } from './render.ts';
 import { message } from './status.ts';
@@ -367,7 +367,14 @@ export function paintInspector() {
       },
       get: (id) => draftState.state.messages.find((message) => message.id === id)?.request,
       open: (id, objectId) => {
-        if (objectId) selectInResult(id, objectId);
+        const result = draftState.state.messages.find((entry) => entry.id === id)?.request.result;
+        if (objectId && result?.hostExecuted && !result.scene && result.sceneOmitted) {
+          // Not drawn yet (T-123): the object is picked once its Sync is drawn.
+          selectInResult(id, objectId);
+          void loadFullResult(id).then(() => {
+            if (selectionState.selectedResult === id) selectInResult(id, objectId);
+          });
+        } else if (objectId) selectInResult(id, objectId);
         else {
           selectionState.selectedResult = id;
           selectionState.appliedSelection = undefined;

@@ -49,6 +49,8 @@ interface InspectorResult {
   baseRequestId?: string;
   scene?: InspectorScene[];
   objects?: InspectorObject[];
+  /** A display Sync listed without its rows (T-123): drawn, it has them again. */
+  objectsOmitted?: boolean;
 }
 interface InspectorRequest {
   id: string;
@@ -118,7 +120,12 @@ export function buildInspectorView(
               ? ' · ' + (source.result.host === 'zwcad' ? 'ZWCAD' : 'Rhino')
               : ' · 기준 확인 불가'),
           disabled: !source?.result?.hostExecuted,
-          open: () => references.open?.(link.basis, target?.id),
+          // A display Sync not drawn yet has no rows here: the link names the object itself.
+          open: () =>
+            references.open?.(
+              link.basis,
+              target?.id ?? (source?.result?.objectsOmitted && link.id ? link.id : undefined),
+            ),
         };
       }),
     });

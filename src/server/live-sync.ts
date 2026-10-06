@@ -14,6 +14,11 @@ const inputSchema = hostTargetSchema.extend({
   basisId: z.string(),
   /** Revision of the display the caller holds; the returned delta applies to it. */
   revision: z.number().int().nonnegative(),
+  /**
+   * The basis must not change in place (a draft on the file uses it, SPEC-01.11 6): the merge goes
+   * into a copy of its manifest, as for a basis another request references.
+   */
+  keep: z.boolean().optional(),
 });
 const basisSchema = z
   .object({
@@ -52,8 +57,9 @@ export const LIVE_RETRY = ['SOURCE_CHANGED', 'HOST_BUSY', 'PROJECT_BUSY', 'WORKS
 /**
  * SPEC-01.11 Live Sync: applies only the objects Rhino reports as changed to the latest display
  * Sync of the document, in its stored manifest (PLAN-27 1단계, ARCH-01 §5): the stored model is
- * never read whole. A Sync that other requests already reference is never rewritten; a copy of
- * its manifest becomes the new basis instead. Unknown state means RESYNC_REQUIRED (a full Sync).
+ * never read whole. A Sync that other requests already reference, or that a draft holds (`keep`),
+ * is never rewritten; a copy of its manifest becomes the new basis instead. Unknown state means
+ * RESYNC_REQUIRED (a full Sync).
  */
 export class LiveSync {
   private latest = new Map<string, string>();
@@ -189,11 +195,13 @@ export class LiveSync {
       },
       ...(layers ? { layers } : {}),
     };
-    const referenced = this.workspace.store.db
-      .prepare(
-        'SELECT 1 FROM workspace_requests WHERE projectId=? AND id<>? AND instr(input, ?)>0 LIMIT 1',
-      )
-      .get(projectId, basis.id, basis.id);
+    const referenced =
+      input.keep ||
+      this.workspace.store.db
+        .prepare(
+          'SELECT 1 FROM workspace_requests WHERE projectId=? AND id<>? AND instr(input, ?)>0 LIMIT 1',
+        )
+        .get(projectId, basis.id, basis.id);
     let savedId = basis.id;
     if (referenced) {
       savedId = randomUUID();

@@ -1746,9 +1746,11 @@ export class Execution {
    */
   private storedDisplay(target: { instance: string; documentId: number }) {
     const row = this.workspace.store.db
+      // Only requests stored per object are looked at (one manifest per Sync, newest first):
+      // CROSS JOIN keeps sync_manifests the outer loop.
       .prepare(
         `SELECT w.id, w.projectId, json_extract(w.result,'$.sourceDocument') AS source
-          FROM workspace_requests w JOIN sync_manifests m ON m.requestId=w.id
+          FROM sync_manifests m CROSS JOIN workspace_requests w ON w.id=m.requestId
           WHERE w.state='succeeded' AND json_extract(w.result,'$.displayOnly')=1
             AND json_extract(w.result,'$.sourceDocument.instance')=?
             AND json_extract(w.result,'$.sourceDocument.documentId')=?
@@ -1820,8 +1822,23 @@ export class Execution {
           } catch {
             /* Rhino cannot tell (RESYNC_REQUIRED) or the read failed: read the document. */
           }
-        const { sourceDocument, ...model } = await sdk.readLayers(target, {});
-        return { ...model, units: sourceDocument.units };
+        // As the stored path gives it: rows without coordinate arrays or block definitions.
+        const {
+          sourceDocument,
+          objects,
+          scene,
+          definitions: _definitions,
+          ...model
+        } = (await sdk.readLayers(target, {})) as Awaited<ReturnType<typeof sdk.readLayers>> & {
+          objects?: Record<string, unknown>[];
+          scene?: Record<string, unknown>[];
+          definitions?: unknown;
+        };
+        return {
+          ...model,
+          ...overlayDisplay([], { objects: objects ?? [], scene: scene ?? [], removed: [] }),
+          units: sourceDocument.units,
+        };
       });
       return {
         host,

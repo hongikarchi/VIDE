@@ -4002,6 +4002,28 @@ body[data-workspace='context'] .workspace > .jig-dialog {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+/* The row menu (right click): 지금 Sync · 전체 다시 읽기 (SPEC-01.11 10, T-123). */
+.link-row .link-menu {
+  grid-column: 1 / -1;
+  justify-self: end;
+  display: grid;
+  min-width: 140px;
+  padding: 4px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-float);
+}
+.link-row .link-menu button {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  font-size: var(--fs-sm);
+  color: var(--text-1);
+}
+.link-row .link-menu button:hover {
+  background: var(--soft);
+}
 .link-row .link-mini {
   width: 22px;
   height: 22px;

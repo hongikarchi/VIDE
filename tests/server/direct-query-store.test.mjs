@@ -123,6 +123,10 @@ test('query reads the whole document without a stored Sync or when Rhino cannot 
   let page = await driver.query({ limit: 5 });
   assert.equal(calls.readLayers, 1);
   assert.equal(page.page.total, 50);
+  // Rows as the stored path gives them: no coordinate arrays (T-123 review).
+  assert.equal(page.model.scene[0].vertices, undefined, 'a query row carries coordinates');
+  assert.equal(page.model.scene[0].line, undefined);
+  assert.equal(page.model.definitions, undefined);
   store(4);
   change('resync');
   driver = execution.directDriverFor('rhino', source(4));

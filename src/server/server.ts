@@ -1447,8 +1447,19 @@ export async function startServer({
         // Every Sync asked here is the user's (⟳, 지금 Sync, the plugin's Sync): automatic ones are
         // the engine's own (T-084), so this one never joins another read (ARCH-01 §7). It asks the
         // host only for what changed when the shown Sync can be continued (T-123).
+        // A draft or work on the file keeps its shown Sync as it is (the Live Sync goes into a copy),
+        // and a Sync that succeeds ends the wait or failure the engine shows on the row.
         const { result: synced } = await runUserSync(
-          { ...syncContext, ...(liveSync ? { live: runLiveSync } : {}) },
+          {
+            ...syncContext,
+            ...(liveSync ? { live: runLiveSync } : {}),
+            ...(scheduler
+              ? {
+                  holds: (id, where) => scheduler.holds(id, where),
+                  synced: (id, where) => scheduler.userSynced(id, where),
+                }
+              : {}),
+          },
           projectId,
           target,
         );
@@ -2306,7 +2317,8 @@ export async function startServer({
         return;
       }
       // The object rows of one request, without geometry (T-123): what the request list leaves out
-      // of a display Sync. `ids` (comma separated) limits them to those objects.
+      // of a display Sync. `ids` (comma separated) limits them to those objects, `native` to those
+      // Rhino ids (any case: a jig names objects by their Rhino id).
       const requestObjects = /^\/api\/v1\/projects\/([^/]+)\/requests\/([^/]+)\/objects$/.exec(
         url.pathname,
       );
@@ -2315,13 +2327,25 @@ export async function startServer({
         store.project(projectId);
         const wanted = url.searchParams.get('ids');
         const ids = wanted ? new Set(wanted.split(',').filter(Boolean)) : undefined;
+        const nativeWanted = url.searchParams.get('native');
+        const natives = nativeWanted
+          ? new Set(nativeWanted.toLowerCase().split(',').filter(Boolean))
+          : undefined;
         const view = workspace.model(projectId, id);
         const rows = view
           ? view.rows()
-          : ((workspace.summary(projectId, id).result?.objects ?? []) as { id: string }[]);
+          : ((workspace.summary(projectId, id).result?.objects ?? []) as {
+              id: string;
+              nativeId?: unknown;
+            }[]);
         send(200, {
           requestId: id,
-          objects: ids ? rows.filter((row) => ids.has(String(row.id))) : rows,
+          objects: rows.filter(
+            (row) =>
+              (!ids || ids.has(String(row.id))) &&
+              (!natives ||
+                (typeof row.nativeId === 'string' && natives.has(row.nativeId.toLowerCase()))),
+          ),
         });
         return;
       }
@@ -2342,7 +2366,11 @@ export async function startServer({
         }
         const delta = workspace.models.deltaSince(projectId, id, since, base);
         if (delta.full) send(200, delta);
-        else deliver(200, GEOMETRY_TYPE, Buffer.from(ModelStore.deltaGeometry(delta)));
+        // The host panels keep object rows only (`view=rows`, T-123): no geometry travels.
+        else if (url.searchParams.get('view') === 'rows') {
+          const { scene: _scene, definitions: _definitions, ...rows } = delta;
+          send(200, { ...rows, scene: [] });
+        } else deliver(200, GEOMETRY_TYPE, Buffer.from(ModelStore.deltaGeometry(delta)));
         return;
       }
       if (job) {

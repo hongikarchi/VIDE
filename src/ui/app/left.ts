@@ -121,7 +121,7 @@ export function renderLinkPanel() {
       renderLinkPanel();
     },
     onToggle: (link) => void setLinkHidden(link, !link.hidden),
-    onSync: (link) => void syncLink(link),
+    onSync: (link, full) => void syncLink(link, full),
     onRemove: (link) => {
       if (
         !confirm(

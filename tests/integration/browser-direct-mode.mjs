@@ -219,8 +219,8 @@ try {
     requests.set(input.id, request);
     await route.fulfill({ json: request });
   });
-  await page.route(/\/requests\/[^/?]+$/, (route) => {
-    const request = requests.get(route.request().url().split('/').at(-1));
+  await page.route(/\/requests\/[^/?]+(\?view=summary)?$/, (route) => {
+    const request = requests.get(new URL(route.request().url()).pathname.split('/').at(-1));
     return request ? route.fulfill({ json: request }) : route.continue();
   });
   await page.route(/\/requests\/[^/]+\/(undo|confirm|continue)$/, async (route) => {

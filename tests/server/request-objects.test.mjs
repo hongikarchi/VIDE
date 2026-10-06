@@ -99,4 +99,63 @@ test('the request list leaves out display Sync rows; …/objects gives them on r
     ['Slab 7', 'Slab 9999'],
   );
   assert.equal((await get(`${base}/nope/objects`)).status, 404);
+  // A jig finds one Rhino object by its id in any case (`native`), not by reading the model.
+  const native = await get(`${base}/sync-4/objects?native=${key(12).toUpperCase()}`);
+  assert.deepEqual(
+    native.body.objects.map((row) => row.name),
+    ['Slab 12'],
+  );
+
+  // One request as the list shows it, and the user's Sync answer: no rows of a display Sync.
+  const summary = await get(`${base}/sync-4?view=summary`);
+  assert.equal(summary.body.result.objects, undefined);
+  assert.equal(summary.body.result.objectsOmitted, true);
+  assert.equal(summary.body.result.objectCount, 10_000);
+  assert.ok(summary.bytes < 10_000, `the summary is ${summary.bytes} bytes`);
+  const captured = await fetch(`${app.origin}/api/v1/projects/${project.id}/capture`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    // The stored Sync of this id answers (no host here): the answer's form is what is checked.
+    body: JSON.stringify({ id: 'sync-4', ...target, fresh: true }),
+  });
+  const answer = await captured.json();
+  assert.equal(captured.status, 200);
+  assert.equal(answer.id, 'sync-4');
+  assert.equal(answer.result.objects, undefined);
+  assert.equal(answer.result.scene, undefined);
+  assert.equal(answer.result.objectsOmitted, true);
+
+  // The host panels ask a Live Sync's change as rows only (`view=rows`): no geometry.
+  workspace.applyDelta(
+    project.id,
+    'sync-4',
+    {
+      objects: [{ id: key(3), nativeId: key(3), kind: 'native', name: 'Moved', origin: [9, 0, 0] }],
+      scene: [
+        {
+          id: key(3),
+          nativeId: key(3),
+          nativeType: 'Brep',
+          vertices: [9, 0, 0, 10, 0, 0, 9, 1, 0],
+          indices: [0, 1, 2],
+          valid: true,
+        },
+      ],
+      removed: [],
+    },
+    {
+      sourceDocument: { ...target, connection: 'attached-editor', documentHash: 'e', revision: 2 },
+    },
+  );
+  const rowsDelta = await fetch(`${app.origin}/api/v1${base}/sync-4/delta?since=1&view=rows`, {
+    headers,
+  });
+  assert.match(rowsDelta.headers.get('content-type'), /json/);
+  const change = await rowsDelta.json();
+  assert.deepEqual(
+    change.objects.map((row) => row.name),
+    ['Moved'],
+  );
+  assert.deepEqual(change.scene, []);
+  assert.equal(change.definitions, undefined);
 });

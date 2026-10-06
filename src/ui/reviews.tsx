@@ -208,7 +208,7 @@ let shared:
   | {
       actions: NoteActions;
       getProject: () => string | undefined;
-      onSharedAdopt: (note: ReceivedFeedback) => void;
+      onSharedAdopt: (note: ReceivedFeedback) => void | Promise<void>;
       refresh: () => Promise<void>;
     }
   | undefined;
@@ -236,9 +236,9 @@ export function openSharedFeedback(projectId: string, onCount?: (count: number) 
         projectId={projectId}
         onBasis={actions.onBasis}
         onCount={onCount}
-        onAdopt={(note) => {
+        onAdopt={async (note) => {
           if (getProject() !== projectId) throw Error('프로젝트가 변경되었습니다.');
-          onSharedAdopt(note);
+          await onSharedAdopt(note);
           dialog.close();
         }}
       />
@@ -306,7 +306,7 @@ export function initializeReviews(
   notify: (message: string) => void,
   onAdopt: NoteActions['onAdopt'],
   onBasis: NoteActions['onBasis'],
-  onSharedAdopt: (note: ReceivedFeedback) => void,
+  onSharedAdopt: (note: ReceivedFeedback) => void | Promise<void>,
 ) {
   let refreshGeneration = 0;
   const actions: NoteActions = {

@@ -264,6 +264,38 @@ try {
 
   assert.deepEqual(started, [], 'the page started a Sync itself');
   assert.ok(leases.length > 3);
+
+  // ⟳ asks only for what changed; Shift+⟳ and the row menu's 전체 다시 읽기 ask for the whole
+  // document (`full`, T-123 review).
+  await page.unroute('**/api/v1/projects/*/capture');
+  const pressed = [];
+  await page.route('**/api/v1/projects/*/capture', (route) => {
+    pressed.push(route.request().postDataJSON());
+    return route.fulfill({ status: 503, json: { code: 'HOST_BUSY' } });
+  });
+  const press = async (action) => {
+    const count = pressed.length;
+    await action();
+    while (pressed.length === count) await new Promise((r) => setTimeout(r, 50));
+    // The row leaves 'Sync 중' when the answer is in.
+    await page.waitForFunction(
+      () => !document.querySelector('.link-row')?.textContent.includes('Sync 중'),
+    );
+    return pressed.at(-1);
+  };
+  const sync = page.locator('.link-row .link-sync').first();
+  let body = await press(() => sync.click());
+  assert.equal(body.fresh, true);
+  assert.equal(body.full, undefined);
+  body = await press(() => sync.click({ modifiers: ['Shift'] }));
+  assert.equal(body.full, true);
+  await page.locator('.link-row').first().click({ button: 'right' });
+  const menu = page.getByRole('menu', { name: 'Attached test 메뉴' });
+  await menu.waitFor();
+  body = await press(() => menu.getByRole('menuitem', { name: '전체 다시 읽기' }).click());
+  assert.equal(body.full, true);
+  assert.equal(body.linkId, 'link-a');
+  assert.equal(await menu.count(), 0);
   assert.deepEqual(errors, []);
   await page.screenshot({ path: join(directory, 'live-sync.png') });
   console.log(
@@ -275,6 +307,7 @@ try {
       engineStateShown: true,
       draftLease: true,
       reopenedWhileMeshesLoad: true,
+      fullReread: true,
       directory,
     }),
   );

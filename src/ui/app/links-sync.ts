@@ -59,8 +59,11 @@ export async function refreshDisplay(
   if (refreshing.has(id) || loadingResults.has(id)) return;
   refreshing.add(id);
   try {
+    // The panels ask for the changed rows only, never their geometry (`view=rows`).
     const reply = deltaReplySchema.parse(
-      await api(`/projects/${projectId}/requests/${id}/delta?since=${held}`),
+      await api(
+        `/projects/${projectId}/requests/${id}/delta?since=${held}${panelMode ? '&view=rows' : ''}`,
+      ),
     );
     if (sessionState.project?.id !== projectId) return;
     const index = draftState.state.messages.findIndex((item) => item.id === id);
@@ -250,8 +253,11 @@ export function syncNote(link: LinkRow): string | undefined {
   if (sync.state === 'failed') return errors[sync.code ?? ''] || 'Sync 실패';
   return undefined;
 }
-/** ⟳ (and 지금 Sync): a fresh read the user asked for; automatic Syncs are the engine's (T-084). */
-export async function syncLink(link: LinkRow) {
+/**
+ * ⟳ (and 지금 Sync): a fresh read the user asked for; automatic Syncs are the engine's (T-084).
+ * `full` (전체 다시 읽기, Shift+⟳): the whole document, not only what changed since the shown Sync.
+ */
+export async function syncLink(link: LinkRow, full = false) {
   const connection = link.connection;
   if (!connection || !sessionState.project || linksState.linkSyncing) return;
   const projectId = sessionState.project.id,
@@ -267,6 +273,7 @@ export async function syncLink(link: LinkRow) {
       linkId: link.id,
       // The user's own Sync never joins one the engine is running.
       fresh: true,
+      ...(full ? { full: true } : {}),
     });
     if (sessionState.project?.id !== projectId) return;
     if (!draftState.state.messages.some((entry) => entry.id === request.id))
@@ -628,6 +635,9 @@ export function showLayers() {
         ...linksState.currentLayers.map((layer) => layer.requestId),
         selectionState.displayedResult,
         selectionState.selectedResult,
+        // The draft's basis and its pins' Syncs keep their rows (pin markers, send checks).
+        draftState.state.baseRequestId,
+        ...draftState.state.pins.map((pin) => pin.basis),
       ].filter((id): id is string => typeof id === 'string'),
     ),
   );

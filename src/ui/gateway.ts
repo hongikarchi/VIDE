@@ -40,8 +40,9 @@ export async function api(
         signal: controller.signal,
       });
     } catch {
-      // A read that timed out is retried by its poll; no notice for each one.
-      if (controller.signal.aborted) throw apiError('NETWORK_TIMEOUT', undefined, method === 'GET');
+      // A read that timed out is retried by its poll; no notice for each one. An action that timed
+      // out is not asked again: what it did is in the work history (ACTION_TIMEOUT).
+      if (controller.signal.aborted) throw timedOut(method);
       throw apiError('NETWORK_UNAVAILABLE');
     }
     let result;
@@ -51,7 +52,7 @@ export async function api(
         ? decodeGeometry(await response.arrayBuffer(), { typed: true })
         : await response.json();
     } catch {
-      if (controller.signal.aborted) throw apiError('NETWORK_TIMEOUT', undefined, method === 'GET');
+      if (controller.signal.aborted) throw timedOut(method);
       throw apiError('INVALID_RESPONSE');
     }
     return finish(response, result, quiet);
@@ -59,6 +60,10 @@ export async function api(
     clearTimeout(timer);
   }
 }
+const timedOut = (method: string) =>
+  method === 'GET'
+    ? apiError('NETWORK_TIMEOUT', undefined, true)
+    : apiError('ACTION_TIMEOUT', undefined, false);
 function finish(response: Response, result: unknown, quiet: readonly string[]) {
   if (!response.ok) {
     // The PC answers {code}; the account site relaying it answers {error} (PC off, unreachable).
@@ -208,6 +213,8 @@ Object.assign(errors, {
     '로컬 서버에 연결하지 못했습니다. 서버 실행 상태를 확인하세요. 전송한 작업은 이력에서 상태를 확인한 뒤 다시 요청하세요.',
   INVALID_RESPONSE: '서버 응답을 읽지 못했습니다. 작업 이력을 새로 확인하세요.',
   NETWORK_TIMEOUT: '로컬 서버가 제때 답하지 않았습니다. 잠시 뒤 다시 확인합니다.',
+  ACTION_TIMEOUT:
+    '로컬 서버가 10분 동안 답하지 않았습니다. 작업이 이어졌을 수 있으니 작업 이력에서 상태를 확인한 뒤 다시 요청하세요.',
   REQUEST_FAILED: '요청을 처리하지 못했습니다. 작업 이력을 확인하세요.',
   STALE_CONNECTION: 'Rhino 문서 연결이 바뀌었습니다. 열린 문서를 다시 조회하고 대상을 선택하세요.',
   SOURCE_CHANGED:

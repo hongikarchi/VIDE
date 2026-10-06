@@ -95,19 +95,10 @@ const syncSchema = z.object({
   cadUnits: z.string(),
 });
 type Sync = z.infer<typeof syncSchema>;
-/** A stored Sync as far as finding one document object in it needs. */
-const syncObjectsSchema = z
-  .object({
-    result: z
-      .object({
-        objects: z
-          .array(z.object({ id: z.string(), nativeId: z.string().optional() }).passthrough())
-          .optional(),
-      })
-      .passthrough()
-      .nullish(),
-  })
-  .passthrough();
+/** A stored Sync's rows of one document object (`GET …/requests/:r/objects?native=`). */
+const syncRowsSchema = z.object({
+  objects: z.array(z.object({ id: z.string(), nativeId: z.string().optional() }).passthrough()),
+});
 type Row = Sync['rows'][number];
 
 export interface SyncSource {
@@ -591,10 +582,12 @@ function instanceHost(jig: OpenJig): JigHost {
       for (const source of jig.context.sources.filter((s) => s.host === 'rhino').reverse()) {
         let objects: { id: string; nativeId?: string }[] = [];
         try {
-          objects =
-            syncObjectsSchema.parse(
-              await api(`${project}/requests/${encodeURIComponent(source.id)}`),
-            ).result?.objects ?? [];
+          // Only that object's row, never the Sync's model (T-123).
+          objects = syncRowsSchema.parse(
+            await api(
+              `${project}/requests/${encodeURIComponent(source.id)}/objects?native=${encodeURIComponent(wanted)}`,
+            ),
+          ).objects;
         } catch {
           continue;
         }

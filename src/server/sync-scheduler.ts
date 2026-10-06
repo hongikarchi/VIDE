@@ -26,6 +26,12 @@ export interface ScheduledDocument extends OpenDocument {
   connection?: string;
 }
 type LiveReply = { resync: true } | { retry: string } | { requestId: string };
+/** The document a user's Sync read (`POST …/capture`). */
+export interface UserSyncTarget {
+  instance: string;
+  documentId: number;
+  linkId?: string;
+}
 export interface SchedulerOptions {
   workspace: Workspace;
   links: Pick<DocumentLinks, 'list'>;
@@ -126,6 +132,50 @@ export class SyncScheduler {
   }
   private key(projectId: string, document: ScheduledDocument) {
     return [projectId, document.host ?? 'rhino', document.instance ?? '', document.id].join('|');
+  }
+  /** The linked file a user's Sync of this document belongs to (its link id, else its window). */
+  private linkOf(projectId: string, target: UserSyncTarget) {
+    return this.options.links
+      .list(projectId)
+      .find((row) =>
+        target.linkId
+          ? row.id === target.linkId
+          : !isFileLink(row) &&
+            row.instance === target.instance &&
+            row.documentId === target.documentId,
+      );
+  }
+  /**
+   * True when the engine holds this document's automatic Sync now (a page's draft lease, work on
+   * its Syncs, a write on it): a user's Live Sync then writes into a copy and leaves the shown Sync
+   * the draft uses as it is (SPEC-01.11 6, T-123).
+   */
+  holds(projectId: string, target: UserSyncTarget) {
+    const link = this.linkOf(projectId, target);
+    if (!link) return false;
+    const requests = this.options.workspace.list(projectId);
+    return this.held(projectId, link, linkRequests(link, requests), requests, {
+      host: link.host,
+      instance: target.instance,
+      id: target.documentId,
+      name: link.name,
+    });
+  }
+  /**
+   * ⟳, 지금 Sync or the plugin's Sync brought this document up to date (T-123): a wait or a failure
+   * shown on its row is over. A Live Sync in place keeps the Sync's id, so the id alone cannot tell.
+   */
+  userSynced(projectId: string, target: UserSyncTarget) {
+    for (const host of ['rhino', 'zwcad'] as const) {
+      const state = this.states.get(
+        this.key(projectId, { host, instance: target.instance, id: target.documentId, name: '' }),
+      );
+      if (!state || state.running) continue;
+      state.attempts = 0;
+      state.firstFailure = state.retryAt = undefined;
+      state.lastSync = undefined;
+      this.set(state, 'idle');
+    }
   }
   /** The state the links list shows for a linked file open in this document. */
   status(projectId: string, document: ScheduledDocument | undefined) {
@@ -258,8 +308,10 @@ export class SyncScheduler {
     requests: StoredWork[],
     document: ScheduledDocument,
   ) {
+    const now = this.now();
     for (const lease of this.leases.values())
-      if (lease.projectId === projectId && lease.links.has(link.id)) return true;
+      if (lease.projectId === projectId && lease.until >= now && lease.links.has(link.id))
+        return true;
     const byId = new Map(requests.map((entry) => [entry.id, entry]));
     const ownIds = new Set(own.map((entry) => entry.id));
     // A request's basis chain reaches one of this file's Syncs.

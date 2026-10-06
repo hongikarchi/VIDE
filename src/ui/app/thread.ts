@@ -609,6 +609,10 @@ export function followAgenda(conversationId: string, turn: AgendaTurn) {
 }
 /** Failed status reads in a row per request: the next try waits longer, up to 10 s (T-085). */
 const pollFailures = new Map<string, number>();
+/** About 10 minutes of failed reads (1.2 s doubling to 10 s): then the work history tells. */
+const POLL_FAILURE_LIMIT = 64;
+/** Answers that will not change on a retry: the request or its project is gone, or refused. */
+const POLL_PERMANENT = new Set(['NOT_FOUND', 'PROJECT_NOT_FOUND', 'INVALID_INPUT', 'FORBIDDEN']);
 export async function poll(
   id: string,
   projectId = currentProject().id,
@@ -618,10 +622,12 @@ export async function poll(
   if (selectionState.selectedResult === undefined)
     selectionState.selectedResult = selectionState.displayedResult ?? null;
   try {
-    const request = await requestData(`/projects/${projectId}/requests/${id}`);
+    // As the request list shows it (T-123): a result's geometry is fetched once when it is drawn,
+    // not with every status read.
+    const request = await requestData(`/projects/${projectId}/requests/${id}?view=summary`);
     const children = await Promise.all(
       (request.result?.targetResults || []).map((target) =>
-        requestData(`/projects/${projectId}/requests/${target.requestId}`),
+        requestData(`/projects/${projectId}/requests/${target.requestId}?view=summary`),
       ),
     );
     if (sessionState.project?.id !== projectId || draftState.state !== original) return;
@@ -654,10 +660,19 @@ export async function poll(
       setTimeout(() => poll(id, projectId, original), 1200);
   } catch (cause) {
     if (sessionState.project?.id !== projectId || draftState.state !== original) return;
-    // A request that is gone (removed with its file) is not read again.
-    if ((cause as { code?: unknown } | null)?.code === 'NOT_FOUND') return;
+    // A request that is gone (removed with its file) or a refusal that stays is not read again.
+    const code = (cause as { code?: unknown } | null)?.code;
+    if (typeof code === 'string' && POLL_PERMANENT.has(code)) {
+      pollFailures.delete(id);
+      return;
+    }
     // The status is read again (1.2 s, doubling to 10 s); the notice is shown once per outage.
     const failures = (pollFailures.get(id) ?? 0) + 1;
+    if (failures > POLL_FAILURE_LIMIT) {
+      pollFailures.delete(id);
+      message('작업 상태를 계속 읽지 못했습니다. 작업 이력에서 상태를 확인하세요.');
+      return;
+    }
     pollFailures.set(id, failures);
     if (failures === 1) message('작업 상태 연결이 끊겼습니다. 다시 연결되면 이어서 확인합니다.');
     setTimeout(() => poll(id, projectId, original), Math.min(10_000, 1200 * 2 ** (failures - 1)));

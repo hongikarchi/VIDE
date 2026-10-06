@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
 import { iconSvg } from './inspector.ts';
@@ -107,7 +108,8 @@ interface Props {
   onCloseResult: (key: string) => void;
   onFocusResult: (key: string) => void;
   onToggle: (link: LinkRow) => void;
-  onSync: (link: LinkRow) => void;
+  /** ⟳; `full`: read the whole document even when a Live Sync could continue the shown one. */
+  onSync: (link: LinkRow, full?: boolean) => void;
   onRemove: (link: LinkRow) => void;
   onFocus: (link: LinkRow) => void;
   onBackToSync: (link: LinkRow) => void;
@@ -260,6 +262,23 @@ function ResultRow({ result, ...props }: Props & { result: Props['results'][numb
   );
 }
 function LinkList(props: Props) {
+  // The row menu (right click on a connected file's row): 지금 Sync · 전체 다시 읽기 (T-123).
+  const [menu, setMenu] = useState<string>();
+  useEffect(() => {
+    if (!menu) return;
+    const close = (event: Event) => {
+      if (!(event.target as Element | null)?.closest?.('.link-menu')) setMenu(undefined);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenu(undefined);
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [menu]);
   if (!props.loaded) return <small className="link-empty">연결 파일 확인 중…</small>;
   const results = props.results.map((result) => (
     <ResultRow key={result.key} {...props} result={result} />
@@ -330,6 +349,11 @@ function LinkList(props: Props) {
             data-hidden={String(link.hidden)}
             aria-current={props.active === link.id ? 'true' : undefined}
             data-link-id={link.id}
+            onContextMenu={(event) => {
+              if (!connection || file) return;
+              event.preventDefault();
+              setMenu(link.id);
+            }}
           >
             <button
               type="button"
@@ -377,9 +401,13 @@ function LinkList(props: Props) {
               disabled={!connection}
               tabIndex={file ? -1 : undefined}
               aria-hidden={file || undefined}
-              title={connection ? '지금 Sync' : '파일이 열려 있지 않습니다'}
+              title={
+                connection
+                  ? '지금 Sync (Shift: 전체 다시 읽기 · 행 오른쪽 클릭: 메뉴)'
+                  : '파일이 열려 있지 않습니다'
+              }
               aria-label={`${link.name} Sync`}
-              onClick={() => props.onSync(link)}
+              onClick={(event) => props.onSync(link, event.shiftKey)}
               dangerouslySetInnerHTML={{ __html: iconSvg('refresh') }}
             />
             <button
@@ -394,6 +422,31 @@ function LinkList(props: Props) {
               onClick={() => props.onRemove(link)}
               dangerouslySetInnerHTML={{ __html: iconSvg('x') }}
             />
+            {menu === link.id && connection && !file ? (
+              <div className="link-menu" role="menu" aria-label={`${link.name} 메뉴`}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenu(undefined);
+                    props.onSync(link);
+                  }}
+                >
+                  지금 Sync
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  title="바뀐 객체만 묻지 않고 문서 전체를 다시 읽습니다"
+                  onClick={() => {
+                    setMenu(undefined);
+                    props.onSync(link, true);
+                  }}
+                >
+                  전체 다시 읽기
+                </button>
+              </div>
+            ) : null}
             <LinkNote {...props} link={link} />
             {props.candidates.has(link.id) ? (
               <button

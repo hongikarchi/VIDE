@@ -175,6 +175,13 @@ type LiveReply = { resync: true } | { retry: string } | { requestId: string };
 export async function runUserSync(
   context: DocumentSyncContext & {
     live?: (projectId: string, input: unknown) => Promise<LiveReply>;
+    /**
+     * True when the engine holds the document's automatic Sync (a draft, work on it): the Live
+     * Sync then writes into a copy and the shown Sync the draft uses stays as it is (SPEC-01.11 6).
+     */
+    holds?: (projectId: string, target: DocumentSyncTarget) => boolean;
+    /** The document is up to date: the engine's wait or failure shown on its row is over. */
+    synced?: (projectId: string, target: DocumentSyncTarget) => void;
   },
   projectId: string,
   target: DocumentSyncTarget & { full?: boolean },
@@ -190,6 +197,7 @@ export async function runUserSync(
         documentId: target.documentId,
         basisId: basis.id,
         revision: basis.revision,
+        ...(context.holds?.(projectId, target) ? { keep: true } : {}),
       });
     } catch {
       reply = undefined;
@@ -201,6 +209,7 @@ export async function runUserSync(
         action: 'live',
         ms: Math.round(performance.now() - began),
       });
+      context.synced?.(projectId, target);
       return { result: context.workspace.summary(projectId, reply.requestId), action: 'live' };
     }
   }
@@ -214,6 +223,7 @@ export async function runUserSync(
     action: 'full',
     ms: Math.round(performance.now() - began),
   });
+  if (result.state === 'succeeded') context.synced?.(projectId, target);
   return { result, action: 'full' };
 }
 

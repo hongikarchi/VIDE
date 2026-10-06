@@ -63,7 +63,7 @@ export function SharedFeedback({
   onCount,
 }: {
   projectId: string;
-  onAdopt: (note: ReceivedFeedback) => void;
+  onAdopt: (note: ReceivedFeedback) => void | Promise<void>;
   onBasis: (id: string) => void;
   /** The received count changed (the 산출물 badge follows it). */
   onCount?: (count: number) => void;
@@ -103,11 +103,13 @@ export function SharedFeedback({
       setBusy(false);
     }
   }
-  const perform = (action: () => void) => {
-    try {
-      action();
-    } catch (error) {
+  const perform = (action: () => void | Promise<void>) => {
+    const failed = (error: unknown) =>
       setStatus(error instanceof Error ? error.message : '처리하지 못했습니다.');
+    try {
+      void action()?.catch(failed);
+    } catch (error) {
+      failed(error);
     }
   };
   return (

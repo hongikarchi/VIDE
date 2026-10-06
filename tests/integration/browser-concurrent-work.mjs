@@ -41,7 +41,7 @@ try {
     await route.fulfill({ json: request });
   });
   await page.route('**/requests/*', async (route) => {
-    const id = route.request().url().split('/').at(-1);
+    const id = new URL(route.request().url()).pathname.split('/').at(-1);
     const request = pending.get(id);
     return request ? route.fulfill({ json: request }) : route.continue();
   });

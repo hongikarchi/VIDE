@@ -3,6 +3,7 @@
 import { initializeReviews, onReviewsChange } from '../reviews.tsx';
 import { attachReviewNote, linkedCandidates, objects, packet, models } from '../model.ts';
 import { attachSharedFeedback } from '../shared-feedback.tsx';
+import { withObjects } from '../object-rows.ts';
 import { attachJigs, type JigContext, legacyJigTab } from '../jigs.tsx';
 import { displayIdOf } from '../layers.ts';
 import { requestData, requestMessage } from '../workspace-data.ts';
@@ -162,9 +163,11 @@ export function initGlue1() {
       showModelView();
       message('의견 작성 당시 후보를 열었습니다.');
     },
-    (note) => {
+    async (note) => {
       if (sessionState.busy) throw Error('현재 요청 전송이 끝난 뒤 첨부하세요.');
       if (note.projectId !== sessionState.project?.id) throw Error('의견의 프로젝트가 다릅니다.');
+      // A display Sync listed without its rows (T-123) gets them before the object is checked.
+      await withObjects(note.projectId, note.requestId);
       attachSharedFeedback(draftState.state, note);
       render();
       revealPanel('right');
