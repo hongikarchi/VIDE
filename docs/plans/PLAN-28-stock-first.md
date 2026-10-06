@@ -121,6 +121,8 @@ ADR-032를 사용자가 확인한 뒤 ARCH-01 §5에 반영하고 구현한다. 
 
 **진행(2026-10-02):** `-ma`·최근 3개 유지·덤프 경로를 `shell` 로그에 남기는 것까지 구현(셸 빌드 오류 0). 엔진 stderr는 이미 `engine-stderr-*.log`로 남는다. 심볼 확인과 T-123 뒤 재현 확인은 남음(설치본 갱신 필요).
 
+**원인 확인(2026-10-06):** 설치본 0.2.20 엔진이 시작 30~50초 뒤 연달아 끝나 ProcDump `-ma` 덤프 4개를 얻었다. 4개 모두 같은 자리다: `Unhandled: C0000409`, fail-fast 코드 2(스택 쿠키), `node.exe+0x21f2189` = `__report_gsfailure`, 호출 경로 `node::TCPWrap::Connect` → `uv_tcp_connect` → `uv__tcp_connect`(Node v24.15.0 심볼로 확인). 엔진에 들어온 시스템 밖 모듈은 node.exe뿐이다. 알려진 libuv 1.51.0 결함이다(루프백 연결마다 부르는 `uv__is_fast_loopback_fail_supported`가 크기를 넣지 않은 `OSVERSIONINFOW`로 `RtlGetVersion`을 불러 스택 쿠키를 덮음, [libuv#5274](https://github.com/libuv/libuv/issues/5274), 수정 libuv#5107이 Node 24.16.0에 들어감). 그래서 번들 런타임을 Node 24.21.0으로 올렸다(`src/desktop/build.mjs`, `package.json` engines `>=24.16.0`, CI). 10-01부터의 `0xC0000409` 종료와 원인이 같은지는 덤프가 없어 확정할 수 없지만 증상(stderr 없음·WER 없음·불규칙 시점)이 같다. 남음: 24.21.0 설치본에서 종료가 사라졌는지 확인.
+
 ## T-126 진단 기록 (ADR-031 9)
 
 - 로그 쓰기를 모아서 쓰는 방식으로 바꾼다(엔진을 기다리게 하지 않음). 모든 줄에 VIDE 버전을 붙인다.

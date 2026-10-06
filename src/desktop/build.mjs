@@ -11,8 +11,8 @@ import { createHash } from 'node:crypto';
 const exec = promisify(execFile),
   root = resolve(fileURLToPath(new URL('../..', import.meta.url))),
   source = join(root, 'src', 'desktop');
-if (process.platform !== 'win32' || process.arch !== 'x64' || process.version !== 'v24.15.0')
-  throw Error('Build requires the verified Windows x64 Node.js v24.15.0 runtime.');
+if (process.platform !== 'win32' || process.arch !== 'x64' || process.version !== 'v24.21.0')
+  throw Error('Build requires the verified Windows x64 Node.js v24.21.0 runtime.');
 const args = process.argv.slice(2),
   installer = args.includes('--installer'),
   pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')),
@@ -175,7 +175,7 @@ await copyZwcadNotices(
   zwcadAssemblies.slice(1),
 );
 await copyFile(
-  join(source, 'licenses', 'node-v24.15.0.txt'),
+  join(source, 'licenses', 'node-v24.21.0.txt'),
   join(directory, 'licenses', 'node.txt'),
 );
 await copyFile(

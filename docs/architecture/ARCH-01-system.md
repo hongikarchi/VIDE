@@ -103,7 +103,7 @@ Node 시험이 직접 불러오는 화면 모듈(`reference-check.ts`·`conversa
 | 화면 | TypeScript + React | 기존 디자인/CSS·동작을 보존하며 DOM 직접 갱신을 컴포넌트와 명시적 상태로 전환 |
 | 개발·웹 빌드 | Vite | 개발 도구로 사용하고 제품에서는 빌드한 정적 자산을 로컬 서버/공유 서비스가 제공 |
 | 스타일 | CSS | 기존 디자인 토큰·레이아웃 유지. UI 프레임워크 변경을 디자인 재작성으로 확대하지 않음 |
-| 로컬 제어기 | TypeScript + Node.js | src/core·server·ai와 JavaScript 호스트 어댑터를 점진 이행. 기존 검증된 Node 24.15.0 유지 |
+| 로컬 제어기 | TypeScript + Node.js | src/core·server·ai와 JavaScript 호스트 어댑터를 점진 이행. Node 24.21.0(2026-10-06, 24.0~24.15의 libuv 1.51 루프백 연결 결함으로 엔진이 `0xC0000409`로 끝나 24.16 이상으로 올림, PLAN-28 T-125) |
 | 네이티브 실행 | C# + 설치 호스트 공식 SDK | Rhino/ZWCAD의 SDK·런타임 차이는 별도 검증 |
 | 로컬 저장 | SQLite | 기존 데이터·스키마·백업 유지. 언어 전환만을 이유로 DB 이행하지 않음 |
 | 외부 공유 | Cloudflare 계획 유지 | Workers는 로컬 Node 프로세스 실행 경로와 분리. 공유 계약/화면만 재사용 |
