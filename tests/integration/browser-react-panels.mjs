@@ -117,7 +117,7 @@ try {
       },
     ],
   };
-  soleDb(app.store)
+  soleDb(app.store, first)
     .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
     .run(
       fixtureInput.id,
@@ -259,7 +259,7 @@ try {
     body: 'Restore exact original',
     baseRequestId: null,
   };
-  soleDb(app.store)
+  soleDb(app.store, second)
     .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
     .run(
       failed.id,
@@ -275,7 +275,7 @@ try {
     body: 'Uncertain host action',
     permission: 'candidate',
   };
-  soleDb(app.store)
+  soleDb(app.store, second)
     .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
     .run(
       unknown.id,
@@ -311,7 +311,7 @@ try {
       },
     ],
   };
-  soleDb(app.store)
+  soleDb(app.store, second)
     .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
     .run(
       attached.id,
@@ -376,7 +376,7 @@ try {
       { id: 'object-1', name: 'Fixture box', kind: 'box', origin: [0, 0, 0], size: [2, 3, 4] },
     ],
   };
-  soleDb(app.store)
+  soleDb(app.store, second)
     .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
     .run(
       applicable.id,
@@ -513,7 +513,7 @@ try {
   await savedReview.getByRole('status').filter({ hasText: '의견을 저장했습니다.' }).waitFor();
   assert.deepEqual(notesSent[0], notesSent[1]);
   assert.equal(
-    soleDb(app.store)
+    soleDb(app.store, second)
       .prepare('SELECT count(*) AS n FROM review_notes WHERE projectId=?')
       .get(second).n,
     1,
@@ -542,7 +542,7 @@ try {
     objects: [{ ...applicableResult.objects[0], size: [2, 3, 5] }],
     scene: [{ ...applicableResult.scene[0], volume: 30 }],
   };
-  soleDb(app.store)
+  soleDb(app.store, second)
     .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
     .run(
       nextInput.id,
@@ -552,7 +552,7 @@ try {
       JSON.stringify(nextResult),
       new Date().toISOString(),
     );
-  const firstReview = soleDb(app.store)
+  const firstReview = soleDb(app.store, second)
     .prepare('SELECT * FROM review_snapshots WHERE projectId=?')
     .get(second);
   const snapshot = JSON.parse(firstReview.payload);

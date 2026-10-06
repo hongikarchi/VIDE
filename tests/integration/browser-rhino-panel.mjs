@@ -108,10 +108,9 @@ try {
     await route.fulfill({ json: storeSync(projectId, target) });
   });
   // The plugin linked this document to the project and opened the panel for it.
-  const projectId = 'panel-project';
-  soleDb(app.store).prepare("INSERT INTO projects(id, name) VALUES(?, 'Panel')").run(projectId);
+  const projectId = app.store.createProject('Panel').id;
   const now = new Date().toISOString();
-  soleDb(app.store)
+  soleDb(app.store, projectId)
     .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
     .run('link-panel', projectId, 'rhino', 'Panel test.3dm', null, instance, 7, now, now);
   await page.route(linksUrl, async (route) => {
@@ -234,7 +233,10 @@ try {
     projectId,
   );
   await page.waitForFunction(() => window.__actions.includes('unlink'));
-  assert.equal(soleDb(app.store).prepare('SELECT count(*) AS n FROM document_links').get().n, 0);
+  assert.equal(
+    soleDb(app.store, projectId).prepare('SELECT count(*) AS n FROM document_links').get().n,
+    0,
+  );
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ passed: true, panelOnly: true, sharedPins: true, directory }));
 } finally {
