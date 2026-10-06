@@ -88,6 +88,20 @@ function ViewNavigation() {
       <ViewButton view="front" label="앞" title="앞 · 직교" />
       <ViewButton view="side" label="옆" title="옆 · 직교" />
       <button
+        id="walk-toggle"
+        data-view="walk"
+        title={
+          camera?.view === 'walk'
+            ? '걷기 끝내기 (Esc)'
+            : '걷기 · 눈높이로 걸으며 보기 (WASD 이동, 우클릭 끌기 둘러보기)'
+        }
+        aria-label={camera?.view === 'walk' ? '걷기 끝내기' : '걷기'}
+        aria-pressed={camera ? camera.view === 'walk' : undefined}
+        data-icon="walk"
+        onClick={() => act.walk()}
+        dangerouslySetInnerHTML={icon('walk')}
+      />
+      <button
         id="projection-toggle"
         title={
           !camera

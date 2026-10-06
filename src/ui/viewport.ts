@@ -39,6 +39,7 @@ import {
   type StyledGeometry,
 } from './cad-annotations.ts';
 import { TOKEN_FALLBACK } from './tokens.ts';
+import { createWalk } from './walk-controls.ts';
 
 type Camera = THREE.PerspectiveCamera | THREE.OrthographicCamera;
 type PlaneName = 'XY' | 'XZ' | 'YZ';
@@ -255,6 +256,7 @@ export function createViewport(
   onPick: (ids: string[], mode: 'replace' | 'add' | 'remove', source: PickSource) => void,
   onSketch: (event: SketchEvent) => void,
   onCamera?: (state: { view: string; projection: 'orthographic' | 'perspective' }) => void,
+  onNotice?: (text: string) => void,
 ) {
   let dirty = true;
   let selectedIds = new Set<string>();
@@ -313,6 +315,7 @@ export function createViewport(
   const visibleMeshes = () => meshes.filter((mesh) => mesh.visible);
   function applyHidden() {
     for (const mesh of meshes) mesh.visible = !hiddenIds.has(mesh.userData.id);
+    walk.invalidate();
     rebatchAll();
     dirty = true;
   }
@@ -1414,6 +1417,7 @@ export function createViewport(
   }
   /** Frame document objects, a box, or an overlay layer or item; small targets get room. */
   function focus(target: FocusTarget) {
+    leaveWalk();
     const bounds = new THREE.Box3();
     if ('overlay' in target) {
       const group = overlays.get(target.overlay)?.group;
@@ -1475,6 +1479,10 @@ export function createViewport(
   }
   function reportCamera() {
     dirty = true;
+    if (walk.active) {
+      onCamera?.({ view: 'walk', projection: 'perspective' });
+      return;
+    }
     const direction = camera.position.clone().sub(controls.target).normalize();
     const ortho = camera instanceof THREE.OrthographicCamera;
     let view =
@@ -1510,6 +1518,7 @@ export function createViewport(
   }
   /** Frame one object, several objects, or everything visible. */
   function fit(id?: string | readonly string[]) {
+    leaveWalk();
     const wanted = id === undefined ? undefined : new Set(typeof id === 'string' ? [id] : id);
     const targets = wanted
       ? meshes.filter((m) => wanted.has(m.userData.id))
@@ -1567,6 +1576,7 @@ export function createViewport(
     controls.update();
   }
   function home() {
+    leaveWalk();
     standardView = false;
     perspective.up.set(0, 0, 1);
     perspective.position.set(34, -43, 32);
@@ -1574,8 +1584,48 @@ export function createViewport(
     grid.rotation.set(Math.PI / 2, 0, 0);
     fit();
   }
+  // Walk mode (PLAN-37): an eye-level camera; the select tool keeps working (click, window, pin).
+  const walk = createWalk({
+    camera: perspective,
+    dom: renderer.domElement,
+    container,
+    surfaces: () => walkSurfaces(),
+    changed: () => {
+      dirty = true;
+    },
+    exit: () => leaveWalk(),
+    notice: (text) => onNotice?.(text),
+    keyboard: 'host',
+  });
+  /** Enter walk mode at the floor under the orbit centre, facing the way the camera looks. */
+  function enterWalk() {
+    if (walk.active) return;
+    if (mode === 'sketch') return;
+    const at = controls.target.clone();
+    const facing = at.clone().sub(camera.position);
+    if (Math.hypot(facing.x, facing.y) < 1e-6) facing.copy(camera.up);
+    if (camera !== perspective) {
+      standardView = false;
+      perspective.position.copy(camera.position);
+      perspective.up.set(0, 0, 1);
+      grid.rotation.set(Math.PI / 2, 0, 0);
+      activate(perspective, at);
+    }
+    controls.enabled = false;
+    cancel();
+    walk.start(at, facing);
+    renderer.domElement.dataset.projection = 'perspective';
+    reportCamera();
+  }
+  /** Back to the orbit camera where the walker stands, looking where they looked. */
+  function leaveWalk() {
+    const target = walk.stop();
+    if (!target) return;
+    activate(perspective, target);
+  }
   home();
   function planeView(name: PlaneName) {
+    leaveWalk();
     standardView = true;
     orthographic.zoom = 1;
     orthographic.up.set(0, 0, 1);
@@ -1594,6 +1644,7 @@ export function createViewport(
     fit();
   }
   function projection(kind: 'orthographic' | 'perspective') {
+    leaveWalk();
     const next = kind === 'orthographic' ? orthographic : perspective;
     if (next === camera) return;
     const target = controls.target.clone(),
@@ -1627,7 +1678,7 @@ export function createViewport(
       camera instanceof THREE.OrthographicCamera
         ? viewSpan / camera.zoom
         : 2 *
-          camera.position.distanceTo(controls.target) *
+          (walk.active ? 10 : camera.position.distanceTo(controls.target)) *
           Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     ray.params.Points.threshold = ray.params.Line.threshold = (span / Math.max(r.height, 1)) * 6;
   }
@@ -1673,6 +1724,16 @@ export function createViewport(
     down = { x: e.clientX, y: e.clientY };
   }
   const surfaceMeshes = () => meshes.filter((m) => m instanceof THREE.Mesh);
+  /** Surfaces the walker stands on: meshes and the surface parts of block instances. */
+  const walkSurfaces = () => {
+    const out: THREE.Object3D[] = [];
+    for (const object of meshes) {
+      if (object instanceof THREE.Mesh) out.push(object);
+      else if (object instanceof THREE.Group)
+        for (const child of object.children) if (child instanceof THREE.Mesh) out.push(child);
+    }
+    return out;
+  };
   function viewPlane(through: THREE.Vector3) {
     const normal = camera.getWorldDirection(new THREE.Vector3()).negate();
     return new THREE.Plane().setFromNormalAndCoplanarPoint(normal, through);
@@ -1776,6 +1837,8 @@ export function createViewport(
       return;
     }
     if (!down || !(e.buttons & 1)) return;
+    // Walking on touch: one finger looks around (walk-controls), it draws no window.
+    if (walk.active && e.pointerType === 'touch') return;
     if (Math.hypot(e.clientX - down.x, e.clientY - down.y) <= 5) return;
     const r = container.getBoundingClientRect();
     marquee.hidden = false;
@@ -1899,6 +1962,7 @@ export function createViewport(
     down = null;
     marquee.hidden = true;
     if (moved > 5) {
+      if (walk.active && e.pointerType === 'touch') return;
       if (mode !== 'sketch')
         onPick(
           boxSelect(start.x, start.y, e.clientX, e.clientY, e.clientX < start.x),
@@ -1955,13 +2019,17 @@ export function createViewport(
   renderer.domElement.addEventListener('webglcontextrestored', contextRestored);
   const resize = new ResizeObserver(sizing);
   resize.observe(container);
+  const lookAhead = new THREE.Vector3();
   function animate() {
     frame = requestAnimationFrame(animate);
-    controls.update();
+    if (walk.active) walk.update();
+    else controls.update();
     if (dirty) {
       if (overlays.size) scaleLabels();
       light.position.copy(camera.position);
-      light.target.position.copy(controls.target);
+      if (walk.active)
+        light.target.position.copy(camera.position).add(camera.getWorldDirection(lookAhead));
+      else light.target.position.copy(controls.target);
       renderer.render(scene, camera);
       dirty = false;
     }
@@ -2076,11 +2144,13 @@ export function createViewport(
     },
     replace(data: DisplayObject[], definitions?: Record<string, BlockDefinition>) {
       replace(data, false, definitions);
+      walk.invalidate();
       fit();
     },
     /** Live Sync: rebuild only changed objects and keep the camera. */
     update(data: DisplayObject[], definitions?: Record<string, BlockDefinition>) {
       replace(data, true, definitions);
+      walk.invalidate();
     },
     /** Override colours per object id (e.g. structure verdicts); null clears them. */
     tint(colors: Record<string, string> | null) {
@@ -2208,6 +2278,7 @@ export function createViewport(
       return fat?.material.linewidth;
     },
     mode(next: ToolMode) {
+      if (next === 'sketch') leaveWalk();
       mode = next;
       if (next !== 'sketch') cancel();
       configure();
@@ -2219,6 +2290,25 @@ export function createViewport(
     },
     plane: planeView,
     home,
+    /** Walk mode on or off (PLAN-37). */
+    walk(on: boolean) {
+      if (on) enterWalk();
+      else leaveWalk();
+    },
+    walking() {
+      return walk.active;
+    },
+    /** Keydown while walking (shortcut order 5): true when the walk used the key. */
+    walkKey(e: KeyboardEvent) {
+      return walk.key(e, true);
+    },
+    /** Test/diagnostic hook: the walker's state, and simulated key holds. */
+    walkState: () => walk.state(),
+    walkSimulate: (keys: readonly string[], ms: number) => walk.simulate(keys, ms),
+    walkFloor: (direction: 1 | -1) => walk.changeFloor(direction),
+    walkJump: (x: number, y: number) => walk.jumpAt(x, y),
+    walkTeleport: (point: [number, number, number], heading?: number) =>
+      walk.teleport(point, heading),
     fit,
     hide(ids: readonly string[]) {
       for (const id of ids) hiddenIds.add(id);
@@ -2274,6 +2364,7 @@ export function createViewport(
     dispose() {
       cancelAnimationFrame(frame);
       resize.disconnect();
+      walk.dispose();
       controls.dispose();
       renderer.domElement.removeEventListener('pointerdown', cameraPointerDown, true);
       renderer.domElement.removeEventListener('pointerdown', pointerDown);

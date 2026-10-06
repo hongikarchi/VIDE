@@ -2,10 +2,10 @@
 id: SPEC-10
 title: 공유 노트·협의 사항·일지
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-10-06
 owner: agent:claude
-related: [FR-07, FR-16, FR-18, FR-19, AC-04, ADR-034, ADR-031, SPEC-01, SPEC-04, PLAN-32]
+related: [FR-07, FR-16, FR-18, FR-19, AC-04, ADR-034, ADR-031, SPEC-01, SPEC-04, PLAN-32, RESEARCH-15]
 ---
 
 # 공유 노트·협의 사항·일지
@@ -66,3 +66,5 @@ related: [FR-07, FR-16, FR-18, FR-19, AC-04, ADR-034, ADR-031, SPEC-01, SPEC-04,
 ## 범위 밖과 후속 — SPEC-10.8
 
 표·이미지·파일 첨부, 노트 안의 객체 핀·스케치, AI가 노트에 쓰기, 노트별 공유 범위, 지운 노트 되살리기·판 이력, 구성원에서 빠진 사람의 열린 연결 즉시 끊기, 사이트에서 할 일 보내기(작업 PC 할 일과의 연동).
+
+후속 후보(2026-10-06): 구조화 표 — 행 고정 id·칸 단위 병합, 상태 배지·필터, 행 단위 할 일 보내기, 결과·의견·교차검토 열. S-18의 법규 검토표 공동편집이 실제 수요이며 대조 근거는 [RESEARCH-15](../research/RESEARCH-15-s18-feature-harvest.md) §5에 있다. 동작은 착수를 정할 때 이 절에서 꺼내 정의한다.

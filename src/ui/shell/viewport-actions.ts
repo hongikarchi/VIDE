@@ -10,6 +10,8 @@ export const viewportActions: {
   tool: (tool: 'select' | 'sketch') => void;
   view: (view: 'axon' | 'plan' | 'front' | 'side') => void;
   toggleProjection: () => void;
+  /** Walk mode on/off (PLAN-37). */
+  walk: () => void;
   fitSelection: () => void;
   fitView: () => void;
   swatch: (color: string) => void;
@@ -27,6 +29,7 @@ export const viewportActions: {
   tool: nothing,
   view: nothing,
   toggleProjection: nothing,
+  walk: nothing,
   fitSelection: nothing,
   fitView: nothing,
   swatch: nothing,

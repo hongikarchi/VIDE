@@ -5,6 +5,7 @@ import type { Scene } from './api';
 import type { SharedPin, SharedSketch } from '../../contracts/shared-spatial';
 import { spatialTools, worldPoint, type SpatialState, type StrokeDraft } from './spatial-tools';
 import { displayCoordinates } from '../../core/display-coordinates';
+import { createWalk } from '../../ui/walk-controls';
 
 export interface SpatialDraft {
   pin?: SharedPin | null;
@@ -155,7 +156,8 @@ export function Model({
       center = bounds.getCenter(new THREE.Vector3()),
       span = Math.max(bounds.getSize(new THREE.Vector3()).length(), 0.001),
       distance = span * 1.5;
-    const perspective = view === 'perspective',
+    const walking = view === 'walk',
+      perspective = view === 'perspective' || walking,
       camera = perspective
         ? new THREE.PerspectiveCamera(40, 1, span / 10000, span * 100)
         : new THREE.OrthographicCamera(-span, span, span, -span, span / 10000, span * 100);
@@ -175,8 +177,21 @@ export function Model({
     controls.target.copy(center);
     controls.enableDamping = true;
     control.current = controls;
-    controls.enabled = mode !== 'sketch';
+    controls.enabled = mode !== 'sketch' && !walking;
     scale.current = span;
+    // Walk mode (PLAN-37 T-173): eye level from the model's centre; 탐색 and 핀 keep their clicks.
+    const walk =
+      walking && camera instanceof THREE.PerspectiveCamera
+        ? createWalk({
+            camera,
+            dom: renderer.domElement,
+            container: element,
+            surfaces: () => group.children,
+            changed: () => {},
+            exit: () => setView('perspective'),
+          })
+        : null;
+    walk?.start(center, center.clone().sub(camera.position));
     const drawing = new THREE.Group(),
       preview = new THREE.Group();
     scene.add(drawing, preview);
@@ -201,7 +216,8 @@ export function Model({
     resize();
     let frame = 0;
     const render = () => {
-      controls.update();
+      if (walk) walk.update();
+      else controls.update();
       renderer.render(scene, camera);
       frame = requestAnimationFrame(render);
     };
@@ -223,6 +239,7 @@ export function Model({
     });
     return () => {
       detach();
+      walk?.dispose();
       cancelAnimationFrame(frame);
       observer.disconnect();
       controls.dispose();
@@ -237,7 +254,7 @@ export function Model({
     };
   }, [model, view, fit]);
   useEffect(() => {
-    if (control.current) control.current.enabled = mode !== 'sketch';
+    if (control.current) control.current.enabled = mode !== 'sketch' && view !== 'walk';
   }, [mode, model, view, fit]);
   useEffect(() => {
     const group = overlay.current;
@@ -328,6 +345,7 @@ export function Model({
           ['top', '위'],
           ['front', '앞'],
           ['right', '오른쪽'],
+          ['walk', '걷기'],
         ].map(([value, label]) => (
           <button
             key={value}

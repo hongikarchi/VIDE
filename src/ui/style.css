@@ -4871,3 +4871,67 @@ body.panel-mode .mode-toggle {
   overflow: auto;
   font-size: 12px;
 }
+
+/* Walk mode (PLAN-37, Design §05): the bar along the bottom and, on touch, a joystick. */
+.walk-bar {
+  position: absolute;
+  z-index: 6;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-floating);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-float);
+  font-size: 12px;
+}
+.walk-bar[hidden],
+.walk-joystick[hidden] {
+  display: none;
+}
+.walk-hint {
+  padding: 0 6px;
+  color: var(--text-3);
+  font-size: 11px;
+}
+.walk-bar button {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.walk-bar button[aria-pressed='true'] {
+  background: var(--bg-active);
+}
+.walk-joystick {
+  position: absolute;
+  z-index: 6;
+  left: calc(16px + env(safe-area-inset-left, 0px));
+  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  width: 124px;
+  height: 124px;
+  border-radius: 50%;
+  background: var(--bg-floating);
+  border: var(--hairline) solid var(--line);
+  box-shadow: var(--shadow-float);
+  display: grid;
+  place-items: center;
+  touch-action: none;
+}
+.walk-joystick > div {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--text-3);
+  opacity: 0.55;
+  pointer-events: none;
+}
+#canvas canvas[data-walk='true'] {
+  cursor: grab;
+}

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { api, message, type Project } from './api';
 import { decodeSnapshot, type Snapshot } from '../../contracts/offline-snapshot';
 import { OfflineAgenda, OfflineHistory } from './offline-summary';
+import { createWalk } from '../../ui/walk-controls';
 
 // PLAN-20, PLAN-33: a project while its work PC is off (SPEC-04.10). 할 일 (editable; the PC
 // applies the changes when it is on), the work history summary, a place for notes (PLAN-32), the
@@ -76,7 +77,7 @@ function SnapshotView({ snapshot, hidden }: { snapshot: Snapshot; hidden: Set<st
   const host = useRef<HTMLDivElement>(null),
     layers = useRef(new Map<string, THREE.Object3D[]>()),
     redraw = useRef<() => void>(() => {}),
-    [view, setView] = useState<'top' | 'perspective'>('top'),
+    [view, setView] = useState<'top' | 'perspective' | 'walk'>('top'),
     [error, setError] = useState('');
   useEffect(() => {
     const element = host.current;
@@ -156,6 +157,7 @@ function SnapshotView({ snapshot, hidden }: { snapshot: Snapshot; hidden: Set<st
     }
     camera.lookAt(0, 0, 0);
     const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enabled = view !== 'walk';
     controls.enableRotate = !top;
     controls.screenSpacePanning = true;
     if (top)
@@ -227,11 +229,34 @@ function SnapshotView({ snapshot, hidden }: { snapshot: Snapshot; hidden: Set<st
       draw();
     };
     controls.addEventListener('change', draw);
+    // Walk mode (PLAN-37 T-173): an eye-level camera over the saved view; it draws every frame.
+    let walkFrame = 0;
+    const walk =
+      view === 'walk' && camera instanceof THREE.PerspectiveCamera
+        ? createWalk({
+            camera,
+            dom: renderer.domElement,
+            container: element,
+            surfaces: () => [...byLayer.values()].flat(),
+            changed: draw,
+            exit: () => setView('perspective'),
+          })
+        : null;
+    if (walk) {
+      walk.start(new THREE.Vector3(), new THREE.Vector3().sub(camera.position));
+      const step = () => {
+        walk.update();
+        walkFrame = requestAnimationFrame(step);
+      };
+      walkFrame = requestAnimationFrame(step);
+    }
     const observer = new ResizeObserver(resize);
     observer.observe(element);
     resize();
     return () => {
       cancelAnimationFrame(pending);
+      cancelAnimationFrame(walkFrame);
+      walk?.dispose();
       observer.disconnect();
       controls.dispose();
       for (const shapes of byLayer.values())
@@ -261,6 +286,9 @@ function SnapshotView({ snapshot, hidden }: { snapshot: Snapshot; hidden: Set<st
         </button>
         <button aria-pressed={view === 'perspective'} onClick={() => setView('perspective')}>
           3D
+        </button>
+        <button aria-pressed={view === 'walk'} onClick={() => setView('walk')}>
+          걷기
         </button>
       </div>
       {error ? <p className="status banner">{error}</p> : null}

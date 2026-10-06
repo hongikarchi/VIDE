@@ -224,6 +224,7 @@ export function initViewport2() {
           viewerState.camera = { view: camera.view, projection: camera.projection };
           viewerState.bump();
         },
+        (text) => message(text),
       );
     } catch {
       message('3D 뷰포트를 열 수 없습니다. WebGL 지원을 확인하세요.');
@@ -266,6 +267,16 @@ export function initViewport3() {
     draw();
   };
   viewportActions.fitView = () => viewerState.viewport?.fit();
+  viewportActions.walk = () => {
+    const viewport = viewerState.viewport;
+    if (!viewport) return;
+    if (viewport.walking()) viewport.walk(false);
+    else {
+      // Walking looks with the select tool's clicks: leaving the sketch tool attaches its strokes.
+      if (sketchState.tool === 'sketch') setTool('select');
+      viewport.walk(true);
+    }
+  };
   // A native listener: thread.ts and the view buttons send this select a non-bubbling change.
   $('projection').onchange = () => {
     if ($('projection').value === 'axon') viewerState.viewport?.home();
@@ -465,6 +476,12 @@ export function viewKeys(e: KeyboardEvent): ShortcutResult {
       return 'stop';
     }
   }
+}
+/** Walk keys (order 5): movement, PageUp/PageDown floors and Escape leave walk mode first. */
+export function walkKeys(e: KeyboardEvent): ShortcutResult {
+  const viewport = viewerState.viewport;
+  if (viewport?.walking() && !isTyping(e) && workspaceShowsViewport() && viewport.walkKey(e))
+    return 'stop';
 }
 /** Escape (order 30): clears the selection outside the sketch tool and the message box. */
 export function escapeSelection(e: KeyboardEvent): ShortcutResult {

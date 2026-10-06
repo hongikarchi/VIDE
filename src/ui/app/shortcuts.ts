@@ -3,13 +3,14 @@
 // old single listener's `return`); any other result lets the next handler see the key.
 import { escapeEffortMenu } from './composer.ts';
 import { panelToggleKeys } from './left.ts';
-import { escapeSelection, escapeSketch, sketchKeys, viewKeys } from './viewport.ts';
+import { escapeSelection, escapeSketch, sketchKeys, viewKeys, walkKeys } from './viewport.ts';
 
 export type ShortcutResult = 'stop' | void;
 export type ShortcutHandler = (event: KeyboardEvent) => ShortcutResult;
 
 /** The order is part of the contract: change it only here. */
 export const SHORTCUT_ORDER = {
+  walkKeys: 5,
   sketchKeys: 10,
   viewKeys: 20,
   escapeSelection: 30,
@@ -36,6 +37,7 @@ export function isTyping(event: KeyboardEvent) {
 }
 
 export function initShortcuts() {
+  registerShortcut(SHORTCUT_ORDER.walkKeys, walkKeys);
   registerShortcut(SHORTCUT_ORDER.sketchKeys, sketchKeys);
   registerShortcut(SHORTCUT_ORDER.viewKeys, viewKeys);
   registerShortcut(SHORTCUT_ORDER.escapeSelection, escapeSelection);

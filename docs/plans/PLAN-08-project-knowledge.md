@@ -2,10 +2,10 @@
 id: PLAN-08
 title: 프로젝트 지식 DB — 수집·정리·질의·크리틱·팀 공유 단계 계획
 status: draft
-version: 0.6
-updated: 2026-10-01
+version: 0.7
+updated: 2026-10-06
 owner: agent:claude
-related: [RESEARCH-06, RESEARCH-10, T-032, PLAN-05, PLAN-22, PLAN-24, ADR-018, PRD, FR-08, FR-09, FR-18, FR-21, FR-22, SPEC-03, ARCH-01, AC-12, AC-14, AC-30, AC-37]
+related: [RESEARCH-06, RESEARCH-10, T-032, PLAN-05, PLAN-22, PLAN-24, PLAN-30, RESEARCH-15, ADR-018, ADR-037, PRD, FR-08, FR-09, FR-18, FR-21, FR-22, SPEC-03, ARCH-01, AC-12, AC-14, AC-30, AC-37]
 ---
 
 # PLAN-08 — 프로젝트 지식 DB
@@ -227,6 +227,12 @@ K0-T 피드백(2026-09-29): 이슈 113개 × 항목 약 30개를 같은 무게�
   - 다른 드라이브 문자로 같은 자료 인식, 한국어 부분 검색
   - 원문 구간 열람 브라우저 시험, 원본 폴더에 쓰기 없음, 백업/복구 포함, 비밀값 검사
 - **완료 기준:** 표본 자료에서 “기둥 간격”, “회의실” 같은 검색으로 해당 메일·쪽·슬라이드를 찾아 원문을 연다.
+- **수집기 보충(2026-10-06, 계획만 — 백로그 유지):** 사용자 결정으로 문서 텍스트 추출은 계획안에만 두고 나중에 다듬어 구현한다. 조사 근거는 [RESEARCH-06](../research/RESEARCH-06-project-knowledge.md) §7.7·§7.8.
+  - 텍스트 추출 권고안: 엔진 안 수집기가 `knowledge.sqlite` 발췌·`excerpt_fts`에 쓴다(자료 탭·`project_search`는 그대로 사용). 라이브러리 1순위 후보는 kordoc(MIT, Buffer 입력으로 한컴 COM 차단, `KORDOC_OFFLINE=1`), PDF는 pdfjs-dist 대안. 표는 Markdown으로 보존하고 XLSX는 열 위치 유지. 크기·수정 시각 기준 증분, 원본 무변경. 결과 상태(완료·건너뜀(크기)·암호·추출 불가·오류)를 자료 행에 남기고 스캔 PDF는 '글자 없음'으로 표시만.
+  - 입력 후보: 카톡 txt(PC·모바일)·Slack export zip·mbox 파서를 S-18 참고 구현에서 TS로 다시 작성. 메시지 단위 출처 ID를 쓴다.
+  - 첨부 대안(B): 같은 추출 모듈을 채팅 첨부·[PLAN-30](PLAN-30-dashboard-agenda.md) T-136에 먼저 써서 첨부 옆 `.md`로 CLI가 읽게 하는 길도 후보로 둔다.
+  - 추가 검증: 같은 내보내기·같은 폴더 재수집 시 발췌·메시지 중복 0, 출처 ID 안정(검토 기록 유지), 표·열 위치 보존 단위 시험, 암호·스캔·깨진 파일이 상태만 남기고 수집을 멈추지 않음.
+  - 착수 전 결정 필요: RESEARCH-06 §12의 11~12(티켓 등록 시점, kordoc 대 직접 작성, 스캔 PDF·옛 형식·크기 상한, 첨부 먼저 여부, 메신저 수집 허용·동의·공개 범위). 티켓 번호는 새로 매기지 않고 T-026 제안 안에서 다룬다.
 
 ### K2 · 진술·쟁점 정리와 검토 큐 — T-027 제안
 
@@ -287,10 +293,10 @@ K2~K5의 표·타임라인·인용으로 부족하다는 실제 근거가 생길
 - **추출기:**
   - PDF: pdf.js
   - DOCX·PPTX·XLSX·HWPX: ZIP 해제 + XML 읽기
-  - 메일: K0 파서 이식
+  - 메일: K0 파서 이식. 후보: 카톡 txt·Slack zip·mbox(S-18 참고 구현을 TS로 다시 작성, RESEARCH-06 §7.8)
   - 3DM: rhino3dm.js
   - DWG: K0의 ZWCAD 명령을 `hosts/zwcad` 빌드에 편입하고, 숨은 ZWCAD 일괄 실행을 유지
-  - HWP(옛 형식): 라이선스를 확인한 뒤 결정
+  - HWP(옛 형식): 라이선스를 확인한 뒤 결정. 후보 kordoc(MIT)은 HWP·HWPX·PDF·DOCX·XLSX를 한 번에 다룬다(RESEARCH-06 §7.7)
   - 스캔 PDF·이미지: AI 판독 선택 기능
   - 새 의존성은 PLAN-03의 추적·검사 규칙을 따른다. pdf.js의 속도·품질은 K0 결과와 비교한다.
 - **폴더 구조 파악:** 경로를 코드에 고정하지 않는다.

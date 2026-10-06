@@ -2,7 +2,7 @@
 id: PLAN-32
 title: 공유 노트·협의 사항·일지 — 실시간 공동 편집(T-145~T-149)
 status: draft
-version: 0.1
+version: 0.2
 updated: 2026-10-06
 owner: agent:claude
 related: [ADR-034, SPEC-10, SPEC-01, SPEC-04, ARCH-01, PLAN-30, FR-07, FR-16, FR-18, FR-19]
@@ -88,3 +88,7 @@ Worker 자체의 무료 요청 하루 100,000건은 PC 중계·heartbeat와 함�
 1. 두 사람(다른 계정·다른 기기)이 같은 협의 사항을 동시에 쓰고, 한 사람이 휴대 기기 네트워크를 잠시 끊었다 붙여도 글이 합쳐진다.
 2. VIDE를 켠 PC의 네트워크를 끊고 노트를 쓴 뒤 VIDE를 다시 시작하고 네트워크를 붙이면 그 글이 사이트에 나타난다.
 3. 하루 사용량(Cloudflare 대시보드의 DO 요청·행 쓰기)이 무료 한도의 몇 %인지 기록한다.
+
+## 후속(미착수)
+
+- 구조화 표 공동편집(SPEC-10.8 후속 후보). 근거 [RESEARCH-15](../research/RESEARCH-15-s18-feature-harvest.md) §5. 티켓 번호는 착수할 때 정한다.
