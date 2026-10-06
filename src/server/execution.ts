@@ -387,7 +387,7 @@ export class Execution {
     input: Pick<
       RequestInput,
       // conversationId: a conversation turn takes the wider turn limits (SPEC-02.6).
-      'provider' | 'model' | 'effort' | 'executionLimits' | 'conversationId'
+      'provider' | 'model' | 'effort' | 'executionLimits' | 'conversationId' | 'folders'
     > & {
       id?: string;
       files?: readonly unknown[];
@@ -504,7 +504,7 @@ export class Execution {
       if (stored) attachments.push(stored.path);
     }
     // Neither a folder store nor anything attached: the turn has no file tools.
-    if (!this.folders && !attachments.length) return undefined;
+    if (!this.folders && !attachments.length && !input.folders?.length) return undefined;
     const readOnly = requestMode(input) === 'plan';
     const gate = this.fileGate(input, projectId, requestId, attachments, readOnly);
     const scope = gate.scope();
@@ -599,6 +599,8 @@ export class Execution {
       grants,
       attachments,
       readOnly,
+      // Folder chips of the request (SPEC-01.13 5), checked when it was submitted.
+      granted: (input.folders ?? []).map((folder) => folder.path),
       ask:
         typeof input.conversationId === 'string' && requestId
           ? (folder, path, signal, action) =>
@@ -1269,6 +1271,8 @@ export class Execution {
         ...pinContext(pins),
         ...input.sketches.map((data, i) => ({ id: `sketch-${i}`, type: 'sketch', data })),
         ...input.files.map((data, i) => ({ id: `file-${i}`, type: 'file', data })),
+        // Folder chips (SPEC-01.12 6): read in this turn without asking.
+        ...(input.folders ?? []).map((data, i) => ({ id: `folder-${i}`, type: 'folder', data })),
         // Images go to the model as image content (PLAN-24; the CLI adapters split them out).
         ...(input.images ?? []).map((data, i) => ({ id: `image-${i}`, type: 'image', data })),
       ];

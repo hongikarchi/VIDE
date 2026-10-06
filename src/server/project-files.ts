@@ -316,6 +316,7 @@ export class WorkFolderGate {
   readonly #onUse: (text: string) => void;
   readonly #attachments: Set<string>;
   readonly #readOnly: boolean;
+  readonly #granted: string[];
   #scope?: { cwd?: string; write: string[]; read: string[] };
   constructor({
     folders,
@@ -326,6 +327,7 @@ export class WorkFolderGate {
     onUse = () => {},
     attachments = [],
     readOnly = false,
+    granted = [],
   }: {
     /** The project's folders; left out (no folder store), the turn has no work folder. */
     folders?: ProjectFolders;
@@ -339,6 +341,11 @@ export class WorkFolderGate {
     attachments?: readonly string[];
     /** A Plan turn: no file is written. */
     readOnly?: boolean;
+    /**
+     * Folders the user pasted as chips for this turn (SPEC-01.13 5, checked on submission): read
+     * like `read` folders, without asking; writing and running there still ask.
+     */
+    granted?: readonly string[];
   }) {
     this.#folders = folders;
     this.#projectId = projectId;
@@ -348,10 +355,16 @@ export class WorkFolderGate {
     this.#onUse = onUse;
     this.#attachments = new Set(attachments.map((path) => fold(resolve(path))));
     this.#readOnly = readOnly;
+    this.#granted = [...granted];
   }
   /** The work folder as it is now (read once per turn, again after [이 폴더는 항상]). */
   scope() {
     return (this.#scope ??= workFolderScope(this.#folders, this.#projectId, this.#context));
+  }
+  /** The scope the read judgement uses: the work folder and this turn's pasted folders. */
+  #readScope() {
+    const scope = this.scope();
+    return this.#granted.length ? { ...scope, read: [...scope.read, ...this.#granted] } : scope;
   }
   /** The CLI's question about one tool use. */
   async decide(request: GateRequest, signal: AbortSignal): Promise<GateAnswer> {
@@ -369,7 +382,7 @@ export class WorkFolderGate {
     }
   }
   async #decide(request: GateRequest, signal: AbortSignal): Promise<GateAnswer> {
-    const scope = this.scope();
+    const scope = this.#readScope();
     const text = (key: string) =>
       typeof request.input[key] === 'string' ? (request.input[key] as string) : undefined;
     const list = (key: string) =>

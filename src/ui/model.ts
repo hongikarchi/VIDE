@@ -1,6 +1,7 @@
 import type { Review, ReviewNote } from '../contracts/reviews.ts';
 import { executionLimitsSchema, type ExecutionLimits } from '../contracts/execution-limits.ts';
 import type { UiMessage } from './workspace-data.ts';
+import { pathTokenLabels, type DraftPath } from './path-tokens.ts';
 export interface DraftPin {
   id: string;
   basis: string;
@@ -50,6 +51,8 @@ export interface DraftState {
   pins: DraftPin[];
   sketches: DraftSketch[];
   files: DraftFile[];
+  /** Path chips in the message (SPEC-01.12 6): files attach on sending, folders go as `folders`. */
+  paths?: DraftPath[];
   model: string;
   effort: string;
   permission: 'review' | 'candidate';
@@ -273,11 +276,19 @@ export function packet(s: DraftState) {
     pins: s.pins,
     sketches: s.sketches,
     files: s.files,
+    ...(folders(s).length ? { folders: folders(s) } : {}),
     provider: models.find((m) => m.id === s.model)!.provider,
     model: s.model,
     effort: s.effort,
     permission: s.permission,
   });
+}
+/** The folder chips still in the message (SPEC-01.12 6). */
+export function folders(s: Pick<DraftState, 'body' | 'instructions' | 'paths'>) {
+  const labels = pathTokenLabels(requestBody(s));
+  return (s.paths ?? [])
+    .filter((entry) => entry.kind === 'folder' && labels.has(entry.label))
+    .map((entry) => ({ name: entry.label.slice(6, -1), path: entry.path }));
 }
 /** Attach free brush strokes (world XYZ metres) as one sketch. */
 export function attachBrushSketch(

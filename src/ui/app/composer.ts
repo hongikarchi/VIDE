@@ -51,6 +51,14 @@ import { interventionTargetDraft } from '../linked-draft.ts';
 import { requestData, requestMessage, modelsSchema } from '../workspace-data.ts';
 import { waitingText } from '../request-scope.ts';
 import { setReferenceBridge } from '../reference-bridge.ts';
+import {
+  attachFileChips,
+  chipPath,
+  finishTypedPaths,
+  pastePaths,
+  pendingFileChip,
+  prunePathChips,
+} from './path-chips.ts';
 import { draftState, paintComposer, type ContextItem, type WorkMode } from '../store/draft.ts';
 import { sessionState } from '../store/session.ts';
 import { sketchState } from '../store/sketch.ts';
@@ -619,7 +627,7 @@ export function runViewRequest(route: Route, body: string) {
     }),
   );
 }
-/** Attachments and paths already answered on the check before sending (SPEC-09.11 4). */
+/** Attachments and paths already answered on the check before sending (SPEC-09.11 5). */
 export const referenceAnswered = new Set<string>();
 export const pathRefusals: Record<string, string> = {
   FILE_FORBIDDEN: '이 위치의 파일은 읽지 않습니다(키·로그인·VIDE 데이터 폴더).',
@@ -738,6 +746,7 @@ export async function submitRequest(
       draftState.state.pins = [];
       draftState.state.sketches = [];
       draftState.state.files = [];
+      draftState.state.paths = [];
       draftState.state.linkedTargets = undefined;
       draftState.state.coordinateBasis = undefined;
       setBody('');
@@ -843,6 +852,8 @@ export function initComposer1() {
     draftState.state.pins = draftState.state.pins.filter(
       (pin) => !pin.label || labels.has(pin.label),
     );
+    // So do path chips (SPEC-01.12 6).
+    prunePathChips();
     render();
     // Drafts save automatically per project; only a failure is worth showing.
     draftState.view.saved = draftState.draftSaved ? '' : '초안 저장 실패';
@@ -893,7 +904,9 @@ export function initComposer1() {
       render();
       if (selectionState.selectedIds.length) viewerState.viewport?.fit(selectionState.selectedIds);
     },
+    pathOf: chipPath,
   });
+  $('body').addEventListener('input', finishTypedPaths);
   draftState.refreshPinComposer = () => pinComposer.refresh();
 }
 
@@ -911,6 +924,20 @@ export function initComposer2() {
       validate(draftState.state)
     )
       return sendComposer();
+    // File chips are copied as attachments first (SPEC-01.12 6); then the checks below see them
+    // as attachments (an image chip with reference words asks with SPEC-09.11 1).
+    if (pendingFileChip()) {
+      const draft = draftState.state;
+      draftState.routing = true;
+      paintComposer();
+      void attachFileChips(pathRefusals).then((ok) => {
+        draftState.routing = false;
+        paintComposer();
+        // Every chip copied: send again (a failed copy stops here with its reason).
+        if (ok && draftState.state === draft && !pendingFileChip()) draftState.actions.send();
+      });
+      return;
+    }
     const words = [draftState.state.body, ...(draftState.state.instructions ?? [])].join('\n');
     const image = draftState.state.files.find(
       (file) =>
@@ -1057,7 +1084,8 @@ export function initComposer3() {
   draftState.actions.attach = (files) => void attachFiles(files);
   $('body').addEventListener('paste', (event) => {
     const files = Array.from(event.clipboardData?.files ?? []);
-    if (!files.length) return;
+    // Paths of this PC in pasted text become chips (SPEC-01.12 6).
+    if (!files.length) return pastePaths(event);
     event.preventDefault();
     void attachFiles(files);
   });

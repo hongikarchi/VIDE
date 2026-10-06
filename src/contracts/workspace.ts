@@ -160,6 +160,14 @@ export const requestInputSchema = z
     sketches: z.array(sketchSchema),
     images: z.array(imageItemSchema).max(MAX_TURN_IMAGES).optional(),
     files: z.array(z.union([storedAttachmentSchema, inlineFileSchema])),
+    // Folder chips of the composer (SPEC-01.12 6): read without asking during this turn. The
+    // server checks each path on submission (`checkFolder`); see ARCH-01 「첨부 보관과 읽기 도구」.
+    folders: z
+      .array(
+        z.object({ name: z.string().min(1).max(255), path: z.string().min(1).max(1024) }).strict(),
+      )
+      .max(64)
+      .optional(),
     host: z.enum(['rhino', 'zwcad']).optional(),
     baseRequestId: id.nullable().optional(),
     linkedTargets: z.array(linkedTargetSchema).length(2).optional(),

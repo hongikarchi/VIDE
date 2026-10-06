@@ -2,10 +2,10 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.84
+version: 0.85
 updated: 2026-10-06
 owner: agent:codex
-related: [ADR-033, PLAN-29, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03]
+related: [ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03]
 ---
 
 # VIDE 기술 구조와 구현 계약
@@ -208,7 +208,7 @@ T-002의 첫 HTTP 구현은 프로젝트 목록·생성과 입력 목록·생성
 
 | 묶음 | 경로 | 비고 |
 |---|---|---|
-| 프로젝트·입력 | `GET·POST /projects`, `PUT·DELETE /projects/:p`, `POST …/thumbnail`, `…/inputs[/:i]`, `…/ai-instructions`, `POST …/attachments?name=`, `POST …/attachments/:a/view`, `GET …/attachments/:a`, `GET·POST …/folders`, `POST …/folders/remove`, `GET·POST …/agenda`, `PUT …/agenda/:id`, `POST …/agenda/order`, `POST …/agenda/:id/remove`, `POST …/agenda/remove-done`, `POST …/agenda/undo` | 프로젝트 삭제는 SPEC-01.1. 첨부는 §3 「첨부 보관과 읽기 도구」, 폴더는 §3 「프로젝트 폴더와 파일 읽기 도구」, 할 일은 §3 「대시보드의 할 일」 |
+| 프로젝트·입력 | `GET·POST /projects`, `PUT·DELETE /projects/:p`, `POST …/thumbnail`, `…/inputs[/:i]`, `…/ai-instructions`, `POST …/attachments?name=`, `POST …/attachments/:a/view`, `GET …/attachments/:a`, `POST …/attachments/path-images`·`…/path-kinds`·`…/from-path`, `GET·POST …/folders`, `POST …/folders/remove`, `GET·POST …/agenda`, `PUT …/agenda/:id`, `POST …/agenda/order`, `POST …/agenda/:id/remove`, `POST …/agenda/remove-done`, `POST …/agenda/undo` | 프로젝트 삭제는 SPEC-01.1. 첨부는 §3 「첨부 보관과 읽기 도구」, 폴더는 §3 「프로젝트 폴더와 파일 읽기 도구」, 할 일은 §3 「대시보드의 할 일」 |
 | 요청(AI 턴·Sync·가져오기) | `GET·POST …/requests`, `GET …/requests/:r`, `…/:r/cancel`, `…/:r/interventions`, `…/:r/hide`, `…/:r/questions`, `…/:r/reconcile`, `…/:r/model\|open`, `…/:r/report`, `…/:r/quantities[.csv]`, `…/:r/publication-export` | 상태는 SPEC-00.10 |
 | 바로 적용 | `POST …/requests/:r/undo {executionId}` 또는 `{all: true}`(작업 단위, ADR-027), `…/:r/confirm {executionId?}`, `…/:r/continue`, `…/:r/acknowledge`(결과 불명 [확인함], T-102) | §4 「바로 적용 경로」. confirm·continue는 202, acknowledge는 200 |
 | 연결 파일·Sync | `GET·POST …/links`, `PUT …/links/:l`, `POST …/links/:l/remove`, `POST …/links/:l/split·merge·dismiss`, `POST …/links/:l/reads`, `…/live-sync`, `…/capture`, `…/import`, `…/imports/:i/reconcile` | §7 「프로젝트 연결 파일(Link)」 |
@@ -458,6 +458,8 @@ SPEC-01.12(2026-10-01). 작성기의 파일·이미지 첨부는 내용을 요�
 - **미리보기·보기본:** `GET …/attachments/:id`는 `kind = image`인 보관본만(보기본이 있으면 보기본) 판별한 이미지 MIME과 `X-Content-Type-Options: nosniff`로 돌려준다(작성기 칩의 미리보기, CSP `img-src 'self'`). 그 밖은 404. 1MB를 넘는 이미지는 작성기가 긴 변 1600px JPEG를 만들어 `POST …/attachments/:id/view`(PNG·JPEG, 1MB 이하)로 보내고 `<id>.view`로 둔다. 서버에 이미지 축소 의존성은 두지 않는다.
 - **AI가 읽는 법(ADR-031 8):** VIDE 도구는 없다. 그 요청과 같은 `conversationId`의 요청들에 붙은 보관 첨부의 보관 경로(`AttachmentStore.get`의 `path`, 브라우저가 보낸 경로가 아님)가 그 턴의 작업 폴더 `attachments`가 되고, CLI의 기본 읽기 도구(Claude `Read`, Codex 셸·`view_image`)가 패킷의 `file` 항목 `path`로 읽는다. 게이트는 이 경로만 VIDE 데이터 폴더 금지보다 먼저 읽기로 허용한다. 형식별 처리(이미지·PDF 등)는 CLI 도구의 것이다. `AttachmentStore.read`(바이트 구간·보기본)는 남아 있으나 AI 경로는 쓰지 않는다.
 - **지시:** 작업 폴더 규칙(`workFolderRule`)이 '첨부는 file 항목의 경로로 읽는다'를 담는다.
+- **경로 칩(SPEC-01.12의 6, PLAN-31):** `POST …/attachments/path-kinds {paths}`(최대 64개)는 각 경로를 `{path, kind: 'file'|'folder'|null, name}`으로 돌려준다(`items`). 절대 경로가 아니거나 장치 경로, 없음, 금지 위치·비밀 이름(입력·실제 경로), 드라이브·UNC 공유 맨 위는 `null`. `POST …/attachments/from-path {path}`는 형식과 관계없이 그 파일을 위 보관과 같이 복사한다(폴더는 `INVALID_INPUT`, 금지 위치·비밀 이름 `FILE_FORBIDDEN`, 없음 `FILE_NOT_FOUND`). 둘 다 원격 세션이면 `FORBIDDEN`(`src/server/attachment-paths.ts`). 작성기의 경로 후보 추출은 `src/ui/path-tokens.ts`(`pathSpans`)다.
+- **폴더 칩의 요청 필드:** `requestInputSchema.folders?: {name, path}[]`(최대 64). 접수(`POST …/requests`, 새 요청만) 때 서버가 각 `path`를 `checkFolder`로 다시 검사해 실제 경로로 바꾸고(`FOLDER_NOT_FOUND`·`FOLDER_NOT_ALLOWED`), 원격 세션이면 `FORBIDDEN`, 다시 보낸 요청은 처음 기록을 쓴다. 개입(`…/interventions`) 본문의 `folders`는 버린다. `Execution.fileGate`가 이 경로를 `WorkFolderGate`의 `granted`로 넘겨 그 턴의 읽기 판정 ③에서 `read` 폴더처럼 허용한다(작업 폴더 값 `dirs`에는 넣지 않는다 — Codex 쓰기 루트가 되지 않게). 패킷에는 항목 `{type:'folder', data:{name, path}}`로 간다.
 - **삭제:** 프로젝트 삭제(`purgeProject`)가 `attachments/<projectId>` 폴더를 함께 지운다.
 
 ### 프로젝트 폴더와 파일 도구

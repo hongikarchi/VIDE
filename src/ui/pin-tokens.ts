@@ -4,6 +4,8 @@
 // ghost chip at the caret inserts the current viewport selection.
 
 const TOKEN = /\[고정(\d+) · (\d+)개\]/g;
+// Every chip that deletes whole: pins and pasted paths (SPEC-01.12 6, PLAN-31 T-140).
+const CHIP = /\[고정(\d+) · \d+개\]|\[(?:파일|폴더) · [^\]\n]+\]/g;
 
 export const pinToken = (label: number, count: number) => `[고정${label} · ${count}개]`;
 
@@ -19,12 +21,16 @@ export function nextTokenNumber(text: string) {
   return max + 1;
 }
 
-/** The token range containing or touching `offset` (end-inclusive), if any. */
+/**
+ * The chip range containing or touching `offset` (end-inclusive), if any: `label` is "고정N" for a
+ * pin token and the token text itself for a path chip.
+ */
 export function tokenAt(text: string, offset: number) {
-  for (const match of text.matchAll(TOKEN)) {
+  for (const match of text.matchAll(CHIP)) {
     const start = match.index!,
       end = start + match[0].length;
-    if (offset >= start && offset <= end) return { start, end, label: `고정${match[1]}` };
+    if (offset >= start && offset <= end)
+      return { start, end, label: match[1] ? `고정${match[1]}` : match[0], pin: !!match[1] };
   }
   return undefined;
 }
@@ -39,6 +45,8 @@ interface Options {
   insert: (label: string) => void;
   /** Called when the caret lands on a token (e.g. to show its objects). */
   focusToken: (label: string) => void;
+  /** The full path of a path chip, shown when the pointer is over it. */
+  pathOf?: (label: string) => string | undefined;
 }
 
 /**
@@ -82,11 +90,17 @@ export function attachPinTokens(textarea: HTMLTextAreaElement, options: Options)
     backdrop.style.paddingRight = parseFloat(style.paddingRight) + scrollbar + 'px';
   };
   const render = (text: string) =>
-    escape(text).replace(
-      /\[(고정\d+ · \d+개)\]/g,
-      (_token, inner) =>
-        `<mark class="pin-token"><span class="pin-bracket">[</span>${inner}<span class="pin-bracket">]</span></mark>`,
-    );
+    escape(text)
+      .replace(
+        /\[(고정\d+ · \d+개)\]/g,
+        (_token, inner) =>
+          `<mark class="pin-token"><span class="pin-bracket">[</span>${inner}<span class="pin-bracket">]</span></mark>`,
+      )
+      .replace(
+        /\[((?:파일|폴더) · [^\]\n]+)\]/g,
+        (_token, inner) =>
+          `<mark class="pin-token path-token"><span class="pin-bracket">[</span>${inner}<span class="pin-bracket">]</span></mark>`,
+      );
   // The backdrop draws the text and carries a zero-width anchor at the caret: the chip is placed
   // from the same layout the user sees, so it sits in the sentence exactly where it would go.
   const paint = () => {
@@ -180,8 +194,22 @@ export function attachPinTokens(textarea: HTMLTextAreaElement, options: Options)
   textarea.addEventListener('click', () => {
     remember();
     const token = tokenAt(textarea.value, textarea.selectionStart);
-    if (token && textarea.selectionStart > token.start && textarea.selectionStart < token.end)
+    if (token?.pin && textarea.selectionStart > token.start && textarea.selectionStart < token.end)
       options.focusToken(token.label);
+  });
+  // The backdrop takes no pointer: the path under the pointer is found from the chips' boxes.
+  textarea.addEventListener('mousemove', (event) => {
+    let title = '';
+    for (const chip of backdrop.querySelectorAll<HTMLElement>('.path-token'))
+      for (const rect of chip.getClientRects())
+        if (
+          event.clientX >= rect.left &&
+          event.clientX <= rect.right &&
+          event.clientY >= rect.top &&
+          event.clientY <= rect.bottom
+        )
+          title = options.pathOf?.(chip.textContent ?? '') ?? '';
+    if (textarea.title !== title) textarea.title = title;
   });
   new ResizeObserver(() => {
     align();

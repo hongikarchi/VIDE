@@ -56,16 +56,18 @@ test('images at a folder path are listed by name, others and denied places are l
     assert.equal((await imagesAtPath([join(folder, 'sub')], context)).path, null);
     await writeFile(join(data, 'inside.png'), PNG);
     assert.equal((await imagesAtPath([data], context)).path, null);
-    // The copy keeps the image as an attachment; a text file and the data folder are refused.
+    // The copy keeps the image as an attachment; any other file is copied too (a pasted file chip,
+    // SPEC-01.12 6), a folder and the data folder are refused.
     const store = new AttachmentStore(join(data, 'attachments'));
     const kept = await attachFromPath(store, 'p1', join(folder, '기둥 2.png'), context);
     assert.equal(kept.kind, 'image');
     assert.equal(kept.name, '기둥 2.png');
     assert.equal(store.get('p1', kept.id)?.kind, 'image');
-    await assert.rejects(
-      attachFromPath(store, 'p1', join(folder, 'notes.txt'), context),
-      /INVALID_INPUT/,
+    assert.equal(
+      (await attachFromPath(store, 'p1', join(folder, 'notes.txt'), context)).kind,
+      'text',
     );
+    await assert.rejects(attachFromPath(store, 'p1', folder, context), /INVALID_INPUT/);
     await assert.rejects(
       attachFromPath(store, 'p1', join(data, 'inside.png'), context),
       /FILE_FORBIDDEN/,

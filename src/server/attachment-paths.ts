@@ -1,8 +1,8 @@
 import { createReadStream } from 'node:fs';
 import { readdir, realpath, stat } from 'node:fs/promises';
-import { basename, isAbsolute, join, resolve } from 'node:path';
+import { basename, isAbsolute, join, parse, resolve } from 'node:path';
 import { DomainError } from '../core/store.ts';
-import { describeFile, type AttachmentStore } from './attachments.ts';
+import type { AttachmentStore } from './attachments.ts';
 import { deniedPath, secretName, type FileContext } from './project-files.ts';
 
 /**
@@ -98,7 +98,47 @@ export async function imagesAtPath(candidates: unknown, context: FileContext): P
   return { path: null, total: 0, images: [] };
 }
 
-/** Copies the image file at `value` into the project's attachments (an image by its content). */
+/** A drive root (`C:\`) or a UNC share root (`\\server\share`). */
+const isRoot = (path: string) => {
+  const trimmed = path.replace(/[\\/]+$/, '');
+  return !trimmed || trimmed === parse(path).root.replace(/[\\/]+$/, '');
+};
+export const MAX_PATH_KINDS = 64;
+export interface PathKindItem {
+  /** The path as written. */
+  path: string;
+  /** null: not on this PC, not readable (SPEC-01.13 4), a drive or share root, or odd input. */
+  kind: 'file' | 'folder' | null;
+  name: string;
+}
+/**
+ * What each pasted path is (SPEC-01.12 6, PLAN-31 T-141): a file, a folder or nothing. The user
+ * pasted the paths, so they are checked without the permission question; denied places, secret
+ * names and roots are `null`.
+ */
+export async function pathKinds(values: unknown, context: FileContext): Promise<PathKindItem[]> {
+  const list = Array.isArray(values) ? values.slice(0, MAX_PATH_KINDS) : [];
+  return Promise.all(
+    list.map(async (value): Promise<PathKindItem> => {
+      const written = typeof value === 'string' ? value : '';
+      const path = pathOf(value);
+      const none = { path: written, kind: null, name: '' } as const;
+      if (!path || isRoot(path)) return none;
+      const target = await allowed(path, context);
+      if (!target || isRoot(target)) return none;
+      const info = await stat(target).catch(() => undefined);
+      if (info?.isFile() && !secretName(basename(target)))
+        return { path: written, kind: 'file', name: basename(path) };
+      if (info?.isDirectory()) return { path: written, kind: 'folder', name: basename(path) };
+      return none;
+    }),
+  );
+}
+
+/**
+ * Copies the file at `value` into the project's attachments, any type (SPEC-01.12 2·6): an image
+ * picked on the reference card or a pasted file chip.
+ */
 export async function attachFromPath(
   store: AttachmentStore,
   projectId: string,
@@ -113,13 +153,12 @@ export async function attachFromPath(
   if (deniedPath(target, context) || secretName(basename(target))) throw error('FILE_FORBIDDEN');
   const info = await stat(target);
   if (!info.isFile()) throw error('INVALID_INPUT');
-  if ((await describeFile(target)).kind !== 'image') throw error('INVALID_INPUT');
   return store.save(projectId, basename(path), createReadStream(target));
 }
 
 /**
- * `POST /api/v1/projects/:p/attachments/path-images` {paths} and `…/attachments/from-path` {path}.
- * True when the route was one of these.
+ * `POST /api/v1/projects/:p/attachments/path-images` {paths}, `…/attachments/path-kinds` {paths}
+ * and `…/attachments/from-path` {path}. True when the route was one of these.
  */
 export async function attachmentPathRoutes(
   url: URL,
@@ -140,9 +179,10 @@ export async function attachmentPathRoutes(
     remote: boolean;
   },
 ) {
-  const match = /^\/api\/v1\/projects\/([^/]+)\/attachments\/(path-images|from-path)$/.exec(
-    url.pathname,
-  );
+  const match =
+    /^\/api\/v1\/projects\/([^/]+)\/attachments\/(path-images|path-kinds|from-path)$/.exec(
+      url.pathname,
+    );
   if (!match) return false;
   const [, projectId, action] = match;
   project(projectId);
@@ -152,6 +192,7 @@ export async function attachmentPathRoutes(
   if (!attachments) throw error('NOT_FOUND');
   const input = await body();
   if (action === 'path-images') send(200, await imagesAtPath(input.paths, context));
+  else if (action === 'path-kinds') send(200, { items: await pathKinds(input.paths, context) });
   else send(200, await attachFromPath(attachments, projectId, input.path, context));
   return true;
 }

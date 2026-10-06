@@ -13,6 +13,17 @@ const draftSchema = z.object({
   pins: z.array(draftPinSchema),
   sketches: requestInputSchema.shape.sketches,
   files: requestInputSchema.shape.files,
+  // Path chips (SPEC-01.12 6): the token text and the path it stands for.
+  paths: z
+    .array(
+      z.object({
+        label: z.string().min(1).max(300),
+        kind: z.enum(['file', 'folder']),
+        path: z.string().min(1).max(1024),
+        attached: z.string().max(100).optional(),
+      }),
+    )
+    .default([]),
   model: z.string().min(1).max(110),
   effort: z.string().min(1).max(30),
   permission: z.enum(['review', 'candidate']),
@@ -93,6 +104,7 @@ export function clearStoredDraft(key: string) {
       pins: [],
       sketches: [],
       files: [],
+      paths: [],
       linkedTargets: undefined,
       coordinateBasis: undefined,
     });

@@ -529,7 +529,8 @@ try {
   );
   assert.ok(await card.isHidden());
   assert.deepEqual(posted, [], 'picking an image does not send');
-  // Only images are copied, and key folders are never read (SPEC-01.13 4).
+  // Any file is copied (a pasted file chip, SPEC-01.12 6), a folder is not, and key folders are
+  // never read (SPEC-01.13 4).
   const copy = (path) =>
     page.evaluate(
       async ({ id, path }) =>
@@ -544,7 +545,8 @@ try {
         ).code,
       { id: projectId, path },
     );
-  assert.equal(await copy(join(folder, 'notes.txt')), 'INVALID_INPUT');
+  assert.equal(await copy(join(folder, 'notes.txt')), undefined);
+  assert.equal(await copy(folder), 'INVALID_INPUT');
   assert.equal(await copy(join(homedir(), '.ssh', 'look.png')), 'FILE_FORBIDDEN');
   assert.deepEqual(errors, []);
   console.log(

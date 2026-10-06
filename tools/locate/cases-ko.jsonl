@@ -115,3 +115,4 @@
 {"request":"grasshopper 승인받기 구현 (작업 폴더 밖 .gh 열기·저장은 승인 카드)","files":["src/server/grasshopper-tools.ts","src/server/direct-mode.ts","src/server/execution.ts","src/server/agent-tools.ts"]}
 {"request":"최신버전 릴리스했는데, 라이노에서 127.0.0.1 연결을 거부했습니다로 보이는 이유가 뭘까?","files":["src/desktop/build.mjs","package.json",".github/workflows/verify.yml","src/desktop/licenses/node-v24.21.0.txt"]}
 {"request":"왼쪽 탭 순서를 홈-대시보드-자료-모델-이력-JIG-산출물 순서로","files":["src/ui/shell/rail.tsx","Design.md"]}
+{"request":"파일 경로 복붙하면 pin처럼 block으로 처리","files":["src/ui/path-tokens.ts","src/ui/app/path-chips.ts","src/ui/pin-tokens.ts","src/ui/app/composer.ts","src/ui/model.ts","src/ui/draft-storage.ts","src/ui/reference-check.ts","src/server/attachment-paths.ts","src/server/project-files.ts","src/server/execution.ts","src/server/server.ts","src/contracts/workspace.ts","src/ai/instructions/common.md"]}

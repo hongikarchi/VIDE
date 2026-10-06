@@ -52,7 +52,20 @@ export async function imagesAtPaths(api: Api, projectId: string, paths: string[]
     }),
   );
 }
-/** Copies one image file into the project's attachments (like the paperclip's pick). */
+const pathKindsSchema = z.object({
+  items: z.array(
+    z.object({ path: z.string(), kind: z.enum(['file', 'folder']).nullable(), name: z.string() }),
+  ),
+});
+/** What each pasted path is on this PC (SPEC-01.12 6): a file, a folder or null. */
+export async function pathKindsAt(api: Api, projectId: string, paths: string[]) {
+  return pathKindsSchema.parse(
+    await api(`/projects/${encodeURIComponent(projectId)}/attachments/path-kinds`, 'POST', {
+      paths,
+    }),
+  ).items;
+}
+/** Copies one file of this PC, any type, into the project's attachments (like the paperclip's pick). */
 export async function attachImagePath(
   api: Api,
   projectId: string,
@@ -64,6 +77,9 @@ export async function attachImagePath(
     }),
   );
 }
+
+/** A pasted file chip's copy on sending (SPEC-01.12 6): the same route, any file type. */
+export const attachPath = attachImagePath;
 
 /**
  * The one-line card in the composer's proposal slot (`#route-card`, Design SCR-15), drawn by

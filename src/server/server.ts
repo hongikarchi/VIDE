@@ -112,7 +112,7 @@ import { DomainError } from '../core/store.ts';
 import { openStore } from '../core/store-open.ts';
 import type { splitProjectDatabase } from '../core/project-split.ts';
 import { Workspace } from '../core/workspace.ts';
-import { requestMode } from '../contracts/workspace.ts';
+import { requestInputSchema, requestMode } from '../contracts/workspace.ts';
 import { Execution } from './execution.ts';
 import { ModelStore, isItemList } from '../core/model-store.ts';
 import { maintainModels } from '../core/model-move.ts';
@@ -122,7 +122,7 @@ import { dirname, join } from 'node:path';
 import { importModel, recoverDwgImport } from './import-model.ts';
 import { AttachmentStore } from './attachments.ts';
 import { attachmentPathRoutes } from './attachment-paths.ts';
-import { folderRoutes } from './project-files.ts';
+import { checkFolder, folderRoutes } from './project-files.ts';
 import { ProjectFolders } from '../core/project-folders.ts';
 import { Agenda } from '../core/agenda.ts';
 import { agendaRoutes, agendaStatuses } from './agenda-routes.ts';
@@ -2282,7 +2282,9 @@ export async function startServer({
         url.pathname,
       );
       if (intervention && request.method === 'POST') {
-        send(202, execution.intervene(intervention[1], intervention[2], await body(request)));
+        // Folder chips are granted only on a checked submission (SPEC-01.13 5), never here.
+        const { folders: _folders, ...value } = await body(request);
+        send(202, execution.intervene(intervention[1], intervention[2], value));
         return;
       }
       // Plan / Auto (ADR-022): [되돌리기] of one direct execution, the guard card's [진행], the
@@ -2599,6 +2601,21 @@ export async function startServer({
           if (old?.accountProfileId) input.accountProfileId = old.accountProfileId;
           // Attachment entries take what is kept (size, type, path), never the browser's word.
           if (attachments && !old) input.files = attachments.normalize(projectId, input.files);
+          // Folder chips (SPEC-01.12 6, SPEC-01.13 5): checked again here, this PC only; a
+          // retried request keeps the folders it was given the first time.
+          if (old) {
+            if (old.folders) input.folders = old.folders;
+            else delete input.folders;
+          } else if (input.folders !== undefined) {
+            if (remote) throw new DomainError('FORBIDDEN');
+            const named = requestInputSchema.shape.folders.parse(input.folders) ?? [];
+            input.folders = await Promise.all(
+              named.map(async (folder) => ({
+                name: folder.name,
+                path: await checkFolder(folder.path, fileContext),
+              })),
+            );
+          }
           // A reference turn is recorded on its board only once the request is stored.
           const result =
             reference && referenceBoards
