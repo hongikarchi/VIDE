@@ -20,9 +20,12 @@
     "AUTH_ORIGIN": "https://vide-sharing-staging.archivibe.workers.dev",
     "EMAIL_FROM": "",
     "AUTH_MODE": "manual-approval",
-    "UPLOADS_ENABLED": "false",
-    "SNAPSHOTS_ENABLED": "false",
-    "SNAPSHOT_TOTAL_MB": "0"
+    // R2 was cleared on 2026-10-06 (about 12 MB used of the 10 GB free): uploads and PC-off model
+    // snapshots are on again, snapshots capped at 5 GB; diagnostic bundles only when a user sends one.
+    "UPLOADS_ENABLED": "true",
+    "SNAPSHOTS_ENABLED": "true",
+    "SNAPSHOT_TOTAL_MB": "5000",
+    "TELEMETRY_BUNDLES_ENABLED": "true"
   },
   // Shared notes (ADR-034): one SQLite-backed Durable Object per note (the free plan's only DO kind).
   "durable_objects": {
