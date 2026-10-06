@@ -195,13 +195,11 @@ export class LiveSync {
       },
       ...(layers ? { layers } : {}),
     };
+    // Anything that points at the basis (a request, review, publication, jig read or bake, a
+    // conversation's pins) keeps it as it was: the change goes to a new Sync instead, so a
+    // structure jig sees its input as stale and a review still shows what it reviewed.
     const referenced =
-      input.keep ||
-      this.workspace.store.db
-        .prepare(
-          'SELECT 1 FROM workspace_requests WHERE projectId=? AND id<>? AND instr(input, ?)>0 LIMIT 1',
-        )
-        .get(projectId, basis.id, basis.id);
+      input.keep || this.workspace.models.references(projectId, [basis.id]).has(basis.id);
     let savedId = basis.id;
     if (referenced) {
       savedId = randomUUID();

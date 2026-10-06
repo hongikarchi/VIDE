@@ -909,8 +909,12 @@ export class ModelStore {
     });
   }
 
-  /** Which of `ids` something other than their own request row points at. */
-  private references(projectId: string, ids: string[]): Set<string> {
+  /**
+   * Which of `ids` something other than their own request row points at: another request, a
+   * review, a publication, shared feedback, a jig read or bake, a conversation's ledger or targets.
+   * Pruning keeps these, and a Live Sync copies rather than edits them in place.
+   */
+  references(projectId: string, ids: string[]): Set<string> {
     const found = new Set<string>();
     const texts: { owner?: string; text: string }[] = [];
     for (const row of this.db

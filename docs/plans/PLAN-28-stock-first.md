@@ -131,3 +131,12 @@ ADR-032를 사용자가 확인한 뒤 ARCH-01 §5에 반영하고 구현한다. 
 - Rhino·ZWCAD 플러그인 `rhino-*`/`zwcad-*.jsonl`, 셸 `shell-*.jsonl`(공용 `hosts/common/DiagnosticLog.cs`). 세 C# 빌드 오류 0.
 - 화면 오류 수신 `POST /api/v1/diagnostics/client`, 진단 묶음 `POST /api/v1/diagnostics/bundle`·`tools/diagnostics/bundle.mjs`, 보기 `tools/diagnostics/view.mjs`.
 - 남은 것: 화면 쪽 연결(`window` `error`/`unhandledrejection` → client 엔드포인트, 설정의 [진단 묶음 내보내기] 단추) — 화면 작업 세션 뒤. 설치본 갱신 뒤 실제 로그 확인.
+
+## T-123 검토 뒤 남은 일 (2026-10-06)
+
+- T-123·T-085(v0.2.20)를 RESEARCH-14 §1과 대조해 검토했다. 그 결과 두 가지를 고쳤다.
+  - 오프라인 보기는 Sync 목록의 revision까지 비교한다. Live Sync가 같은 Sync를 제자리에서 고쳐도 다시 올라간다(`offline-view.ts`).
+  - Live Sync가 기준을 제자리에서 고칠지 판단할 때 정리(prune)와 같은 참조 확인(`ModelStore.references`)을 쓴다. 검토본·게시·공유 의견·jig 읽기와 만들기·대화 기록이 가리키는 Sync는 복사본으로 바뀐다. 그래서 구조 jig의 '오래됨' 판정도 다시 듣는다.
+- **T-127 (다음):** 초안이 잡혀 있을 때 ⟳마다 새 Sync와 목록 전체 복사가 생기는 문제를 고친다(복사본 한 번, 그 뒤 제자리 수정, 화면은 `delta?base=`). 일시적 실패(`SOURCE_CHANGED`·`HOST_BUSY`)는 전체 읽기 대신 Live로 다시 시도한다. `GET /requests/:r`의 표시 Sync JSON 응답을 거절한다. 패널의 `/objects`를 쪽으로 나눈다.
+- **T-128 (다음):** Rhino→엔진 전체 읽기(첫 Sync, 전체 다시 읽기)를 VGT1 바이너리 쪽으로 바꾼다(ADR-031 5의 마지막 경로). ZWCAD도 Live Sync로 한다.
+- **T-129 (다음):** jig 입력, 검토 비교, 보고서, 게시, 오프라인 스냅샷, 작업 사본 실행이 모델 전체 대신 `ModelView`의 필요한 객체만 읽는다.

@@ -21,6 +21,8 @@ const stateSchema = z.object({
       z.object({
         projectId: z.string(),
         requestId: z.string(),
+        /** The Sync list revision uploaded: a Live Sync fixes a Sync in place and raises it. */
+        revision: z.number().nullable().optional(),
         at: z.number(),
         size: z.number(),
       }),
@@ -87,14 +89,28 @@ export class OfflineView {
     this.busy = next.catch(() => undefined);
     return next;
   }
+  /** The file's last Sync and its list revision (a Live Sync updates a Sync in place). */
   private lastSync(projectId: string, linkId: string) {
     const row = this.options.store.db
       .prepare(
-        `SELECT id FROM workspace_requests WHERE projectId=? AND state='succeeded'
-         AND json_extract(input,'$.linkId')=? ORDER BY rowid DESC LIMIT 1`,
+        `SELECT w.id, m.revision FROM workspace_requests w
+         LEFT JOIN sync_manifests m ON m.requestId=w.id
+         WHERE w.projectId=? AND w.state='succeeded'
+         AND json_extract(w.input,'$.linkId')=? ORDER BY w.rowid DESC LIMIT 1`,
       )
-      .get(projectId, linkId) as { id: string } | undefined;
-    return row?.id;
+      .get(projectId, linkId) as { id: string; revision: number | null } | undefined;
+    return row ? { requestId: row.id, revision: row.revision ?? null } : undefined;
+  }
+  private static current(
+    uploaded: { requestId: string; revision?: number | null } | undefined,
+    last: { requestId: string; revision: number | null } | undefined,
+  ) {
+    return (
+      !!uploaded &&
+      !!last &&
+      uploaded.requestId === last.requestId &&
+      (uploaded.revision ?? null) === last.revision
+    );
   }
 
   async status(projectId: string) {
@@ -114,7 +130,7 @@ export class OfflineView {
             name: link.name,
             uploadedAt: uploaded ? new Date(uploaded.at).toISOString() : null,
             size: uploaded?.size ?? null,
-            upToDate: !!uploaded && !!last && uploaded.requestId === last,
+            upToDate: OfflineView.current(uploaded, last),
             synced: !!last,
             error: this.state.errors[link.id]?.code ?? null,
           };
@@ -186,20 +202,20 @@ export class OfflineView {
       }
       for (const link of links) {
         if (link.hidden) continue;
-        const requestId = this.lastSync(projectId, link.id);
+        const last = this.lastSync(projectId, link.id);
         const uploaded = this.state.uploaded[link.id];
-        if (!requestId || uploaded?.requestId === requestId) continue;
+        if (!last || OfflineView.current(uploaded, last)) continue;
         if (!force && uploaded && this.now - uploaded.at < MIN_INTERVAL_MS) continue;
         const failed = this.state.errors[link.id];
         if (!force && failed && this.now - failed.at < MIN_INTERVAL_MS) continue;
-        await this.serial(() => this.upload(projectId, link, requestId));
+        await this.serial(() => this.upload(projectId, link, last));
       }
     }
   }
   private async upload(
     projectId: string,
     link: { id: string; name: string; host: 'rhino' | 'zwcad' },
-    requestId: string,
+    { requestId, revision }: { requestId: string; revision: number | null },
   ) {
     let code: string | undefined;
     let size = 0;
@@ -230,7 +246,7 @@ export class OfflineView {
     if (code) this.state.errors[link.id] = { code, at: this.now };
     else {
       delete this.state.errors[link.id];
-      this.state.uploaded[link.id] = { projectId, requestId, at: this.now, size };
+      this.state.uploaded[link.id] = { projectId, requestId, revision, at: this.now, size };
     }
     await this.save();
   }

@@ -128,3 +128,42 @@ test('10,000 objects: Live Sync of 10 changes stays small in time and storage', 
       `Live Sync ${liveMs.toFixed(1)} ms (engine ${reply.timing.engineMs} ms, +${Math.round(liveGrown / 1024)} KB)`,
   );
 });
+
+test('a Live Sync copies a basis that a publication points at instead of editing it', async (t) => {
+  const store = new Store(':memory:');
+  t.after(() => store.close());
+  const workspace = new Workspace(store);
+  const project = store.createProject('referenced');
+  const small = (revision) => {
+    const full = model(revision);
+    return {
+      ...full,
+      objects: full.objects.slice(0, 3),
+      scene: full.scene.slice(0, 3),
+      displayCoverage: displayCoverage(full.scene.slice(0, 3)),
+    };
+  };
+  workspace.submit(project.id, captureInput({ id: 's1', ...target }));
+  workspace.update(project.id, 's1', 'succeeded', small(4));
+  // Only a publication points at s1 (no other request's input names it).
+  store.db
+    .prepare('INSERT INTO publication_exports VALUES(?,?,?,?,?)')
+    .run('p1', project.id, 's1', 'm', 's');
+  const sdk = {
+    async liveSync(where, basis, since) {
+      return {
+        delta: { objects: [object('o0')], scene: [mesh('o0', 9)], removed: [] },
+        survey: {},
+        result: { sourceDocument: { ...basis.sourceDocument, ...where, revision: since + 1 } },
+      };
+    },
+  };
+  const live = new LiveSync(workspace, sdk);
+  live.record(project.id, workspace.brief(project.id, 's1'));
+  const reply = await live.run(project.id, { ...target, basisId: 's1', revision: 4 });
+  assert.equal(reply.created, true);
+  assert.notEqual(reply.requestId, 's1');
+  // The published Sync keeps what was published; the new one has the change.
+  assert.equal(workspace.model(project.id, 's1').scene('o0').geometryHash, 'h-o0-0');
+  assert.equal(workspace.model(project.id, reply.requestId).scene('o0').geometryHash, 'h-o0-9');
+});

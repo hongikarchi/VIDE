@@ -102,6 +102,16 @@ test('offline view uploads changed linked files of enabled projects and keeps an
     clock += 11 * 60_000;
     await offline.tick();
     assert.equal(uploads.length, 2);
+    // A Live Sync fixes s2 in place (same id, a higher list revision): sent again after the interval.
+    const manifest = store.db.prepare(
+      'INSERT INTO sync_manifests(requestId,projectId,revision,updatedAt) VALUES(?,?,?,?) ON CONFLICT(requestId) DO UPDATE SET revision=excluded.revision',
+    );
+    manifest.run('s2', project.id, 2, new Date(clock).toISOString());
+    assert.equal((await offline.status(project.id)).files[0].upToDate, false);
+    clock += 11 * 60_000;
+    await offline.tick();
+    assert.equal(uploads.length, 3);
+    assert.equal((await offline.status(project.id)).files[0].upToDate, true);
     // Requests from the site: kept once, dismissed by the user.
     const item = {
       id: crypto.randomUUID(),
