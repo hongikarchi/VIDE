@@ -2,7 +2,7 @@
 id: PLAN-28
 title: 순정 우선 — 상한·자체 도구 정리, 모델 전체 JSON 전송 제거, 프로젝트별 DB
 status: draft
-version: 0.3
+version: 0.4
 updated: 2026-10-06
 owner: agent:claude
 related: [ADR-031, ADR-032, RESEARCH-14, PLAN-27, SPEC-02, ARCH-01]
@@ -74,7 +74,7 @@ related: [ADR-031, ADR-032, RESEARCH-14, PLAN-27, SPEC-02, ARCH-01]
 - 새로: `tests/server/user-sync-live.test.mjs`(⟳가 기준이 있으면 Live로, 없으면·`resync`면 전체로, 응답에 `objects`·`scene` 없음), `tests/server/request-objects.test.mjs`(목록·capture 응답 크기와 `objectsOmitted`, `…/objects?ids=`), `tests/server/direct-query-store.test.mjs`(합성 1만 개: `query`가 전체 읽기를 부르지 않고 변경만 묻고 덮어 씀, 저장 Sync 없으면 전체 읽기), `tests/core/geometry-transfer.test.mjs`의 형식화 풀기, 통합 `tests/integration/browser-large-sync.mjs`(아래 측정).
 - 고침: `model-context`·`large-sync-pins`(턴에서 `load` 0번)·`capture`·`workspace-list` 시험, 통합 `browser-live-sync`·`browser-links`·`browser-rhino-panel`.
 
-**완료 기준:** ⟳·요청 목록·AI 턴·`query` 어디에서도 모델 전체 JSON을 보내거나 조립하지 않음(응답 크기·호출 경로 시험). PLAN-27 1~3단계 완료 기준의 합성 1만 개 측정.
+**완료 기준:** ⟳·요청 목록·AI 턴·`query` 어디에서도 모델 전체 JSON을 보내거나 조립하지 않음(응답 크기·호출 경로 시험). PLAN-27 1~3단계 완료 기준의 합성 1만 개 측정. 알려진 예외 하나: Live Sync가 블록 정의를 새로 보이게 하거나 비우는 변경이거나 표시 수(`displayCoverage`)를 모르는 기준이면 `LiveSync.apply`가 표시 수를 다시 세려고 저장 모델을 한 번 읽는다(`live-sync.ts`). 정의 단위로 수를 고치는 방법은 작은 변경이 아니라 이번 범위에서 두고, 블록이 많은 실제 문서에서 문제가 보이면 따로 고친다(2026-10-06 검토).
 
 **진행(2026-10-06) — 구현·자동 검증, 실제 Rhino 확인 남음.**
 - 1: `runUserSync`(`document-sync.ts`). 기준은 `LiveSync.basisOf`, 없으면 그 문서의 마지막 성공 표시 Sync. 기록 `user-sync {action}`.
@@ -82,6 +82,15 @@ related: [ADR-031, ADR-032, RESEARCH-14, PLAN-27, SPEC-02, ARCH-01]
 - 3: `Execution.previousOf`·`ModelView.entries`·`count`. 표시 Sync 기준 턴에서 `load` 0번, 큰 JSON 해석 0번(시험).
 - 4: `displayQuery`의 읽기를 `storedDisplay` + `sdk.liveSync`(변경만) + `overlayDisplay`로. 합성 1만 개에서 한 쪽 약 70 ms, 전체 읽기 0번(시험). 저장 Sync가 없거나 `RESYNC_REQUIRED`면 `readLayers`.
 - 5: PLAN-27 3단계 결과.
+- 검토 반영(2026-10-06, 독립 검토의 `12c4992`·`c4f93e0`·`334b042` 지적):
+  - ⟳가 성공하면(Live·전체) 엔진이 그 문서의 '변경 중'·실패 표시와 재시도를 지운다(`SyncScheduler.userSynced`). Live Sync는 같은 ID를 고치므로 ID 비교로는 끝난 것을 알 수 없었다.
+  - 엔진이 그 문서의 자동 Sync를 보류하고 있으면(초안 임대 등, `SyncScheduler.holds`) ⟳의 Live Sync는 기준의 목록 복사본에 쓴다(`LiveSync.run`의 `keep`). 초안 임대는 DB에 없어 `referenced` 확인으로는 못 보았다. SPEC-01.11의 6 보완.
+  - '전체 다시 읽기': 연결 파일 행의 오른쪽 클릭 메뉴와 Shift+⟳가 `full: true`를 보낸다. SPEC-01.11의 3·10, Design §03 보완.
+  - jig의 객체 찾기는 Sync마다 VGT1 전체 대신 `…/objects?native=`로 그 객체 줄만 받는다. 외부 의견 첨부는 객체 줄을 먼저 받고(`withObjects`), 속성 창의 참조 링크는 그리지 않은 Sync면 그 Sync를 그린 뒤 객체를 고른다. 안 보이는 Sync를 버릴 때 초안의 기준·핀의 Sync는 남긴다.
+  - 쓰기 요청이 10분을 넘기면 `ACTION_TIMEOUT`('작업 이력에서 상태를 확인')으로 알린다. 작업 상태 확인은 `?view=summary`로 하고, 약 10분 실패하거나 다시 물어도 같은 답(`NOT_FOUND`·`PROJECT_NOT_FOUND`·`INVALID_INPUT`·`FORBIDDEN`)이면 멈춘다.
+  - 패널은 Live Sync 변경분을 `…/delta?view=rows`로 형상 없이 받는다. `query`의 전체 읽기(`readLayers`)도 저장 경로처럼 좌표 배열·블록 정의 없이 쪽을 만든다. `storedDisplay`는 `sync_manifests`부터 훑는다.
+  - 시험: 새 `tests/server/user-sync-scheduler.test.mjs`(실제 `LiveSync`·`SyncScheduler`: Live ⟳ 뒤 대기 해제, 초안 보류 중 복사본, 고치기 전 둘 다 실패), `request-objects`(`?view=summary`·`POST …/capture`의 `objectsOmitted`, `?native=`, `delta?view=rows`), `direct-query-store`(전체 읽기 쪽에 좌표 없음, 고치기 전 실패), 통합 `browser-live-sync`(⟳·Shift+⟳·행 메뉴의 `full`).
+  - 프로젝트별 DB 2단계(T-124)에서 바꿀 곳에 `storedDisplay`와 Live Sync의 `referenced` SQL을 더했다(ADR-032).
 - 남음: 실제 Rhino 창에서 ⟳가 Live로 끝나는지(엔진 기록 `user-sync`), 바로 적용 턴의 `query`가 변경만 묻는지, 패널 고정·선택. 작업 사본 후보·DWG 불러오기 같은 비표시 기준은 지금처럼 모델을 한 번 읽는다.
 
 ## T-124 프로젝트별 DB (ADR-032)

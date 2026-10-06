@@ -42,6 +42,7 @@ related: [ADR-031, ARCH-01, PLAN-08, PLAN-27, PLAN-28]
 - 같은 문서가 두 프로젝트에 동시에 연결되는 것을 막는 검사(`src/core/store.ts:306`, `src/server/application.ts:163-171`)와 불확실한 쓰기 검사(`store.ts:413` `hasUncertainWrite`, 같은 호스트 문서의 다른 프로젝트 기록까지 봄), 명령 ID 중복 검사(`store.ts:436`)와 `lease(connectionId)`(`store.ts:472`).
 - 요청을 ID만으로 찾는 곳(`src/core/workspace.ts:389` 등)과 시작 때 전체 복구(`workspace.ts:62`), 닫힌 대화 정리(`src/core/conversation-store.ts:179`), 옮기기·정리(`src/core/model-move.ts:219`, `src/core/model-store.ts:805`), 작업 사본 정리(`src/server/capture-cleanup.ts:80`), 프로젝트 삭제의 사용 중 파일 확인(`src/server/project-removal.ts:111`), 최근 활동(`store.ts:194`).
 - `shared_feedback.identity`의 UNIQUE는 프로젝트 안에서만 보장된다.
+- 한 문서의 마지막 저장 표시 Sync를 모든 프로젝트에서 찾는 `query`의 `storedDisplay`(`src/server/execution.ts`, T-123)와 Live Sync가 기준을 다른 요청이 가리키는지 보는 SQL(`src/server/live-sync.ts`의 `referenced`, 한 DB의 `workspace_requests`를 가정)(2026-10-06 T-123 검토).
 
 ## 이행 (1단계 구현 2026-10-06, 엔진에는 아직 연결하지 않음)
 

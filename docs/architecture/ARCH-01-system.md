@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.80
+version: 0.81
 updated: 2026-10-06
 owner: agent:codex
 related: [SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03]
@@ -88,7 +88,7 @@ T-113([PLAN-26](../plans/PLAN-26-chat-stage.md#t-113), 2026-10-02 사용자 승�
 | `src/ui/store/` | `core.ts`(변경 가능한 조각 객체 + `version`·`bump`·`subscribe`, `useStore`는 `useSyncExternalStore`)와 소비 범위별 조각(`session`·`draft`·`work`·`selection`·`sketch`·`viewer`·`links`·`toast`, 지역 단계에서 더한 `layout`(레일·패널 접기·너비·모바일 보기)·`status`(설정 대화상자·상태 줄·연결 배너)) | 하나의 전역 객체로 모으지 않음. 카메라는 보기·투영이 바뀔 때만 넣고 프레임마다 넣지 않음. 조각은 DOM에 접근하지 않음(예외: `layout.ts`의 동작 함수가 CSS용 `body` 플래그(`data-mobile`·`*-hidden`)·너비 CSS 변수·포커스와 `#right`의 `hidden`을 씀) |
 | `src/ui/app/` | 화면 명령형 코드의 지역 모듈: `context.ts`(패널 모드·현재 프로젝트), `boot.ts`(초기화 순서·연결·패널 모드·호스트 링크 폴링), `status.ts`(토스트·상태 줄·설정 열기), `left.ts`(레일·왼쪽 패널·패널 접기), `viewport.ts`(뷰포트·스케치·선택), `composer.ts`(작성기·전송·요청 판별), `thread.ts`(작업 보기·대화·제안 카드·요청 폴링), `links-sync.ts`(연결 파일 Sync·레이어 합성), `glue.ts`(jig·대시보드·검토본·skill 연결), `render.ts`(`render()`·`renderMessages()` 호출 순서), `shortcuts.ts`(단축키 등록부) | 모듈은 선언과 `init*()`만 내보내고 최상위 부작용을 두지 않음. `boot.ts`가 `init*()`를 정해진 순서로 부름. 지역 간 호출은 내보낸 함수(파사드) 이름으로 하고 시그니처는 추가만 허용 |
 
-**큰 모델의 화면 경로(T-085·T-123, 2026-10-06).** 형상 응답(`GET …/requests/:r`·`…/delta`, VGT1)은 `decodeGeometry(…, {typed: true})`로 풀어 좌표를 응답 버퍼 위의 `Float32Array`(배열 첫 점 `origin`을 속성으로 붙인 float32 차이)로, 색인을 `Uint16Array`/`Uint32Array`로 둔다. 뷰포트(`src/ui/viewport.ts`)는 이 배열을 복사하지 않고 `BufferAttribute`로 올리며 `origin`을 물체 위치로 쓴다(`number[]`도 계속 받음). Live Sync 갱신은 바뀐·지운 객체가 든 그리기 묶음만 다시 만든다. 레이어에 보이지 않는 결과의 `scene`·`definitions`(표시 Sync는 `objects`도)는 메시지에서 지우고 다시 보일 때 받는다. Rhino·ZWCAD 패널 모드는 뷰포트를 만들지 않고 형상을 받지 않는다. 패널은 연결 목록의 Sync를 `GET …/requests/:r?view=summary`로 받고 객체 줄은 `…/objects`로 받아 객체 목록(선택 비추기·고정)을 만들며, Live Sync 변경분(`…/delta`)으로 줄만 고친다. 화면 객체는 `objectById` 색인으로 찾는다. `api`는 시간 제한(형상 120초, 그 밖 30초, 넘으면 `NETWORK_TIMEOUT`)을 두고, 작업 상태 확인은 실패해도 간격을 늘려 계속한다.
+**큰 모델의 화면 경로(T-085·T-123, 2026-10-06).** 형상 응답(`GET …/requests/:r`·`…/delta`, VGT1)은 `decodeGeometry(…, {typed: true})`로 풀어 좌표를 응답 버퍼 위의 `Float32Array`(배열 첫 점 `origin`을 속성으로 붙인 float32 차이)로, 색인을 `Uint16Array`/`Uint32Array`로 둔다. 뷰포트(`src/ui/viewport.ts`)는 이 배열을 복사하지 않고 `BufferAttribute`로 올리며 `origin`을 물체 위치로 쓴다(`number[]`도 계속 받음). Live Sync 갱신은 바뀐·지운 객체가 든 그리기 묶음만 다시 만든다. 레이어에 보이지 않는 결과의 `scene`·`definitions`(표시 Sync는 `objects`도)는 메시지에서 지우고 다시 보일 때 받는다. Rhino·ZWCAD 패널 모드는 뷰포트를 만들지 않고 형상을 받지 않는다. 패널은 연결 목록의 Sync를 `GET …/requests/:r?view=summary`로 받고 객체 줄은 `…/objects`로 받아 객체 목록(선택 비추기·고정)을 만들며, Live Sync 변경분은 형상 없이(`…/delta?view=rows`) 받아 줄만 고친다. 화면 객체는 `objectById` 색인으로 찾는다. `api`는 시간 제한(형상 120초, 그 밖 읽기 30초, 넘으면 `NETWORK_TIMEOUT`, 쓰기 요청 10분, 넘으면 다시 묻지 않고 작업 이력을 보라는 `ACTION_TIMEOUT`)을 둔다. 작업 상태 확인(`?view=summary`)은 실패해도 간격을 늘려(10초까지) 약 10분 동안 계속하고, 그 뒤나 다시 물어도 같은 답(`NOT_FOUND`·`FORBIDDEN` 등)이면 멈춘다.
 
 Node 시험이 직접 불러오는 화면 모듈(`reference-check.ts`·`conversations.tsx`·`connection-recovery.ts`)에는 DOM 부작용이나 JSX를 넣지 않는다. 아이콘은 `icons.ts`의 `paintIcons()`가 자식이 없는 `[data-icon]` 노드만 채운다.
 
@@ -722,9 +722,9 @@ Sync 표시 형상의 객체별 불변 blob·내용 지문 중복 제거·참조
 **API 응답.**
 - `GET …/requests`: `scene`·`definitions` 없음(`sceneOmitted`). 표시 Sync(`displayOnly: true`) 행은 `objects`도 빼고 `objectsOmitted: true`·`objectCount`를 둔다(T-123, 2026-10-06). `POST …/capture` 응답도 같은 모양이다. 엔진 안의 `Workspace.list`·`summary`는 고정 확인 등을 위해 `objects`를 그대로 가진다(형상 없음, 캐시).
 - `GET …/requests/:r?view=summary`(새, T-123): 그 요청 하나를 목록과 같은 모양으로 준다(형상·표시 Sync 객체 줄 없음).
-- `GET …/requests/:r/objects[?ids=<id,…>]`(새, T-123): 그 요청의 `objects[]` 줄만 JSON(`{requestId, objects}`)으로 준다. 형상은 열지 않는다. `ids`가 있으면 그 객체만. 목록에서 빠진 객체 줄이 필요한 화면(Rhino 패널의 고정·선택, 후속 초안)이 쓴다.
+- `GET …/requests/:r/objects[?ids=<id,…>][&native=<Rhino id,…>]`(새, T-123): 그 요청의 `objects[]` 줄만 JSON(`{requestId, objects}`)으로 준다. 형상은 열지 않는다. `ids`가 있으면 그 객체만, `native`가 있으면 그 Rhino ID(대소문자 무관)의 객체만. 목록에서 빠진 객체 줄이 필요한 화면(Rhino 패널의 고정·선택, 후속 초안, 외부 의견 첨부, jig의 객체 찾기)이 쓴다.
 - `GET …/requests/:r`에 `Accept: application/vnd.vide.geometry`: 지금과 같은 VGT1 컨테이너를 저장된 객체별 버퍼를 이어 붙이고 각 `$bin` 오프셋만 고쳐 만든다(좌표를 풀거나 다시 인코딩하지 않음). 화면(`src/ui/gateway.ts`)은 바꾸지 않아도 된다. 이 헤더가 없으면 지금처럼 JSON(느린 경로, 시험·호환용).
-- `GET …/requests/:r/delta?since=<revision>[&base=<parentId>]`(새, T-084의 알림용): `revision`이 `since`보다 큰 줄의 `objects`·`scene`·`definitions`와 `removed`, 지금 `revision`을 VGT1로 준다. 모양은 지금 Live Sync 응답의 `delta`와 같아 화면의 `applyDisplayDelta`를 그대로 쓴다. `base`가 이 목록의 `parentId`이면 부모 revision에서 이어 준다. `since`가 지운 기록보다 오래됐으면 `full: true`로 알려 전체를 받게 한다.
+- `GET …/requests/:r/delta?since=<revision>[&base=<parentId>]`(새, T-084의 알림용): `revision`이 `since`보다 큰 줄의 `objects`·`scene`·`definitions`와 `removed`, 지금 `revision`을 VGT1로 준다. 모양은 지금 Live Sync 응답의 `delta`와 같아 화면의 `applyDisplayDelta`를 그대로 쓴다. `base`가 이 목록의 `parentId`이면 부모 revision에서 이어 준다. `since`가 지운 기록보다 오래됐으면 `full: true`로 알려 전체를 받게 한다. `&view=rows`이면 형상 없이 `objects`·`removed`·`revision`만 JSON으로 준다(`scene: []`, 호스트 패널용).
 - `POST …/live-sync` 응답(`delta` JSON과 요약)은 바꾸지 않는다.
 
 **기존 결과 옮기기.**
@@ -917,7 +917,7 @@ SPEC-01.11의 10을 구현하는 물리 계약이다(PLAN-27 2단계). 저장은
 - **재시도:** `SOURCE_CHANGED`·`HOST_BUSY`·`PROJECT_BUSY`·`WORKSPACE_CAPACITY`는 실패로 저장하지 않고 1·2·4·8초 뒤(최대 30초) 다시 한다. 그 사이 `generation`이 또 바뀌면 다시 0부터 센다. 30초가 지나면 `state: 'waiting'`으로 두고 다음 변경이나 ⟳를 기다린다.
 - **알림:** `GET …/links` 행에 `sync: {state: 'idle'|'syncing'|'held'|'waiting'|'failed', code?, at}`과 `display: {requestId, revision}`(마지막 Sync와 그 목록 revision)를 더한다. 화면은 지금처럼 이 조회를 1.5초마다 하고, `requestId`가 같고 `revision`만 늘면 `GET …/requests/:r/delta?since=`로 변경분만, `requestId`가 바뀌면 `delta?base=<이전 ID>&since=` 또는 전체(VGT1)를 받는다. 화면은 `POST …/live-sync`와 자동 `POST …/capture`를 부르지 않는다(⟳만 `capture`에 `fresh: true`).
 - **기록:** `sync-scheduler {document, action: live|full|held|retry|wait, generation, ms}`.
-- **사용자 Sync(T-123, 2026-10-06):** ⟳·지금 Sync·플러그인 Sync(`POST …/capture`, `fresh`)는 `runUserSync`(`src/server/document-sync.ts`)를 거친다. 그 문서의 기준(`LiveSync.basisOf`, 없으면 연결의 마지막 성공 Sync)이 Rhino 표시 Sync이고 `sourceDocument.revision`이 있으면 `LiveSync.run`(같은 문서의 실행 중 전체 Sync가 끝난 뒤 그 revision 이후 변경만 호스트에 물음)을 하고, `resync`·재시도 대상 실패·기준 없음·ZWCAD·작업 사본이면 `runDocumentSync`로 전체를 새로 읽는다. 요청 본문 `full: true`는 늘 전체를 읽는다. 응답은 형상·객체 줄 없는 요청이고, Live로 끝나면 기준 Sync(또는 복사본)의 ID다. 기록 `user-sync {request, action: live|full, ms}`.
+- **사용자 Sync(T-123, 2026-10-06):** ⟳·지금 Sync·플러그인 Sync(`POST …/capture`, `fresh`)는 `runUserSync`(`src/server/document-sync.ts`)를 거친다. 그 문서의 기준(`LiveSync.basisOf`, 없으면 연결의 마지막 성공 Sync)이 Rhino 표시 Sync이고 `sourceDocument.revision`이 있으면 `LiveSync.run`(같은 문서의 실행 중 전체 Sync가 끝난 뒤 그 revision 이후 변경만 호스트에 물음)을 하고, `resync`·재시도 대상 실패·기준 없음·ZWCAD·작업 사본이면 `runDocumentSync`로 전체를 새로 읽는다. 요청 본문 `full: true`(목록 행 메뉴의 '전체 다시 읽기', Shift+⟳)는 늘 전체를 읽는다. 엔진이 그 문서의 자동 Sync를 보류하고 있으면(`SyncScheduler.holds`: 화면의 초안 임대, 그 파일 기준 작업, 그 문서 쓰기) `LiveSync.run`에 `keep: true`를 주어 변경을 기준 Sync의 목록 복사본에 쓴다(초안이 쓰는 기준은 그대로). 성공하면(Live·전체) `SyncScheduler.userSynced`가 그 문서의 대기·실패 표시와 재시도를 지운다(Live Sync는 같은 ID를 고치므로 ID 비교로는 알 수 없다). 응답은 형상·객체 줄 없는 요청이고, Live로 끝나면 기준 Sync(또는 복사본)의 ID다. 기록 `user-sync {request, action: live|full, ms}`.
 
 ### JIG 탭과 Sync jig
 
