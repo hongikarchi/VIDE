@@ -930,7 +930,16 @@ export class Execution {
     return Promise.all(
       (['claude-cli', 'codex-cli'] as const).map(async (provider) => {
         try {
-          return { id: provider, ...(await this.provider({ provider }).status()) };
+          const adapter = this.provider({ provider });
+          const status = await adapter.status();
+          // Automatic selection must not offer a logged-in CLI the executor will reject.
+          if (
+            status.available &&
+            'checkVersion' in adapter &&
+            typeof adapter.checkVersion === 'function'
+          )
+            await adapter.checkVersion();
+          return { id: provider, ...status };
         } catch (error) {
           return {
             id: provider,
@@ -1503,7 +1512,14 @@ export class Execution {
       if (sdk) {
         const result = await sdk.run({
           input,
-          previous,
+          // CAD merges the changed entities into its prior display instead of capturing all again.
+          previous:
+            target === 'zwcad' && previous && previousView
+              ? {
+                  ...previous,
+                  result: parsedModel(this.workspace.get(projectId, previous.id).result),
+                }
+              : previous,
           items,
           projectTools,
           signal: controller.signal,

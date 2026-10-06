@@ -111,7 +111,7 @@ namespace Vide.Zwcad.Connection
             if (disposed) throw new InvalidOperationException("STALE_CONNECTION");
             string method = Value(request, "method");
             if (method == "attachedStatus") {
-                using (Document.LockDocument())
+                using (Document.LockDocument(DocumentLockMode.Read, null, null, false))
                 using (var tx = Document.Database.TransactionManager.StartTransaction()) {
                     var table = (BlockTable)tx.GetObject(Document.Database.BlockTableId, OpenMode.ForRead);
                     var space = (BlockTableRecord)tx.GetObject(table[BlockTableRecord.ModelSpace], OpenMode.ForRead);
@@ -129,7 +129,7 @@ namespace Vide.Zwcad.Connection
                 string projectId = Value(request, "projectId") ?? "", linkId = Value(request, "linkId") ?? "";
                 if (projectId.Length == 0 || projectId.Length > 100 || linkId.Length == 0 || linkId.Length > 100) throw new InvalidOperationException("INVALID_INPUT");
                 LinkIdStore.Write(Document, projectId, linkId);
-                using (Document.LockDocument())
+                using (Document.LockDocument(DocumentLockMode.Read, null, null, false))
                 using (var tx = Document.Database.TransactionManager.StartTransaction())
                     return new { ok = true, linkIds = LinkIdStore.All(Document.Database, tx) };
             }
@@ -142,7 +142,7 @@ namespace Vide.Zwcad.Connection
                 if (offset == 0) { building = new Dictionary<string, Shown>(); buildingRevision = revision; buildingNext = 0; }
                 if (building != null && (buildingRevision != revision || offset != buildingNext)) building = null;
                 var record = building;
-                using (Document.LockDocument()) {
+                using (Document.LockDocument(DocumentLockMode.Read, null, null, false)) {
                     object result = AttachedDisplay.Page(Document.Database, offset, Convert.ToInt32(request["limit"]), revision, out next, out total,
                         record == null ? null : (Action<AttachedDisplay.EntityRead>)(read => record[read.Handle] = ShownOf(read)));
                     if (record != null) {
@@ -161,7 +161,7 @@ namespace Vide.Zwcad.Connection
                 else if (cursor > 0) throw new InvalidOperationException("STALE_REFERENCE");
                 var ids = changedAt.Where(entry => entry.Value > since).Select(entry => entry.Key).ToList();
                 var state = shown;
-                using (Document.LockDocument()) {
+                using (Document.LockDocument(DocumentLockMode.Read, null, null, false)) {
                     object result = AttachedDisplay.Changes(Document.Database, ids, cursor, revision,
                         read => state[read.Handle] = ShownOf(read), handle => state.Remove(handle), Coverage);
                     LastRead = DateTime.Now; return result;
@@ -173,7 +173,7 @@ namespace Vide.Zwcad.Connection
                 return new { ok = true, documentHash = Fingerprint(), selectedIds = selected.Status == ZwSoft.ZwCAD.EditorInput.PromptStatus.OK
                     ? selected.Value.GetObjectIds().Select(id => "cad-" + id.Handle.ToString()).ToArray() : new string[0] };
             }
-            if (method == "queryEntities") { using (Document.LockDocument()) return AttachedEdit.Query(Document, request); }
+            if (method == "queryEntities") return AttachedEdit.Query(Document, request);
             if (method == "runCode")
             {
                 string code = Value(request, "code") ?? "";

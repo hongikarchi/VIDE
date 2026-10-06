@@ -1,3 +1,4 @@
+import { applyDisplayDelta } from '../core/display-delta.ts';
 import { storedItem } from '../core/model-move.ts';
 import { inspectorOptions } from '../../hosts/zwcad/inspector.ts';
 import { ZwcadEditors } from '../../hosts/zwcad/editor-sessions.ts';
@@ -184,6 +185,10 @@ export class ZwcadSdkExecution {
         phase: 'host',
         host: 'zwcad',
         hostExecuted: writes > 0,
+        appliedDirectly: writes > 0,
+        executions: executions
+          .filter((entry) => entry.state === 'applied')
+          .map(({ code: _code, ...entry }) => entry),
         progress: progress(),
         activity: [...activity],
       });
@@ -365,7 +370,35 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
         removed: [...changes.erased],
       };
       // Show the drawing as it is now (a fresh read-only Sync of the open drawing).
-      const model = writes ? await attached.capture(basis).catch(() => undefined) : undefined;
+      const refresh = async () => {
+        const prior = previous!.result;
+        const source = prior.sourceDocument as { revision?: number } | undefined;
+        if (typeof source?.revision === 'number' && prior.objects && prior.scene) {
+          try {
+            const delta = await attached.changes(basis, source.revision);
+            return {
+              ...applyDisplayDelta(
+                modelSchema.pick({ objects: true, scene: true }).parse(prior),
+                delta,
+              ),
+              displayOnly: true,
+              displayCoverage: delta.displayCoverage,
+              displayWarnings: delta.displayWarnings,
+              sourceDocument: {
+                ...(prior.sourceDocument as object),
+                ...basis,
+                documentHash: delta.source.documentHash,
+                revision: delta.revision,
+                capturedAt: new Date().toISOString(),
+              },
+            };
+          } catch {
+            // An old plugin, changed definition or missing change history requires a full read.
+          }
+        }
+        return attached.capture(basis);
+      };
+      const model = writes ? await refresh().catch(() => undefined) : undefined;
       return {
         ...(model ?? {}),
         ...response,
@@ -380,7 +413,9 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
         hostExecuted: writes > 0,
         host: 'zwcad',
         executionMode: 'sdk',
-        baseRequestId: model ? undefined : previous?.id,
+        // The fresh display still belongs to the linked drawing of its basis. Without this
+        // lineage the UI treats it as an unrelated result beside the old, unchanged Sync.
+        baseRequestId: previous?.id,
         sourceDocument: model?.sourceDocument ?? previous?.result.sourceDocument,
       };
     } catch (error) {

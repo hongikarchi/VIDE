@@ -4,7 +4,7 @@
 // data folder; the user's data and work engine are not touched.
 // Needs `npm run desktop:build` and `npm run build:web`.
 import assert from 'node:assert/strict';
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
@@ -18,6 +18,8 @@ assert.ok(existsSync(exe), 'Run npm run desktop:build first.');
 const directory = runDirectory('desktop-shell');
 const data = join(directory, 'data');
 await mkdir(data, { recursive: true });
+// Isolated fixture: do not transmit diagnostics or block shell controls on first-run consent.
+await writeFile(join(data, 'telemetry.json'), JSON.stringify({ consent: 'denied' }));
 const debugPort = 9300 + Math.floor(Math.random() * 400);
 const env = {
   ...process.env,

@@ -531,3 +531,31 @@ test('host modeling turns get the project read tools of SPEC-02.6 beside their h
     rmSync(root, { recursive: true, force: true, maxRetries: 3 });
   }
 });
+
+test('automatic provider availability excludes an authenticated incompatible CLI', async (t) => {
+  const { store, workspace } = fixture();
+  const execution = new Execution(workspace, {
+    providerFactory: ({ provider }) => ({
+      status: async () => ({ available: true }),
+      checkVersion: async () => {
+        if (provider === 'codex-cli')
+          throw Object.assign(Error('unsupported'), { code: 'CLI_VERSION_UNSUPPORTED' });
+        return '2.1.284';
+      },
+    }),
+  });
+  t.after(async () => {
+    await execution.close();
+    store.close();
+  });
+  const rows = await execution.status();
+  assert.equal(rows.find((row) => row.id === 'claude-cli').available, true);
+  assert.deepEqual(
+    rows.find((row) => row.id === 'codex-cli'),
+    {
+      id: 'codex-cli',
+      available: false,
+      reason: 'CLI_VERSION_UNSUPPORTED',
+    },
+  );
+});

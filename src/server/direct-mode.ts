@@ -723,6 +723,9 @@ const hostLabel = (host: 'rhino' | 'zwcad') => (host === 'rhino' ? 'Rhino' : 'ZW
  */
 function linkedFilesNote(links: LiveLink[], targetKey: string, eyes: boolean, mode: RequestMode) {
   if (!links.length) return '';
+  const startingOpen = links.some(
+    (link) => link.open && documentKey(link.host, link.open) === targetKey,
+  );
   const rows = links.slice(0, 30).map((link) => {
     const state =
       link.open && documentKey(link.host, link.open) === targetKey
@@ -737,6 +740,10 @@ function linkedFilesNote(links: LiveLink[], targetKey: string, eyes: boolean, mo
     return `- ${link.id} · ${link.name} (${hostLabel(link.host)}) · ${state}`;
   });
   // A drawing open in ZWCAD takes ZWCAD's own wrapper, not RhinoCommon (ADR-027 4).
+  if (!startingOpen)
+    rows.unshift(
+      'The historical starting document is no longer open in that session. Do not query or execute it by default. Choose the open linked file(s) required by the user and pass linkId explicitly; an unavailable starting document does not prevent work on other open files. Never transfer pins silently to another document.',
+    );
   const drawing = links
     .slice(0, 30)
     .some(

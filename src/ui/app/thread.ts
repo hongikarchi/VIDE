@@ -349,8 +349,10 @@ export async function directAction(
 ) {
   const projectId = currentProject().id;
   // A 409 here: the request already ended or runs again; it is read again (SPEC-02.13 4).
-  const reply = (await requestAction(`/projects/${projectId}/requests/${id}/${action}`, body, () =>
-    poll(id, projectId),
+  const reply = (await requestAction(
+    `/projects/${projectId}/requests/${id}/${action}${action === 'undo' ? '?view=summary' : ''}`,
+    body,
+    () => poll(id, projectId),
   )) as {
     ok?: unknown;
     reason?: unknown;

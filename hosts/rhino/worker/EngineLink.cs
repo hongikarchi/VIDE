@@ -116,7 +116,7 @@ internal static class EngineLink
         {
             if (doc.IsHeadless) return;
             var name = doc.Name ?? "제목 없는 문서";
-            var project = new ProjectDialog(name).ShowModal();
+            var project = new ProjectDialog(name).ShowModal(Rhino.UI.RhinoEtoApp.MainWindowForDocument(doc));
             if (project == null) return;
             created = AttachedConnection.Current?.DocumentId != doc.RuntimeSerialNumber;
             AttachedConnection.Connect(doc);
@@ -126,7 +126,7 @@ internal static class EngineLink
             if (choice != null)
             {
                 // Which row this document continues (SPEC-01.11 1): asked only when it is unclear.
-                var answer = await OnUi(() => new LinkChoiceDialog(name, choice).ShowModal());
+                var answer = await OnUi(() => new LinkChoiceDialog(name, choice).ShowModal(Rhino.UI.RhinoEtoApp.MainWindowForDocument(doc)));
                 if (answer == null)
                 {
                     if (created && AttachedConnection.Current == connection) { connection.Dispose(); AttachedConnection.Current = null; }
@@ -143,7 +143,7 @@ internal static class EngineLink
         catch (Exception error)
         {
             RhinoApp.WriteLine("VIDE Link 실패: " + error.Message);
-            MessageBox.Show(error.Message, "VIDE", MessageBoxType.Warning);
+            await OnUi(() => MessageBox.Show(Rhino.UI.RhinoEtoApp.MainWindowForDocument(doc), error.Message, "VIDE", MessageBoxType.Warning));
         }
     }
 }

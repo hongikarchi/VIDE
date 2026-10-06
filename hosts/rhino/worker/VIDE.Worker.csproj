@@ -15,6 +15,7 @@
   <ItemGroup>
     <Reference Include="Eto"><HintPath>$(RhinoSystem)\Eto.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="RhinoCommon"><HintPath>$(RhinoSystem)\RhinoCommon.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Rhino.UI"><HintPath>$(RhinoSystem)\Rhino.UI.dll</HintPath><Private>false</Private></Reference>
     <!-- Rhino 8 Python 3 for direct mode (ADR-029). -->
     <Reference Include="Rhino.Runtime.Code"><HintPath>$(RhinoSystem)\Rhino.Runtime.Code.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Microsoft.CodeAnalysis"><HintPath>$(RhinoSystem)\Microsoft.CodeAnalysis.dll</HintPath><Private>false</Private></Reference>

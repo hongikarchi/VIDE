@@ -25,7 +25,7 @@ namespace Vide.Zwcad.Connection
             var layers = Strings(request, "layers");
             var types = Strings(request, "types");
             var db = document.Database;
-            using (document.LockDocument())
+            using (document.LockDocument(DocumentLockMode.Read, null, null, false))
             using (var tr = db.TransactionManager.StartTransaction())
             {
                 var table = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
@@ -175,10 +175,16 @@ namespace Vide.Zwcad.Connection
                                 ["pending"] = new { added = added.Count, changed = modified.Count, removed = erased.Count },
                             };
                         }
-                        foreach (var id in added) if (tr.GetObject(id, OpenMode.ForRead) is Entity entity) addedRows.Add(Row(entity, tr));
-                        foreach (var id in modified) if (tr.GetObject(id, OpenMode.ForRead) is Entity entity) changedRows.Add(Row(entity, tr));
-                        foreach (var pair in erased) removedRows.Add(new { nativeId = pair.Key.Handle.ToString(), layer = pair.Value });
                         tr.Commit();
+                    }
+                    // ZWCAD raises ObjectModified when the write transaction closes. Build the
+                    // result afterwards so attribute-only edits are included in the changed rows.
+                    modified.ExceptWith(added); modified.ExceptWith(erased.Keys);
+                    using (var read = db.TransactionManager.StartTransaction())
+                    {
+                        foreach (var id in added) if (!id.IsErased && read.GetObject(id, OpenMode.ForRead) is Entity entity) addedRows.Add(Row(entity, read));
+                        foreach (var id in modified) if (!id.IsErased && read.GetObject(id, OpenMode.ForRead) is Entity entity) changedRows.Add(Row(entity, read));
+                        foreach (var pair in erased) removedRows.Add(new { nativeId = pair.Key.Handle.ToString(), layer = pair.Value });
                     }
                 }
                 finally { db.ObjectAppended -= append; db.ObjectModified -= change; db.ObjectErased -= erase; }

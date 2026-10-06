@@ -124,7 +124,7 @@ export function attachPinTokens(textarea: HTMLTextAreaElement, options: Options)
     // With nothing typed yet, the chip takes the sentence's first place (placeholder hidden).
     field.dataset.ghost = String(!ghost.hidden && !textarea.value);
     if (ghost.hidden) return;
-    ghost.textContent = `📌 고정 · ${count}개`;
+    ghost.textContent = `선택 ${count}개 첨부`;
     const style = getComputedStyle(textarea);
     const lineHeight = parseFloat(style.lineHeight) || 20;
     ghost.style.fontSize = style.fontSize;

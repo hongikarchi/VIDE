@@ -272,8 +272,12 @@ test('Auto over HTTP: two executes are two undo records; [되돌리기] only und
   assert.equal(older.status, 200);
   assert.deepEqual([older.body.ok, older.body.reason], [false, 'not-latest']);
   // The latest one is undone by the host.
-  const latest = await api(`${path}/auto-1/undo`, 'POST', { executionId: second.executionId });
+  const latest = await api(`${path}/auto-1/undo?view=summary`, 'POST', {
+    executionId: second.executionId,
+  });
   assert.equal(latest.body.ok, true);
+  assert.equal(latest.body.request.result.scene, undefined);
+  assert.equal(latest.body.request.result.definitions, undefined);
   assert.equal(latest.body.request.result.executions[1].state, 'undone');
   assert.deepEqual(
     host.calls.filter((c) => c.method === 'direct-undo').map((c) => c.undoId),

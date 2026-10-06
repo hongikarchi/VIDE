@@ -223,91 +223,99 @@ try {
     const request = requests.get(new URL(route.request().url()).pathname.split('/').at(-1));
     return request ? route.fulfill({ json: request }) : route.continue();
   });
-  await page.route(/\/requests\/[^/]+\/(undo|confirm|continue)$/, async (route) => {
-    const parts = route.request().url().split('/');
-    const [id, action] = parts.slice(-2);
-    const body = route.request().postDataJSON() ?? {};
-    calls.push({ id, action, body });
-    const request = requests.get(id);
-    if (action === 'undo' && body.all === true) {
-      // The whole request: the first press finds 평면.3dm edited after it (not-latest), the
-      // second undoes what is left.
-      const left = request.result.executions.filter((row) => row.state === 'applied');
-      const blocked = !request.undoTried;
-      request.undoTried = true;
-      for (const row of left) if (!blocked || row.file.name !== '평면.3dm') row.state = 'undone';
-      const files = ['구조.3dm', '평면.3dm'].map((name) => ({
-        name,
-        host: 'rhino',
-        target: left.find((row) => row.file.name === name)?.target,
-        state: blocked && name === '평면.3dm' ? 'refused' : 'undone',
-        ...(blocked && name === '평면.3dm' ? { reason: 'not-latest' } : {}),
-      }));
-      request.result = { ...request.result, undo: { at: 'now', files } };
-      return route.fulfill({ json: { ok: !blocked, files, request } });
-    }
-    if (action === 'undo') {
-      // Only the latest record can be undone here (the host answers 'not-latest' otherwise).
-      const latest = request.result.executions.filter((row) => row.state !== 'undone').at(-1);
-      if (latest?.executionId !== body.executionId)
-        return route.fulfill({ json: { ok: false, reason: 'not-latest' } });
-      latest.state = 'undone';
-      return route.fulfill({ json: { ok: true } });
-    }
-    if (action === 'confirm' && body.executionId === 'held-1') {
-      // As execution.confirm answers: the held row turns 'confirmed', the re-run is a new row.
-      request.state = 'succeeded';
-      request.result = {
-        ...request.result,
-        guarded: undefined,
-        appliedDirectly: true,
-        executions: [
-          { ...request.result.executions[0], state: 'confirmed', guarded: undefined },
-          {
-            executionId: 'run-2',
-            state: 'applied',
-            undoId: '52',
-            label: 'VIDE AI 1: 옛 레이어 지우기',
-            confirms: 'held-1',
-            changes: { added: [], changed: [], removed: [added('w-1', '옛 벽')] },
-          },
-        ],
-      };
-      return route.fulfill({ json: request });
-    }
-    if (action === 'confirm') {
-      request.state = 'succeeded';
-      request.result = {
-        mode: 'auto',
-        text: '확인 후 지웠습니다.',
-        executions: [
-          {
-            executionId: 'undo-3',
-            undoId: 'undo-3',
-            label: '옛 벽 지우기',
-            confirmedGuard: { kind: 'bulk-delete' },
-            changes: {
-              added: [],
-              changed: [],
-              removed: Array.from({ length: 120 }, (_, i) => ({ nativeId: 'w-' + i, layer: '벽' })),
+  await page.route(
+    /\/requests\/[^/]+\/(undo|confirm|continue)(\?view=summary)?$/,
+    async (route) => {
+      const url = new URL(route.request().url());
+      const parts = url.pathname.split('/');
+      if (parts.at(-1) === 'undo') assert.equal(url.searchParams.get('view'), 'summary');
+      const [id, action] = parts.slice(-2);
+      const body = route.request().postDataJSON() ?? {};
+      calls.push({ id, action, body });
+      const request = requests.get(id);
+      if (action === 'undo' && body.all === true) {
+        // The whole request: the first press finds 평면.3dm edited after it (not-latest), the
+        // second undoes what is left.
+        const left = request.result.executions.filter((row) => row.state === 'applied');
+        const blocked = !request.undoTried;
+        request.undoTried = true;
+        for (const row of left) if (!blocked || row.file.name !== '평면.3dm') row.state = 'undone';
+        const files = ['구조.3dm', '평면.3dm'].map((name) => ({
+          name,
+          host: 'rhino',
+          target: left.find((row) => row.file.name === name)?.target,
+          state: blocked && name === '평면.3dm' ? 'refused' : 'undone',
+          ...(blocked && name === '평면.3dm' ? { reason: 'not-latest' } : {}),
+        }));
+        request.result = { ...request.result, undo: { at: 'now', files } };
+        return route.fulfill({ json: { ok: !blocked, files, request } });
+      }
+      if (action === 'undo') {
+        // Only the latest record can be undone here (the host answers 'not-latest' otherwise).
+        const latest = request.result.executions.filter((row) => row.state !== 'undone').at(-1);
+        if (latest?.executionId !== body.executionId)
+          return route.fulfill({ json: { ok: false, reason: 'not-latest' } });
+        latest.state = 'undone';
+        return route.fulfill({ json: { ok: true } });
+      }
+      if (action === 'confirm' && body.executionId === 'held-1') {
+        // As execution.confirm answers: the held row turns 'confirmed', the re-run is a new row.
+        request.state = 'succeeded';
+        request.result = {
+          ...request.result,
+          guarded: undefined,
+          appliedDirectly: true,
+          executions: [
+            { ...request.result.executions[0], state: 'confirmed', guarded: undefined },
+            {
+              executionId: 'run-2',
+              state: 'applied',
+              undoId: '52',
+              label: 'VIDE AI 1: 옛 레이어 지우기',
+              confirms: 'held-1',
+              changes: { added: [], changed: [], removed: [added('w-1', '옛 벽')] },
             },
-          },
-        ],
+          ],
+        };
+        return route.fulfill({ json: request });
+      }
+      if (action === 'confirm') {
+        request.state = 'succeeded';
+        request.result = {
+          mode: 'auto',
+          text: '확인 후 지웠습니다.',
+          executions: [
+            {
+              executionId: 'undo-3',
+              undoId: 'undo-3',
+              label: '옛 벽 지우기',
+              confirmedGuard: { kind: 'bulk-delete' },
+              changes: {
+                added: [],
+                changed: [],
+                removed: Array.from({ length: 120 }, (_, i) => ({
+                  nativeId: 'w-' + i,
+                  layer: '벽',
+                })),
+              },
+            },
+          ],
+        };
+        return route.fulfill({ json: { ok: true } });
+      }
+      // continue: the same conversation goes on in 자동 as a new request.
+      // The engine answers with the continued request itself (execution.continuePlan), which names
+      // its plan by `continuesPlanId`; the plan's own result is not rewritten.
+      const next = {
+        id: 'continued-1',
+        input: { ...request.input, id: 'continued-1', mode: 'auto', continuesPlanId: id },
+        state: 'running',
+        result: null,
       };
-      return route.fulfill({ json: { ok: true } });
-    }
-    // continue: the same conversation goes on in 자동 as a new request.
-    // The engine answers with the continued request itself (execution.continuePlan), which names
-    // its plan by `continuesPlanId`; the plan's own result is not rewritten.
-    const next = {
-      id: 'continued-1',
-      input: { ...request.input, id: 'continued-1', mode: 'auto', continuesPlanId: id },
-      state: 'running',
-      result: null,
-    };
-    requests.set(next.id, next);
-    return route.fulfill({ json: next });
-  });
+      requests.set(next.id, next);
+      return route.fulfill({ json: next });
+    },
+  );
 
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => !document.querySelector('#body').disabled);

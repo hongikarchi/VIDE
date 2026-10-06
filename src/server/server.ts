@@ -2533,7 +2533,13 @@ export async function startServer({
             all === true
               ? await execution.undoRequest(projectId, id)
               : await execution.undo(projectId, id, executionId);
-          send(200, { ...undone, request: withApplications(undone.request) });
+          send(200, {
+            ...undone,
+            request:
+              url.searchParams.get('view') === 'summary'
+                ? listed(withApplications(workspace.summary(projectId, id)))
+                : withApplications(undone.request),
+          });
         } else if (action === 'confirm') {
           const { executionId } = await body(request);
           send(202, withApplications(await execution.confirm(projectId, id, executionId)));

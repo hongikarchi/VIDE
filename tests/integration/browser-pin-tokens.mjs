@@ -157,7 +157,7 @@ try {
   await body.click();
   await page.keyboard.press('End');
   await ghost.waitFor({ state: 'visible' });
-  assert.equal(await ghost.textContent(), '📌 고정 · 2개');
+  assert.equal(await ghost.textContent(), '선택 2개 첨부');
   // The ghost sits on the sentence's line right after the typed words, at the text's size.
   const [line, chip] = [await body.boundingBox(), await ghost.boundingBox()];
   assert.ok(chip.y - line.y < 30, 'ghost on the first line');

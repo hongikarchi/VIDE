@@ -237,6 +237,25 @@ test('auto mode routes execute to direct-execute and records undoable executions
   assert.equal(host.calls.at(-1).undoId, 'undo-1');
 });
 
+test('a fresh display after a CAD edit keeps its linked-file basis', async (t) => {
+  const host = await fakeHost(t, (params) => applied(params));
+  const { sdk, handlers } = execution(host);
+  const { task: auto } = task(host, { mode: 'auto' }, async () => {
+    await handlers().execute({ code: 'return 1;' });
+    return { text: '색상 변경' };
+  });
+  sdk.editors.attached.capture = async () => ({
+    objects: [{ id: 'cad-1F', nativeId: '1F' }],
+    scene: [{ id: 'cad-1F', color: 5 }],
+    sourceDocument: { ...auto.previous.result.sourceDocument, revision: 7 },
+  });
+  const result = await sdk.run(auto);
+  assert.equal(result.baseRequestId, auto.previous.id);
+  assert.equal(result.scene[0].color, 5);
+  assert.equal(result.sourceDocument.revision, 7);
+  assert.equal(result.appliedDirectly, true);
+});
+
 test('a confirmed re-run releases the guard; plan mode never writes', async (t) => {
   const host = await fakeHost(t, (params) => {
     if (params.method === 'direct-execute') return applied(params);
@@ -323,4 +342,42 @@ test('a failure that may have reached the drawing stays unknown', async (t) => {
     return {};
   });
   await assert.rejects(sdk.run(auto), { code: 'HOST_RESULT_UNKNOWN' });
+});
+
+test('CAD direct edits refresh only changed objects and publish applied progress', async (t) => {
+  const host = await fakeHost(t, (params) => applied(params));
+  const { sdk, handlers } = execution(host);
+  const { task: auto, updates } = task(host, { mode: 'auto' }, async () => {
+    await handlers().execute({ code: 'return 1;' });
+    return { text: 'done' };
+  });
+  const unchanged = { id: 'keep', name: 'keep', kind: 'native' };
+  auto.previous.result.objects = [unchanged];
+  auto.previous.result.scene = [{ id: 'keep' }];
+  auto.previous.result.sourceDocument.revision = 6;
+  let captures = 0;
+  sdk.editors.attached.capture = async () => {
+    captures++;
+    throw Error('unexpected full capture');
+  };
+  sdk.editors.attached.changes = async (target, since) => {
+    assert.equal(since, 6);
+    return {
+      objects: [{ id: 'new', name: 'new', kind: 'native' }],
+      scene: [{ id: 'new' }],
+      removed: [],
+      revision: 7,
+      source: { documentHash: hash },
+      displayWarnings: {},
+      displayCoverage: { total: 2, displayed: 2, omitted: 0, omittedTypes: {} },
+    };
+  };
+  const result = await sdk.run(auto);
+  assert.equal(captures, 0);
+  assert.deepEqual(
+    result.objects.map((o) => o.id),
+    ['keep', 'new'],
+  );
+  assert.equal(result.sourceDocument.revision, 7);
+  assert.ok(updates.some((u) => u.appliedDirectly && u.executions?.[0]?.undoId === 'undo-1'));
 });

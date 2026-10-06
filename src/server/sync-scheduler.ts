@@ -267,7 +267,13 @@ export class SyncScheduler {
     const first = !last && seen === undefined;
     const changed = seen !== undefined && generation > seen;
     // Opened again while the engine had not seen it: a Live file catches up once.
-    const reopened = seen === undefined && !!last && !!document.live;
+    const oldSource = last?.result?.sourceDocument as
+      | { instance?: string; documentId?: number }
+      | undefined;
+    const newSession =
+      !!oldSource &&
+      (oldSource.instance !== document.instance || oldSource.documentId !== document.id);
+    const reopened = seen === undefined && !!last && (!!document.live || newSession);
     const retrying = state.retryAt !== undefined;
     if (changed && retrying) {
       // Changed again while retrying: count from 0 and Sync now.
@@ -387,6 +393,9 @@ export class SyncScheduler {
         last &&
         // ZWCAD too (T-128): its Syncs carry a revision only when the plugin reports changes.
         basis?.displayOnly === true &&
+        (basis.sourceDocument as { instance?: string; documentId?: number })?.instance ===
+          document.instance &&
+        (basis.sourceDocument as { documentId?: number })?.documentId === document.id &&
         typeof revision === 'number'
       ) {
         action = 'live';

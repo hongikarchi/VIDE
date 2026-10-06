@@ -2,8 +2,8 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.87
-updated: 2026-10-06
+version: 0.88
+updated: 2026-10-07
 owner: agent:codex
 related: [ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35, PLAN-36, ADR-039, PLAN-38, PLAN-39]
 ---
@@ -566,6 +566,7 @@ Roslyn/호스트 런타임 버전 충돌·첫 컴파일 지연·반복 실행 �
 - **보호 카드의 [진행]:** 여러 파일 요청이거나 보류한 실행이 대상 밖 문서에 있으면 다시 실행하기 전에 `documentHolder`로 그 문서를 검사하고, 잡혀 있으면 실행하지 않고 `needs-confirmation`에 `refused: {code: DOCUMENT_LOCKED, reason, file}`을 남긴다. 다시 실행한 행은 보류 행의 `file`을 이어받는다. 여러 파일 요청의 재실행이 실패하면(`ok: false`, 답 유실, `reverted: false`) `Execution.rollBackConfirmed`가 위 자동 되돌림과 같은 규칙으로 적용된 행을 되돌리고 `rollback: {reason: 'failed', …}`을 남긴다. 답을 잃은 그 문서는 건너뛰고 `documents[]`에 `pending: 'execute'`로 남는다. 한 파일 요청의 [진행]은 그대로다.
 - **실행 기록:** 모든 행에 `file: {linkId?, name}`을 싣는다. 실행 전 거절의 `final`(읽기 전용 문서·연결 끊김)은 그 문서에만 적용한다. 응답을 잃은 실행은 지금처럼 그 턴의 다음 실행을 모두 막는다.
 - **여러 파일 요청:** 실행을 시도한 문서가 둘 이상인 요청(`multiFile: true`, 호스트의 실행 전 거절·잠금 거절된 시도도 센다). 요청이 오류·중단(중단은 공급자의 코드가 아니라 요청의 중단 신호로 판단해 `CANCELLED`·`STOP_UNCONFIRMED` 모두 `reason: 'cancelled'`, 추가 지시로 끊긴 경우 제외)으로 끝나면 `runDirectTurn`이 적용된 실행(`state: applied`, `undoId` 있음)을 마지막 것부터 문서별 `direct-undo`로 되돌린다. 한 문서에서 거절되면 그 문서의 더 앞 실행은 건너뛰고(마지막 기록이 아니므로) 다른 문서는 계속한다. 응답을 잃은 실행이 있는 문서는 되돌리지 않는다. 턴이 끝날 때 답을 기다리던 `execute`의 문서도 응답을 잃은 것으로 본다(한 파일 턴의 대상은 지금처럼 `documents: []`). 턴이 끝난 뒤 온 도구 답은 요청 결과·상태에 쓰지 않는다. 결과의 `rollback: {at, reason: 'failed' | 'cancelled', files: [{host, target, linkId?, name, state: 'undone' | 'refused' | 'unknown', undone, kept, reason?}]}`에 남기고(파일은 요청이 처음 쓴 순서, 공통 함수 `undoExecutions`) 행을 `undone`으로 바꾼다. 결과 불명이면 결과의 `documents[]`에는 확인이 필요한 문서를 잃은 답의 종류(`pending: 'execute' | 'undo'`)와 함께 남긴다. 여러 파일 요청이 그런 문서를 모두 알면 `heldOnly: true`를 두고, `claimsOf`(`src/contracts/request-scope.ts`)는 그 요청의 입력 대상을 빼고 이 문서들만 쓰기 주장으로 센다. `heldOnly`가 없는 결과 불명(한 파일 요청, 재시작으로 `unknown`이 된 요청)은 지금처럼 대상도 주장한다. 자동 되돌림의 되돌리기 답만 잃었으면 `settles: {state: 'failed' | 'cancelled', code?}`(모두 해소되면 돌아갈 결과)를 둔다. 실행 전 거절은 결과의 `refused: {code, reason, file?}`(대상 밖 파일이면 이름)로 남고 실패·중단한 요청에도 남는다. 거절이 있으면 요청 코드는 원래 코드 그대로(화면이 `rollback`을 보임), 되돌리기 답을 잃으면 요청은 `unknown`(`HOST_RESULT_UNKNOWN`)이다.
+- **Undo 화면 응답:** 실행별·작업별 Undo에 `?view=summary`를 지정하면 `request`는 기존 요청 요약과 같은 형상 제외 형식이다. 생략 시 기존 전체 응답을 유지한다. UI는 요약을 요청하고 후속 상태를 조회한다.
 - **작업 단위 되돌리기:** `POST …/requests/:rid/undo {all: true}`는 그 요청의 적용된 행을 마지막 것부터 위 규칙으로 되돌리고 `200 {ok, files: [{host, target, name, state, undone, kept, reason?}], request}`(모두 되돌렸을 때만 `ok: true`)를 돌려준다. 결과의 `undo: {at, files}`에 마지막 시도를 남긴다. 되돌리기 답을 잃은 문서가 있으면 요청을 `unknown`(`HOST_RESULT_UNKNOWN`)으로 두고 `documents[]`에 그 문서(`pending: 'undo'`), `heldOnly: true`, 앞 결과의 상태·코드·`documents`를 `settles`에 남긴다. 결과 불명 요청에서 다시 부르면 기존 `documents[]`를 지우지 않고 합치되, 호스트가 이번에 답한 문서(`undone`, `refused`의 `not-latest`)와 적용된 행이 남지 않은 문서의 `pending: 'undo'`는 뺀다. 남은 문서가 없고 `heldOnly`·`settles`가 있으면 `settles`의 상태·코드·`documents`로 돌린다(`afterRequestUndo`, `src/server/direct-mode.ts`). `pending: 'execute'`는 되돌리기로 지우지 않는다. 진행 중 요청은 `REVISION_CONFLICT`, 결과 불명이 아닌데 되돌릴 행이 없으면 `{ok: true, already: true}`, 결과 불명인데 실행 행이 하나도 없으면 `acknowledge`와 같이 닫고 `{ok: true, files: [], request}`(T-102). 한 파일 요청의 실행별 `{executionId}`는 그대로다.
 
 ### VIDE 소유 작업 실행본과 사본 분기

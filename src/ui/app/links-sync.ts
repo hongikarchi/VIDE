@@ -350,7 +350,13 @@ export async function syncLink(link: LinkRow, full = false) {
     if (!draftState.state.messages.some((entry) => entry.id === request.id))
       draftState.state.messages.push(requestMessage(request));
     if (request.result?.hostExecuted) {
-      link.lastSync = { requestId: request.id, at: request.createdAt ?? new Date().toISOString() };
+      // Polling replaces LinkRow objects while a long capture is running.
+      const current = linksState.links.find((entry) => entry.id === link.id);
+      if (current)
+        current.lastSync = {
+          requestId: request.id,
+          at: request.createdAt ?? new Date().toISOString(),
+        };
       layerOverride.delete(link.id);
       linkNotes.delete(link.id);
       viewportEmpty.sync('idle');
@@ -449,6 +455,7 @@ export async function pollLinks() {
           await api(`/projects/${projectId}/requests/${id}?view=summary`),
         );
         if (draftState.state.messages.some((entry) => entry.id === id)) continue;
+        if (sessionState.project?.id !== projectId) return;
         draftState.state.messages.push(fetched);
       }
     }
@@ -526,15 +533,18 @@ export const loadingResults = new Map<string, Promise<void>>();
 export function loadFullResult(id: string): Promise<void> {
   const pending = loadingResults.get(id);
   if (pending || !sessionState.project) return pending ?? Promise.resolve();
+  const projectId = sessionState.project.id;
   viewportEmpty.sync('loading');
   const loading = (async () => {
     try {
       // The fetch carries at least the display revision listed now (Live Syncs merge after it).
       const revision = listedRevision(id);
-      const full = requestMessage(await api(`/projects/${currentProject().id}/requests/${id}`));
+      const full = requestMessage(await api(`/projects/${projectId}/requests/${id}`));
+      if (sessionState.project?.id !== projectId) return;
       if (revision !== undefined) heldRevision.set(id, revision);
       const index = draftState.state.messages.findIndex((entry) => entry.id === id);
       if (index >= 0) draftState.state.messages[index] = full;
+      linksState.liveRefresh = id;
       viewportEmpty.sync('idle');
       renderMessages();
     } catch (error) {

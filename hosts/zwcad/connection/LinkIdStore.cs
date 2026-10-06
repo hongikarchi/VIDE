@@ -41,7 +41,7 @@ namespace Vide.Zwcad.Connection
 
         internal static string Read(Document doc, string projectId)
         {
-            using (doc.LockDocument())
+            using (doc.LockDocument(DocumentLockMode.Read, null, null, false))
             using (var tx = doc.Database.TransactionManager.StartTransaction())
             {
                 var nod = (DBDictionary)tx.GetObject(doc.Database.NamedObjectsDictionaryId, OpenMode.ForRead);

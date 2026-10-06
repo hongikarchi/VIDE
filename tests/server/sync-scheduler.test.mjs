@@ -228,3 +228,28 @@ test('a work copy VIDE opened gets its first Sync once; later changes wait for â
   }
   assert.deepEqual(calls, [instance]);
 });
+
+test('a reconnected non-live file gets a full Sync instead of its old session display', async (t) => {
+  const s = setup(t);
+  s.document.live = false;
+  s.workspace.submit(
+    s.project.id,
+    captureInput({ id: 'old-session', instance, documentId: 7, linkId: s.link.id }),
+  );
+  s.workspace.update(s.project.id, 'old-session', 'succeeded', {
+    hostExecuted: true,
+    displayOnly: true,
+    host: 'rhino',
+    objects: [],
+    scene: [],
+    sourceDocument: {
+      instance: 'old:session',
+      documentId: 7,
+      revision: 30,
+      connection: 'attached-editor',
+    },
+  });
+  await s.tick();
+  await s.tick();
+  assert.deepEqual(s.calls, ['full']);
+});
