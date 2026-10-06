@@ -35,6 +35,16 @@ export const BUNDLE_EXCLUDED =
 export const DUMP_NOTE =
   '충돌 덤프 포함 — 수백 MB이고 작업 엔진의 메모리 내용(열려 있던 요청 글·모델 일부)이 들어 있을 수 있습니다.';
 
+/**
+ * Project conversation records (ADR-037 4, SPEC-04.12): not part of the reports above, but the
+ * same notice page says what of a project's conversations goes to the account site.
+ */
+export const CONVERSATION_SHARING = [
+  '오류·성능 보고와 별개로, 계정에 로그인한 PC는 프로젝트마다 "할 일·대화 기록을 사이트에 올리기"가 켜져 있으면(기본 켜짐) 호스트 문서 없이 한 대화의 요청 글·AI 답 전문·활동 줄·실행 코드·파일 이름을 VIDE 계정 사이트에 올립니다. 그 프로젝트 구성원이 사이트와 자기 VIDE에서 읽습니다.',
+  'Rhino·ZWCAD 문서를 쓰거나 읽은 모델링 대화의 전문, 모델·도면, 첨부 파일 내용, 핀·스케치 좌표는 올리지 않습니다. 모델링 요청은 요청 글·답의 첫 줄·상태·시각·파일 이름의 요약만 PC 없이 보기 화면에 올라갑니다.',
+  '스위치를 끄거나 PC에서 프로젝트를 지우면 그 PC가 올린 그 프로젝트의 대화 기록을 사이트에서 지우고 더 올리지 않습니다.',
+  'Cloudflare(미국 등 해외 데이터센터 포함)에 보관됩니다.',
+];
 /** The site's notice page sections (draft). */
 export const PRIVACY_SECTIONS: { title: string; body: string[] }[] = [
   {
@@ -68,6 +78,7 @@ export const PRIVACY_SECTIONS: { title: string; body: string[] }[] = [
       '이미 보낸 요약의 삭제를 원하면 설정에 보이는 설치 번호와 함께 VIDE 관리자에게 알려 주세요.',
     ],
   },
+  { title: '프로젝트 대화 기록', body: CONVERSATION_SHARING },
 ];
 export const PRIVACY_DRAFT_NOTE =
   '초안입니다. 많은 사용자에게 배포하기 전에 법률 검토를 받을 예정입니다.';

@@ -16,6 +16,7 @@ import {
 } from './telemetry';
 import { noteSocket, notesRoute } from './notes';
 import { sharedLayerRoute } from './shared-layer';
+import { conversationsRoute } from './conversations';
 
 export { NoteRoom } from './note-room';
 
@@ -160,6 +161,8 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
       );
     if (path[1] === 'projects' && path[2] && path[3] === 'notes')
       return await notesRoute(request, env, actor.id, path[2], path.slice(4));
+    if (path[1] === 'projects' && path[2] && path[3] === 'conversations')
+      return await conversationsRoute(request, env, actor.id, path[2], path.slice(4));
     if (
       path[1] === 'projects' &&
       path[2] &&

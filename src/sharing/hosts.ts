@@ -6,6 +6,7 @@ import { offlineDeviceRoute, pendingQueue } from './offline';
 import { pendingAgendaEdits, summaryDeviceRoute } from './summary';
 import { notesRoute } from './notes';
 import { memberProjects, memberView, sharedLayerRoute } from './shared-layer';
+import { conversationsDeviceRoute } from './conversations';
 
 // Work PCs: a desktop VIDE (with Rhino/CAD attached) signs in once with the account's ID and
 // password and receives a host key. It then reports by heartbeat that it is on, its local address
@@ -267,6 +268,9 @@ export async function hostDeviceRoute(
   // Shared notes as the PC's account (SPEC-10): list, open, journal append and live tickets.
   if (path[0] === 'projects' && path[1] && path[2] === 'notes')
     return notesRoute(request, env, row.user_id, projectId(path[1]), path.slice(3));
+  // Conversation records this PC ran (ADR-037 4, PLAN-36): upload, remove, read the others'.
+  if (path[0] === 'projects' && path[1] && path[2] === 'conversations' && path.length === 3)
+    return conversationsDeviceRoute(request, env, row, path[1]);
   const offlineReply =
     (await offlineDeviceRoute(request, env, row, path)) ??
     (await summaryDeviceRoute(request, env, row, path));

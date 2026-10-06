@@ -5,7 +5,7 @@ status: review
 version: 0.86
 updated: 2026-10-06
 owner: agent:codex
-related: [ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35]
+related: [ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35, PLAN-36]
 ---
 
 # VIDE 기술 구조와 구현 계약
@@ -869,12 +869,13 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 | PC `<데이터>/projects/<id>/project.sqlite` | 요청·결과·Sync 표시 형상·대화·jig·검토본·할 일·자료 검토(`knowledge_reviews`·`knowledge_source_rules`) | 요청·형상·대화는 원본. 자료 검토·규칙은 로그인한 PC에서 사이트의 사본 | §5, ARCH-03 §10.2 |
 | PC `<데이터>/projects/<id>/knowledge.sqlite` | 정리된 자료 DB(진술·발췌·출처 경로·이슈·현황 요약) | 수집한 PC는 원본(크롤러 결과), 다른 PC는 사이트에서 받은 사본(`meta.vide_copy`) | 「팀 공유 프로젝트 층」 |
 | PC `<데이터>/projects/<id>/notes/` | 공유 노트의 Markdown·Yjs 복제본·보내지 못한 편집 | 사본(원본은 사이트) | 「공유 노트」 |
+| PC `<데이터>/projects/<id>/history/` | 다른 구성원의 공유 대화 기록(대화마다 Markdown, README, `.data/mirror.json`) | 사본(원본은 그 대화를 돌린 PC, 사이트를 거침) | 「대화 기록 공유」 |
 | PC `<데이터>/ai-instructions/<id>.json` | 프로젝트 AI 지시 | 사본(원본은 사이트; 로그인 전에는 이 PC가 원본) | 「팀 공유 프로젝트 층」 |
 | PC `<데이터>/shared-layer/` | 공유받은 프로젝트 목록 사본(`projects.json`), 프로젝트별 자료 묶음 판·검토 보낼 상자(`<id>.json`) | 사본·대기열 | 「팀 공유 프로젝트 층」 |
 | PC `<데이터>/models/`·`cad-models/`·`sdk-models/`·`zwcad-sdk-models/` | 작업 사본·가져오기 사본·호스트 실행본 | 원본(사이트에 올리지 않음) | §4 |
 | PC `<데이터>/attachments/`·`reference-boards/`·`outputs/`·`structure/` | 첨부·참고 이미지 보드·산출물·구조 jig 설정 | 원본(올리지 않음) | §3, SPEC-09 |
 | PC 사용자 폴더 | 프로젝트 폴더·원본 도면·자료 원본 | 사용자 원본. VIDE는 경로만 기록 | SPEC-01.13, SPEC-08.4 |
-| PC 설정·키 | `remote-host.json`(PC 호스트 키), `local-session.key`, `typesafe.env`(Jev 키), `*-settings.json`(질문·웹·경로·사용량), `cli-profiles/`, `desktop.json`, `offline-view.json`, `removed-projects.json`, `launch.json` | PC 전용(올리지 않음) | 「PC 프로그램」 |
+| PC 설정·키 | `remote-host.json`(PC 호스트 키), `local-session.key`, `typesafe.env`(Jev 키), `*-settings.json`(질문·웹·경로·사용량), `cli-profiles/`, `desktop.json`, `offline-view.json`, `conversation-mirror.json`(올린 대화 기록 지문), `removed-projects.json`, `launch.json` | PC 전용(올리지 않음) | 「PC 프로그램」 |
 | PC 기록 | `logs/`(진단 기록), `crashdumps/`, 오류·성능 보고 보낼 상자 | PC 전용. 보고는 동의한 요약만 사이트로(ADR-036) | 「진단 기록」·「오류·성능 보고」 |
 | PC 창·도구 | `webview/`·`webview-zwcad/`(WebView2 저장소), `plugins/`, `bin/`, `tools/` | PC 전용 | 「PC 프로그램」 |
 | 사이트 D1 계정 | `user`·`session`·`account`·`verification`·`rateLimit`(0001), 아이디 계정(0006) | 원본 | 「로그인·프로젝트 공유 계약」 |
@@ -884,7 +885,7 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 | 사이트 D1 PC 없이 보기 | `project_snapshots`(저장본 정보)·`queued_requests`(0007), `project_agenda`·`agenda_edits`·`project_history`(이력 요약)·`project_summaries`(0009) | 할 일·이력 요약은 PC 원본의 사본, 사이트 변경 대기열은 원본 | SPEC-04.9·04.10 |
 | 사이트 D1 노트 | `notes`(Markdown 사본, 0008) | 사본(본문 정본은 DO) | 「공유 노트」 |
 | 사이트 D1 팀 공유 층 | `project_instructions`·`knowledge_sets`·`knowledge_rows`·`knowledge_reviews`·`knowledge_rules`(0011) | 지시·검토·규칙은 원본, 자료 묶음은 수집 PC가 올린 원본 | 「팀 공유 프로젝트 층」 |
-| 사이트 D1 대화 사본 | 요청·답·대화 전문의 글 사본(0012, PLAN-36) | PC 원본의 사본 | PLAN-36 |
+| 사이트 D1 대화 사본 | `shared_conversations`·`shared_requests`·`shared_request_chunks`(0012): 호스트 문서 없는 요청의 요청 글·답 전문·활동 줄·실행 코드·파일 이름과 대화 제목·종류·모델 이름. 모델링 요청은 올리지 않음 | 그 작업을 돌린 PC 원본의 사본(PC는 자기 행만 바꾸고 지움) | 「대화 기록 공유」, SPEC-04.12 |
 | 사이트 D1 보고 | `telemetry_reports`·`telemetry_limits`·`telemetry_bundles`(0010) | 원본(동의한 요약) | 「오류·성능 보고」 |
 | 사이트 R2 | 게시본 파일, PC 없이 보기 저장본(`snapshots/<project>/<link>`, 상한 5 GB), 진단 묶음(스위치) | 게시본은 원본, 저장본은 PC Sync의 보기 전용 사본 | SPEC-04, PLAN-20, ADR-036 |
 | 사이트 Durable Object | `NoteRoom`의 Yjs 갱신(노트 본문) | 원본 | 「공유 노트」 |
@@ -905,6 +906,16 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 - **자료 묶음**: 수집 PC 판단 = 자료 DB가 있고 `meta.vide_copy`가 없음. 지문 = 파일 크기·수정 시각(`-wal` 포함). 다르면 begin → 표마다 200행씩(발췌는 진술이 가리키는 것만, 글 20,000자; 출처는 그 발췌의 것만) → commit(`counts {files, mails, excerpts}`). 다른 PC는 사이트 `revision`이 사본의 `meta.vide_copy`와 다르면 표를 모두 받아 `knowledge.sqlite.copy`에 같은 열의 표·`excerpt_fts`(trigram)·`run(started = builtAt)`·`meta.vide_counts`를 만들고 이름을 바꿔 덮는다. `knowledgeSummary`는 `meta.vide_counts`가 있으면 그 수를 쓴다. 이 PC에 프로젝트가 있을 때만 받는다.
 - **검토·규칙**: `facts-routes.ts`의 기록 뒤 `onReviewChange`가 `<데이터>/shared-layer/<id>.json`의 보낼 상자에 쌓고, 맞출 때 보낸 뒤 받은 행을 `KnowledgeReviewStore`에 적고(보낼 상자에 남은 것은 다시 적용) `since`를 둔다.
 - **화면**: `src/ui/project-heading.tsx`의 `<optgroup label="공유받은 프로젝트">`. `?project=<id>`가 공유받은 프로젝트면 `src/ui/gateway.ts` `connect()`가 `remote`를 돌려주고 `src/ui/app/boot.ts`가 작업 화면 대신 `src/ui/remote-project.tsx`를 띄운다. 사이트 `offline.tsx`의 PC 없이 보기 화면에 AI 지시 칸.
+### 대화 기록 공유(ADR-037 4, SPEC-04.12, PLAN-36)
+
+요청·답·대화의 원본은 그 작업을 돌린 PC(프로젝트별 DB의 `workspace_requests`·`conversations`, ADR-032)이고 사이트는 글 사본이다. 호스트 문서 없는 요청만 올린다(2026-10-06 사용자 조정). 공통 코드: `src/contracts/conversation-mirror.ts`(올릴지 판정 `shareableRequest`, 요청 문서 `mirrorDocSchema` = `{body, answer, activity[{at,kind,text,detail?}], executions[{label,state,at,file,language,code}], files[]}`, 나누기 `chunkText`(100,000자, 서로게이트 쌍은 나누지 않음), AI용 Markdown `mirrorMarkdown`). 판정: `input.hostUse==='none'`이고 `source`가 document·file이 아니며 `provider`가 extension이 아니고 `jig`·`sourceDocument`·`linkId`·`baseRequestId`·`linkedTargets`·`applyToSource`·`parentRequestId`가 없고, 결과에 `executions`·`sourceDocument`·`baseRequestId`·`hostExecuted`가 없을 때만.
+
+- **D1** `0012-shared-conversations.sql`: `shared_conversations(project_id → projects ON DELETE CASCADE, origin_host, id, origin_user, title, kind, provider, model, created_at, updated_at, stored_at; PK(project_id, origin_host, id))`(기본 대화는 id `default`), `shared_requests(project_id → projects, id, origin_host, origin_user, conversation_id, state, created_at, ended_at, files JSON, preview(요청 글 300자), revision, chunks, size, stored_at; PK(project_id, id))`, 색인 `(project_id, origin_host, conversation_id, created_at)`·`(project_id, stored_at)`, `shared_request_chunks(project_id, request_id, seq, text; PK 셋)`. 요청 문서(JSON 글)를 조각으로 나눠 두고 읽을 때 이어 붙인다(D1 행 2 MB 아래, 자르지 않음). `0011`은 PLAN-35(ADR-037 1~3)가 쓴다.
+- **PC 경로**(host key, 구성원 확인 `membership`): `PUT /api/hosts/device/projects/:id/conversations {conversations[], requests[{id, conversationId, state, createdAt, endedAt, revision, doc}], removed?[]}`(본문 24 MB·요청 200개까지; `doc`은 문서 스키마의 필드만 남겨 다시 직렬화; 다른 PC의 요청 id와 겹치면 409 `REQUEST_CONFLICT`; 요청이 남지 않은 이전 대화 행은 지움), `DELETE …/conversations`(이 PC의 행만 삭제), `GET …/conversations?since=<ms>`(다른 PC의 대화 목록·요청 메타 전부, `stored_at > since`인 요청만 문서 포함, `at`).
+- **브라우저 경로**(구성원 모두, 아니면 404): `GET /api/projects/:id/conversations[?q=]`(대화 목록 `{id,title,kind,provider,model,createdAt,updatedAt,originHost,originName,originPc,requests,lastAt}`; `q`는 조각 글·대화 제목 LIKE, `matches` 200개), `GET …/conversations/:originHost/:conversationId`(요청마다 메타+문서). 조각 경계에 걸친 말은 찾지 못할 수 있다.
+- **로컬**(`src/server/conversation-mirror.ts`, `offline-view.ts`가 부름): `conversation-mirror.json`에 프로젝트별 보낸 요청의 지문(상태|입력 길이|결과 길이), 대화 지문(제목|종류|updatedAt), revision, 시각·오류, `removing`. heartbeat 뒤 `summary` 스위치가 켜진 프로젝트마다 1분에 한 번까지 비교해 바뀐 요청만 약 1 MB·8개 묶음으로 올리고(호출 한 번이 D1 무료 요금의 Worker 호출당 쿼리 50개 근처에 머물게) 묶음마다 기록한다(재시작 이어 올리기). 지운 요청(`hidden_requests`)·더는 해당하지 않는 요청은 `removed`. 스위치 끄기·프로젝트 삭제는 `DELETE`(실패하면 `removing`으로 남겨 heartbeat마다 다시). 다른 구성원의 기록은 `GET`으로 받아 데이터 폴더 `projects/<id>/history/`에 `<originHost 앞 8자>-<대화 id>.md`, `README.md`, `.data/mirror.json`(다음 읽기의 `since`와 문서)으로 쓴다. 노트 사본과 같이 10분마다(그리고 작업 이력 화면이 열릴 때) 새로 고친다. AI 턴의 규칙(`workFolderRule`)이 이 폴더를 기록 폴더 안의 읽기 전용 자료로 알린다. 로컬 API: `GET /api/v1/projects/:id/shared-conversations`(`{online, error?, conversations}`; 사이트에 닿지 않으면 사본), `GET …/shared-conversations/:originHost/:conversationId`(사본의 대화 전문).
+- **화면**: `src/ui/conversation-mirror/mirror-thread.tsx`(목록·대화 전문, 사이트·VIDE·원격 프로젝트 화면 공용), VIDE 작업 이력의 `src/ui/shared-history.tsx`, 사이트 `src/sharing/web/conversations.tsx`(`/?conversations=<id>&c=<host>:<conversation>&r=<request>`).
+- **PC 없이 보기 요약(`0009`)과의 관계**: 요약은 바꾸지 않는다. 모델링 요청까지 포함한 최근 50개 요약은 그대로 `project_history`에 올리고, 전문은 위 표들이 따로 둔다.
 
 ### PC 프로그램
 

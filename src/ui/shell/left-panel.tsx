@@ -7,6 +7,8 @@
 import { memo } from 'react';
 import { useStore } from '../store/core.ts';
 import { layoutState, selectSection, type HistoryRow, type Section } from '../store/layout.ts';
+import { sessionState } from '../store/session.ts';
+import { SharedHistory } from '../shared-history.tsx';
 
 const SECTIONS: [Section, string][] = [
   ['document-tree', '작업 문서'],
@@ -88,16 +90,23 @@ function HistoryRowView({ row }: { row: HistoryRow }) {
   );
 }
 
-/** Work history: every request, newest first, with its state; opens it in the conversation. */
+/**
+ * Work history: every request, newest first, with its state; opens it in the conversation. Below
+ * it, other members' shared conversations (PLAN-36), read-only.
+ */
 function TaskHistory() {
   const history = useStore(layoutState, (s) => s.history);
+  const projectId = useStore(sessionState, (s) => s.project?.id);
   return (
-    <div id="task-list">
-      {history.empty ? <small>아직 요청이 없습니다.</small> : null}
-      {history.rows.map((row) => (
-        <HistoryRowView key={row.id} row={row} />
-      ))}
-    </div>
+    <>
+      <div id="task-list">
+        {history.empty ? <small>아직 요청이 없습니다.</small> : null}
+        {history.rows.map((row) => (
+          <HistoryRowView key={row.id} row={row} />
+        ))}
+      </div>
+      <SharedHistory projectId={projectId} />
+    </>
   );
 }
 

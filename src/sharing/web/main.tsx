@@ -9,6 +9,7 @@ import { Review } from './review';
 import { OfflineProject } from './offline';
 import { Reports } from './reports';
 import { Privacy } from './privacy';
+import { ProjectConversations } from './conversations';
 // The block editor loads only when notes are opened.
 const ProjectNotes = lazy(() => import('./notes').then((m) => ({ default: m.ProjectNotes })));
 import './style.css';
@@ -32,6 +33,9 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
     ),
     [admin, setAdmin] = useState(false),
     [notesId, setNotesId] = useState(() => new URL(location.href).searchParams.get('notes') || ''),
+    [conversationsId, setConversationsId] = useState(
+      () => new URL(location.href).searchParams.get('conversations') || '',
+    ),
     [status, setStatus] = useState('');
   const { hosts, thisPc } = useHosts();
   const user = useRef(session.user.id);
@@ -78,6 +82,7 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
       setOfflineId(params.get('offline') || '');
       setReports(params.get('admin') === 'reports');
       setNotesId(params.get('notes') || '');
+      setConversationsId(params.get('conversations') || '');
     };
     window.addEventListener('popstate', back);
     return () => window.removeEventListener('popstate', back);
@@ -107,6 +112,17 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
   const offline = review ? undefined : projects?.find((project) => project.id === offlineId);
   const notesProject =
     review || offline ? undefined : projects?.find((project) => project.id === notesId);
+  const conversationsProject =
+    review || offline || notesProject
+      ? undefined
+      : projects?.find((project) => project.id === conversationsId);
+  const openConversations = (project: Project) => {
+    setReviewing('');
+    setOfflineId('');
+    setNotesId('');
+    setConversationsId(project.id);
+    history.pushState(null, '', '/?conversations=' + encodeURIComponent(project.id));
+  };
   return (
     <div className="site">
       <header className="topbar">
@@ -117,6 +133,7 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
             setOfflineId('');
             setReports(false);
             setNotesId('');
+            setConversationsId('');
             history.pushState(null, '', '/');
           }}
         >
@@ -126,6 +143,9 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
         {offline ? <span className="crumb">/ {offline.name} · PC 없이 보기</span> : null}
         {reports ? <span className="crumb">/ 오류·성능 보고</span> : null}
         {notesProject ? <span className="crumb">/ {notesProject.name} · 노트·일지</span> : null}
+        {conversationsProject ? (
+          <span className="crumb">/ {conversationsProject.name} · 대화 기록</span>
+        ) : null}
         <span className="spacer" />
         {admin && !reports ? (
           <button
@@ -170,6 +190,7 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
           project={offline}
           pcOnline={!!hosts?.find((host) => host.id === offline.host_id)?.online}
           notice={offlineNotice}
+          openConversations={() => openConversations(offline)}
           openNotes={(noteId) => {
             setOfflineId('');
             setNotesId(offline.id);
@@ -182,6 +203,8 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
             );
           }}
         />
+      ) : conversationsProject ? (
+        <ProjectConversations key={conversationsProject.id} project={conversationsProject} />
       ) : notesProject ? (
         <Suspense fallback={<p className="empty">불러오는 중…</p>}>
           <ProjectNotes key={notesProject.id} project={notesProject} user={displayName(session)} />
@@ -205,6 +228,7 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
             setNotesId(project.id);
             history.pushState(null, '', '/?notes=' + encodeURIComponent(project.id));
           }}
+          conversations={openConversations}
         />
       )}
     </div>

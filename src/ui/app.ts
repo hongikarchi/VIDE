@@ -13,6 +13,8 @@ import './request-scope.ts';
 import './draft-storage.ts';
 import './reference-check.ts';
 import './reference-check.css';
+// Shared conversation records (PLAN-36): in the main stylesheet, not a chunk of its own.
+import './conversation-mirror/mirror-thread.css';
 import 'zod';
 import '../contracts/workspace.ts';
 import '../contracts/link-requests.ts';

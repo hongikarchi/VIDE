@@ -42,8 +42,19 @@ interface Props {
    */
   offline: (project: Project, notice?: string) => void;
   notes: (project: Project) => void;
+  /** The project's shared conversation records (PLAN-36). */
+  conversations: (project: Project) => void;
 }
-export function Home({ projects, hosts, thisPc, refresh, review, offline, notes }: Props) {
+export function Home({
+  projects,
+  hosts,
+  thisPc,
+  refresh,
+  review,
+  offline,
+  notes,
+  conversations,
+}: Props) {
   const [creating, setCreating] = useState(false),
     [name, setName] = useState(''),
     [renaming, setRenaming] = useState(''),
@@ -287,6 +298,15 @@ export function Home({ projects, hosts, thisPc, refresh, review, offline, notes 
                     }}
                   >
                     노트·일지
+                  </button>
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setMenu('');
+                      conversations(project);
+                    }}
+                  >
+                    대화 기록
                   </button>
                   <button
                     role="menuitem"

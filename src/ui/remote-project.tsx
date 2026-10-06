@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
 import { api } from './gateway.ts';
+import { SharedHistory } from './shared-history.tsx';
 import './remote-project.css';
 
 // A shared project opened on this PC as a remote project (SPEC-04.11 3, Design SCR-24): the
@@ -291,6 +292,8 @@ function RemoteProject({
                 <p className="remote-muted">사이트에 올라간 작업 이력이 없습니다.</p>
               )}
             </section>
+            {/* Members' shared conversations (PLAN-36, SPEC-04.12), read-only; hidden when none. */}
+            <SharedHistory projectId={projectId} />
           </div>
           <div className="remote-column">
             <Instructions projectId={projectId} initial={view.instructions} />

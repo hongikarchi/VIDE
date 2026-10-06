@@ -70,6 +70,12 @@ export const offlineStatusSchema = z.object({
   summary: z.boolean().default(true),
   summaryAt: z.string().nullable().default(null),
   summaryError: z.string().nullable().default(null),
+  /** PLAN-36: the hostless conversations' text on the site (same switch). */
+  conversations: z
+    .object({ shared: z.number(), error: z.string().nullable() })
+    .passthrough()
+    .nullable()
+    .default(null),
   linked: z.boolean(),
   files: z.array(
     z.object({
@@ -223,6 +229,8 @@ function OfflineSwitch(props: Props) {
  * PLAN-33: the project opens on the account site while this PC is off, with its 할 일 (editable
  * there) and a summary of the work history (request, the answer's first lines, state, time, file
  * names; no model or attachments). On unless turned off; off removes them from the site.
+ * PLAN-36 (ADR-037 4): the same switch sends the full text of the hostless conversations (request,
+ * answer, activity, code, file names) for the members to read; modeling conversations stay here.
  */
 function SummarySwitch(props: Props) {
   const offline = props.offline;
@@ -230,16 +238,22 @@ function SummarySwitch(props: Props) {
   return (
     <label
       className="link-offline"
-      title="켜면 PC가 꺼져 있어도 계정 사이트에서 이 프로젝트를 열 수 있습니다: 할 일(사이트에서 고치면 PC가 켜질 때 반영)과 작업 이력 요약(요청 글·답의 첫 줄·상태·시각·파일 이름). 모델·첨부·AI 모델 이름은 올리지 않습니다. 끄면 사이트의 사본을 지웁니다."
+      title="켜면 PC가 꺼져 있어도 계정 사이트에서 이 프로젝트를 열 수 있습니다: 할 일(사이트에서 고치면 PC가 켜질 때 반영)과 작업 이력 요약(요청 글·답의 첫 줄·상태·시각·파일 이름). 호스트 문서 없이 한 대화는 요청·답 전문·활동·실행 코드·파일 이름까지 올려 구성원이 사이트와 자기 VIDE에서 읽습니다. 모델링 대화의 전문, 모델·첨부·핀 좌표는 올리지 않습니다. 끄면 사이트의 사본을 지웁니다."
     >
       <input
         type="checkbox"
         checked={offline.summary}
         onChange={(event) => props.onSummary(event.target.checked)}
       />
-      할 일·작업 이력 요약을 사이트에 올리기
+      할 일·대화 기록을 사이트에 올리기
       {offline.summary && offline.summaryError ? (
         <small>올리기 실패: {OFFLINE_ERRORS[offline.summaryError] ?? offline.summaryError}</small>
+      ) : null}
+      {offline.summary && !offline.summaryError && offline.conversations?.error ? (
+        <small>
+          대화 기록 올리기 실패:{' '}
+          {OFFLINE_ERRORS[offline.conversations.error] ?? offline.conversations.error}
+        </small>
       ) : null}
     </label>
   );

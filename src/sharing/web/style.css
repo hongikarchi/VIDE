@@ -952,3 +952,67 @@ button.ghost {
   overflow: auto;
   font-size: 12px;
 }
+/* Shared conversation records (PLAN-36, Design SCR-25). */
+.conversations-page {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: 20px;
+  padding: 16px 24px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+.conversations-side {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+.conversations-search {
+  display: flex;
+  gap: 6px;
+}
+.conversations-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.conversations-note {
+  margin: 0;
+  font-size: 12px;
+}
+.conversations-side h3 {
+  font-size: 13px;
+  margin: 4px 0;
+}
+.conversations-matches {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.conversations-matches button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  padding: 6px 8px;
+}
+.conversations-matches strong {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conversations-main {
+  min-width: 0;
+}
+@media (max-width: 760px) {
+  .conversations-page {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px 16px;
+  }
+}

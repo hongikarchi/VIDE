@@ -8,6 +8,7 @@ import type { Workspace } from '../core/workspace.ts';
 import { buildSnapshot, packSnapshot, type SyncResult } from './offline-snapshot.ts';
 import type { AgendaEdit, AgendaEditResult, QueuedRequest, RemoteAccess } from './remote-access.ts';
 import { agendaShare, applyAgendaEdit, historySummary } from './offline-summary.ts';
+import type { ConversationMirror } from './conversation-mirror.ts';
 
 // Offline view and request queue (PLAN-20). Per project, the owner may let this PC keep a
 // view-only snapshot of each linked file on the account site, so the model can be looked at while
@@ -18,6 +19,9 @@ import { agendaShare, applyAgendaEdit, historySummary } from './offline-summary.
 // 할 일 and a summary of its work history with the site, so the project opens there while the PC
 // is off, unless the owner turned that off for the project. 할 일 edits made on the site come back
 // with the heartbeat and are applied here (offline-summary.ts).
+//
+// PLAN-36 (ADR-037 4): the same switch ("할 일·대화 기록을 사이트에 올리기") also sends the full text
+// of the project's hostless conversations (conversation-mirror.ts); turning it off removes them.
 const MIN_INTERVAL_MS = 10 * 60_000;
 /** A failed summary upload is tried again after this; the history at most this often too. */
 const SUMMARY_RETRY_MS = 60_000;
@@ -91,6 +95,8 @@ interface Options {
     'uploadSnapshot' | 'deleteSnapshot' | 'uploadSummary' | 'deleteSummary' | 'hostId'
   >;
   agenda?: Agenda;
+  /** Conversation records on the site (PLAN-36); absent in tests that do not use them. */
+  mirror?: ConversationMirror;
   now?: () => number;
 }
 
@@ -168,6 +174,7 @@ export class OfflineView {
       summary: this.summaryOn(projectId),
       summaryAt: shared?.at ? new Date(shared.at).toISOString() : null,
       summaryError: shared?.error?.code ?? null,
+      conversations: (await this.options.mirror?.status(projectId)) ?? null,
       linked: !!this.options.remote.hostId,
       files: this.options.links
         .list(projectId)
@@ -211,6 +218,8 @@ export class OfflineView {
       if (!on) {
         await this.options.remote.deleteSummary(projectId);
         delete this.state.summaries[projectId];
+        // The conversation text leaves the site too (retried until the site confirms).
+        await this.options.mirror?.remove(projectId);
       }
       await this.save();
       if (on) void this.tick(true);
@@ -242,6 +251,8 @@ export class OfflineView {
       await this.load();
       delete this.state.projects[projectId];
       delete this.state.summaries[projectId];
+      // Its conversation text leaves the site too (retried with the heartbeat until it answers).
+      await this.options.mirror?.remove(projectId).catch(() => undefined);
       for (const [linkId, uploaded] of Object.entries(this.state.uploaded))
         if (uploaded.projectId === projectId) {
           await this.options.remote.deleteSnapshot(projectId, linkId).catch(() => undefined);
@@ -272,10 +283,14 @@ export class OfflineView {
   private async run(force: boolean) {
     await this.load();
     // 할 일 and history summaries first: small, and they do not depend on the snapshot switch.
+    const mirror = this.options.mirror;
+    if (mirror) await this.serial(() => mirror.pendingRemovals());
     for (const project of this.options.store.listProjects()) {
       if (this.closed) return;
       if (!this.summaryOn(project.id)) continue;
       await this.serial(() => this.share(project.id, force));
+      // The hostless conversations' text (PLAN-36): what changed since the last upload.
+      if (mirror && !this.closed) await this.serial(() => mirror.upload(project.id, force));
     }
     for (const [projectId, setting] of Object.entries(this.state.projects)) {
       if (!setting.enabled) continue;

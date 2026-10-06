@@ -451,6 +451,7 @@ export function OfflineProject({
   pcOnline,
   notice,
   openNotes,
+  openConversations,
 }: {
   project: Project;
   pcOnline: boolean;
@@ -458,6 +459,8 @@ export function OfflineProject({
   notice?: string;
   /** Opens the project's 노트·일지 page (one note when given). */
   openNotes?: (noteId?: string) => void;
+  /** Opens the project's shared conversation records (PLAN-36). */
+  openConversations?: () => void;
 }) {
   const [files, setFiles] = useState<SnapshotInfo[] | null>(null),
     [chosen, setChosen] = useState(''),
@@ -549,7 +552,7 @@ export function OfflineProject({
         ) : null}
         <div className="offline-summary">
           <OfflineAgenda projectId={project.id} />
-          <OfflineHistory projectId={project.id} />
+          <OfflineHistory projectId={project.id} openConversations={openConversations} />
         </div>
         <OfflineNotes projectId={project.id} open={openNotes} />
         <OfflineInstructions projectId={project.id} />

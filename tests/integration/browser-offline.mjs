@@ -1,10 +1,12 @@
 // PLAN-20 in the VIDE window: the per-project switch for the saved view on the account site and
 // the inbox of requests left there ("작성기로" puts the text in the composer; nothing is sent).
 // PLAN-33: the switch for 할 일 and the work history summary on the site (on by default).
+// PLAN-36: another member's shared conversation in 작업 이력, read-only, from the engine's copy.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
 import { DocumentLinks } from '../../src/core/document-links.ts';
@@ -85,7 +87,7 @@ try {
   await toggle.check();
   await panel.getByText('1개 저장 · 2.2 MB').waitFor();
   // PLAN-33: 할 일 and the history summary go to the site unless turned off for the project.
-  const summary = panel.getByLabel('할 일·작업 이력 요약을 사이트에 올리기');
+  const summary = panel.getByLabel('할 일·대화 기록을 사이트에 올리기');
   assert.equal(await summary.isChecked(), true);
   await summary.uncheck();
   assert.equal(await summary.isChecked(), false);
@@ -98,7 +100,69 @@ try {
   assert.equal(calls.filter((call) => call === 'PUT ').length, 2, calls.join(','));
   assert.equal(status.summary, false);
   assert.ok(calls.some((call) => call.endsWith('/dismiss')));
+
+  // PLAN-36: bob's conversation (his PC ran it) as the engine copied it from the site; this PC is
+  // not linked in the test, so the list comes from the copy with '사이트 연결 안 됨'.
+  const now = new Date().toISOString();
+  const copyDir = join(directory, 'projects', projectId, 'history', '.data');
+  await mkdir(copyDir, { recursive: true });
+  await writeFile(
+    join(copyDir, 'mirror.json'),
+    JSON.stringify({
+      since: 1,
+      at: 1,
+      conversations: [
+        {
+          id: 'c-9',
+          title: '자재 검토',
+          kind: 'session',
+          provider: 'codex-cli',
+          model: null,
+          createdAt: now,
+          updatedAt: now,
+          originHost: 'host-b-123456',
+          originName: 'bob',
+          originPc: 'Bob PC',
+          requests: 1,
+          lastAt: now,
+        },
+      ],
+      requests: {
+        'o-1': {
+          id: 'o-1',
+          conversationId: 'c-9',
+          originHost: 'host-b-123456',
+          state: 'succeeded',
+          createdAt: now,
+          endedAt: null,
+          revision: 1,
+          storedAt: 1,
+          doc: {
+            body: '마감재 단가 비교해줘',
+            answer: '석재가 가장 비쌉니다.',
+            activity: [{ at: now, kind: 'execute', text: 'Bash', detail: 'Import-Csv 단가표.csv' }],
+            executions: [],
+            files: ['단가표.xlsx'],
+          },
+        },
+      },
+    }),
+  );
+  await page.reload();
+  await page.getByRole('button', { name: '작업 이력', exact: true }).click();
+  const shared = page.locator('.shared-history');
+  await shared.getByText('다른 구성원의 대화').waitFor();
+  await shared.getByText('사이트 연결 안 됨').waitFor();
+  await shared.getByRole('button', { name: /자재 검토/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'bob · Bob PC의 대화 기록' });
+  await dialog.getByText('석재가 가장 비쌉니다.').waitFor();
+  await dialog.getByText('단가표.xlsx').waitFor();
+  await dialog.getByText(/활동 1줄/).click();
+  await dialog.getByText('Import-Csv 단가표.csv').waitFor();
+  assert.equal(await dialog.locator('textarea, input').count(), 0, 'read-only');
   if (process.env.VIDE_SHOT) await page.screenshot({ path: process.env.VIDE_SHOT });
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'detached' });
   assert.deepEqual(errors, []);
   console.log('Offline view panel checks passed');
 } finally {

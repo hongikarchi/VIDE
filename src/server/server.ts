@@ -11,6 +11,7 @@ import { applyAttachedCandidate } from './attached-application.ts';
 import { LiveSync } from './live-sync.ts';
 import { DEFAULT_SHARING_ORIGIN, RemoteAccess } from './remote-access.ts';
 import { OfflineView } from './offline-view.ts';
+import { ConversationMirror } from './conversation-mirror.ts';
 import { Connectors, type ConnectorOptions } from './connectors.ts';
 import { appVersion, defaultRhinoPlugin, defaultZwcadConnection } from './sdk-options.ts';
 import { gzip } from 'node:zlib';
@@ -381,9 +382,24 @@ export async function startServer({
     if (!sharedNotes || Date.now() - notesRefreshed < 10 * 60_000) return;
     notesRefreshed = Date.now();
     void (async () => {
-      for (const project of listProjects()) await sharedNotes.list(project.id).catch(() => {});
+      for (const project of listProjects()) {
+        await sharedNotes.list(project.id).catch(() => {});
+        // Other members' conversation records, copied for the AI (PLAN-36).
+        await conversationMirror?.refresh(project.id).catch(() => {});
+      }
     })();
   }
+  // Conversation records through the site (ADR-037 4, PLAN-36): this PC's hostless requests go up
+  // with the 할 일·대화 기록 switch; the other members' come back as a read-only copy.
+  const conversationMirror =
+    filename === ':memory:'
+      ? undefined
+      : new ConversationMirror({
+          directory: dirname(filename),
+          store,
+          links,
+          remote: remoteAccess,
+        });
   // Offline view and site request inbox (PLAN-20).
   const offlineView = new OfflineView({
     directory: filename === ':memory:' ? undefined : dirname(filename),
@@ -392,6 +408,7 @@ export async function startServer({
     links,
     remote: remoteAccess,
     agenda,
+    mirror: conversationMirror,
   });
   /**
    * Deletes a project on this PC, asked in the app or on the account site (SPEC-01.1): its rows,
@@ -1499,6 +1516,24 @@ export async function startServer({
           send(200, { ...routeSettings().get(), key: hasJevKey(dirname(filename)) });
           return;
         }
+      }
+      // Other members' conversation records (PLAN-36): the list for 작업 이력 and one thread.
+      const sharedList = /^\/api\/v1\/projects\/([^/]+)\/shared-conversations$/.exec(url.pathname);
+      const sharedThread =
+        /^\/api\/v1\/projects\/([^/]+)\/shared-conversations\/([A-Za-z0-9-]{1,64})\/([A-Za-z0-9-]{1,64})$/.exec(
+          url.pathname,
+        );
+      if ((sharedList || sharedThread) && request.method === 'GET') {
+        if (!conversationMirror) throw new DomainError('NOT_FOUND');
+        if (sharedList) {
+          send(200, await conversationMirror.list(sharedList[1]));
+          return;
+        }
+        send(
+          200,
+          await conversationMirror.thread(sharedThread![1], sharedThread![2], sharedThread![3]),
+        );
+        return;
       }
       // Offline view on the account site and requests left there (PLAN-20).
       const offline = /^\/api\/v1\/projects\/([^/]+)\/offline-view$/.exec(url.pathname);

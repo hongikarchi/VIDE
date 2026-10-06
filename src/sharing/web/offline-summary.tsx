@@ -220,7 +220,14 @@ export function OfflineAgenda({ projectId }: { projectId: string }) {
   );
 }
 
-export function OfflineHistory({ projectId }: { projectId: string }) {
+export function OfflineHistory({
+  projectId,
+  openConversations,
+}: {
+  projectId: string;
+  /** The full text of the hostless conversations (PLAN-36), on its own page. */
+  openConversations?: () => void;
+}) {
   const [data, setData] = useState<z.infer<typeof historySchema> | null>(null),
     [status, setStatus] = useState('');
   useEffect(() => {
@@ -236,6 +243,11 @@ export function OfflineHistory({ projectId }: { projectId: string }) {
         <h2>작업 이력</h2>
         {data?.sharedAt ? (
           <small className="muted">요약 · PC 기준 {when(data.sharedAt)} · 보기 전용</small>
+        ) : null}
+        {openConversations ? (
+          <button className="ghost" onClick={openConversations}>
+            대화 기록 전문
+          </button>
         ) : null}
       </div>
       {data && !data.sharedAt ? (

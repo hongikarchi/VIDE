@@ -147,6 +147,7 @@ export function workFolderRule(folders: WorkFolders, format: AgentFormat = 'clau
     (folders.records
       ? ` This project's own records are readable without a question at ${JSON.stringify(folders.records)} (project.sqlite; knowledge.sqlite): open them read-only and change nothing.` +
         ` The members' shared notes, 협의 사항 (meeting points) and daily 일지 (work journal) are copied there as Markdown in ${JSON.stringify(join(folders.records, 'notes'))} (README.md lists them; journal-YYYY-MM-DD.md is one day): read them with Read, Glob or Grep for what the team wrote or decided; they are the account site's, never write them.` +
+        ` Other members' VIDE work in this project (requests, answers, activity and code of their conversations without a host document; modeling conversations stay on their PC) is copied in ${JSON.stringify(join(folders.records, 'history'))} (README.md lists the conversations, one Markdown file each): read it when the user asks what someone else did or decided in VIDE; never write it.` +
         " Keys, logins and VIDE's other data are never read."
       : " Keys, logins and VIDE's own data are never read.") +
     (folders.attachments.length
