@@ -11,6 +11,7 @@ import {
   type LegalAnswerView,
 } from './legal-answer-card.tsx';
 import type { ClawdeChecklist, ClawdeStageId, ClawdeVerdict } from '../contracts/clawde.ts';
+import { LegalContribute } from './legal-contribute.tsx';
 import './legal-jig.css';
 
 // 법규 검토 jig (J-03, SPEC-13.2·13.3·13.5·13.6·13.7·13.9, Design SCR-29, PLAN-46 T-221·T-222): a
@@ -125,7 +126,7 @@ export function LegalJig({ projectId }: { projectId: string }) {
   const base = `/projects/${encodeURIComponent(projectId)}/legal`;
   const [profile, setProfile] = useState<ProfileView | null>(null);
   const [answers, setAnswers] = useState<AnswersView | null>(null);
-  const [view, setView] = useState<'answers' | 'checklist' | 'profile'>('answers');
+  const [view, setView] = useState<'answers' | 'checklist' | 'profile' | 'contribute'>('answers');
   const [question, setQuestion] = useState('');
   const [pending, setPending] = useState<Pending | null>(null);
   const [unsent, setUnsent] = useState<string[]>([]);
@@ -400,6 +401,7 @@ export function LegalJig({ projectId }: { projectId: string }) {
             ['answers', `답 ${answers?.answers.length ?? 0}`],
             ['checklist', '단계별 법령'],
             ['profile', '법규 프로필'],
+            ['contribute', 'cLAWde로 보내기'],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -521,6 +523,10 @@ export function LegalJig({ projectId }: { projectId: string }) {
 
       {view === 'profile' && profile ? (
         <ProfileEditor profile={profile} onSave={putProfile} />
+      ) : null}
+
+      {view === 'contribute' ? (
+        <LegalContribute base={base} connected={connected} labels={labels} />
       ) : null}
     </div>
   );

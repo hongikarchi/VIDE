@@ -8,6 +8,7 @@ import {
 import type { ClawdeChecklist, ClawdeStageId } from '../contracts/clawde.ts';
 import type { ClawdeClient } from './clawde.ts';
 import { LegalAnswers, type LegalAnswerView, type LegalSent } from './legal-answers.ts';
+import { LegalContributions } from './legal-contribute.ts';
 import { LegalProfile, type LegalChecklistCache, type LegalSendItem } from './legal-profile.ts';
 import { writerKey, type LegalWriter } from './legal-writer.ts';
 import type { ServiceSettings } from './settings.ts';
@@ -25,6 +26,7 @@ export const legalStatuses: Record<string, number> = {
   LEGAL_NO_RECIPE: 409,
   LEGAL_CERT_RUNNING: 409,
   LEGAL_WRITER_UNAVAILABLE: 503,
+  LEGAL_NOT_CONTRIBUTABLE: 400,
 };
 
 export interface LegalAskResult {
@@ -57,6 +59,8 @@ export interface LegalChecklistView {
 export class LegalService {
   readonly answers: LegalAnswers;
   readonly profile: LegalProfile;
+  /** 되돌려 보내기 (SPEC-13.10, T-224): the user's ticked items to cLAWde. */
+  readonly contributions: LegalContributions;
   private readonly client: ClawdeClient;
   private readonly settings: ServiceSettings;
   /** The answer prose writer (T-236); without one only the deterministic fields are shown. */
@@ -81,6 +85,14 @@ export class LegalService {
     this.settings = settings;
     this.writer = writer;
     this.now = now;
+    this.contributions = new LegalContributions({
+      store,
+      client,
+      settings,
+      profile: this.profile,
+      labels: () => this.labels(),
+      now,
+    });
   }
   /** Refused before anything is sent: the project is off, or the service is not connected. */
   async assertCanSend(projectId: string) {
@@ -316,5 +328,30 @@ export class LegalService {
     }
     const result = await this.ask(projectId, question, sentOf(), { refresh });
     return { ...result, number: result.answer.number };
+  }
+
+  // --- the conversation tools (SPEC-13.9, PLAN-46 T-223) -----------------------------------------
+
+  /**
+   * Whether a conversation turn gets the legal tools: the service is connected (an unreachable one
+   * still counts: the tools then give cached answers or SERVICE_UNAVAILABLE) and the project is on.
+   */
+  async toolsOn(projectId: string) {
+    return !(await this.settings.projectOff(projectId)) && (await this.settings.ready());
+  }
+  /** The last service call found it unreachable: cached results are shown as '오프라인'. */
+  get offline() {
+    return this.settings.status === 'unreachable';
+  }
+  /**
+   * One article's text (SPEC-13.9 `legal_article`): the project's cached copy first, else the
+   * service, kept for the project. Only the article id is sent.
+   */
+  async article(projectId: string, ref: string) {
+    const cached = this.answers.article(projectId, ref);
+    if (cached) return { ...cached, cached: true };
+    await this.assertCanSend(projectId);
+    const article = await this.client.article(ref);
+    return { ...this.answers.saveArticle(projectId, article), cached: false };
   }
 }

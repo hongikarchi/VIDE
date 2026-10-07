@@ -156,6 +156,9 @@ export function routePayload(query: RouteQuery, model = 'jev-1.13.0') {
   criteria.document =
     'Work on the Rhino model or CAD drawing itself (create, change, delete, move, recolour or rename in the file; also anything said to happen in CAD, in Rhino, in the drawing or in the original), or a question, count, check or analysis of the model or drawing for the AI assistant.';
   criteria.make = 'Make a new tool (jig) or automate a repeated task as a reusable tool.';
+  // 법규 Q&A (SPEC-13.2, PLAN-46 T-223): answered by the legal service in the legal conversation.
+  criteria.legal =
+    'A question about building law or regulations for this project: whether a rule applies or what it requires (건축법, 시행령, 조례, 일조 사선, 주차 대수, 용적률·건폐율 한도, 이격 거리, 건축선, 인허가, 법규 검토). Not a measurement of the model itself.';
   const questions: Record<string, unknown> = {
     target: {
       type: 'choice',

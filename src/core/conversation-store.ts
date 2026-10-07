@@ -18,6 +18,8 @@ export const conversationKinds = [
   'jig-run',
   'jig-make',
   'app',
+  // 법규 Q&A (SPEC-13.2): the project's legal conversation, where Jev sends legal questions.
+  'legal',
 ] as const;
 const newConversation = z
   .object({

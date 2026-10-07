@@ -129,6 +129,7 @@ test('one call asks every route question and maps each answer; no-AI routes choo
     'ask',
     'document',
     'make',
+    'legal',
   ]);
   assert.equal(asked.param.criteria.p0, '경간 상한 — 거더 경간의 상한');
   assert.equal(asked.jig.criteria.j0, 'Steel frame structural check');

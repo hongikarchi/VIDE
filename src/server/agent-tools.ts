@@ -29,6 +29,8 @@ import type { JigDrafts } from '../jigs/runtime/drafts.ts';
 import { turnOutputSchema } from './turn-output.ts';
 import { GH_READ_TOOLS, GH_WRITE_TOOLS } from './grasshopper-tools.ts';
 import { existsSync } from 'node:fs';
+import { clawdeRefSchema, clawdeStageIdSchema } from '../contracts/clawde.ts';
+import { legalToolHandlers, type LegalToolSource } from './legal-tools.ts';
 import { resolveAgentToken } from '../ai/agent-relay.ts';
 import { Agenda, localDate } from '../core/agenda.ts';
 import {
@@ -613,6 +615,42 @@ const definitions = {
       "Compare a jig instance's settings with the numbers of their basis statements (code compares): match, conflict, no-number, no-basis, invalid-basis. Without instanceId it uses the jig this conversation has open. Quote the verdicts; do not recompute.",
     schema: z.object({ targetRef: scoped, instanceId: id.optional() }).strict(),
   },
+  // Legal tools (SPEC-13.9, PLAN-46 T-223): the legal service cLAWde for this project, read-only.
+  // Given only while the service is connected and the project is on (src/server/legal-tools.ts).
+  legal_ask: {
+    description:
+      "Ask the legal service (cLAWde) a building-law question for this project (건축법, 조례, 일조 사선, 주차, 용적률…). Returns the answer [L<n>]: the service's verdict (applies, not-applies, conditional, unknown), its articles with excerpts and links, reasons, checks still to confirm, needed information, and the verified answer prose (`prose`, else `proseStatus`). VIDE shows it as a card above your reply: do not rewrite the card's conclusion, never change its verdict, cite it as [L<n>] and only articles it returned; anything you add is shown as AI 해석. When the information sent must be confirmed, VIDE shows the user a card and waits; SEND_NOT_CONFIRMED means nothing was sent.",
+    schema: z
+      .object({
+        targetRef: scoped,
+        question: z.string().trim().min(1).max(2000),
+        stage: clawdeStageIdSchema.optional(),
+        refresh: z.boolean().optional(),
+      })
+      .strict(),
+  },
+  legal_checklist: {
+    description:
+      "The laws to check at a design stage (scale-review 규모검토, schematic 계획설계, design-development 기본설계, construction-docs 실시설계; default the project's stage) and whether each applies to this project, from the legal service. Other stages' items are only counted. Ask legal_ask for an item's answer card.",
+    schema: z.object({ targetRef: scoped, stage: clawdeStageIdSchema.optional() }).strict(),
+  },
+  legal_article: {
+    description:
+      "One article's text (law name, article, excerpt, effective date, 법제처 link) by its ref from a legal tool result (e.g. law:건축법/제61조/①). Quote the excerpt as given.",
+    schema: z.object({ targetRef: scoped, ref: clawdeRefSchema }).strict(),
+  },
+  legal_answers: {
+    description:
+      "This project's legal answer record, newest first ([L<n>], question, verdict, conclusion, stale). With number, that one answer in full.",
+    schema: z
+      .object({
+        targetRef: scoped,
+        number: z.number().int().min(1).optional(),
+        offset: z.number().int().min(0).optional(),
+        limit: z.number().int().min(1).max(50).optional(),
+      })
+      .strict(),
+  },
 };
 type ToolName = keyof typeof definitions;
 type ToolArgs<N extends ToolName> = z.infer<(typeof definitions)[N]['schema']>;
@@ -684,6 +722,10 @@ const knownErrors = new Set([
   'DRAFT_PATH_INVALID',
   'MAKE_STOPPED',
   'FACT_EXCLUDED',
+  'SERVICE_UNAVAILABLE',
+  'SERVICE_AUTH',
+  'SERVICE_BAD_RESPONSE',
+  'SEND_NOT_CONFIRMED',
   'NO_VIEW',
   'LAYER_OPTION_UNAVAILABLE',
   'CAPTURE_FAILED',
@@ -720,6 +762,14 @@ const errorHints: Record<string, string> = {
     'Nothing ran. Give exactly one of code (C#), command (a Rhino command macro) or python (a Python 3 script).',
   EXECUTE_FORM_UNSUPPORTED:
     'Nothing ran. This target runs only a C# body in code; Rhino commands and Python run only in Auto mode on an open Rhino document.',
+  SEND_NOT_CONFIRMED:
+    'The user did not confirm what would be sent to the legal service, so nothing was sent. Do not ask again in this turn; answer without the service and say the answer has no service basis.',
+  SERVICE_UNAVAILABLE:
+    'The legal service cannot be reached now. Nothing new was asked; earlier answers (legal_answers) still read. Tell the user, and do not answer the legal question from memory as if it were the service.',
+  SERVICE_AUTH:
+    'The legal service refused the login. Tell the user to connect again in 설정 › 외부 서비스.',
+  SERVICE_BAD_RESPONSE:
+    'The legal service answered outside its contract; the answer was not kept. Tell the user.',
   GH_NOT_LOADED:
     'Grasshopper is not running in that Rhino. gh_open starts it (Auto); in Plan mode tell the user.',
   GH_NO_DOCUMENT:
@@ -757,6 +807,13 @@ export const HOST_TURN_PROJECT_TOOLS = [
   'project_statement',
   'project_checks',
 ] as const satisfies readonly ToolName[];
+/** The legal service tools (SPEC-13.9, T-223), given while cLAWde is connected and the project on. */
+export const LEGAL_TOOLS = [
+  'legal_ask',
+  'legal_checklist',
+  'legal_article',
+  'legal_answers',
+] as const satisfies readonly ToolName[];
 /**
  * Tools that act on the project, never on one host file, so a scope of several targets (a linked
  * turn) may leave targetRef out: the project reads above and the 할 일 a conversation's host turn
@@ -764,6 +821,7 @@ export const HOST_TURN_PROJECT_TOOLS = [
  */
 const projectScoped: ReadonlySet<string> = new Set([
   ...HOST_TURN_PROJECT_TOOLS,
+  ...LEGAL_TOOLS,
   'agenda_list',
   'agenda_add',
   'agenda_set',
@@ -816,6 +874,8 @@ export const PLAN_MODE_TOOLS: ReadonlySet<string> = new Set<ToolName>([
   'project_statement',
   'project_checks',
   'agenda_list',
+  // The legal service reads (SPEC-13.9); they never change a document or the project.
+  ...LEGAL_TOOLS,
 ]);
 /** The handlers Plan mode keeps (PLAN_MODE_TOOLS). */
 export function planModeHandlers<H extends Handlers>(handlers: H): H {
@@ -1208,6 +1268,8 @@ export interface ConversationToolSources {
     /** Statements tools returned this turn, for the citation gate (knowledge.ts citationGate). */
     returned?: Map<number, FactState>;
   };
+  /** The legal service (SPEC-13.9); legal_* exist only while it is connected and the project on. */
+  legal?: LegalToolSource;
 }
 /**
  * A tool result's size (ADR-031 3): about what the stock MCP output keeps. A larger one is cut, not
@@ -1548,6 +1610,7 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
   if (sources.facts && existsSync(sources.facts.file))
     Object.assign(handlers, factHandlers(sources));
   if (sources.draft) Object.assign(handlers, makeHandlers(sources));
+  if (sources.legal) Object.assign(handlers, legalToolHandlers(projectId, sources.legal));
   return handlers;
 }
 

@@ -4,6 +4,7 @@ import {
   clawdeAnswerSchema,
   clawdeArticleSchema,
   clawdeChecklistSchema,
+  clawdeContributionReceiptSchema,
   clawdeGoldenSchema,
   clawdeMetaSchema,
   clawdeRecipeSchema,
@@ -14,6 +15,8 @@ import {
   type ClawdeArticle,
   type ClawdeAskRequest,
   type ClawdeChecklist,
+  type ClawdeContributionReceipt,
+  type ClawdeContributionRequest,
   type ClawdeGolden,
   type ClawdeMeta,
   type ClawdeRecipe,
@@ -141,6 +144,13 @@ export class ClawdeClient {
   search(q: string, limit = 10) {
     const query = new URLSearchParams({ q, limit: String(limit) });
     return this.call(`/v1/search?${query}`, clawdeSearchSchema);
+  }
+  /** `POST /v1/contributions` (SPEC-13.10): the service dedupes on `idempotencyKey`. */
+  contribute(request: ClawdeContributionRequest): Promise<ClawdeContributionReceipt> {
+    return this.call('/v1/contributions', clawdeContributionReceiptSchema, {
+      method: 'POST',
+      body: request,
+    });
   }
   /** A versioned recipe never changes: cached by `(id, version)` for the engine's life. */
   async recipe(id: string, version: string): Promise<ClawdeRecipe> {

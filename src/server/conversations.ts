@@ -82,6 +82,11 @@ export const DEFAULT_TITLE = '기본 대화';
 export const DEFAULT_KEY = 'default';
 /** The default conversation's row, made at its first turn. */
 export const defaultConversationId = (projectId: string) => `default-${projectId}`;
+/**
+ * What the composer sends for a legal question Jev routed (SPEC-13.2): the project's newest open
+ * legal conversation, or a new one.
+ */
+export const LEGAL_KEY = 'legal';
 /** The ledger mark of a conversation opened with "자동 (Jev)" and no request yet. */
 const FIRST_TURN_CHOICE = 'first-turn';
 const KIND_TITLES: Record<Kind, string> = {
@@ -92,6 +97,7 @@ const KIND_TITLES: Record<Kind, string> = {
   'jig-run': 'jig 작업',
   'jig-make': 'jig 만들기',
   app: '앱',
+  legal: '법규',
 };
 
 /** HTTP statuses of the conversation error codes; server.ts merges them into its table. */
@@ -811,6 +817,28 @@ export class ConversationService {
             defaultConversationId(projectId),
             routing ? 'jev' : 'user',
           );
+      }
+    } else if (raw === LEGAL_KEY) {
+      this.db.project(projectId);
+      conversation = this.store
+        .list(projectId, 'open')
+        .filter((entry) => entry.kind === 'legal')
+        .at(-1);
+      if (!conversation) {
+        opened = true;
+        const choice = await choose();
+        conversation = this.open(
+          projectId,
+          {
+            kind: 'legal',
+            title: KIND_TITLES.legal,
+            provider: choice.provider,
+            model: choice.model ?? null,
+            effort: choice.effort,
+          },
+          undefined,
+          routing ? 'jev' : 'user',
+        );
       }
     } else conversation = this.store.get(projectId, raw);
     if (conversation.state !== 'open') throw new DomainError('CONVERSATION_CLOSED');

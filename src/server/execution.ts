@@ -59,6 +59,9 @@ import type { GeometryObject } from '../core/geometry.ts';
 import type { SdkExecution } from './sdk-execution.ts';
 import type { ZwcadSdkExecution } from './zwcad-sdk-execution.ts';
 import { defaultConversationId, type ConversationService, type Turn } from './conversations.ts';
+import { legalCitations, legalTurn } from './legal-tools.ts';
+import type { LegalService } from '../services/legal.ts';
+import type { LegalSendItem } from '../services/legal-profile.ts';
 import { takeReferenceBlock, turnOutputResult } from './turn-output.ts';
 import { makeTurnResult } from './make-routes.ts';
 import { workspaceResultSchema } from '../contracts/workspace-result.ts';
@@ -164,6 +167,11 @@ interface Options {
    * links table matched to the Rhino and ZWCAD connections like the links list.
    */
   liveLinks?: (projectId: string) => Promise<LiveLink[]>;
+  /**
+   * 법규 Q&A (SPEC-13.9, PLAN-46 T-223): a conversation turn gets the legal tools while cLAWde is
+   * connected and the project is on; every turn's answer passes the legal citation gate.
+   */
+  legal?: LegalService;
 }
 const pinsSchema = z.array(
   z
@@ -239,6 +247,8 @@ export function hostTurnProjectHandlers(
   ) as ProjectToolHandlers;
 }
 
+/** The card id of a legal tool's '보낼 정보' question (SPEC-13.3). */
+export const LEGAL_SEND_CARD = 'legal-send';
 /** The card id of the file permission question (SPEC-01.13 3). */
 export const FILE_PERMISSION_CARD = 'file-access';
 /**
@@ -328,6 +338,7 @@ export class Execution {
       liveLinks,
       questions,
       web,
+      legal,
       selectContext: choose = (body, candidates) =>
         selectContext(body, candidates, { key: () => '' }),
     }: Options = {},
@@ -355,7 +366,9 @@ export class Execution {
     this.onFinished = onFinished;
     this.questions = questions;
     this.web = web;
+    this.legal = legal;
   }
+  private readonly legal?: LegalService;
   private readonly web?: Options['web'];
   /** AI 웹 검색 is on (an unreadable setting counts as off). */
   webOn() {
@@ -649,6 +662,83 @@ export class Execution {
     } catch {
       /* The project is gone. */
     }
+  }
+  /**
+   * The '보낼 정보' card of a legal tool (SPEC-13.3, SPEC-02.19 6 wait rule): one card on the running
+   * request with what would go to cLAWde, answered like the provider's own questions
+   * (`answerQuestions`; a remote session may answer it, SPEC-13.11). True only for [보내기]; a
+   * closed card, a stop or the wait running out sends nothing.
+   */
+  private askLegalSend(
+    projectId: string,
+    requestId: string,
+    items: LegalSendItem[],
+    signal: AbortSignal,
+    waitMs = PERMISSION_WAIT_MS,
+  ): Promise<boolean> {
+    const value = (item: LegalSendItem) =>
+      `${item.label ?? item.key} ${typeof item.value === 'boolean' ? (item.value ? '예' : '아니오') : item.value}${item.unit ? ' ' + item.unit : ''}`;
+    const going = items.filter((item) => item.selectable && !item.excluded);
+    const kept = items.filter((item) => !item.selectable || item.excluded);
+    const card = {
+      id: LEGAL_SEND_CARD,
+      title:
+        '법규 서비스(cLAWde)에 보낼 정보 · ' +
+        (going.length ? going.map(value).join(', ') : '질문과 설계 단계만') +
+        (kept.length
+          ? ` · 보내지 않음: ${kept.map((item) => item.label ?? item.key).join(', ')}`
+          : ''),
+      blocks: '법규 질문',
+      options: [
+        { id: 'send', label: '보내기', hint: '이 정보와 질문을 cLAWde에 보냄' },
+        {
+          id: 'cancel',
+          label: '보내지 않음',
+          hint: '아무것도 보내지 않음 · 항목을 빼려면 법규 패널에서',
+          recommended: true,
+        },
+      ],
+      allowFree: false,
+    };
+    let before: Record<string, unknown> | null = null;
+    try {
+      before = this.workspace.get(projectId, requestId).result;
+    } catch {
+      return Promise.resolve(false);
+    }
+    const run = this.active.get(requestId)?.controller.signal;
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => done(null), waitMs);
+      const stop = () => done(null);
+      const done = (answers: NativeQuestionAnswer[] | null) => {
+        if (this.nativeQuestions.get(requestId)?.answer !== done) return;
+        this.nativeQuestions.delete(requestId);
+        clearTimeout(timer);
+        signal.removeEventListener('abort', stop);
+        run?.removeEventListener('abort', stop);
+        try {
+          if (this.workspace.get(projectId, requestId).state === 'running')
+            this.workspace.update(projectId, requestId, 'running', {
+              ...(before ?? {}),
+              phase: 'model',
+              hostExecuted: false,
+            });
+        } catch {
+          /* The request ended meanwhile. */
+        }
+        resolve(answers?.find((answer) => answer.id === LEGAL_SEND_CARD)?.option === 'send');
+      };
+      if (signal.aborted || run?.aborted) return done(null);
+      signal.addEventListener('abort', stop, { once: true });
+      run?.addEventListener('abort', stop, { once: true });
+      this.nativeQuestions.set(requestId, { projectId, cards: [card], answer: done });
+      this.workspace.update(projectId, requestId, 'running', {
+        ...(before ?? {}),
+        phase: 'question',
+        hostExecuted: false,
+        questions: [card],
+      });
+    });
   }
   /**
    * The permission question for a path outside the project folders (SPEC-01.13 3): one card on the
@@ -1579,6 +1669,13 @@ export class Execution {
                 this.conversations!.addLedger(projectId, turn!.conversation.id, item),
             })
           : undefined;
+      // The legal tools (SPEC-13.9): only while cLAWde is connected and the project is on.
+      if (sources && this.legal && (await this.legal.toolsOn(projectId).catch(() => false)))
+        sources.legal = {
+          service: this.legal,
+          turn: legalTurn(),
+          confirm: (items, signal) => this.askLegalSend(projectId, id, items, signal),
+        };
       const scope =
         sources && this.tools
           ? this.tools.issueConversation(sources, {
@@ -1719,9 +1816,18 @@ export class Execution {
           sources?.facts && typeof answer.text === 'string'
             ? factCitations(answer.text, sources.facts.returned)
             : {};
+        // The legal citation gate (SPEC-13.5): [L<n>] and articles only from this turn's legal
+        // tools; a legal answer without any is 'AI 추정 · 서비스 근거 없음'.
+        const lawful =
+          sources && typeof answer.text === 'string'
+            ? legalCitations(cited.text ?? answer.text, sources.legal?.turn, {
+                legalConversation: turn?.conversation.kind === 'legal',
+              })
+            : {};
         this.workspace.update(projectId, id, 'succeeded', {
           ...answer,
           ...cited,
+          ...lawful,
           hostExecuted: false,
         });
       }

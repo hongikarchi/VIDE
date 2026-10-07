@@ -85,7 +85,8 @@ export async function serviceSettingsRoutes(
  * `GET …/legal/checklist?stage=&refresh=1` → the stage checklist or the card, `POST …/legal/confirm
  * {hash, exclude?, stage?}` (the card confirmed outside an ask) and `GET/POST
  * /api/v1/legal/model-cert` ([모델 인증]). Remote sessions may ask, confirm the card, read answers
- * and rewrite (SPEC-13.11) but not change the profile or run a certification.
+ * and rewrite (SPEC-13.11) but not change the profile, send to the service (`GET/POST
+ * …/legal/contribute`, 되돌려 보내기 T-224) or run a certification.
  */
 export async function legalRoutes(
   url: URL,
@@ -121,7 +122,7 @@ export async function legalRoutes(
     return true;
   }
   const match =
-    /^\/api\/v1\/projects\/([^/]+)\/legal\/(profile|ask|answers|checklist|confirm)$/.exec(
+    /^\/api\/v1\/projects\/([^/]+)\/legal\/(profile|ask|answers|checklist|confirm|contribute)$/.exec(
       url.pathname,
     );
   if (!match) return false;
@@ -147,7 +148,13 @@ export async function legalRoutes(
     send(200, legal.updateProfile(projectId, await body()));
   } else if (name === 'ask' && method === 'POST')
     send(200, await legal.askProject(projectId, await body()));
-  else if (name === 'answers' && method === 'GET') {
+  // 되돌려 보내기 (SPEC-13.10, T-224): the list, and the ticked items; this PC's screen only.
+  else if (name === 'contribute' && method === 'GET')
+    send(200, { items: legal.contributions.view(projectId) });
+  else if (name === 'contribute' && method === 'POST') {
+    if (remote) throw new DomainError('FORBIDDEN');
+    send(200, await legal.contributions.send(projectId, await body()));
+  } else if (name === 'answers' && method === 'GET') {
     const number = url.searchParams.get('number');
     if (number === null) {
       await legal.ensureMeta();

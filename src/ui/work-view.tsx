@@ -6,6 +6,7 @@ import { attachmentPreview } from './attachments.ts';
 import { undoReason } from '../contracts/direct-refusal.ts';
 import { ActivityLog, activityEntries } from './activity.tsx';
 import { Markdown } from './kit/markdown.tsx';
+import { LegalTurnCards, legalCheckOf } from './legal-turn.tsx';
 import { inConversation } from './conversations.tsx';
 import { api } from './gateway.ts';
 import { executeWaitOf, guardOpen, heldRowLabel, waitingText } from './request-scope.ts';
@@ -725,6 +726,8 @@ function WorkView({
   const reviews = actions.reviewsOf(message.id);
   const jig = jigOf(message);
   const jigCheck = (result as { jigCheck?: { unknown?: string[] } } | undefined)?.jigCheck;
+  // 법규 답 cards of the turn (SPEC-13.5, T-223): the AI's reply under them is 'AI 해석'.
+  const legal = legalCheckOf(result);
   // The latest verified change while the work is still running (the candidate comes at the end).
   const verified = [...activity].reverse().find((entry) => entry.kind === 'result');
   const target = request?.input?.linkedTargets?.length
@@ -895,8 +898,15 @@ function WorkView({
               연결 Rhino에 반영했습니다. 아래 AI 답변은 원본 반영 전에 작성된 작업 사본 설명입니다.
             </p>
           ) : null}
+          {legal?.answers?.length ? (
+            <LegalTurnCards projectId={projectId} numbers={legal.answers} />
+          ) : null}
           {result?.text ? (
-            <Markdown className="work-answer" label="AI 답변" text={result.text} />
+            <Markdown
+              className="work-answer"
+              label={legal?.answers?.length ? 'AI 해석' : 'AI 답변'}
+              text={result.text}
+            />
           ) : null}
           {result?.extensionResult?.rows.map((row, index) => (
             <details key={index}>

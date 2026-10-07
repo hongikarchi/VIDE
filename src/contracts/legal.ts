@@ -77,3 +77,11 @@ export const legalChecklistQuerySchema = z
     refresh: z.boolean().optional(),
   })
   .strict();
+
+/**
+ * `POST …/legal/contribute {keys[]}` (SPEC-13.10, PLAN-46 T-224): the profile keys the user ticked
+ * in the [cLAWde로 보내기] list. Nothing is ticked by default; at least one key goes.
+ */
+export const legalContributeInputSchema = z
+  .object({ keys: z.array(legalProfileKeySchema).min(1).max(200) })
+  .strict();

@@ -839,6 +839,8 @@ export async function startServer({
     fileContext,
     // A reference turn's end makes the board's next 판 and starts its image job (T-090).
     onFinished: (row) => referenceBoards?.afterTurn(row),
+    // 법규 Q&A in conversations (SPEC-13.9, T-223): the legal tools and the citation gate.
+    legal,
   });
   if (referenceBoards)
     referenceBoards.lookup = (projectId, requestId) => {
@@ -1681,7 +1683,7 @@ export async function startServer({
         store.project(routeRevert[1]);
         const reverted = z
           .object({
-            target: z.enum(['view', 'param', 'app', 'jig', 'ask', 'document', 'make']),
+            target: z.enum(['view', 'param', 'app', 'jig', 'ask', 'document', 'make', 'legal']),
             by: z.enum(['jev', 'rules']),
           })
           .strict()

@@ -277,6 +277,11 @@ export const agentToolNames = [
   'agenda_list',
   'agenda_add',
   'agenda_set',
+  // 법규 Q&A (SPEC-13.9, PLAN-46 T-223)
+  'legal_ask',
+  'legal_checklist',
+  'legal_article',
+  'legal_answers',
   // Grasshopper (ADR-033)
   'gh_state',
   'gh_components',
@@ -301,6 +306,12 @@ export const conversationToolInstruction =
 export const agendaInstruction =
   " The project's 할 일: agenda_list reads the dashboard's to-do list and calendar (kinds 할 일, 협의, 접수, 마감; a dated item may span days or a time range, with a place and attendees)." +
   " agenda_add and agenda_set, when given, change it only when the user's words ask for it ('내일 3시 구조 회의 넣어줘'; to collect 할 일 from the shared notes, first read their Markdown copies in the project records' notes folder with Read, Glob or Grep); they apply at once and the user can undo them. Your reply lists what was added or changed. They never touch a Rhino or CAD document.";
+/**
+ * The legal service tools (SPEC-13.5·13.9, PLAN-46 T-223); added to the rules of a turn that has
+ * them. The answer card is the service's: the AI never rewrites it and its own words are AI 해석.
+ */
+export const legalInstruction =
+  " Building-law questions (건축법, 조례, 일조 사선, 주차, 용적률…): ask legal_ask (legal_checklist for a design stage's list, legal_article for an article's text, legal_answers for earlier answers) instead of answering from memory. VIDE shows each answer as a card above your reply with the service's verdict, articles and verified prose: do not restate or rewrite the card, never change its verdict (conditional and unknown stay so), cite answers as [L<n>] and only articles the tools returned in this turn; what you add is labelled AI 해석. You cannot send anything back to the service; you may suggest that the user send confirmed items with [cLAWde로 보내기] in the 법규 검토 panel.";
 /** Tools every instructed turn may get beside its own: the project's 할 일. */
 const TURN_EXTRA_TOOLS = new Set(['agenda_list', 'agenda_add', 'agenda_set']);
 const extraToolsInstruction = (connection: AgentConnection) =>
@@ -312,7 +323,11 @@ export function instructionFor(connection: AgentConnection, format: AgentFormat 
   if (connection.tools.every((name) => TURN_EXTRA_TOOLS.has(name)))
     return extraToolsInstruction(connection);
   const own = ownInstruction(connection, format);
-  return own + (connection.tools.includes('agenda_list') ? agendaInstruction : '');
+  return (
+    own +
+    (connection.tools.includes('agenda_list') ? agendaInstruction : '') +
+    (connection.tools.includes('legal_ask') ? legalInstruction : '')
+  );
 }
 function ownInstruction(connection: AgentConnection, format: AgentFormat) {
   const scope = connection.scope ? scopeRules(connection.scope) : '';

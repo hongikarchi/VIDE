@@ -2,7 +2,7 @@
 id: PLAN-46
 title: 법규 Q&A — cLAWde 연결·법규 jig·단계별 법령·역전송·답 문장 품질 (T-215~T-224, T-236)
 status: review
-version: 0.9
+version: 0.10
 updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-13, SPEC-07, SPEC-08, SPEC-02, SPEC-12, ARCH-01, ARCH-03, ADR-026, ADR-030, ADR-037, ADR-039, ADR-040, RESEARCH-04, RESEARCH-16, PLAN-45, C-04, C-06, OQ-16, OQ-17, FR-09, FR-18, FR-24, FR-25]
@@ -160,6 +160,7 @@ related: [SPEC-13, SPEC-07, SPEC-08, SPEC-02, SPEC-12, ARCH-01, ARCH-03, ADR-026
 - **검증:** `tests/core/legal-tools.test.mjs`(도구 결과·오류 코드·도구 목록 포함 조건), `tests/core/legal-citation-gate.test.mjs`(도구가 준 번호만 통과), 실제 Claude·Codex 한 턴씩 가짜 서버로 확인(VERIFY 메모).
 - **완료:** 시험과 `npm run verify` 통과. 실제 CLI 확인은 남은 조건으로 따로 표시할 수 있다.
 - **의존:** 없음.
+- **상태(2026-10-08): 완료(엔진·화면, 실제 CLI 확인은 남음).** 도구 정의는 `src/server/agent-tools.ts`(`LEGAL_TOOLS`, Plan 모드에서도 읽기), 처리기와 인용 게이트는 `src/server/legal-tools.ts`, 이름은 `src/ai/agent-connection.ts`(턴 규칙에 법규 지침 `legalInstruction`). 엔진(`src/server/execution.ts`)은 대화 턴(호스트 없음)에 `LegalService.toolsOn`(연결됨·프로젝트 켜짐)일 때만 도구를 주고, 보낼 정보 확인이 필요하면 실행 중인 요청에 카드(`legal-send`, [보내기]/[보내지 않음])를 띄워 기다린다(닫으면 `SEND_NOT_CONFIRMED`, 아무것도 보내지 않음). `legal_checklist`는 T-222의 `checklist`·`confirm`을 쓰고, `legal_article`은 프로젝트의 `legal_articles`를 먼저 읽는다. 답 글의 `[L<n>]`·조문 번호는 이 턴 도구 결과와 대조해 `legalCheck`와 '확인되지 않은 인용' 줄을 남기고, 도구 결과 없는 법규 답(조문·`[L]` 인용, 법규 대화에서는 법규 낱말)에는 'AI 추정 · 서비스 근거 없음'을 붙인다. 수치 대조는 하지 않는다(문장 검증은 T-236). Jev 경로는 새 경로 `legal`(`src/ui/request-route.ts`·`src/ai/request-router.ts`)이고, 화면은 그 요청을 `conversationId:'legal'`로 보내며 엔진이 이 프로젝트의 열린 법규 대화(종류 `legal`)를 고르거나 새로 연다(`src/server/conversations.ts` `LEGAL_KEY`). 대화의 답은 도구가 돌려준 답을 T-221의 답 카드로 위에 보이고 AI 글을 'AI 해석'으로 표시한다(`src/ui/legal-turn.tsx`, `work-view.tsx`). 시험: `tests/core/legal-tools.test.mjs` 7건, `tests/core/legal-citation-gate.test.mjs` 4건, `tests/server/legal-turn.test.mjs` 4건(가짜 에이전트가 도구를 부르는 대화 턴, 카드 대기와 답, 게이트, 도구 없는 턴의 AI 추정, `legal` 경로와 대화). **남은 조건:** 실제 Claude·Codex 한 턴씩 가짜 서버로 확인(VERIFY 메모).
 
 ## T-224 되돌려 보내기
 
@@ -169,6 +170,7 @@ related: [SPEC-13, SPEC-07, SPEC-08, SPEC-02, SPEC-12, ARCH-01, ARCH-03, ADR-026
 - **검증:** `tests/core/legal-contribute.test.mjs` — 고른 항목만 서버가 받음, 가정·AI 추정·미확정 진술은 거절, 같은 `idempotencyKey` 재전송은 한 번만 접수, 일부 거절 처리, 503이면 '보냄' 없음·자동 재전송 없음, 원격 세션 403.
 - **완료:** 시험과 `npm run verify` 통과.
 - **의존:** 없음.
+- **상태(2026-10-08): 완료(프로필 값).** `src/services/legal-contribute.ts`(`LegalService.contributions`), 엔진 API `GET/POST …/legal/contribute`(ARCH-01 「엔진 API」), 화면은 법규 jig의 'cLAWde로 보내기' 탭(`src/ui/legal-contribute.tsx`). 보낼 수 있는 것은 사용자 확정 프로필 값(되묻기 답 포함)이며, 가정·AI 추정·서비스·모델 값·보낼 정보에서 뺀 항목·이미 보낸 같은 값은 흐리게 보이고 요청에 들면 전체를 `LEGAL_NOT_CONTRIBUTABLE`(400)로 거절한다. `idempotencyKey`는 프로젝트와 고른 항목의 SHA-256이라 같은 고름을 다시 보내면 서비스가 첫 접수를 돌려준다. `projectRef`는 프로젝트 ID의 해시다. 받은 항목만 `legal_contributions`에 접수 번호와 남고 값이 바뀌면 다시 고를 수 있다. 시험: `tests/core/legal-contribute.test.mjs` 7건, `tests/integration/browser-legal-contribute.mjs`. **남은 것:** 답 카드에 남긴 사용자 판단과 프로젝트 자료 확정 진술은 아직 목록에 없다(그 판단을 남기는 화면이 없음). AI의 '보내기 제안'은 턴 지침의 문장 안내뿐이며 제안 카드는 없다.
 
 ## T-236 답 문장 생성과 품질 관리(레시피·검증·모델 인증)
 
@@ -224,4 +226,4 @@ related: [SPEC-13, SPEC-07, SPEC-08, SPEC-02, SPEC-12, ARCH-01, ARCH-03, ADR-026
 
 ## 현재 상태
 
-2026-10-07 계획을 쓰고 같은 날 범위 채택과 cLAWde의 자리(새 저장소, 세 출처 종합)가 정해졌으며, 사용자가 0단계(T-215·T-216)를 승인했다. T-216(가짜 서버·계약 시험)은 완료했다. T-215 조사도 끝났고, 같은 날 사용자 검토로 조례 범위·단계 어휘·답 문장 방식이 정해졌다(답 문장 품질 관리는 T-236으로 추가). 수집 위치(질문 9의 2)와 판정 레코드 확인자(질문 10)가 남았다. 2026-10-08 사용자가 1단계를 승인했고 T-217(정적 토큰 경로, 계정 사이트 토큰 발급은 남은 조건)·T-218·T-219(엔진)를 마쳤다. T-236(엔진)과 T-221(대상 칩 제외)·T-222도 마쳤다. 다음은 T-220·T-223·T-224다. 진행 현황은 [PLAN](PLAN.md) §6.5가 소유한다.
+2026-10-07 계획을 쓰고 같은 날 범위 채택과 cLAWde의 자리(새 저장소, 세 출처 종합)가 정해졌으며, 사용자가 0단계(T-215·T-216)를 승인했다. T-216(가짜 서버·계약 시험)은 완료했다. T-215 조사도 끝났고, 같은 날 사용자 검토로 조례 범위·단계 어휘·답 문장 방식이 정해졌다(답 문장 품질 관리는 T-236으로 추가). 수집 위치(질문 9의 2)와 판정 레코드 확인자(질문 10)가 남았다. 2026-10-08 사용자가 1단계를 승인했고 T-217(정적 토큰 경로, 계정 사이트 토큰 발급은 남은 조건)·T-218·T-219(엔진)를 마쳤다. T-236(엔진)과 T-221(대상 칩 제외)·T-222도 마쳤다. T-223·T-224도 마쳤다(실제 CLI 확인은 남음). 다음은 T-220이다. 진행 현황은 [PLAN](PLAN.md) §6.5가 소유한다.

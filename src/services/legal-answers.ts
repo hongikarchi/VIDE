@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 import {
   clawdeAnswerSchema,
+  clawdeArticleSchema,
   clawdeProseSchema,
+  type ClawdeArticle,
   clawdeWriterSchema,
   type ClawdeAnswer,
   type ClawdeProse,
@@ -294,6 +296,32 @@ export class LegalAnswers {
       .get(projectId, number) as Row | undefined;
     if (!row) throw new DomainError('NOT_FOUND');
     return this.view(row, latestLawDbDate);
+  }
+  /** A cached article of the project (from an answer's citations or `legal_article`), if any. */
+  article(
+    projectId: string,
+    ref: string,
+  ): { article: ClawdeArticle; fetchedAt: string } | undefined {
+    this.store.project(projectId);
+    const row = this.store
+      .db(projectId)
+      .prepare('SELECT article_json, fetched_at FROM legal_articles WHERE projectId=? AND ref=?')
+      .get(projectId, ref) as { article_json: string; fetched_at: string } | undefined;
+    if (!row) return undefined;
+    const parsed = clawdeArticleSchema.safeParse(JSON.parse(row.article_json));
+    return parsed.success ? { article: parsed.data, fetchedAt: row.fetched_at } : undefined;
+  }
+  /** Keeps an article the service returned (SPEC-13.9: articles stay in the project's record). */
+  saveArticle(projectId: string, article: ClawdeArticle) {
+    this.store.project(projectId);
+    const at = this.now().toISOString();
+    this.store
+      .db(projectId)
+      .prepare(
+        'INSERT INTO legal_articles(projectId,ref,article_json,fetched_at) VALUES(?,?,?,?) ON CONFLICT(projectId,ref) DO UPDATE SET article_json=excluded.article_json, fetched_at=excluded.fetched_at',
+      )
+      .run(projectId, article.ref, JSON.stringify(article), at);
+    return { article, fetchedAt: at };
   }
   /**
    * Profile values changed: the answers that used one of `keys` become '다시 확인 필요'. They are

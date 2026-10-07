@@ -674,6 +674,8 @@ export async function attachPathImage(path: string) {
     );
   }
 }
+/** The conversation key a legal question is sent with (server: conversations.ts LEGAL_KEY). */
+const LEGAL_CONVERSATION = 'legal';
 export function sendComposer() {
   if (!draftState.state.body.trim() || draftState.state.linkedTargets || sessionState.busy) {
     void submitRequest();
@@ -688,6 +690,9 @@ export function sendComposer() {
     .then(({ route, instanceId, planFirst }) => {
       if (route.target === 'view') runViewRequest(route, body);
       else if (route.target === 'param') void runParamRequest(route, body, instanceId);
+      // A legal question goes to the project's legal conversation (SPEC-13.2, T-223).
+      else if (route.target === 'legal')
+        void submitRequest(undefined, draftState.mode, { conversation: LEGAL_CONVERSATION });
       else if (goesToAi(route) && planFirst && draftState.mode === 'auto') showPlanFirstCard();
       else if (goesToAi(route)) void submitRequest();
       else runAppRoute(route, body);
@@ -700,7 +705,7 @@ export function sendComposer() {
 export async function submitRequest(
   predecessorId?: string,
   sendMode: WorkMode = draftState.mode,
-  extra: { hostUse?: 'none' } = {},
+  extra: { hostUse?: 'none'; conversation?: typeof LEGAL_CONVERSATION } = {},
 ) {
   if (
     validate(draftState.state) ||
@@ -718,11 +723,15 @@ export async function submitRequest(
   const chosen = predecessorId ? undefined : currentConversation();
   // The default conversation's turns go as `default`: its first turn fixes its AI (SPEC-02.19 2).
   const conversationId =
-    chosen ?? (!predecessorId && workState.conversationChips ? 'default' : undefined);
+    (!predecessorId ? extra.conversation : undefined) ??
+    chosen ??
+    (!predecessorId && workState.conversationChips ? 'default' : undefined);
   // A jig conversation's turns work on its jig (the jig tools), unless the words name the file.
   // Sent from 노트·일지, 대시보드 or 자료 about the records, a request skips the host (T-190).
   const hostless =
     extra.hostUse === 'none' ||
+    // A legal question needs no host: the legal tools answer it (SPEC-13.9).
+    extra.conversation === LEGAL_CONVERSATION ||
     (!predecessor && hostlessFromScreen(activeWorkspace(), draftState.state)) ||
     (!predecessor &&
       !draftState.state.linkedTargets &&
@@ -780,6 +789,11 @@ export async function submitRequest(
     // Another model than the conversation's: the server opened a new conversation and sent the
     // request there (SPEC-02.19 5); its tab is chosen.
     const landed = (request.input as { conversationId?: unknown }).conversationId;
+    if (conversationId === LEGAL_CONVERSATION && typeof landed === 'string') {
+      workState.conversationChips?.select(landed);
+      message('법규 질문이라 이 프로젝트의 법규 대화로 보냈습니다.');
+      return;
+    }
     if (
       conversationId &&
       typeof landed === 'string' &&

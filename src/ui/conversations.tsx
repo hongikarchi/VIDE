@@ -104,6 +104,7 @@ export const KIND_LABELS: Record<string, string> = {
   'jig-run': 'jig 작업',
   'jig-make': 'jig 만들기',
   app: '앱',
+  legal: '법규',
 };
 const PROVIDER_LABELS: Record<string, string> = { 'claude-cli': 'Claude', 'codex-cli': 'Codex' };
 /** The one line both conversations show when another model took a request to a new one. */

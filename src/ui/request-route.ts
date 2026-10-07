@@ -6,7 +6,7 @@
 // Jev), so no DOM and no Node imports here. The model is chosen when a conversation opens
 // (src/ai/model-router.ts), not here.
 
-export type RouteTarget = 'view' | 'param' | 'app' | 'jig' | 'ask' | 'document' | 'make';
+export type RouteTarget = 'view' | 'param' | 'app' | 'jig' | 'ask' | 'document' | 'make' | 'legal';
 export const ROUTE_TARGETS: readonly RouteTarget[] = [
   'view',
   'param',
@@ -15,9 +15,13 @@ export const ROUTE_TARGETS: readonly RouteTarget[] = [
   'ask',
   'document',
   'make',
+  'legal',
 ];
-/** Routes that go to the conversation AI; the others are done by VIDE itself (SPEC-02.17 2). */
-export const AI_ROUTES: readonly RouteTarget[] = ['ask', 'document', 'make'];
+/**
+ * Routes that go to the conversation AI; the others are done by VIDE itself (SPEC-02.17 2). A
+ * legal question (SPEC-13.2) goes to the project's legal conversation, opened when there is none.
+ */
+export const AI_ROUTES: readonly RouteTarget[] = ['ask', 'document', 'make', 'legal'];
 export type ViewAction = 'hide' | 'isolate' | 'unhide' | 'select' | 'fit';
 export type AppAction =
   | 'login'
@@ -831,6 +835,8 @@ export function jevRoute(
       return { target: 'ask', by, reason: who + '자료 질문' };
     case 'make':
       return { target: 'make', by, reason: who + 'jig 만들기' };
+    case 'legal':
+      return { target: 'legal', by, reason: who + '법규 질문' };
     case 'param': {
       const param = context.params?.find((entry) => entry.key === answer.param);
       if (!param) return undefined;
