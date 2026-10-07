@@ -2,8 +2,8 @@
 id: PLAN-44
 title: JIG 로드맵 — 규모검토·법규 Q&A·도면 역반영의 순서와 의존성
 status: review
-version: 0.3
-updated: 2026-10-07
+version: 0.4
+updated: 2026-10-08
 owner: agent:claude
 related: [PLAN-45, PLAN-46, PLAN-47, RESEARCH-04, SPEC-12, SPEC-13, SPEC-14, ADR-040, RESEARCH-16, C-04, C-05, C-06, C-08, OQ-16, OQ-17]
 ---
@@ -52,7 +52,7 @@ related: [PLAN-45, PLAN-46, PLAN-47, RESEARCH-04, SPEC-12, SPEC-13, SPEC-14, ADR
 세 PLAN의 「결정이 필요한 질문」 가운데 시작을 막는 것만 모았다. 나머지는 각 PLAN의 권장값으로 진행하고, 진행 중에 바꿀 수 있다. 2026-10-07 사용자가 1·2·4를 정했고, 3은 권장값으로 둔다.
 
 1. **범위 채택 — 결정됨(2026-10-07).** 사용자가 C-05(규모검토), C-06·C-04(법규 Q&A·서비스 연동), C-08(도면 생성·역반영)을 모두 채택하고 "기존에 만들어놓은 코드와 repo들을 잘 활용할 것"을 함께 지시했다. PRD §4.4·§14.2에 반영했고 SPEC-12·SPEC-14의 채택 제안(R-01)을 닫았다. 재사용 원칙은 각 작업 계획의 「재사용할 기존 코드·저장소」(PLAN-45·PLAN-47)와 PLAN-46 T-215가 구체화한다. 출처 설명은 [RESEARCH-04](../research/RESEARCH-04-jig-past-experience.md) §1.1이다.
-2. **cLAWde의 자리 — 결정됨(2026-10-07).** "새 저장소로 시작하는데, 옛 비공개 CLAWDE랑 규모검토 때 했던 법규 검토(논현동 규모검토 때), ARCO-FULL에서 만들었던것 까지 3개를 모두 종합해서 하는게 좋을 듯." 새 저장소로 시작하고 S-01·S-04·S-19를 종합한다. 종합 방법은 T-215(세 출처 종합 조사 → 새 저장소 설계 메모와 재사용 지도)다. 실행 기반(Cloudflare Workers + D1, 계정 사이트와 같은 계정, VIDE 계정으로 받은 짧은 토큰)은 권장값이며 T-215 결과를 볼 때 바꿀 수 있다. 실제 저장소가 생기기 전에는 VIDE가 가짜 서버로 개발한다.
+2. **cLAWde의 자리 — 결정됨(2026-10-07).** "새 저장소로 시작하는데, 옛 비공개 CLAWDE랑 규모검토 때 했던 법규 검토(논현동 규모검토 때), ARCO-FULL에서 만들었던것 까지 3개를 모두 종합해서 하는게 좋을 듯." 새 저장소로 시작하고 S-01·S-04·S-19를 종합한다. 종합 방법은 T-215(세 출처 종합 조사 → 새 저장소 설계 메모와 재사용 지도)다. 실행 기반(Cloudflare Workers + D1, 계정 사이트와 같은 계정, VIDE 계정으로 받은 짧은 토큰)은 권장값이며 T-215 결과를 볼 때 바꿀 수 있다. 실제 저장소가 생기기 전에는 VIDE가 가짜 서버로 개발한다. 2026-10-08 사용자가 "cLAWde만 별도 비공개 저장소로 만들자"로 정했다([ADR-040](../decisions/ADR-040-domain-services.md) 결정 1). 새 저장소는 비공개 `hongikarchi/cLAWde`, 로컬 작업본은 `C:\Users\user\Desktop\cLAWde-service`다. 옛 비공개 `CLAWDE`는 GitHub 이름이 대소문자를 가리지 않아 `hongikarchi/CLAWDE-legacy`로 이름을 바꿨다. Site Modeling·Structure Analysis·ArchiDB는 VIDE 저장소 안의 폴더로 둔다.
 3. **공공 데이터 수집의 자리(OQ-16) — 권장값.** 지금은 VIDE 공식 라이브러리에 두고, 응답 형식을 외부 서비스 계약에 맞춰 나중에 Site Modeling 서비스로 바꿔 끼울 수 있게 한다(SPEC-12 R-02는 열려 있다).
 4. **도면의 첫 대상 — 결정됨(2026-10-07).** 사용자가 계획을 검토하고 이렇게 말했다.
 

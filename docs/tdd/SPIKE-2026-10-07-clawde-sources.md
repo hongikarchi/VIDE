@@ -2,8 +2,8 @@
 id: SPIKE-2026-10-07-clawde-sources
 title: cLAWde 새 저장소 착수 전 세 출처(S-01·S-04·S-19) 종합 조사
 status: review
-version: 0.2
-updated: 2026-10-07
+version: 0.3
+updated: 2026-10-08
 owner: agent:claude
 related: [PLAN-46, T-215, T-216, SPEC-13, ARCH-01, ADR-040, RESEARCH-04, RESEARCH-16, C-06, C-04]
 ---
@@ -12,7 +12,7 @@ related: [PLAN-46, T-215, T-216, SPEC-13, ARCH-01, ADR-040, RESEARCH-04, RESEARC
 
 [PLAN-46](../plans/PLAN-46-legal-qa.md) T-215의 기록이다. 2026-10-07 사용자 결정("새 저장소로 시작하는데, 옛 비공개 CLAWDE랑 규모검토 때 했던 법규 검토, ARCO-FULL에서 만들었던것 까지 3개를 모두 종합")에 따라 세 출처를 읽기만 하고 새 cLAWde 저장소의 설계 메모와 재사용 지도를 낸다. 기능 동작은 [SPEC-13](../specs/SPEC-13-legal-qa.md), VIDE 쪽 물리 계약은 [ARCH-01](../architecture/ARCH-01-system.md) 「cLAWde 연결 계약」이 소유한다. 출처 코드(S-NN)와 경로의 대응은 [RESEARCH-04](../research/RESEARCH-04-jig-past-experience.md) §1·§1.1과 저장소 밖 대응표에 있다.
 
-이 문서는 VIDE 저장소의 기획 산출물이다. 새 cLAWde 저장소가 생기면 「새 cLAWde 저장소 설계 메모」 절을 그 저장소의 첫 설계 문서로 옮긴다. 새 저장소와 GitHub 자원은 이 티켓에서 만들지 않았다.
+이 문서는 VIDE 저장소의 기획 산출물이다. 새 cLAWde 저장소가 생기면 「새 cLAWde 저장소 설계 메모」 절을 그 저장소의 첫 설계 문서로 옮긴다. 새 저장소와 GitHub 자원은 이 티켓에서 만들지 않았다. 2026-10-08 사용자 결정(ADR-040 결정 1)으로 새 저장소는 비공개 `hongikarchi/cLAWde`(로컬 작업본 `C:\Users\user\Desktop\cLAWde-service`)가 되었고, 옛 `CLAWDE`(S-01)는 `hongikarchi/CLAWDE-legacy`로 이름을 바꿨다.
 
 ## 질문
 

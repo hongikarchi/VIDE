@@ -2,8 +2,8 @@
 id: RESEARCH-04
 title: jig 후보 기능의 과거 수행 경험 조사
 status: draft
-version: 0.3
-updated: 2026-10-07
+version: 0.4
+updated: 2026-10-08
 owner: agent:claude
 related: [PRD, FR-13, FR-21, OQ-07, SPEC-05, ADR-008, RESEARCH-01, RESEARCH-02, RESEARCH-03, ARCH-01, PLAN-44, PLAN-45, PLAN-46, PLAN-47]
 ---
@@ -40,7 +40,7 @@ related: [PRD, FR-13, FR-21, OQ-07, SPEC-05, ADR-008, RESEARCH-01, RESEARCH-02, 
 
 | 코드 | 유형 | 설명 | 활동 시기 | 주로 관련된 기능 |
 |---|---|---|---|---|
-| S-01 | 로컬 작업본 + GitHub 비공개 저장소 `CLAWDE` | 법규 검토 정적 빌드 도구. 주소 → 수집 → DB → 검토용 HTML 파이프라인 | 2026-08~09 | J-01·J-02·J-03·J-04 |
+| S-01 | 로컬 작업본 + GitHub 비공개 저장소 `CLAWDE`(2026-10-08 `CLAWDE-legacy`로 이름 변경, 새 cLAWde는 별도 저장소 `cLAWde`, ADR-040) | 법규 검토 정적 빌드 도구. 주소 → 수집 → DB → 검토용 HTML 파이프라인 | 2026-08~09 | J-01·J-02·J-03·J-04 |
 | S-02 | 로컬 폴더 (버전관리 없음) | Site Maker — 사이트 모델링 스킬(GH Python 컴포넌트 3종 + 문서 4종 + 배포 스크립트) | 2026-08-19 | J-01·J-00 |
 | S-03 | 로컬 폴더 | 규모검토 A — 준공업지역 지구단위계획 대상지 규모검토 1회성 작업본 | 2026-08 | J-01·J-03·J-04 |
 | S-04 | 로컬 작업공간 | 규모검토 B — 검토엔진·`law-review` 스킬을 갖춘 대규모 규모검토 작업공간 (RESEARCH-01 §2.4·§8이 다루는 작업공간과 같다) | 2026-09 | J-01~J-05 |
