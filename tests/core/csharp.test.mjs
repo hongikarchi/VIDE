@@ -50,3 +50,36 @@ test('Rhino direct execution runs in one undo record and generated code cannot c
     /name == "Rhino\.Runtime\.CommonObject" && symbol\.Name is "IsValid" or "IsValidWithLog" or "IsDocumentControlled"\) continue;/,
   );
 });
+
+// ZWCAD cannot run here (T-187 compiled real snippets against the ZWCAD assemblies in a scratch
+// harness). These source checks keep the escape-only shape of ADR-031 8: no namespace allow-list, so
+// `entity == null` (ZwSoft.ZwCAD.Runtime.DisposableWrapper.op_Equality) passes and the escapes stay denied.
+test('ZWCAD generated code is checked by escape rules only', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const policy = await readFile(
+    new URL('../../hosts/zwcad/worker/SdkCompiler.cs', import.meta.url),
+    'utf8',
+  );
+  assert.doesNotMatch(policy, /bool sdk =|ns == "ZwSoft\.ZwCAD\.DatabaseServices"/);
+  for (const member of [
+    '"System.IO"',
+    '"System.Net"',
+    '"System.Reflection"',
+    '"System.Diagnostics"',
+    '"ZwSoft.ZwCAD.ApplicationServices"',
+    '"System.Console"',
+    '"ZwSoft.ZwCAD.Runtime.DynamicLinker"',
+    '"ZwSoft.ZwCAD.DatabaseServices.HostApplicationServices"',
+    '"SaveAs"',
+    '"ReadDwgFile"',
+    '"DxfOut"',
+  ])
+    assert.ok(policy.includes(member), member);
+  // VIDE owns the transaction, including Dispose inherited from DisposableWrapper and `using (tr)`.
+  assert.ok(
+    policy.includes(
+      'symbol.Name == "Commit" || symbol.Name == "Abort" || symbol.Name == "Dispose"',
+    ),
+  );
+  assert.ok(policy.includes('UsingStatementSyntax'));
+});

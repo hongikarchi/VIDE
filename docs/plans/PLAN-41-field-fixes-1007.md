@@ -15,6 +15,7 @@ related: [ADR-031, ADR-036, ADR-037, SPEC-02, SPEC-04, SPEC-10, PLAN-12, PLAN-36
 ## 완료
 
 - **사이트 D1 읽기 한도 초과.** 24시간 526만 행(무료 500만 행)을 읽었고, 그중 99%가 Better Auth가 요청마다 하는 표 구조 검사였다. `src/sharing/auth.ts`에 `advanced.database.validateSchema: false`를 넣었다. 표 구조는 D1 마이그레이션이 소유한다. Worker 버전 `8f3d645f`로 배포했다(`5f57dd5`).
+- **T-187.** `hosts/zwcad/worker/SdkCompiler.cs`의 허용 목록을 Rhino `CodePolicy`식 탈출 규칙(파일·네트워크·프로세스·리플렉션·동적 로딩·ApplicationServices·`HostApplicationServices`, `Database` 저장·읽기·Xref 붙이기·Undo·Dispose, `Transaction` Commit·Abort·Dispose·`using (tr)`)으로 바꿨다. ZWCAD 2023 어셈블리로 실제 코드 19건을 컴파일해 `== null`·Colors·Geometry는 통과, 탈출 범주는 거절됨을 확인했다. 빌드 오류·경고 0. 실ZWCAD 시험(`tests/integration/zwcad-worker.mjs`)은 갱신만 했고 실행은 배포 검수 때 한다.
 
 ## 티켓
 

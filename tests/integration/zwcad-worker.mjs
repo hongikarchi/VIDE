@@ -14,13 +14,17 @@ try {
   for (const code of [
     'System.IO.File.WriteAllText("should-not-exist", "bad");',
     'tr.Commit();',
-    'var x = db.GetType();',
+    'tr.Dispose();',
+    'db.SaveAs("should-not-exist.dwg", DwgVersion.Current);',
+    'var x = db.GetType().GetMethods();',
   ]) {
     const rejected = await worker.execute(randomUUID(), 0, code);
     assert.equal(rejected.code, 'CODE_POLICY_REJECTED', JSON.stringify(rejected));
   }
   assert.equal((await worker.execute(randomUUID(), 0, 'bad syntax ;')).code, 'COMPILE_ERROR');
-  const code = `var blocks=(BlockTable)tr.GetObject(db.BlockTableId,OpenMode.ForRead);
+  // T-187: comparing an SDK object with null (DisposableWrapper.op_Equality) is ordinary code.
+  const code = `Entity probe=null;if(probe!=null||!(probe==null))return null;
+var blocks=(BlockTable)tr.GetObject(db.BlockTableId,OpenMode.ForRead);
 var space=(BlockTableRecord)tr.GetObject(blocks[BlockTableRecord.ModelSpace],OpenMode.ForWrite);
 var line=new Polyline();
 line.AddVertexAt(0,new Point2d(0,0),0,0,0);line.AddVertexAt(1,new Point2d(20000,0),0,0,0);
