@@ -2,7 +2,7 @@
 id: PLAN-45
 title: 규모검토 jig 세 개 — 사이트 모델링·건축 가능 영역과 매스·건축개요 (T-203~T-214)
 status: draft
-version: 0.5
+version: 0.6
 updated: 2026-10-07
 owner: agent:claude
 related: [SPEC-12, SPEC-07, SPEC-02, SPEC-08, SPEC-13, ARCH-01, ARCH-03, DESIGN, ADR-026, ADR-030, ADR-040, RESEARCH-04, RESEARCH-16, FR-09, FR-12, FR-14, FR-18, FR-21, FR-24, FR-25, C-05, OQ-08, OQ-09, OQ-16]
@@ -217,7 +217,7 @@ T-204 SPIKE 기하 ─ T-208 만들기 틀 ┘                            │
 
 | 티켓 | 상태 | 증거 |
 |---|---|---|
-| T-203 | 진행 — 출처 조사·재사용 지도·키 없는 호출·어댑터 후보 완료, 키 실호출 대기(키를 PC 키 파일에 넣는 동작이 권한 검사에서 막힘) | [SPIKE-2026-10-07-public-site-data](../tdd/SPIKE-2026-10-07-public-site-data.md), `tools/spikes/2026-10-07-public-site-data/` |
+| T-203 | 완료(2026-10-08) — 키 실호출 43단계 응답(공개 지점 2곳). 어댑터 6개 동작 확인, 건물 높이용 `LT_C_BLDGINFO` 추가 | [SPIKE-2026-10-07-public-site-data](../tdd/SPIKE-2026-10-07-public-site-data.md), `tools/spikes/2026-10-07-public-site-data/` |
 | T-204 | 완료(SPIKE) — 엔진(TS) 계산 + Rhino는 평면 면 목록 만들기만(`vide.bake.brep-faces@1`), Rhino 불리언 틀 불필요. Rhino 결합은 1e-5 m, `MergeCoplanarFaces` 쓰지 않음. 점검은 닫힘 + `SolidOrientation` Outward·부피 양수·엔진 부피 대조 | [SPIKE-2026-10-07-envelope](../tdd/SPIKE-2026-10-07-envelope.md), `tools/spikes/2026-10-07-envelope/` |
 | T-205~T-214 | 계획(PRD 채택 완료, 사용자 계획 검토 대기) | — |
 

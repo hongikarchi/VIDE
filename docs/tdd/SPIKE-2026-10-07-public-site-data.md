@@ -1,9 +1,9 @@
 ---
 id: SPIKE-2026-10-07-public-site-data
 title: 공공 자료 접근 — 주소·필지·용도지역·건물·SHP (T-203)
-status: draft
-version: 0.1
-updated: 2026-10-07
+status: review
+version: 0.2
+updated: 2026-10-08
 owner: agent:claude
 related: [PLAN-45, T-203, T-205, T-206, SPEC-12, ADR-040, OQ-09, RESEARCH-04, FR-09, FR-18, FR-24]
 ---
@@ -42,6 +42,26 @@ related: [PLAN-45, T-203, T-205, T-206, SPEC-12, ADR-040, OQ-09, RESEARCH-04, FR
 | 서울도시공간포털 `pacbnd/getList2.json`(키 불필요, 공공 필지) | 200 | JSON 배열. 서울 전용이라 전국 어댑터로는 쓰지 않는다 |
 
 결론: 세 자료원 모두 **HTTP 200 안에 오류를 담는다**(data.go.kr은 401도 씀). 어댑터는 HTTP 상태가 아니라 봉투의 상태 코드로 '키 없음'·'거절'·'한도 초과'·'빈 결과'를 가른다(SPEC-12.4 '에러 없는 빈 결과', SPEC-12.16 자료원 실패).
+
+## 키 실호출 결과 (2026-10-08 실행)
+
+사용자가 S-04의 공공 자료 키 네 개(`VWORLD_KEY`, `VWORLD_DOMAIN`, `JUSO_KEY`, `DATA_GO_KR_KEY`)를 PC 전용 `public-data.env`에 직접 옮겼다. 값은 출력하지 않았다. `probe.mjs keyed`를 공개 지점 두 곳(서울시청, 남산타워)에만 실행했고 43단계가 모두 응답했다.
+
+| 자료 | 결과 |
+|---|---|
+| 주소 → PNU(juso) | 지번·도로명 모두 후보와 `admCd`·`mtYn`이 오고 PNU를 조립할 수 있다. 산 번지(`mtYn=1`)도 맞다 |
+| VWorld 검색 | 후보 여러 개를 주고 `id`가 PNU 형식이다. 질문 카드의 필지 후보 목록으로 쓸 수 있다 |
+| 지적(`LP_PA_CBND_BUBUN`) | PNU 조회 1건 MultiPolygon. 상자 조회는 `size` 1~1000이고 1001은 `INVALID_RANGE`(200 안의 오류). `page.total`로 쪽 나눔이 된다 |
+| 건물(`LT_C_SPBD`) | 외곽선과 층수. 높이 없음. 남산타워 상자는 `NOT_FOUND`(200) — 빈 결과를 오류와 구분해야 한다 |
+| 건물 정보(`LT_C_BLDGINFO`) | 새로 확인. 외곽선과 함께 `height`·지상/지하 층수·용도·건폐율·용적률을 준다. 건물 높이의 1순위 후보로 쓴다(없으면 건축HUB `heit`, 그다음 층수 × 3.3 m 추정) |
+| 용도지역(`LT_C_UQ111` 상자·점) | 고시 번호(`dnum`·`dyear`)가 온다 |
+| 지구단위계획 점 조회 | 대상지에서는 결정 정보가 오고, 없는 곳은 `NOT_FOUND` |
+| 토지이용계획 속성(NED) | 19~23행. 저촉 여부 포함 |
+| 토지 특성(NED) | `lndpclAr`(면적)·공시지가·용도지역 |
+| 건축HUB 표제부 | `pageNo`를 함께 보내야 전 행이 온다(빼면 1행만) — 키 없는 조사 결과와 같다 |
+| GIS건물통합정보 WFS | `ServiceExceptionReport` — 쓰지 않는다 |
+
+결론: T-205의 어댑터 여섯 개는 키로 모두 동작한다. 건물 높이는 `LT_C_BLDGINFO`를 더해 일곱 번째 어댑터로 둔다.
 
 ## 질문별 결과
 
