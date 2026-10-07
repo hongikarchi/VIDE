@@ -2,7 +2,7 @@
 id: SPIKE-2026-10-07-clawde-sources
 title: cLAWde 새 저장소 착수 전 세 출처(S-01·S-04·S-19) 종합 조사
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-10-07
 owner: agent:claude
 related: [PLAN-46, T-215, T-216, SPEC-13, ARCH-01, ADR-040, RESEARCH-04, RESEARCH-16, C-06, C-04]
@@ -106,8 +106,8 @@ related: [PLAN-46, T-215, T-216, SPEC-13, ARCH-01, ADR-040, RESEARCH-04, RESEARC
 | `ontology/` | 문서·판·단위·관계·주제·판정 레코드 스키마, 마이그레이션, D1 적재 묶음 생성 | 같은 곳 → D1 |
 | `gates/` | DB 게이트·범위 게이트·답 게이트, 게시 전 필수 | CI와 수집 작업 끝 |
 | `engine/` | 적용 조건 판정, 안전 산식 계산, 위임 그래프 순회, 인용 해석(공용 TS, Workers와 Node 양쪽) | Workers |
-| `answer/` | 질문 → 주제 → 근거 팩 → 판정 → LLM 문장 → 인용 검증 → `Answer` | Workers |
-| `api/` | `/v1` 여섯 끝점, Bearer 검증, 스키마 검사 | Workers |
+| `answer/` | 질문 → 주제 → 근거 팩 → 판정 → 레시피 → `Answer`, `/v1/verify`의 문장 검사, 골든 묶음 | Workers |
+| `api/` | `/v1` 아홉 끝점(여섯 + `recipes`·`verify`·`golden`), Bearer 검증, 스키마 검사 | Workers |
 | `rules/` | 사람이 쓰는 판정 레코드 원본(JSON/YAML, Git), 검토 도구 | Git → D1 |
 
 ### 데이터 3계층
@@ -148,11 +148,12 @@ related: [PLAN-46, T-215, T-216, SPEC-13, ARCH-01, ADR-040, RESEARCH-04, RESEARC
 2. 주제 고르기: 동의어·트리거 표(S-01/S-04 `law-map.json`·`synonyms.json`)와 FTS로 주제 후보를 고른다(결정적).
 3. 근거 팩: 주제의 판정 레코드, `refs` 원문, 위임 사슬(법 → 영 → 규칙 → 조례·고시)을 모은다.
 4. 판정: 적용 조건을 프로필로 평가한다. 필요한 입력이 없으면 `needs`, 계획 의존이면 `conditional`과 `checks[].dependsOn`, 규칙이 없으면 `unknown`. 수치는 안전 산식 엔진만 계산한다.
-5. 문장: LLM은 근거 팩만 받아 `conclusion`·`reasons`·`interpretation`을 JSON으로 쓴다. 판정 값을 바꿀 수 없다.
-6. 인용 검증: 모든 `refs`가 근거 팩의 ref 화이트리스트 안인가, 문장의 수치·단위가 인용 원문 또는 엔진 계산값에 있는가, `conditional`을 단정으로 바꾸지 않았는가. 어긋난 문장은 빼고, 근거가 남지 않으면 `unknown`.
-7. `interpretation.basis`는 판정 레코드가 `verified`일 때만 `'verified'`이고 LLM 문장은 늘 `'draft'`다.
+5. 레시피: cLAWde는 LLM을 부르지 않는다(2026-10-07 결정, 아래 「결정」 4). `conclusion`·`reasons`·`interpretation`은 판정 레코드의 결정적 문장으로 채우고, 근거 팩(`evidence`)·계산값(`computed`)·레시피(문장 틀 판, 출력 구조, 허용 `refs`, 나올 수 있는 수치, 최소 모델 등급·effort)를 함께 낸다. 문장은 VIDE가 사용자의 CLI로 쓴다(SPEC-13.13).
+6. 인용 검증: 모든 `refs`가 근거 팩의 ref 화이트리스트 안인가, 문장의 수치·단위가 인용 원문 또는 엔진 계산값에 있는가, `conditional`을 단정으로 바꾸지 않았는가. VIDE가 먼저 검사하고 cLAWde `POST /v1/verify`가 같은 규칙과 레시피 판·모델 자격을 다시 본다. 실패한 문장은 답으로 보이지 않는다.
+7. `interpretation.basis`는 판정 레코드가 `verified`일 때만 `'verified'`다. VIDE에서 쓴 문장은 'AI 문장(검증됨)'으로 따로 표시한다.
+8. 골든 질문 묶음(기대 판정·필수 조항)을 저장소에서 관리하고 `/v1/golden`으로 내 VIDE가 모델별 인증에 쓴다.
 
-LLM 호출 키는 서비스(Workers 비밀)에만 둔다. VIDE는 cLAWde의 LLM 키를 갖지 않는다.
+cLAWde에는 답 문장용 LLM 키를 두지 않는다.
 
 ### 배포와 시험
 
@@ -205,7 +206,7 @@ LLM 호출 키는 서비스(Workers 비밀)에만 둔다. VIDE는 cLAWde의 LLM 
 |---|---|---|
 | `GET /v1/meta` `{apiVersion, lawDbDate, stages[]}` | 게시 기록 | 프로필 키 어휘를 `meta`로 알리는 필드가 계약 표에 없다(「제공할 것」 3에만 있음) → 보완 2 |
 | `POST /v1/ask` → `Answer` | 답 생성 7단계 | `needs.options`·`figures`는 출처에 바탕이 없다(새로 만듦) |
-| `POST /v1/checklist` `stage` | 판정 레코드 `stages[]` | 설계 단계 어휘 미정 → 보완 3 |
+| `POST /v1/checklist` `stage` | 판정 레코드 `stages[]` | 설계 단계 어휘 → 보완 3(결정됨) |
 | `GET /v1/articles/{ref}` | L2 `units` | `ref` 경로 표기·`status`·`promulgatedDate` → ARCH-01에 반영 |
 | `GET /v1/search` | `units_fts` + `bi` | 차이 없음 |
 | `POST /v1/contributions` | 없음 | 출처 셋 모두 없다. 받은 값은 L3 판정 레코드가 아니라 별도 '프로젝트 사실' 표에 쌓고 사람이 검토한다(cLAWde 설계) |
@@ -218,7 +219,7 @@ LLM 호출 키는 서비스(Workers 비밀)에만 둔다. VIDE는 cLAWde의 LLM 
 
 1. 자치법규 조항 ID는 `ordin:<지자체>/<조례명>/제N조[/①]`(항까지만)로 제안한다. ARCH-01에는 접두만 적었다.
 2. `/v1/meta`에 `profileKeys[{key, unit?, label}]`를 계약 표로 올린다(지금은 「제공할 것」 3에만 있음).
-3. 설계 단계 어휘: SPEC-13.4의 네 단계(규모검토·계획설계·기본설계·실시설계)를 `stages[]`의 기본값으로 둘지, 출처의 인허가 단계(설계·심의·실시·사용승인)를 함께 둘지.
+3. 설계 단계 어휘(결정됨, 2026-10-07 "설계 단계 + 인허가 단계 (추천)"): 네 설계 단계가 `stages[].id`(`scale-review`·`schematic`·`design-development`·`construction-docs`)이고, 인허가 시점은 항목의 `permitPhases[]`(`review`·`permit`·`construction-start`·`occupancy`)로 붙는다. 판정 레코드의 `stages[{stage, why}]`에 `permitPhases[]`를 더한다(S-04 `phase`가 바탕). ARCH-01·SPEC-13.6 반영.
 4. `Answer`에 판정 레코드 ID(`ruleIds[]`)를 선택 필드로 두면 역전송·다시 묻기 추적에 쓸 수 있다. VIDE는 지금 쓰지 않으므로 필수로 하지 않는다.
 
 ## 첫 단계(cLAWde M1) 제안
@@ -226,13 +227,13 @@ LLM 호출 키는 서비스(Workers 비밀)에만 둔다. VIDE는 cLAWde의 LLM 
 **목표: 법령 정본과 조항 조회까지.** 판정·LLM 없이 VIDE가 조항을 확인할 수 있는 상태.
 
 1. 새 저장소 뼈대(TS, Node 24 + Workers), AI 규약에 S-04 '다섯 절대 규칙'과 함정 목록.
-2. 수집기 다시 작성: 등록 목록은 S-04의 핵심 법(약 40종) + 지자체 둘의 건축·도시계획·주차장 조례. `law:check`·`law:fetch`(역행 방지)·`law:future`·`law:tiers`.
+2. 수집기 다시 작성: 등록 목록은 S-04의 핵심 법(약 40종) + 전국 조례 약 1,100건(S-19 범위, 2026-10-07 결정). `law:check`·`law:fetch`(역행 방지)·`law:future`·`law:tiers`. 조례 전량은 기관명 거르기·별표 첨부 변환·위임 대조를 모두 거쳐야 하므로 검증 시간과 범위 게이트의 할 일이 크게 늘어난다. 처음 전량 수집은 사용자 PC에서 한다(PLAN-46 「결정이 필요한 질문」 9).
 3. 정규화·조항 ID·한글 2-gram 색인, L1(R2)·L2(D1) 적재. D1의 FTS5·용량 확인을 이 단계의 SPIKE로 한다.
 4. DB 게이트와 게시(`lawDbDate`).
 5. `/v1/meta`·`/v1/articles/{ref}`·`/v1/search`와 정적 Bearer.
 6. 계약 시험: VIDE T-216의 응답 스키마로 세 끝점이 통과.
 
-**완료 기준:** 등록 법령 전부가 낡음 검사를 통과하고, 정해 둔 조항 ID 30개(부칙·별표·자치법규 포함)가 원문·시행일·법제처 링크와 함께 나오며, 계약 시험이 통과한다.
+**완료 기준:** 등록 법령·조례 전부가 낡음 검사와 DB 게이트를 통과하고, 정해 둔 조항 ID 30개(부칙·별표·자치법규 포함)가 원문·시행일·법제처 링크와 함께 나오며, 계약 시험이 통과한다.
 
 **다음 단계:** M2 판정 레코드 v2와 `/v1/ask`(주제 5개: 일조 사선·주차·건폐율·용적률·높이 — 답 게이트 포함), M3 `/v1/checklist`(단계 배치)·범위 게이트, M4 `/v1/contributions`와 토큰 발급 연동.
 
@@ -242,10 +243,12 @@ LLM 호출 키는 서비스(Workers 비밀)에만 둔다. VIDE는 cLAWde의 LLM 
 - S-04의 세대 구분(1~3세대)은 여러 문서에서 재구성했다.
 - D1의 FTS5 동작과 크기 한도는 확인하지 않았다(M1의 SPIKE).
 
-## 결정이 필요한 질문
+## 결정
 
-1. 원문 아카이브(L1)를 R2에 둘지 별도 Git 저장소에 둘지, 수집 작업을 사용자 PC에서 돌릴지 예약 작업으로 돌릴지.
-2. 자치법규 범위: 처음부터 S-19의 조례 전체(약 1,100건)인가, 쓰는 지자체부터인가.
-3. 설계 단계 어휘(남은 보완 3).
-4. 답 문장을 쓸 LLM과 키를 cLAWde 서비스에 두는 것(비용 주체).
-5. 판정 레코드를 사람이 확인(`verified`)하는 사람과 절차.
+2026-10-07 사용자 검토 결과다. 남은 것은 PLAN-46 「결정이 필요한 질문」 9·10이 소유한다.
+
+1. **원문 아카이브 위치와 수집 실행 위치:** 사용자 결정 대기. 사용자 질문("cloudflare 예약 작업으로 할 경우, 제한이나 비용이 큰 문제가 될까?")에 대한 한도·비용 분석과 권장안(처음 전량은 PC, 이후 변경분만 cron + Queues·Workflows, 기존 Workers Paid 안)은 PLAN-46 질문 9의 2.
+2. **자치법규 범위(결정됨):** "전국 약 1,100개". 처음부터 조례 전체를 게이트와 함께 모은다(「첫 단계」 2).
+3. **설계 단계 어휘(결정됨):** "설계 단계 + 인허가 단계 (추천)"(남은 보완 3).
+4. **답 문장(결정됨):** 사용자는 cLAWde에 LLM을 두지 않고 VIDE에서 사용자의 CLI가 쓰는 안을 골랐고, "품질은 각자라는 말이 좀 걸리네. 분석하는 방법이나 모델을 계획해서 주면 퀄리티 컨트롤이 가능하지 않을까?"라고 했다. cLAWde가 판정·근거 팩·레시피·검증 끝점·골든 묶음을 주고 VIDE가 그 방법·모델로 쓰고 검증한다(「답 생성과 인용 검증」, SPEC-13.13, PLAN-46 T-236).
+5. **판정 레코드 확인자:** 미정. 기본값: 사용자(관리자)가 VIDE 관리자 화면 또는 cLAWde 저장소 PR로 `verified`를 표시한다(PLAN-46 질문 10).

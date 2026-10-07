@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.98
+version: 0.99
 updated: 2026-10-07
 owner: agent:codex
 related: [PLAN-47, SPEC-14, ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35, PLAN-36, ADR-039, PLAN-38, PLAN-39, PLAN-42, ADR-040, ADR-041, PLAN-43, SPEC-13, PLAN-46]
@@ -1032,25 +1032,35 @@ cLAWde·ArchiDB·Site Modeling·Structure Analysis는 각자의 저장소와 배
 
 | 끝점 | 요청 | 응답 |
 |---|---|---|
-| `GET /v1/meta` | — | `{service:'clawde', apiVersion, lawDbDate, stages[{id, label}], profileKeys[{key, label, unit?}]}` |
+| `GET /v1/meta` | — | `{service:'clawde', apiVersion, lawDbDate, stages[{id, label}], permitPhases[{id, label}], profileKeys[{key, label, unit?}], answerModels[{provider, models[], effort}], recipes[{id, version}]}` |
 | `POST /v1/ask` | `{question, stage, profile, model?, projectRef?, locale:'ko'}` | `Answer` |
-| `POST /v1/checklist` | `{stage, profile, model?}` | `{lawDbDate, items[{topic, stage, status, reason, refs[], answerHint?}]}` |
+| `POST /v1/checklist` | `{stage, profile, model?}` | `{lawDbDate, items[{topic, stage, permitPhases?[], status, reason, refs[], answerHint?}]}` |
 | `GET /v1/articles/{ref}` | — | `Article` |
 | `GET /v1/search?q=&limit=` | — | `{hits[Article 요약]}` |
 | `POST /v1/contributions` | `{projectRef, idempotencyKey, items[{key, value, unit?, basis, confirmedAt}]}` | `{receiptId, accepted[key], rejected[{key, reason}]}` |
+| `GET /v1/recipes/{id}?version=` | — | `Recipe` |
+| `POST /v1/verify` | `{answerId, recipe{id, version}, writer{provider, model, effort}, output}` | `{pass, recipeCurrent, failures[{code, path, message}]}` |
+| `GET /v1/golden?recipe=` | — | `{id, version, recipe{id, version}, items[{goldenId, question, stage, profile, expectVerdict, requiredRefs[]}]}` |
 
   - `profile`: `{[key]: {value, unit?, source:'service'|'model'|'user'|'assumed', version?}}`. 키는 cLAWde가 `meta`로 알리는 어휘(예: `site.area`, `site.zoning`, `plan.mainUse`, `plan.gfa`, `plan.floorsAbove`)를 쓴다. AI 추정 값은 싣지 않는다(SPEC-13.4).
   - `model`: `{northAngleDeg, siteArea, adjacent[{bearingDeg, kind, roadWidth?}], surroundingHeights{max, median}, shpAttrs{}}`. 수치·코드만 싣고 형상은 싣지 않는다.
-  - `Answer`: `{answerId, verdict:'applies'|'not-applies'|'conditional'|'unknown', conclusion, reasons[{text, refs[]}], citations[Article 발췌], interpretation[{text, refs[], basis:'verified'|'draft'}], checks[{text, dependsOn?}], needs[{key, question, options[], recommended?, why}], usedProfile[key], constraints?[{key, value, unit, refs[]}], figures?[{mime:'image/png'|'image/svg+xml', url, caption}], lawDbDate, generatedAt}`.
+  - `Answer`: `{answerId, verdict:'applies'|'not-applies'|'conditional'|'unknown', conclusion, reasons[{text, refs[]}], citations[Article 발췌], interpretation[{text, refs[], basis:'verified'|'draft'}], checks[{text, dependsOn?}], needs[{key, question, options[], recommended?, why}], usedProfile[key], constraints?[{key, value, unit, refs[]}], figures?[{mime:'image/png'|'image/svg+xml', url, caption}], evidence?[{ref, text, effectiveDate}], computed?[{key, value, unit, refs[]}], recipe?{id, version, allowedRefs[], numbers[{value, unit?, from}], models[{provider, model, effort}]}, lawDbDate, generatedAt}`.
+  - 답 문장 분리(2026-10-07 사용자 결정, SPEC-13.13): cLAWde는 답 문장용 LLM을 부르지 않는다. `conclusion`·`reasons`·`interpretation`은 판정 레코드에서 나온 결정적 문장(템플릿·사람이 쓴 문구)이다. `evidence`는 근거 팩의 단위 원문, `computed`는 안전 산식 엔진이 낸 값, `recipe`는 이 답의 문장을 VIDE가 쓰는 방법이다. 셋 중 하나라도 없으면 VIDE는 문장을 쓰지 않고 결정적 필드만 보인다(하위 호환). `numbers[].from`은 수치가 든 원문의 `ref` 또는 `computed:<key>`다.
+  - `stages[].id`(2026-10-07 사용자 결정 "설계 단계 + 인허가 단계 (추천)"): 설계 단계가 주축이며 `scale-review`(규모검토)·`schematic`(계획설계)·`design-development`(기본설계)·`construction-docs`(실시설계) 네 값이다. 요청의 `stage`는 이 중 하나다. 인허가 시점은 축이 아니라 체크리스트 항목의 선택 필드 `permitPhases[]`로 붙으며 값은 `review`(심의)·`permit`(허가)·`construction-start`(착공)·`occupancy`(사용승인)다. 표시 이름은 `meta.permitPhases`가 준다.
+  - `Recipe`: `{id, version, promptTemplate, outputSchema(JSON Schema), rules{refs:'evidence-only', numbers:'evidence-or-computed', verdictLock:true}, models[{provider:'claude'|'codex', model, effort}], maxOutputChars}`. `promptTemplate`은 `{{question}}`·`{{verdict}}`·`{{evidence}}`·`{{computed}}`·`{{checks}}` 자리만 가지며 VIDE가 다른 지시를 덧붙이지 않는다. 출력은 `{verdict, conclusion, reasons[{text, refs[]}], interpretation[{text, refs[]}]}` JSON이다. `models`는 이 레시피를 쓸 수 있는 최소 모델 등급 목록이다(예: Claude Opus·Sonnet 5.x, Codex Sol급, `effort:'high'`). 버전이 붙은 레시피는 바뀌지 않으므로 VIDE는 `(id, version)`으로 캐시한다. `meta.answerModels`는 현재 레시피들의 자격 모델을 모아 알린다.
+  - `POST /v1/verify`: 서버가 VIDE의 검사(아래 「답 문장」 ①~⑤)를 같은 규칙으로 다시 하고, 레시피 버전이 현재인지(`recipeCurrent`)와 작성 모델이 `models`에 드는지를 본다. `failures[].code`는 `SCHEMA`·`REF_OUTSIDE`·`NUMBER_UNSUPPORTED`·`VERDICT_CHANGED`·`RECIPE_STALE`·`MODEL_NOT_QUALIFIED`다. 서버는 받은 문장을 판정 레코드나 법령 DB에 넣지 않는다.
+  - `GET /v1/golden`: cLAWde가 관리하는 골든 질문 회귀 묶음. 질문마다 기대 판정과 반드시 인용할 조항을 준다.
   - `Article`: `{ref, lawName, article, title, excerpt, effectiveDate, sourceUrl, lawDbDate}`. `ref`는 cLAWde 조항 ID(예: `law:건축법/제61조/①`, 별표 `…/별표N`, 부칙 `…/부칙<공포번호>`, 자치법규는 `ordin:` 접두)이고 `sourceUrl`은 법령 원문(법제처) 링크다. 선택 필드 `status:'in-force'|'not-yet'|'repealed'`(공포 후 시행 전 구분)·`promulgatedDate`를 둘 수 있다(2026-10-07 T-215 [SPIKE](../tdd/SPIKE-2026-10-07-clawde-sources.md)).
   - 보완(2026-10-07, T-216): 검사기는 `src/contracts/clawde.ts`의 zod 스키마 하나이며 엔진 커넥터와 계약 시험이 같이 쓴다. `excerpt`·`sourceUrl`은 `null`일 수 있다(그 조항만 '원문 없음', SPEC-13.12). 체크리스트는 모든 단계의 항목을 돌려주고 `items[].status`는 `verdict`와 같은 네 값이다(`unknown` = 확인 필요). 검색 결과 요약은 `{ref, lawName, article, title, excerpt}`. 2xx가 아닌 응답의 본문은 `{error: {code, message}}`이다(400 요청 형식, 401 토큰, 404 조항, 5xx 서비스).
   - `GET /v1/articles/{ref}`의 `{ref}`는 `encodeURIComponent(ref)` 한 경로 조각이다(`ref` 안의 `/`도 인코딩).
   - `lawDbDate`: cLAWde가 낡음 검사와 법령 DB 게이트를 모두 통과해 마지막으로 게시한 정본의 날짜(`YYYY-MM-DD`). 가장 늦은 시행일이 아니다.
+- **답 문장(SPEC-13.13, PLAN-46 T-236).** 엔진은 `Answer.recipe`가 있으면 사용자의 CLI(「CLI 기본 로그인 실행 경계」의 기본 로그인)를 단발 실행으로 한 번 띄워 문장을 쓴다. 모델·effort는 레시피 `models`에서 이 PC에 있는 첫 항목으로 고정하고(대화의 모델을 쓰지 않음), VIDE 지시 묶음·MCP·작업 폴더 도구 없이 `promptTemplate`에 근거 팩만 채워 보낸다. 쓸 수 있는 모델이 없으면 실행하지 않는다. 출력 검사: ① `outputSchema` 통과 ② 모든 `refs` ⊆ `recipe.allowedRefs`(= `evidence[].ref`) ③ 문장의 수치(단위 포함)가 모두 `recipe.numbers`에 있음 ④ 출력 `verdict`가 서비스 `verdict`와 같음(`conditional`·`unknown`을 단정으로 바꾸면 실패) ⑤ 길이 상한. 로컬 검사를 통과하면 `POST /v1/verify`를 부르고, 서버가 실패를 주면 실패다. 서비스가 닿지 않아 서버 검증을 못 하면 로컬 통과로 보이고 `verify:'local-only'`를 남긴다. 실패한 문장은 답 카드에 보이지 않고 결정적 필드와 '문장 생성 검증 실패'만 보인다. 자동으로 다시 쓰지 않는다.
+- **모델 인증(골든 회귀).** 사용자가 요청하면 엔진이 `GET /v1/golden`의 질문마다 `ask` → 문장 생성 → 검사를 돌려 기대 판정·필수 조항과 견준다. 결과는 `<data>/legal-model-cert.json {[provider/model/effort]: {goldenVersion, recipe, passed, total, at}}`에 두고, 마지막 결과가 실패인 모델은 다시 통과할 때까지 문장 생성에 쓰지 않는다. 토큰 사용이 크므로 사용자가 누를 때만 돈다.
 - **엔진 검사.** `verdict`가 `unknown`이 아닌데 `citations`가 비면 `unknown`으로 낮춘다. `reasons[].refs`·`constraints[].refs`가 `citations`에 없으면 그 항목에 `unverifiedRef`를 붙이고 `constraints`는 jig 출력에서 뺀다. `figures`는 `<img>`로만 그리고 SVG는 스크립트·외부 참조를 지운 뒤 data URL로 둔다.
 - **엔진 API.** `GET/PUT /api/v1/projects/:id/legal/profile`, `POST …/legal/ask {question, stage?, confirmSendHash?}` → `{answer, number}` 또는 `{needsConfirm: {items[], hash}}`, `GET …/legal/checklist?stage=`, `GET …/legal/answers[?number=]`, `POST …/legal/contribute {keys[]}`. 원격 세션은 `contribute`와 설정 쓰기가 403이다.
-- **저장.** 프로젝트 DB 표 `legal_profile(key, value_json, source, version, updated_at)`, `legal_answers(number, question, stage, sent_json, sent_hash, answer_json, law_db_date, fetched_at, stale)`, `legal_articles(ref, article_json, fetched_at)`, `legal_contributions(key, value_hash, receipt_id, sent_at)`. 캐시 열쇠는 `(question 정규화, stage, sent_hash)`다.
+- **저장.** 프로젝트 DB 표 `legal_profile(key, value_json, source, version, updated_at)`, `legal_answers(number, question, stage, sent_json, sent_hash, answer_json, law_db_date, fetched_at, stale, prose_json, recipe_id, recipe_version, writer_provider, writer_model, writer_effort, verify_json)`(뒤 일곱 열은 문장 생성 감사 기록이며 실패한 문장도 남긴다), `legal_articles(ref, article_json, fetched_at)`, `legal_contributions(key, value_hash, receipt_id, sent_at)`. 캐시 열쇠는 `(question 정규화, stage, sent_hash)`다.
 - **jig 능력.** `service.clawde`(ARCH-03 `Capability`에 추가). 공식 jig만 선언할 수 있고, 엔진이 읽기 결과(답·체크리스트·`constraints`)만 입력으로 넘긴다. 역전송은 어떤 jig에도 능력으로 주지 않는다.
-- **대화 도구.** `legal_ask`·`legal_checklist`·`legal_article`·`legal_answers`는 VIDE MCP 도구이며, 서비스가 연결되고 프로젝트에서 켜져 있을 때만 턴의 도구 목록에 넣는다. 오류 코드는 `SERVICE_UNAVAILABLE`·`SERVICE_AUTH`·`SERVICE_BAD_RESPONSE`·`SEND_NOT_CONFIRMED`.
+- **대화 도구.** `legal_ask`·`legal_checklist`·`legal_article`·`legal_answers`는 VIDE MCP 도구이며, `legal_ask`는 결정적 답과 검증을 통과한 문장(`prose`, 없으면 `proseStatus:'failed'|'no-model'|'none'`)을 함께 돌려준다. 대화 AI는 답 카드 문장을 대신 쓰지 않는다. 도구는 서비스가 연결되고 프로젝트에서 켜져 있을 때만 턴의 도구 목록에 넣는다. 오류 코드는 `SERVICE_UNAVAILABLE`·`SERVICE_AUTH`·`SERVICE_BAD_RESPONSE`·`SEND_NOT_CONFIRMED`.
 
 ## 7. 개발 기반과 변경 경계
 
