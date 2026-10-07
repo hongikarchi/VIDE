@@ -3,7 +3,7 @@
 // and a window lists the sheets (number, title, paper) with a white-paper preview of the chosen one
 // in the project's plot style table. Candidates (A-ratio blocks) become sheets only after
 // [도곽으로 쓰기]. VIDE writes no file (plot and PDF stay in CAD). Remote sessions only look.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api } from './gateway.ts';
 import { remoteSession } from './remote-panel.ts';
 import { createViewport } from './viewport.ts';
@@ -391,7 +391,14 @@ function SheetsWindow({
   );
 }
 
-export function DrawingSheets({ projectId }: { projectId: string }) {
+export function DrawingSheets({
+  projectId,
+  empty = null,
+}: {
+  projectId: string;
+  /** Shown while no drawing has been read (the 도면 반영 jig's tab; the dashboard shows nothing). */
+  empty?: ReactNode;
+}) {
   const [state, setState] = useState<SheetsState | undefined>();
   const [target, setTarget] = useState('');
   const [open, setOpen] = useState(false);
@@ -418,7 +425,7 @@ export function DrawingSheets({ projectId }: { projectId: string }) {
       clearInterval(timer);
     };
   }, [base, take]);
-  if (!state || (!state.drawings.length && !state.result)) return null;
+  if (!state || (!state.drawings.length && !state.result)) return <>{empty}</>;
   const chosen = target || state.result?.root || state.drawings[0]?.path || '';
   const reading = state.state === 'reading';
   const find = async () => {

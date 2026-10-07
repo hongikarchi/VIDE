@@ -165,6 +165,11 @@ export const OFFICIAL_JIG_ROUTING: Record<string, { intent: string; words: strin
       'Interior finish schedule: choose finish codes from the finish-code library, adjust layer thicknesses, assign floor, wall and ceiling codes to rooms, print the room finish schedule and the finish list.',
     words: ['마감 일람표', '실 마감표', '실내재료마감표', '마감표', '마감 코드'],
   },
+  drawing: {
+    intent:
+      'Carry model changes back into an existing CAD drawing keeping its format (backflow: rows to add, modify or delete, conflicts, save as a new file), or preview the drawing sheets found by their title blocks with the project plot style table (CTB).',
+    words: ['모델 변경 반영', '도면에 반영', '도면 역반영', '역반영', '도곽 미리보기', '도곽 찾기'],
+  },
 };
 
 // Words that name the file itself or change it: these requests always go to the file.
@@ -997,6 +1002,7 @@ const OFFICIAL_JIG_NAMES: Record<string, string> = {
   sync: '모델·도면 정합',
   knowledge: '프로젝트 현황',
   finish: '마감 일람표',
+  drawing: '도면 반영',
 };
 /** The official jigs as the rules see them (their words open a jig without Jev). */
 export function officialRouteJigs(): RouteJig[] {

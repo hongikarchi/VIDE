@@ -248,7 +248,8 @@ try {
   await official.first().waitFor();
   // J-01 사이트 모델링, J-04 건축 가능 영역·매스 and J-11 건축개요 are official tool jigs
   // (vide/site-model T-207, vide/buildable-mass T-209, vide/building-summary T-213): one card each.
-  assert.equal(await official.count(), 13);
+  // 도면 반영 (T-234) is a built-in screen jig of the catalogue.
+  assert.equal(await official.count(), 14);
   assert.equal(
     await dialog.locator('.jig-card[data-source="official"][data-status="planned"]').count(),
     5,

@@ -52,6 +52,16 @@ export const JIGS: JigEntry[] = [
     basis: 'SPEC-11 · PLAN-43 T-198',
   },
   {
+    id: 'drawing',
+    code: 'J-DWG',
+    name: '도면 반영',
+    summary:
+      '모델 변경을 기존 CAD 도면에 형식 그대로 반영합니다(레이어·블록·Handle·DWG 버전 유지). 열린 도면은 바로 고치고 되돌릴 수 있으며, 닫힌 도면은 같은 폴더에 새 파일로 씁니다. 도면의 도곽을 찾아 프로젝트 CTB로 미리 봅니다.',
+    inputs: ['Rhino Sync', 'ZWCAD 연결 도면', '레이어 대응'],
+    status: 'available',
+    basis: 'SPEC-14 · PLAN-47 T-232~T-235',
+  },
+  {
     // The official tool jig `vide/site-model` (PLAN-45 T-207); the JIG list shows its card.
     id: 'vide/site-model',
     code: 'J-01',

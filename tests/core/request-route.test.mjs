@@ -289,6 +289,11 @@ test('the open jig instance settings become routing context; the query carries t
   const jig = routeRequest('구조 검토 해줘', [], [], context);
   assert.deepEqual([jig.target, jig.jig.id, jig.jig.name], ['jig', 'structure', '구조 검토']);
   assert.equal(goesToAi(jig), false);
+  // 도면 반영 (SPEC-14.14 2, T-234): backflow and the sheet preview open the jig screen.
+  for (const body of ['모델 변경 반영 열어줘', '도곽 미리보기 보여줘']) {
+    const drawing = routeRequest(body, [], [], { jigs: officialRouteJigs() });
+    assert.deepEqual([drawing.target, drawing.jig?.id], ['jig', 'drawing'], body);
+  }
   // The /route query: settings by key, title and help; no values, units or ranges leave the screen.
   const query = routeQuery(
     '경간 11로',
