@@ -10,7 +10,7 @@ related: [ADR-031, ADR-036, ADR-037, SPEC-02, SPEC-04, SPEC-10, PLAN-12, PLAN-36
 
 # 2026-10-07 실사용 수정 묶음
 
-[실제 데스크톱 검수](../tdd/VERIFY-2026-10-07-desktop-product-audit.md)와 0.2.24 진단 묶음에서 나온 문제를 고친다. 2026-10-07 사용자 지시: "그렇게 진행해주고, 플러그인들은 그냥 다 정리해줘". 방향은 [ADR-031](../decisions/ADR-031-stock-first.md)(순정 우선: VIDE는 돕는 쪽이고 막지 않는다)이다.
+실제 데스크톱 검수(`VERIFY-2026-10-07-desktop-product-audit`, 다른 세션 작성 중)와 0.2.24 진단 묶음에서 나온 문제를 고친다. 2026-10-07 사용자 지시: "그렇게 진행해주고, 플러그인들은 그냥 다 정리해줘". 방향은 [ADR-031](../decisions/ADR-031-stock-first.md)(순정 우선: VIDE는 돕는 쪽이고 막지 않는다)이다.
 
 ## 완료
 
