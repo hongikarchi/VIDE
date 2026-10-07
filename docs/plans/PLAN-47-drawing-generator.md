@@ -2,8 +2,8 @@
 id: PLAN-47
 title: CAD 도면 역반영과 도곽 미리보기 (T-225~T-235)
 status: draft
-version: 0.4
-updated: 2026-10-07
+version: 0.5
+updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-14, SPEC-01, SPEC-02, SPEC-05, PLAN-43, PLAN-44, ARCH-01, DESIGN, SPIKE-2026-10-07-drawing-export, ADR-022, ADR-027, ADR-030, HOST-RHINO, HOST-ZWCAD, RESEARCH-04, C-08, FR-02, FR-03, FR-04, FR-12, FR-14, FR-16, FR-18]
 ---
@@ -67,7 +67,7 @@ T-232는 Sync jig만 있으면 기존 도면 경로부터 시작할 수 있고, 
 ## T-225 SPIKE: ZWCAD 사이드 DB 쓰기·출처 표시·도곽 읽기
 
 - **기준:** SPEC-14.4·14.7·14.8·14.15, SPIKE-2026-10-07-drawing-export의 「한계」, H-ZWCAD-12·13.
-- **위치:** 코드 `tools/spikes/YYYY-MM-DD-dwg-backflow/`(실행하는 날), 기록 `docs/tdd/SPIKE-YYYY-MM-DD-dwg-backflow.md`(실행하는 날 만든다).
+- **위치:** 코드 `tools/spikes/2026-10-07-drawing-backflow/`, 기록 [SPIKE-2026-10-07-drawing-backflow](../tdd/SPIKE-2026-10-07-drawing-backflow.md).
 - **질문:**
   1. 사이드 DB(`ReadDwgFile` 쓰기 모드)에서 개체를 고치고 `SaveAs`할 때 원래 DWG 버전(2013·2018 등)을 그대로 지정할 수 있는가. 다시 열었을 때 고치지 않은 개체의 Handle·레이어·블록 정의·스타일·레이아웃·xref 부착이 그대로인가. 동료가 AutoCAD로 열어도 되는 보통 DWG인가(ZWCAD 화면 확인, AutoCAD가 이 PC에 있으면 함께).
   2. xref 자식 도면을 따로 열어 고치고 저장할 때 루트의 상대 경로 해석이 유지되는가.
@@ -183,7 +183,7 @@ T-232는 Sync jig만 있으면 기존 도면 경로부터 시작할 수 있고, 
 
 | 티켓 | 상태 | 증거 |
 |---|---|---|
-| T-225 | 계획(2026-10-07 범위 바꿈: 도곽·CTB 질문 추가, 정리 연산 질문 삭제) | — |
+| T-225 | 완료(2026-10-08): 1 버전·Handle 유지 가능(`AcDbCellStyleMap`만 바뀜), 2 xref 자식 쓰기·상대 경로 유지 가능, 3 xdata 가능(복사본은 문자열 Handle 대조로 구분), 4 위험 속성 7개 추가, 5 도곽 API 가능하나 제공 세트는 모형 공간 속성 없는 도곽 + 창 플롯이라 결정 질문 3 기본값 조정 필요, 6 CTB 읽기 가능('개체 선가중치' 값 미확인) | [SPIKE-2026-10-07-drawing-backflow](../tdd/SPIKE-2026-10-07-drawing-backflow.md) |
 | T-226 | 완료(2026-10-07, 사용자 0단계 승인): 숨은 실행 공통 `runHiddenZwcad`(xref·자료 정리 읽기도 옮김), 출력 토큰(엔진 `OutputTokens`·worker `OutputGrant`), `VIDEDRAWINGCOPY`, 위험 속성 목록, AI 코드 정책 고정, ARCH-01 「도면 역반영(PLAN-47)」. 남음: 쓰는 도중 강제 종료 실측, T-225 4의 목록 확장 | `tests/core/drawing-output.test.mjs`·`zwcad-hidden-run.test.mjs`, 실호스트 `tests/integration/zwcad-drawing-output.mjs`·`zwcad-xref.mjs` 통과, H-ZWCAD-14 |
 | T-227 | 계획(좁힘: 도면 읽기·레이어 대응) | — |
 | T-228 | 폐기(2026-10-07, 사용자 검토: Rhino 레이아웃 불필요) | — |
