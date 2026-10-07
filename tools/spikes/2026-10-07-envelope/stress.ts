@@ -5,8 +5,11 @@
 // Usage: node tools/spikes/2026-10-07-envelope/stress.ts
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { Solid } from './csg.ts';
-import { weld, type Mesh } from './mesh.ts';
+import {
+  weldSolid as weld,
+  type Solid,
+  type SolidMesh as Mesh,
+} from '../../../src/jigs/official/geometry-kit/solid.ts';
 import { envelope, type P2, type SiteCase } from './rules.ts';
 
 function star(n: number): SiteCase {

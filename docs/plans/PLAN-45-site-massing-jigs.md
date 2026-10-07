@@ -2,7 +2,7 @@
 id: PLAN-45
 title: 규모검토 jig 세 개 — 사이트 모델링·건축 가능 영역과 매스·건축개요 (T-203~T-214)
 status: draft
-version: 0.9
+version: 0.10
 updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-12, SPEC-07, SPEC-02, SPEC-08, SPEC-13, ARCH-01, ARCH-03, DESIGN, ADR-026, ADR-030, ADR-040, RESEARCH-04, RESEARCH-16, FR-09, FR-12, FR-14, FR-18, FR-21, FR-24, FR-25, C-05, OQ-08, OQ-09, OQ-16]
@@ -154,7 +154,7 @@ related: [SPEC-12, SPEC-07, SPEC-02, SPEC-08, SPEC-13, ARCH-01, ARCH-03, DESIGN,
 - **검증:** `tests/core/massing-envelope.test.mjs`
   - 합성 대지에서 외피 부피의 손계산 대조(직사각형 대지의 일조 사선은 해석식으로 계산).
   - 정북 기준(진북·도북) 전환 시 다시 계산, 뒤집힌 솔리드 거름, '판단 필요' 일조 항목은 적용·미적용 두 외피를 모두 냄.
-  - 실제 Rhino: T-208의 시험에 외피 만들기 추가(닫힌 폴리서피스, `IsSolid`, 부피 대조 0.1%).
+  - 실제 Rhino: `tests/integration/rhino-massing-envelope.mjs`(숨은 Rhino 8 워커에서 T-208 틀로 엔진 외피를 만들고 닫힌 폴리서피스, `IsSolid`, `Outward`, 부피 대조 0.1%, 뒤집힌 사본은 `failed[]`).
 - **완료:** 시험 통과.
 
 ## T-211 층·대안·인센티브·공개공지
@@ -222,7 +222,9 @@ T-204 SPIKE 기하 ─ T-208 만들기 틀 ┘                            │
 | T-204 | 완료(SPIKE) — 엔진(TS) 계산 + Rhino는 평면 면 목록 만들기만(`vide.bake.brep-faces@1`), Rhino 불리언 틀 불필요. Rhino 결합은 1e-5 m, `MergeCoplanarFaces` 쓰지 않음. 점검은 닫힘 + `SolidOrientation` Outward·부피 양수·엔진 부피 대조 | [SPIKE-2026-10-07-envelope](../tdd/SPIKE-2026-10-07-envelope.md), `tools/spikes/2026-10-07-envelope/` |
 | T-205 | 완료(2026-10-08) — 어댑터 8개(`juso`, `vworld-search`, `vworld-cadastral`(PNU·상자 1000건 쪽 넘김·2 km² 타일), `vworld-land-use`(속성 + `LT_C_UQ*`·`UD801` 고시 번호 + `UPISUQ161` 지구단위계획, 필지 안쪽 점), `vworld-land-characteristics`(올해 → 지난해), `vworld-buildings`(`LT_C_SPBD`), `vworld-building-info`(`LT_C_BLDGINFO`, 높이 1순위), `building-register`(늘 `pageNo`)), 200 안의 오류·NOT_FOUND 판정, 허용 끝점만 호출, 출처 붙은 사본·빈 결과·면적 차이 '확인 필요', PC 전용 키·설정 「외부 자료」(있음/없음만)·진단 묶음 제외, 전송 고지 API(카드 화면은 T-207), `LIBRARY_MODULES` 등록(SHP·PNU만). 서울시청 실호출: 후보 6·제안 1, 7개 사본 모두 `ok`(필지 91·건물 27·건물 정보 34·대장 11·용도 17항목 중 고시 번호 3·지구단위계획 1), 키 이름·있음만 출력 | `src/jigs/official/site-data/`, `src/server/public-data-keys.ts`·`site-data-routes.ts`, `tests/core/site-data.test.mjs`(11건), `tests/server/public-data-keys.test.mjs`(3건), `tests/integration/site-data-live.mjs`, `tests/integration/browser-public-data.mjs`, SPEC-12.5, ARCH-01 「공공 자료 수집」, ARCH-03 §8.1 |
 | T-206 | 완료(2026-10-08) — SHP·DBF·PRJ·CPG·ZIP 읽기(새 의존성 없음), `.prj` 매개변수 판별(5179·5180~5188·32651·32652·4326·4737, 매개변수가 다 있는 GRS80 TM), Bessel·다른 타원체·TM 아닌 투영·m 아닌 단위 거절, Krüger 6차 TM과 격자 수렴각, 한 좌표계·한 정수 m 기준점의 로컬 f64 좌표 + `packOffsets` f32 전달, 포함 깊이로 고리 정리(바깥 반시계·구멍 시계), `.cpg`/DBF 0x79 인코딩(선언 없으면 엄격 UTF-8), 국토지리정보원 코드 사전(건물·도로경계·등고선·표고점, 연속지적도 필지). 공개 기준점(OS GB Annex C ±1 mm, EPSG GN7-2 ±1 cm) 대조, 5179→5186 합성 대지 어긋남 < 1 cm. 라이브러리 등록은 T-205·T-207 | `src/jigs/official/site-data/shp/`, `site-data/assets/`(사전·NOTICE), `tests/core/site-shp.test.mjs`(12건), SPEC-12.4·12.5, ARCH-03 §8.1 |
-| T-207·T-209~T-214 | 계획(2026-10-08 사용자 1단계 착수 승인) | — |
+| T-209 | 완료(2026-10-08) — 공식 라이브러리 `vide/massing-kit`(`LIBRARY_MODULES` 등록): 규제 조건 항목의 닫힌 목록과 형식(값·단위·적용 여부·확정 상태·출처 구분·근거·출처·대상 구간), 설정값 → 항목(빈 값·0은 '사람 입력 필요', 코드에 법정 값 없음), 사람 값 우선 병합과 차이 목록, SPEC-13 어댑터 자리(`regulationsFromLegal`, T-220 전에는 '법규 결과 없음'). 경계 구간(도로·인접 대지·확인 필요), 선분 캡슐 후퇴(외접 64각형, 같은 규칙이 덮는 볼록 모퉁이 끝은 평평), 가각, 건축한계선(도로 쪽 제거)·기타 이격(그린 선), 일조 지면 벽(기준선 = 정북 쪽 인접 대지 구간, 정북 도로는 '기준선 위치' 항목대로 도로 너비만큼 이동), '판단 필요'는 미반영 목록 또는 일조 두 변형, 건폐율 비교, 빈 영역 메시지, 자기 교차·열린 경계의 위치. 공식 작업 jig 패키지 `vide/buildable-mass`(대지 입력·규제 조건·계획 조건·제한선·가능 영역, 주용도 질문은 `basis-required`) — 등록부 적재는 T-207. 합성 대지 다섯 곳 면적·규칙별 감소가 손계산과 1e-6 ㎡ 안(L형 참 원 대비 −0.0025 ㎡, 꺾인 북측은 격자 참값과 0.011 ㎡) | `src/jigs/official/massing-kit/`, `src/jigs/official/jigs/buildable-mass/`, `tests/core/massing-setback.test.mjs`(11건), `tests/fixtures/massing-sites.mjs`, SPEC-12.7·12.8, ARCH-03 §8.2 |
+| T-210 | 완료(2026-10-08) — `geometry-kit/solid.ts`(스파이크 `csg.ts`·`mesh.ts`를 옮김: BSP 불리언·용접·점검·단면 + 같은 평면 면 병합(구멍 포함, 꼭짓점 보존)·짧은 변 경고, 판 0.2.1), `massing-kit` `envelope.ts`(돌출·일조 사선·최대, 높이 상한 = 적용된 높이 중 최저 → 층수 × 층고 → 검토 높이(미반영 표시)), `solid-check.ts`(점검 실패면 단계를 멈추고 뒤집지 않음, 병합 면 부피 대조), 일조 거리 정의 항목(최단 거리 · 정북 방향, 기본 '사람 입력 필요' → 최단 거리로 계산하고 미확정 1), 정북 기준 전환, '판단 필요' 일조·높이의 두 변형, 만들기 선언(`vide.bake.curves@1` 제한선, `vide.bake.brep-faces@1` 외피). 외피 부피: 직사각형 세 곳·정북 경사 대지 해석값과 1e-6 m³, L형 −1.3e-4·꺾인 북측 −7.7e-5(격자 참값 대비). 숨은 Rhino 8 워커(이 시험이 띄우고 그 PID만 종료): 7개 대지 21개 외피 모두 한 조각·`IsSolid`·`IsValid`·`Outward`, Brep 면 수 = 병합 면 수, 부피 상대 차 최대 1.1e-8, 뒤집은 사본 7개는 모두 `failed[]` | `src/jigs/official/geometry-kit/solid.ts`, `src/jigs/official/massing-kit/`, `tests/core/massing-envelope.test.mjs`(8건), `tests/integration/rhino-massing-envelope.mjs`, SPEC-12.9, ARCH-03 §8.2 |
+| T-207·T-211~T-214 | 계획(2026-10-08 사용자 1단계 착수 승인) | — |
 
 ## 결정이 필요한 질문
 

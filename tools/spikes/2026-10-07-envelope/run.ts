@@ -5,9 +5,15 @@
 // Usage: node tools/spikes/2026-10-07-envelope/run.ts [--quick]
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { Solid, V3 } from './csg.ts';
+import type { Vec3 as V3 } from '../../../src/jigs/official/geometry-kit/plan.ts';
+import {
+  checkSolid as check,
+  reversedMesh as reversed,
+  weldSolid as weld,
+  type Solid,
+  type SolidMesh as Mesh,
+} from '../../../src/jigs/official/geometry-kit/solid.ts';
 import { cases, SURVEY } from './fixtures.ts';
-import { check, reversed, weld, type Mesh } from './mesh.ts';
 import { envelope, reference, type P2, type SiteCase } from './rules.ts';
 
 const quick = process.argv.includes('--quick');

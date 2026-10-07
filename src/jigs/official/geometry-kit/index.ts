@@ -3,7 +3,7 @@
 // step and a step-runner bundle can carry a copy (with `delaunator` and `@kninnug/constrainautor`,
 // its only dependencies). Project-specific rules do not belong here.
 
-export const library = { id: 'vide/geometry-kit', version: '0.2.0' } as const;
+export const library = { id: 'vide/geometry-kit', version: '0.2.1' } as const;
 
 export {
   GeometryError,
@@ -75,3 +75,24 @@ export type {
 export { arcPoint, arcThrough, fitArc, segmentArc, segmentPolyline, verticalArc } from './arc.ts';
 export type { Arc, ArcFit, SegmentOptions } from './arc.ts';
 export * from './faces.ts';
+export {
+  SHORT_EDGE,
+  SOLID_EPS,
+  checkSolid,
+  earClip,
+  facesVolume,
+  loftSolid,
+  mergeCoplanar,
+  planeOf,
+  prismSolid,
+  reversedMesh,
+  sectionArea,
+  solidIntersect,
+  solidPolygon,
+  solidSubtract,
+  solidUnion,
+  solidUnionAll,
+  solidVolume,
+  weldSolid,
+} from './solid.ts';
+export type { MergedFace, Plane, Solid, SolidCheck, SolidMesh, SolidPolygon } from './solid.ts';

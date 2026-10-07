@@ -4,17 +4,22 @@
 // infinite line over-cuts at reflex corners and next to exempt runs (S-04 lesson, RESEARCH-04 J-04).
 // Round capsule ends are polygons circumscribing the circle, so the approximation only ever removes
 // more (conservative) — the error is bounded by r·(1/cos(π/m) − 1).
+// The BSP booleans and the check moved to `vide/geometry-kit` as solid.ts (T-210).
 import {
-  intersect,
-  poly,
-  subtract,
-  union,
-  unionAll,
-  type Poly,
+  checkSolid as check,
+  sectionArea,
+  solidIntersect as intersect,
+  solidPolygon as poly,
+  solidSubtract as subtract,
+  solidUnion as union,
+  solidUnionAll as unionAll,
+  weldSolid as weld,
   type Solid,
-  type V3,
-} from './csg.ts';
-import { check, sectionArea, weld, type Mesh, type SolidCheck } from './mesh.ts';
+  type SolidCheck,
+  type SolidMesh as Mesh,
+  type SolidPolygon as Poly,
+} from '../../../src/jigs/official/geometry-kit/solid.ts';
+import type { Vec3 as V3 } from '../../../src/jigs/official/geometry-kit/plan.ts';
 
 export type P2 = [number, number];
 export type Ring = P2[];

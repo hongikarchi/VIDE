@@ -1,0 +1,82 @@
+{
+  "layout": "jig-run",
+  "left": [
+    { "part": "step-rail" },
+    { "part": "role-card", "input": "inputs.site" },
+    { "part": "param-group" }
+  ],
+  "center": {
+    "views": [
+      {
+        "part": "plan-map",
+        "title": "평면",
+        "layers": [
+          {
+            "key": "site",
+            "from": "step.site.ring",
+            "shape": "polygon",
+            "tone": "ov-existing"
+          }
+        ]
+      }
+    ],
+    "kpis": {
+      "part": "kpi-strip",
+      "items": [
+        { "label": "대지면적", "from": "step.buildable.siteArea", "unit": "m²", "decimals": 2 },
+        { "label": "가능 영역", "from": "step.buildable.area", "unit": "m²", "decimals": 2 },
+        { "label": "미확정 조건", "from": "step.envelope.unconfirmed", "unit": "개" }
+      ]
+    }
+  },
+  "drawer": {
+    "part": "result-tabs",
+    "tabs": [
+      {
+        "title": "제한선별 감소",
+        "part": "table",
+        "from": "step.buildable.reductions",
+        "columns": [
+          { "field": "title", "label": "제한선" },
+          { "field": "area", "label": "줄어든 면적", "unit": "m²", "decimals": 2 }
+        ],
+        "csv": "제한선별-감소"
+      },
+      {
+        "title": "경계 구간",
+        "part": "table",
+        "from": "step.limits.segmentRules",
+        "columns": [
+          { "field": "segment", "label": "구간" },
+          { "field": "kind", "label": "맞닿은 것" },
+          { "field": "status", "label": "판정" },
+          { "field": "length", "label": "길이", "unit": "m", "decimals": 2 }
+        ],
+        "csv": "경계-구간"
+      },
+      {
+        "title": "미반영 조건",
+        "part": "table",
+        "from": "step.envelope.unresolved",
+        "columns": [
+          { "field": "title", "label": "규칙" },
+          { "field": "reason", "label": "이유" }
+        ],
+        "csv": "미반영-조건"
+      },
+      {
+        "title": "규제 조건",
+        "part": "table",
+        "from": "step.regulations.items",
+        "columns": [
+          { "field": "title", "label": "항목" },
+          { "field": "value", "label": "값" },
+          { "field": "status", "label": "확정 상태" },
+          { "field": "origin", "label": "출처 구분" }
+        ],
+        "csv": "규제-조건"
+      }
+    ]
+  },
+  "actions": [{ "id": "recompute", "label": "다시 계산", "step": "envelope", "tier": "T1" }]
+}

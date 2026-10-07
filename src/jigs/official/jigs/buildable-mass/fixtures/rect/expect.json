@@ -1,0 +1,36 @@
+{
+  "tolerance": {
+    "length": 0.000001,
+    "ratio": 1e-9
+  },
+  "steps": {
+    "site": {
+      "area_m2": 600
+    },
+    "buildable": {
+      "area": 522.5,
+      "siteArea": 600,
+      "coverage": {
+        "capArea": 360
+      }
+    },
+    "envelope": {
+      "variants": [
+        {
+          "height": 30,
+          "envelopes": [
+            {
+              "volume": 15675
+            },
+            {
+              "volume": 13700
+            },
+            {
+              "volume": 12445
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

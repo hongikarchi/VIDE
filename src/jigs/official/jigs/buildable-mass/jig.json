@@ -1,0 +1,1173 @@
+{
+  "contractVersion": 3,
+  "id": "vide/buildable-mass",
+  "version": "0.1.0",
+  "kind": "tool",
+  "name": "건축 가능 영역·매스",
+  "summary": "대지와 규제 조건으로 제한선별 2D 건축 가능 영역과 3D 가능 외피(돌출·일조 사선·최대)를 계산하고 Rhino에 만든다. 규제 조건의 값은 법규 결과나 사람이 넣으며, 탐색용 규모검토로 인허가 도서·면적 산정·법규 검토를 대체하지 않는다.",
+  "icon": "building",
+  "hosts": {
+    "rhino": "optional"
+  },
+  "inputs": [
+    {
+      "key": "site",
+      "title": "대지",
+      "kind": "assembly",
+      "roles": [
+        {
+          "role": "boundary",
+          "title": "대지 경계",
+          "shape": "polygon",
+          "many": false,
+          "required": true,
+          "hints": {
+            "layers": ["*대지*", "*site*"],
+            "words": ["대지 경계", "대지"]
+          },
+          "extract": "rows"
+        },
+        {
+          "role": "roads",
+          "title": "도로 경계·도로 영역",
+          "shape": "polyline",
+          "many": true,
+          "required": false,
+          "hints": {
+            "layers": ["*도로*", "*road*"],
+            "words": ["도로"]
+          },
+          "extract": "rows"
+        },
+        {
+          "role": "neighbors",
+          "title": "인접 대지 경계",
+          "shape": "polyline",
+          "many": true,
+          "required": false,
+          "hints": {
+            "layers": ["*인접*", "*필지*", "*parcel*"],
+            "words": ["인접 대지", "필지"]
+          },
+          "extract": "rows"
+        },
+        {
+          "role": "limitLines",
+          "title": "건축한계선",
+          "shape": "polyline",
+          "many": true,
+          "required": false,
+          "hints": {
+            "layers": ["*건축한계선*"],
+            "words": ["건축한계선"]
+          },
+          "extract": "rows"
+        },
+        {
+          "role": "otherLines",
+          "title": "기타 이격 기준선",
+          "shape": "polyline",
+          "many": true,
+          "required": false,
+          "hints": {
+            "layers": ["*이격*"],
+            "words": ["이격"]
+          },
+          "extract": "rows"
+        },
+        {
+          "role": "sunDatum",
+          "title": "일조 기준선(그릴 때만)",
+          "shape": "polyline",
+          "many": true,
+          "required": false,
+          "hints": {
+            "layers": ["*일조*"],
+            "words": ["일조 기준선"]
+          },
+          "extract": "rows"
+        },
+        {
+          "role": "sunZone",
+          "title": "일조 적용 구역(용도지역 걸침)",
+          "shape": "polygon",
+          "many": true,
+          "required": false,
+          "hints": {
+            "layers": ["*용도지역*", "*zone*"],
+            "words": ["용도지역"]
+          },
+          "extract": "rows"
+        }
+      ]
+    }
+  ],
+  "params": [
+    {
+      "key": "coverageState",
+      "title": "건폐율 상한 — 적용 여부",
+      "group": "규제 조건 · 밀도",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "coverage",
+      "title": "건폐율 상한",
+      "group": "규제 조건 · 밀도",
+      "type": "ratio",
+      "display": {
+        "unit": "%",
+        "decimals": 1
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": 0.001
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "heightMaxState",
+      "title": "최고 높이 — 적용 여부",
+      "group": "규제 조건 · 높이",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "heightMax",
+      "title": "최고 높이",
+      "group": "규제 조건 · 높이",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 1000,
+        "step": 0.01
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "streetHeightState",
+      "title": "가로구역 최고 높이 — 적용 여부",
+      "group": "규제 조건 · 높이",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "streetHeight",
+      "title": "가로구역 최고 높이",
+      "group": "규제 조건 · 높이",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 1000,
+        "step": 0.01
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "altitudeHeightState",
+      "title": "고도지구 높이 — 적용 여부",
+      "group": "규제 조건 · 높이",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "altitudeHeight",
+      "title": "고도지구 높이",
+      "group": "규제 조건 · 높이",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 1000,
+        "step": 0.01
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "floorsMaxState",
+      "title": "지상 층수 상한 — 적용 여부",
+      "group": "규제 조건 · 높이",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "floorsMax",
+      "title": "지상 층수 상한",
+      "group": "규제 조건 · 높이",
+      "type": "count",
+      "unit": "EA",
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 200,
+        "step": 1
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "roadSetbackState",
+      "title": "도로 후퇴 거리 — 적용 여부",
+      "group": "규제 조건 · 건축선",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "roadSetback",
+      "title": "도로 후퇴 거리",
+      "group": "규제 조건 · 건축선",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 100,
+        "step": 0.01
+      },
+      "affects": ["regulations"],
+      "help": "도로와 맞닿은 대지 경계 구간에서 대지 안쪽으로 잰 거리"
+    },
+    {
+      "key": "chamferLengthState",
+      "title": "가각 전제 길이 — 적용 여부",
+      "group": "규제 조건 · 건축선",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "chamferLength",
+      "title": "가각 전제 길이",
+      "group": "규제 조건 · 건축선",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 100,
+        "step": 0.01
+      },
+      "affects": ["regulations"],
+      "help": "두 도로 구간이 만나는 볼록한 모퉁이에서 각 도로 경계를 따라 자르는 길이"
+    },
+    {
+      "key": "openSpaceRoadState",
+      "title": "대지 안의 공지(건축선에서) — 적용 여부",
+      "group": "규제 조건 · 이격",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "openSpaceRoad",
+      "title": "대지 안의 공지(건축선에서)",
+      "group": "규제 조건 · 이격",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 100,
+        "step": 0.01
+      },
+      "affects": ["regulations"],
+      "help": "건축선(도로 경계 + 후퇴 거리)에서 잰 거리"
+    },
+    {
+      "key": "openSpaceAdjacentState",
+      "title": "대지 안의 공지(인접 대지 경계선에서) — 적용 여부",
+      "group": "규제 조건 · 이격",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "openSpaceAdjacent",
+      "title": "대지 안의 공지(인접 대지 경계선에서)",
+      "group": "규제 조건 · 이격",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 100,
+        "step": 0.01
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "civilSetbackState",
+      "title": "민법상 이격 거리 — 적용 여부",
+      "group": "규제 조건 · 이격",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "civilSetback",
+      "title": "민법상 이격 거리",
+      "group": "규제 조건 · 이격",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 100,
+        "step": 0.01
+      },
+      "affects": ["regulations"],
+      "help": "인접 대지와 맞닿은 구간에서 잰 거리"
+    },
+    {
+      "key": "otherSetbackState",
+      "title": "기타 이격 거리 — 적용 여부",
+      "group": "규제 조건 · 이격",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "otherSetback",
+      "title": "기타 이격 거리",
+      "group": "규제 조건 · 이격",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 100,
+        "step": 0.01
+      },
+      "affects": ["regulations"],
+      "help": "사람이 그린 기타 이격 기준선에서 잰 거리"
+    },
+    {
+      "key": "sunState",
+      "title": "정북 일조 — 적용 여부",
+      "group": "규제 조건 · 일조",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "sunBaseHeight",
+      "title": "일조 기준 높이",
+      "group": "규제 조건 · 일조",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 100,
+        "step": 0.01
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "sunNearDistance",
+      "title": "기준 높이 이하 거리",
+      "group": "규제 조건 · 일조",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 100,
+        "step": 0.01
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "sunRatio",
+      "title": "초과 부분의 높이 대비 비율(거리 = 비율 × 높이)",
+      "group": "규제 조건 · 일조",
+      "type": "ratio",
+      "display": {
+        "unit": "",
+        "decimals": 3
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 10,
+        "step": 0.001
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "sunDatumRoad",
+      "title": "일조 기준선 위치(정북이 도로일 때)",
+      "group": "규제 조건 · 일조",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "across-road",
+          "label": "도로 건너편 경계"
+        },
+        {
+          "value": "boundary",
+          "label": "대지 경계(도로 쪽)"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "sunDistance",
+      "title": "일조 거리의 정의",
+      "help": "정해지기 전에는 기준선까지의 최단 거리(더 많이 깎는 쪽)로 계산하고 미확정으로 둡니다",
+      "group": "규제 조건 · 일조",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "euclidean",
+          "label": "기준선까지의 최단 거리"
+        },
+        {
+          "value": "north",
+          "label": "정북 방향으로 잰 거리"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "mainUse",
+      "title": "주용도",
+      "group": "계획 조건",
+      "type": "choice",
+      "default": "unset",
+      "choices": [
+        {
+          "value": "unset",
+          "label": "미정"
+        },
+        {
+          "value": "단독주택",
+          "label": "단독주택"
+        },
+        {
+          "value": "공동주택",
+          "label": "공동주택"
+        },
+        {
+          "value": "제1종 근린생활시설",
+          "label": "제1종 근린생활시설"
+        },
+        {
+          "value": "제2종 근린생활시설",
+          "label": "제2종 근린생활시설"
+        },
+        {
+          "value": "업무시설",
+          "label": "업무시설"
+        },
+        {
+          "value": "판매시설",
+          "label": "판매시설"
+        },
+        {
+          "value": "숙박시설",
+          "label": "숙박시설"
+        },
+        {
+          "value": "교육연구시설",
+          "label": "교육연구시설"
+        },
+        {
+          "value": "노유자시설",
+          "label": "노유자시설"
+        },
+        {
+          "value": "기타",
+          "label": "기타"
+        }
+      ],
+      "basis": {
+        "status": "to-ask",
+        "question": "이 대지의 주용도가 무엇인가요?"
+      },
+      "affects": ["plan"],
+      "fixedAtPin": true
+    },
+    {
+      "key": "floorHeightGround",
+      "title": "1층 층고",
+      "group": "계획 조건",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 4.5,
+      "range": {
+        "min": 0,
+        "max": 20,
+        "step": 0.01
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "계획 가정값"
+      },
+      "affects": ["plan"]
+    },
+    {
+      "key": "floorHeightTypical",
+      "title": "기준층 층고",
+      "group": "계획 조건",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 3.3,
+      "range": {
+        "min": 0,
+        "max": 20,
+        "step": 0.01
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "계획 가정값"
+      },
+      "affects": ["plan"]
+    },
+    {
+      "key": "basementFloors",
+      "title": "지하 층수",
+      "group": "계획 조건",
+      "type": "count",
+      "unit": "EA",
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 20,
+        "step": 1
+      },
+      "basis": {
+        "status": "assumed"
+      },
+      "affects": ["plan"]
+    },
+    {
+      "key": "targetFar",
+      "title": "목표 용적률",
+      "group": "계획 조건",
+      "type": "ratio",
+      "display": {
+        "unit": "%",
+        "decimals": 1
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 20,
+        "step": 0.001
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "0이면 없음"
+      },
+      "affects": ["plan"]
+    },
+    {
+      "key": "studyHeight",
+      "title": "검토 높이(높이 상한이 없을 때의 계산 상한)",
+      "group": "계획 조건",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 60,
+      "range": {
+        "min": 0,
+        "max": 1000,
+        "step": 0.01
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "법정 값이 아닌 계산 상한"
+      },
+      "affects": ["plan"]
+    },
+    {
+      "key": "northBasis",
+      "title": "정북 기준",
+      "group": "계획 조건",
+      "type": "choice",
+      "default": "true",
+      "choices": [
+        {
+          "value": "true",
+          "label": "진북"
+        },
+        {
+          "value": "grid",
+          "label": "도북"
+        }
+      ],
+      "basis": {
+        "status": "assumed",
+        "note": "어느 쪽이 법상 정북인지는 법규 결과나 사람이 확정"
+      },
+      "affects": ["site"]
+    },
+    {
+      "key": "gridNorthDeg",
+      "title": "도북 방향(문서 +Y에서 시계 방향)",
+      "group": "대지",
+      "type": "angle",
+      "unit": "deg",
+      "default": 0,
+      "range": {
+        "min": -180,
+        "max": 180,
+        "step": 0.001
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "사이트 모델링 또는 사람이 확인"
+      },
+      "affects": ["site"]
+    },
+    {
+      "key": "convergenceDeg",
+      "title": "진북 − 도북(격자 수렴각, 시계 방향)",
+      "group": "대지",
+      "type": "angle",
+      "unit": "deg",
+      "default": 0,
+      "range": {
+        "min": -10,
+        "max": 10,
+        "step": 0.0001
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "사이트 모델링의 대지 정보 또는 사람이 확인"
+      },
+      "affects": ["site"]
+    },
+    {
+      "key": "segmentTolerance",
+      "title": "경계 구간 판정 허용 오차",
+      "group": "대지",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "mm",
+        "decimals": 0
+      },
+      "default": 0.05,
+      "range": {
+        "min": 0.001,
+        "max": 1,
+        "step": 0.001
+      },
+      "basis": {
+        "status": "assumed"
+      },
+      "affects": ["site"]
+    }
+  ],
+  "steps": [
+    {
+      "id": "site",
+      "title": "대지 입력",
+      "kind": "library",
+      "use": "vide/massing-kit#siteStep",
+      "reads": [
+        "input.site.boundary",
+        "input.site.roads",
+        "input.site.neighbors",
+        "param.segmentTolerance",
+        "param.northBasis",
+        "param.gridNorthDeg",
+        "param.convergenceDeg"
+      ],
+      "writes": "site",
+      "speed": "live",
+      "gates": [
+        {
+          "use": "inputs-present"
+        },
+        {
+          "use": "stale-input"
+        },
+        {
+          "use": "no-nan"
+        }
+      ]
+    },
+    {
+      "id": "regulations",
+      "title": "규제 조건",
+      "kind": "library",
+      "use": "vide/massing-kit#regulationStep",
+      "reads": [
+        "param.coverageState",
+        "param.coverage",
+        "param.heightMaxState",
+        "param.heightMax",
+        "param.streetHeightState",
+        "param.streetHeight",
+        "param.altitudeHeightState",
+        "param.altitudeHeight",
+        "param.floorsMaxState",
+        "param.floorsMax",
+        "param.roadSetbackState",
+        "param.roadSetback",
+        "param.chamferLengthState",
+        "param.chamferLength",
+        "param.openSpaceRoadState",
+        "param.openSpaceRoad",
+        "param.openSpaceAdjacentState",
+        "param.openSpaceAdjacent",
+        "param.civilSetbackState",
+        "param.civilSetback",
+        "param.otherSetbackState",
+        "param.otherSetback",
+        "param.sunState",
+        "param.sunBaseHeight",
+        "param.sunNearDistance",
+        "param.sunRatio",
+        "param.sunDatumRoad",
+        "param.sunDistance"
+      ],
+      "writes": "regulations",
+      "speed": "live",
+      "gates": [
+        {
+          "use": "no-nan"
+        }
+      ]
+    },
+    {
+      "id": "plan",
+      "title": "계획 조건",
+      "kind": "library",
+      "use": "vide/massing-kit#planStep",
+      "reads": [
+        "param.mainUse",
+        "param.floorHeightGround",
+        "param.floorHeightTypical",
+        "param.basementFloors",
+        "param.targetFar",
+        "param.studyHeight",
+        "param.northBasis"
+      ],
+      "writes": "plan",
+      "speed": "live",
+      "gates": [
+        {
+          "use": "basis-required",
+          "level": "warn"
+        },
+        {
+          "use": "no-nan"
+        }
+      ]
+    },
+    {
+      "id": "limits",
+      "title": "제한선",
+      "kind": "library",
+      "use": "vide/massing-kit#limitStep",
+      "needs": ["site", "regulations"],
+      "reads": [
+        "step.site",
+        "step.regulations",
+        "input.site.limitLines",
+        "input.site.otherLines",
+        "input.site.sunDatum",
+        "input.site.sunZone"
+      ],
+      "writes": "limits",
+      "speed": "live",
+      "gates": [
+        {
+          "use": "no-nan"
+        }
+      ]
+    },
+    {
+      "id": "buildable",
+      "title": "가능 영역",
+      "kind": "library",
+      "use": "vide/massing-kit#buildableStep",
+      "needs": ["limits"],
+      "reads": ["step.site", "step.regulations", "step.limits"],
+      "writes": "buildable",
+      "speed": "live",
+      "gates": [
+        {
+          "use": "no-nan"
+        }
+      ],
+      "budget": {
+        "wallClockMs": 30000
+      }
+    },
+    {
+      "id": "envelope",
+      "title": "3D 가능 외피",
+      "kind": "library",
+      "use": "vide/massing-kit#envelopeStep",
+      "needs": ["buildable", "plan"],
+      "reads": ["step.site", "step.regulations", "step.plan", "step.limits"],
+      "writes": "envelope",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "no-nan"
+        }
+      ],
+      "budget": {
+        "wallClockMs": 60000
+      }
+    },
+    {
+      "id": "make",
+      "title": "Rhino에 만들기",
+      "kind": "host",
+      "bake": ["limitLines", "envelopes"],
+      "needs": ["envelope"],
+      "reads": ["step.buildable", "step.envelope"],
+      "writes": "made",
+      "speed": "button"
+    }
+  ],
+  "bake": [
+    {
+      "id": "limitLines",
+      "template": "vide.bake.curves@1",
+      "host": "rhino",
+      "items": "step.buildable.lines",
+      "layer": "제한선",
+      "key": "key",
+      "attrs": {
+        "vide-rules": "rule"
+      },
+      "mode": "replace-own"
+    },
+    {
+      "id": "envelopes",
+      "template": "vide.bake.brep-faces@1",
+      "host": "rhino",
+      "items": "step.envelope.items",
+      "layer": "외피",
+      "key": "key",
+      "attrs": {
+        "vide-envelope": "kind",
+        "vide-rules": "rules",
+        "vide-volume-m3": "volumeText",
+        "vide-unconfirmed": "unconfirmed"
+      },
+      "mode": "replace-own"
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "sync.read",
+      "reason": "대지·도로·인접 대지 경계와 그린 선을 읽습니다"
+    },
+    {
+      "name": "library.call",
+      "reason": "vide/massing-kit의 규칙으로 계산합니다"
+    },
+    {
+      "name": "host.bake",
+      "reason": "제한선과 외피를 Rhino에 만듭니다"
+    }
+  ],
+  "panel": "panel.json",
+  "selftest": {
+    "fixtures": "fixtures",
+    "requiresHost": false
+  },
+  "skill": "skill.md"
+}

@@ -2,7 +2,7 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 0.96
+version: 0.97
 updated: 2026-10-08
 owner: agent:claude
 related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, PLAN-45, SPEC-12, RESEARCH-10, RESEARCH-12, SPEC-13, PLAN-46]
@@ -25,7 +25,8 @@ related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-
 | 단계 실행 | `src/jigs/runtime/graph.ts`, `runner.ts`, `child-runner.ts`, `compute-box.ts` | 단계 DAG·캐시, 실행기 규약, 출처별 실행기(§6) |
 | 점검 | `src/jigs/runtime/gates.ts` | 점검 구현 전부. jig는 이름으로 고른다(§11) |
 | 묶기·점검 명령 | `src/jigs/runtime/pack.ts`, `npm run jig:pack`·`jig:validate`·`jig:test` | 제작 대화 도구 `jig_validate`·`jig_test`와 같은 코드 |
-| 공식 라이브러리 | `src/jigs/official/geometry-kit/`, `structure-analysis/`, `project-facts/`, `site-data/` | 빌드에 포함. 구조 해석은 기존 `src/jigs/structure/core.ts`의 코어 연결과 ARCH-02 계약을 재사용. `site-data/shp/`는 SHP 넣기와 좌표계(§8.1) |
+| 공식 라이브러리 | `src/jigs/official/geometry-kit/`, `structure-analysis/`, `project-facts/`, `site-data/`, `massing-kit/` | 빌드에 포함. 구조 해석은 기존 `src/jigs/structure/core.ts`의 코어 연결과 ARCH-02 계약을 재사용. `site-data/shp/`는 SHP 넣기와 좌표계(§8.1). `geometry-kit/solid.ts`와 `massing-kit/`은 규모검토의 가능 영역·외피(§8.2) |
+| 공식 작업 jig 소스 | `src/jigs/official/jigs/<name>/`(1차 `buildable-mass`) | `library` 단계로 공식 라이브러리를 부르는 공식 jig 패키지. 등록부에 빌드 포함으로 적재하는 경로는 PLAN-45 T-207이 더한다. 그 전에는 `loadJig`·`jig:test`로 점검·자체 시험만 한다 |
 | Rhino에 만들기 | `src/jigs/bake/bake.ts`, `data-block.ts`, `plan.ts`, `templates/*.cs` | 공식 틀·데이터 블록·만들기 기록·바로 적용과 되돌리기(§9) |
 | 서버 경로 | `src/server/jig-routes.ts` | jig 경로 전부(§7). `server.ts`는 위임 한 줄 |
 | 화면 | `src/ui/jig-panel/`, `src/ui/kit/`(등록부 `registry.ts`) | 선언형 패널 렌더러와 공식 부품. 부품 목록·표현의 정본은 Design |
@@ -475,6 +476,15 @@ jig 입력은 표시용 Sync가 아니라 jig 입력 읽기로 받는다.
 - **출력:** `{frame, layers[], ignored[], rejected[]}`. `frame = {crs, origin(f64 3), convergenceDeg, trueNorth(로컬 단위 벡터), originLatLon}`. 좌표는 기준점에서의 f64 로컬 m이고, Rhino로 넘길 때만 `packOffsets`로 f32 차이가 된다(§9.2, SPIKE-2026-10-07-envelope). 레이어는 역할(`building`·`road-boundary`·`contour`·`spot-height`·`parcel`)·원 좌표계·옮김 여부·원 격자와의 회전각·인코딩·필드 한글 이름·개수(`records`·`deleted`·`nullShapes`·`features`·`reversedRings`·`skippedParts`)·로컬 범위·경고를 갖는다. 면은 포함 깊이로 바깥 고리·구멍을 나누고 바깥 반시계·구멍 시계로 맞추며 닫는 점을 뺀다. 형상마다 원 레코드 번호·원 속성·코드값 한글 뜻을 남기고, 건물은 층수·종류·용도·이름·무벽건물(BDK005) 표시를, 등고선은 `CONT`, 표고점은 `NUME`(없으면 `ALTI`, 그다음 Z)을 높이로 둔다.
 - **코드 사전:** `site-data/assets/ngii-codes.json`(연속수치지형도 데이터 설명서 Ver 5.1.1에서 뽑은 레이어 107·속성 66·코드값 503·통합코드 423), 출처·해시는 `site-data/assets/NOTICE.json`. 쓰는 레이어는 파일 이름의 지형지물 코드로 정한다: B0010000 건물, A0010000 도로경계, F0010000 등고선, F0020000 표고점. 연속지적도는 `PNU`와 `JIBUN`(또는 `BCHK`) 필드로 알아본다. 나머지는 `ignored`로만 보인다.
 - **보관:** 이 모듈은 아무것도 저장하지 않는다. 넣은 파일과 결과는 호출하는 jig(T-207)가 작업본 사본으로만 둔다. 라이브러리 등록(`LIBRARY_MODULES`의 `vide/site-data`)은 T-205가 했다. 등록된 모듈 `site-data/library.ts`는 이 SHP 읽기와 PNU 도움 함수만 내놓고, 키가 필요한 공공 자료 수집(`lookupParcel`·`collectSite`)은 엔진만 부른다(ARCH-01 「공공 자료 수집」).
+
+### 8.2 가능 영역과 외피 (`vide/geometry-kit` `solid.ts` · `vide/massing-kit`)
+
+건축 가능 영역·매스 jig(SPEC-12.7~12.9)의 계산 위치와 형식이다. PLAN-45 T-209·T-210이 만들었고, 계산 위치(엔진)와 허용 오차는 [SPIKE-2026-10-07-envelope](../tdd/SPIKE-2026-10-07-envelope.md) 결론을 따른다.
+
+- **`geometry-kit/solid.ts`(일반 기하, 법규 없음):** 평면 다각형 솔리드의 BSP 불리언(합·차·교, csg.js 계열 알고리즘을 TS로 다시 씀, 평면 허용 오차 1e-7 m), 용접(1e-7 m, 평면 허용 오차보다 굵게 하지 않음)과 T자 이음 보정, 닫힘 점검 `checkSolid`(열린 변·비다양체 변·껍질 1·오일러 지표 2·부피 양수·퇴화 다각형, 경고로 1e-4 m보다 짧은 면 사이 변), 수평 단면 면적, 덮개 귀 자르기(`earClip`; `triangulate`는 가는 삼각형을 버리는 망 규칙이 있어 덮개에 쓰지 않음), 돌출(`prismSolid`)과 대응 변이 평행한 두 고리 사이 솔리드(`loftSolid`), 같은 평면 다각형 병합 `mergeCoplanar`. 병합은 같은 평면(법선·거리 1e-5 반올림)이고 변으로 이어진 다각형을 바깥 고리(밖에서 볼 때 반시계) + 구멍으로 잇되 꼭짓점을 하나도 지우지 않는다(이웃 면의 변이 1:1로 맞게). 좌표는 로컬 m(대지 근처 기준점)이어야 한다. 라이브러리 판은 0.2.1(덧붙임만, `^0.2.0` 호환).
+- **`massing-kit/`(규칙):** `rules.ts`(규제 조건 항목의 닫힌 목록 `REGULATION_ITEMS`, 항목 형식 `{id, group, title, value, unit, applies, status, origin, basis, source, target?}`, 닫힌 규칙 목록 `RULES`, 설정값 → 항목 `regulationsFromParams`, 사람 값 우선 병합 `mergeRegulations`), `legal-adapter.ts`(SPEC-13 결과 → 항목의 자리 `regulationsFromLegal`, T-220 전에는 늘 '법규 결과 없음'), `boundary-segments.ts`(대지 변을 도로·인접 필지 변과 겹치는 구간으로 나눔, 둘 다·아무것도 아니면 `unknown`·'확인 필요', 닫힌 도로 영역에서 구간 바깥 법선으로 잰 도로 너비), `setback.ts`(제한선 자료 `Cutter`: 선분 캡슐(둥근 끝은 외접 64각형, 같은 규칙의 다음 구간이 볼록·일직선 모퉁이에서 같거나 큰 거리로 덮으면 평평한 끝) · 다각형(가각 삼각형, 건축한계선의 도로 쪽), 일조 `SunRule`(기준선 선분·기준 높이·이하 거리·비율·거리 정의·정북 단위 벡터·적용 구역), 1 m 판으로 잰 2D 가능 영역과 규칙별 감소), `envelope.ts`(돌출·일조 사선·최대 외피), `solid-check.ts`(점검과 만들기 면 목록), `steps.ts`(jig 단계 함수).
+- **일조 거리:** `euclidean`이면 기준선 선분까지의 최단 거리(벽 = 캡슐 기둥, 사선 = 반경 `비율 × z`인 캡슐 사이 솔리드), `north`이면 정북으로 잰 거리(벽·사선 = 선분을 남쪽으로 `r`만큼 민 평행사변형, 사선은 `r = 비율 × z`). 정해지지 않았으면(`ask`) 최단 거리로 계산하고 미확정 1개를 더한다(최단 거리 ≤ 정북 거리라 더 많이 깎는다).
+- **jig 단계 출력(`vide/buildable-mass`):** `site`(로컬 고리·구간·모퉁이·도로 영역·정북 벡터), `regulations`(항목·법규 결과 유무·차이·사람 입력 필요·미확정), `plan`, `limits`(`cutters`·`sun`·미반영 조건·구간별 규칙 표·`sides`), `buildable`(면적·영역 고리·변형별 면적·규칙별 감소와 근거 항목·건폐율 비교·빈 영역 메시지·만들기용 곡선 `lines`), `envelope`(변형 `base`/`without`별 높이 상한과 출처·외피 부피·점검·층 중간 높이 단면·일조가 줄인 부피, 만들기 항목 `items`). 외피 항목은 `{key: env:<변형>:<종류>, kind, faces, volume, volumeText, rules, unconfirmed}`이고 만들기 선언 `envelopes`가 `vide.bake.brep-faces@1`로 보낸다. 엔진은 보내기 전에 병합한 면의 감긴 부피가 점검 부피와 상대 1e-9 안인지 확인한다.
 
 ## 9. Rhino에 만들기
 
