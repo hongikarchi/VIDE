@@ -2282,6 +2282,50 @@ body.panel-mode .chat-heading h2 {
 .display-check input:disabled + * {
   opacity: 0.5;
 }
+/* Section view (SPEC-01.15): the 단면 button and its popover, beside the display popover. */
+.view-navigation #section-toggle svg {
+  width: 17px;
+  height: 17px;
+}
+.view-navigation #section-toggle[aria-expanded='true'] {
+  background: var(--bg-active);
+  color: var(--text-1);
+}
+.section-popover {
+  width: 236px;
+}
+.section-range {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.section-range > span {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+}
+.section-range output {
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+.section-range input[type='range'] {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.view-navigation .section-popover .section-reset {
+  width: auto;
+  height: 26px;
+  padding: 0 10px;
+  align-self: flex-start;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+}
+.section-note {
+  margin: 0;
+  color: var(--muted);
+}
 /* Kept for scripted access; the host follows the connected document. */
 .visually-hidden {
   position: absolute !important;

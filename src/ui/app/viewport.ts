@@ -31,6 +31,7 @@ import { renderLinkPanel, mobileView } from './left.ts';
 import { render, renderMessages } from './render.ts';
 import { message } from './status.ts';
 import { pinComposer } from './composer.ts';
+import { initSection } from './section.ts';
 
 /** Rhino-style selection: replace by default, Shift adds, Ctrl removes. */
 export function applySelection(ids: string[], mode: SelectMode) {
@@ -294,6 +295,7 @@ export function initViewport4() {
 }
 
 export function initViewport5() {
+  initSection();
   viewportActions.view = showView;
   viewportActions.fitSelection = () => {
     if (draftState.state.selected) viewerState.viewport?.fit(draftState.state.selected);

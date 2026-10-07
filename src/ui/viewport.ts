@@ -44,6 +44,34 @@ import { createWalk } from './walk-controls.ts';
 type Camera = THREE.PerspectiveCamera | THREE.OrthographicCamera;
 type PlaneName = 'XY' | 'XZ' | 'YZ';
 type ToolMode = 'select' | 'sketch';
+export type SectionAxis = 'x' | 'y' | 'z';
+type Triple = [number, number, number];
+/**
+ * A view-only section (SPEC-01.15): a plane on one axis that keeps the side at or below `offset`
+ * (above it when `flip`), or a box that keeps what lies inside it. World coordinates (m).
+ */
+export type Section =
+  | { mode: 'plane'; axis: SectionAxis; offset: number; flip: boolean }
+  | { mode: 'box'; min: Triple; max: Triple };
+const AXIS_INDEX = { x: 0, y: 1, z: 2 } as const;
+/** The clipping planes of a section: three.js keeps the side where each plane's distance ≥ 0. */
+export function sectionPlanes(value: Section): THREE.Plane[] {
+  const unit = (index: number, sign: number) =>
+    new THREE.Vector3().setComponent(index, sign) as THREE.Vector3;
+  if (value.mode === 'plane') {
+    const index = AXIS_INDEX[value.axis];
+    return value.flip
+      ? [new THREE.Plane(unit(index, 1), -value.offset)]
+      : [new THREE.Plane(unit(index, -1), value.offset)];
+  }
+  const planes: THREE.Plane[] = [];
+  for (let index = 0; index < 3; index++)
+    planes.push(
+      new THREE.Plane(unit(index, 1), -value.min[index]),
+      new THREE.Plane(unit(index, -1), value.max[index]),
+    );
+  return planes;
+}
 export interface BrushSettings {
   color: string;
   width: number;
@@ -268,6 +296,28 @@ export function createViewport(
   let plotStyle: PlotStyleTable = plotStyleTable();
   let darkBackground = false;
   const plotMaterials = new Set<LineMaterial>();
+  /*
+   * Section view (SPEC-01.15, PLAN-43 T-197): one shared plane list that every document material
+   * references, so changing the section only edits this array (no material rebuild). Empty = no
+   * cut. Sketches, jig overlays, the live stroke and the grid are never cut.
+   */
+  const clipPlanes: THREE.Plane[] = [];
+  let section: Section | null = null;
+  const isCut = (point: THREE.Vector3) => clipPlanes.some((p) => p.distanceToPoint(point) < -1e-6);
+  /** Points every document material at the shared planes (new objects pick them up here). */
+  function syncClipping() {
+    if (!clipPlanes.length) return;
+    for (const root of scene.children) {
+      if (root === lines || root === overlayRoot || root === live || root === grid) continue;
+      if (root instanceof THREE.Light) continue;
+      root.traverse((item) => {
+        const material = (item as THREE.Mesh).material as THREE.Material | THREE.Material[];
+        if (!material) return;
+        for (const m of Array.isArray(material) ? material : [material])
+          if (m.clippingPlanes !== clipPlanes) m.clippingPlanes = clipPlanes;
+      });
+    }
+  }
   const perspective = new THREE.PerspectiveCamera(40, 1, 0.1, 1000);
   const orthographic = new THREE.OrthographicCamera(-25, 25, 25, -25, 0.1, 1000);
   let viewSpan = 50;
@@ -1724,6 +1774,9 @@ export function createViewport(
     down = { x: e.clientX, y: e.clientY };
   }
   const surfaceMeshes = () => meshes.filter((m) => m instanceof THREE.Mesh);
+  /** The nearest hit the section leaves drawn: what is cut away is not picked or drawn on. */
+  const shownHit = (hits: THREE.Intersection[]) =>
+    clipPlanes.length ? hits.find((hit) => !isCut(hit.point)) : hits[0];
   /** Surfaces the walker stands on: meshes and the surface parts of block instances. */
   const walkSurfaces = () => {
     const out: THREE.Object3D[] = [];
@@ -1740,7 +1793,7 @@ export function createViewport(
   }
   const surfaceHit = (e: PointerEvent) => {
     rayAt(e);
-    return ray.intersectObjects(surfaceMeshes(), false)[0];
+    return shownHit(ray.intersectObjects(surfaceMeshes(), false));
   };
   /** Onto the surface under the pen (when following surfaces), else onto the stroke's plane. */
   function projectPoint(e: PointerEvent, fallback: THREE.Plane) {
@@ -1899,7 +1952,10 @@ export function createViewport(
         const n = attribute.count,
           step = Math.max(1, Math.floor(n / 4000));
         for (let i = 0; i < n; i += step) {
-          corner.fromBufferAttribute(attribute, i).applyMatrix4(source.matrixWorld).project(camera);
+          corner.fromBufferAttribute(attribute, i).applyMatrix4(source.matrixWorld);
+          // Window selection sees only what the section leaves drawn.
+          if (clipPlanes.length && isCut(corner)) continue;
+          corner.project(camera);
           const x = ((corner.x + 1) / 2) * r.width,
             y = ((1 - corner.y) / 2) * r.height;
           if (record) screen.push(x, y);
@@ -1944,7 +2000,7 @@ export function createViewport(
       // A crossing window drawn entirely inside a large face still touches that face.
       mouse.set(((minX + maxX) / 2 / r.width) * 2 - 1, (-(minY + maxY) / 2 / r.height) * 2 + 1);
       ray.setFromCamera(mouse, camera);
-      const hit = ownerId(ray.intersectObjects(visibleMeshes(), true)[0]?.object);
+      const hit = ownerId(shownHit(ray.intersectObjects(visibleMeshes(), true))?.object);
       if (hit && !picked.includes(hit)) picked.push(hit);
     }
     return picked;
@@ -1994,7 +2050,7 @@ export function createViewport(
     };
     const mark = overlayAt(['point', 'label', 'line']);
     if (mark) return { ids: [], source: { source: 'overlay', ...mark } };
-    const id = ownerId(ray.intersectObjects(visibleMeshes(), true)[0]?.object);
+    const id = ownerId(shownHit(ray.intersectObjects(visibleMeshes(), true))?.object);
     if (id) return { ids: [id], source: { source: 'document' } };
     const area = overlayAt(['fill']);
     if (area) return { ids: [], source: { source: 'overlay', ...area } };
@@ -2020,6 +2076,10 @@ export function createViewport(
   const resize = new ResizeObserver(sizing);
   resize.observe(container);
   const lookAhead = new THREE.Vector3();
+  function drawScene() {
+    syncClipping();
+    renderer.render(scene, camera);
+  }
   function animate() {
     frame = requestAnimationFrame(animate);
     if (walk.active) walk.update();
@@ -2030,7 +2090,7 @@ export function createViewport(
       if (walk.active)
         light.target.position.copy(camera.position).add(camera.getWorldDirection(lookAhead));
       else light.target.position.copy(controls.target);
-      renderer.render(scene, camera);
+      drawScene();
       dirty = false;
     }
   }
@@ -2047,7 +2107,7 @@ export function createViewport(
       const offset = start.clone().sub(pivot);
       renderer.info.autoReset = false;
       renderer.info.reset();
-      renderer.render(scene, camera);
+      drawScene();
       const { calls, triangles, lines, points } = renderer.info.render;
       renderer.info.autoReset = true;
       const began = performance.now();
@@ -2057,7 +2117,7 @@ export function createViewport(
           .applyAxisAngle(new THREE.Vector3(0, 0, 1), (i / frames) * Math.PI * 2);
         camera.position.copy(pivot).add(turn);
         camera.lookAt(pivot);
-        renderer.render(scene, camera);
+        drawScene();
         gl.finish();
       }
       const frameMs = (performance.now() - began) / frames;
@@ -2080,7 +2140,7 @@ export function createViewport(
       const shown = overlayRoot.visible;
       overlayRoot.visible = false;
       try {
-        renderer.render(scene, camera);
+        drawScene();
         return renderer.domElement.toDataURL('image/png');
       } finally {
         overlayRoot.visible = shown;
@@ -2098,7 +2158,7 @@ export function createViewport(
       const shown = overlayRoot.visible;
       overlayRoot.visible = false;
       try {
-        renderer.render(scene, camera);
+        drawScene();
         const source = renderer.domElement;
         const scale = Math.min(1, maxSize / Math.max(source.width, source.height, 1));
         const width = Math.max(1, Math.round(source.width * scale)),
@@ -2310,6 +2370,23 @@ export function createViewport(
     walkTeleport: (point: [number, number, number], heading?: number) =>
       walk.teleport(point, heading),
     fit,
+    /** View-only section (SPEC-01.15): a plane or a box, or null to draw everything again. */
+    setSection(next: Section | null) {
+      section = next;
+      clipPlanes.length = 0;
+      if (next) clipPlanes.push(...sectionPlanes(next));
+      renderer.localClippingEnabled = clipPlanes.length > 0;
+      renderer.domElement.dataset.section = next ? next.mode : 'off';
+      dirty = true;
+    },
+    section: () => section,
+    /** The shown (not hidden) document objects' bounds, or undefined for an empty view. */
+    modelBounds() {
+      const bounds = new THREE.Box3();
+      for (const mesh of visibleMeshes()) bounds.expandByObject(mesh);
+      if (bounds.isEmpty()) return undefined;
+      return { min: bounds.min.toArray() as Triple, max: bounds.max.toArray() as Triple };
+    },
     hide(ids: readonly string[]) {
       for (const id of ids) hiddenIds.add(id);
       applyHidden();

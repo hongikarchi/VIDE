@@ -2,7 +2,7 @@
 id: PLAN-43
 title: 단면 보기·마감 일람표 jig·도면 내보내기 실험·xref 관계·jig 관리자 제출·외부 서비스 연동 계약 (T-197~T-202)
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-10-07
 owner: agent:claude
 related: [SPEC-01, SPEC-07, SPEC-08, SPEC-11, ARCH-01, DESIGN, ADR-037, ADR-040, ADR-041, RESEARCH-16, FR-01, FR-03, FR-04, FR-09, FR-14, FR-21, FR-24, C-04, C-05, C-06, C-07, C-08]
@@ -37,7 +37,7 @@ related: [SPEC-01, SPEC-07, SPEC-08, SPEC-11, ARCH-01, DESIGN, ADR-037, ADR-040,
 ## T-197 단면 평면·단면 상자
 
 - **기준:**
-  - [SPEC-01](../specs/SPEC-01-project-input-sync.md)의 단면 보기 항목. 이 작업에서 추가한다.
+  - [SPEC-01.15](../specs/SPEC-01-project-input-sync.md) 단면 보기
   - Design의 뷰포트 도구
 - **변경:**
   - `src/ui/viewport.ts`
@@ -164,7 +164,7 @@ related: [SPEC-01, SPEC-07, SPEC-08, SPEC-11, ARCH-01, DESIGN, ADR-037, ADR-040,
 
 | 티켓 | 상태 | 증거 |
 |---|---|---|
-| T-197 | 착수 | — |
+| T-197 | 구현·시험 완료(실호스트 확인 전) | `tests/integration/browser-section.mjs`, SPEC-01.15, Design 단면 |
 | T-198 | 착수 | — |
 | T-199 | 착수 | — |
 | T-200 | 착수 | — |

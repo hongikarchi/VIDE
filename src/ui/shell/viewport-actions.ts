@@ -14,6 +14,14 @@ export const viewportActions: {
   walk: () => void;
   fitSelection: () => void;
   fitView: () => void;
+  /** Section view (SPEC-01.15): the panel, its mode and the plane or box values. */
+  sectionPanel: (open?: boolean) => void;
+  sectionMode: (mode: 'off' | 'plane' | 'box') => void;
+  sectionAxis: (axis: 'x' | 'y' | 'z') => void;
+  sectionOffset: (offset: number) => void;
+  sectionFlip: () => void;
+  sectionBox: (index: 0 | 1 | 2, side: 'min' | 'max', value: number) => void;
+  sectionResetBox: () => void;
   swatch: (color: string) => void;
   brushColor: (color: string) => void;
   brushWidth: (width: number) => void;
@@ -32,6 +40,13 @@ export const viewportActions: {
   walk: nothing,
   fitSelection: nothing,
   fitView: nothing,
+  sectionPanel: nothing,
+  sectionMode: nothing,
+  sectionAxis: nothing,
+  sectionOffset: nothing,
+  sectionFlip: nothing,
+  sectionBox: nothing,
+  sectionResetBox: nothing,
   swatch: nothing,
   brushColor: nothing,
   brushWidth: nothing,

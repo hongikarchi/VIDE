@@ -5,6 +5,7 @@
 // is always present, so React never inserts or removes nodes next to theirs.
 import { memo, useLayoutEffect, useRef, type CSSProperties } from 'react';
 import { EdgeToggles } from './edge-toggles.tsx';
+import { SectionTool } from './section-tool.tsx';
 import { useStore } from '../store/core.ts';
 import { sketchState } from '../store/sketch.ts';
 import { selectionState } from '../store/selection.ts';
@@ -157,6 +158,7 @@ function ViewNavigation() {
           <path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" />
         </svg>
       </button>
+      <SectionTool />
     </div>
   );
 }
