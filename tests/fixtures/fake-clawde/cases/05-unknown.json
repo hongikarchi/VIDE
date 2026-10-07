@@ -1,0 +1,19 @@
+{
+  "name": "unknown",
+  "order": 90,
+  "match": ["조례"],
+  "fallback": true,
+  "expect": "valid",
+  "engine": {},
+  "answer": {
+    "answerId": "fake-unknown",
+    "verdict": "unknown",
+    "conclusion": "[시험 문구] 근거 조항을 찾지 못해 판단할 수 없습니다.",
+    "reasons": [],
+    "citations": [],
+    "interpretation": [],
+    "checks": [{ "text": "[시험 문구] 해당 지자체 고시를 사람이 확인합니다." }],
+    "needs": [],
+    "usedProfile": []
+  }
+}

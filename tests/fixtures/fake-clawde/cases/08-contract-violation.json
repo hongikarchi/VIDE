@@ -1,0 +1,18 @@
+{
+  "name": "contract-violation",
+  "order": 70,
+  "match": ["계약 위반"],
+  "expect": "invalid",
+  "invalidPath": "conclusion",
+  "engine": {},
+  "answer": {
+    "answerId": "fake-contract-violation",
+    "verdict": "applies",
+    "reasons": [],
+    "citations": ["law:건축법/제61조/①"],
+    "interpretation": [],
+    "checks": [],
+    "needs": [],
+    "usedProfile": []
+  }
+}

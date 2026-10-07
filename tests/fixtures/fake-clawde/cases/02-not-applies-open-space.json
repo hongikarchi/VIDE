@@ -1,0 +1,29 @@
+{
+  "name": "not-applies-open-space",
+  "order": 20,
+  "match": ["공지"],
+  "expect": "valid",
+  "engine": {},
+  "answer": {
+    "answerId": "fake-not-applies-open-space",
+    "verdict": "not-applies",
+    "conclusion": "[시험 문구] 대지 안의 공지 기준을 받지 않습니다.",
+    "reasons": [
+      {
+        "text": "[시험 문구] 시험 대지의 용도에는 띄울 거리가 없습니다.",
+        "refs": ["law:건축법/제58조"]
+      }
+    ],
+    "citations": ["law:건축법/제58조"],
+    "interpretation": [
+      {
+        "text": "[시험 문구] 서비스가 만든, 사람이 확인하지 않은 풀이입니다.",
+        "refs": ["law:건축법/제58조"],
+        "basis": "draft"
+      }
+    ],
+    "checks": [{ "text": "[시험 문구] 조례의 띄울 거리를 고시로 확인합니다." }],
+    "needs": [],
+    "usedProfile": ["site.zoning"]
+  }
+}

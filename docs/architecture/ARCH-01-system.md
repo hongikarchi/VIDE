@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.95
+version: 0.96
 updated: 2026-10-07
 owner: agent:codex
 related: [ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35, PLAN-36, ADR-039, PLAN-38, PLAN-39, PLAN-42, ADR-040, ADR-041, PLAN-43, SPEC-13, PLAN-46]
@@ -1032,7 +1032,7 @@ cLAWde·ArchiDB·Site Modeling·Structure Analysis는 각자의 저장소와 배
 
 | 끝점 | 요청 | 응답 |
 |---|---|---|
-| `GET /v1/meta` | — | `{service:'clawde', apiVersion, lawDbDate, stages[]}` |
+| `GET /v1/meta` | — | `{service:'clawde', apiVersion, lawDbDate, stages[{id, label}], profileKeys[{key, label, unit?}]}` |
 | `POST /v1/ask` | `{question, stage, profile, model?, projectRef?, locale:'ko'}` | `Answer` |
 | `POST /v1/checklist` | `{stage, profile, model?}` | `{lawDbDate, items[{topic, stage, status, reason, refs[], answerHint?}]}` |
 | `GET /v1/articles/{ref}` | — | `Article` |
@@ -1043,6 +1043,7 @@ cLAWde·ArchiDB·Site Modeling·Structure Analysis는 각자의 저장소와 배
   - `model`: `{northAngleDeg, siteArea, adjacent[{bearingDeg, kind, roadWidth?}], surroundingHeights{max, median}, shpAttrs{}}`. 수치·코드만 싣고 형상은 싣지 않는다.
   - `Answer`: `{answerId, verdict:'applies'|'not-applies'|'conditional'|'unknown', conclusion, reasons[{text, refs[]}], citations[Article 발췌], interpretation[{text, refs[], basis:'verified'|'draft'}], checks[{text, dependsOn?}], needs[{key, question, options[], recommended?, why}], usedProfile[key], constraints?[{key, value, unit, refs[]}], figures?[{mime:'image/png'|'image/svg+xml', url, caption}], lawDbDate, generatedAt}`.
   - `Article`: `{ref, lawName, article, title, excerpt, effectiveDate, sourceUrl, lawDbDate}`. `ref`는 cLAWde 조항 ID(예: `law:건축법/제61조/①`)이고 `sourceUrl`은 법령 원문(법제처) 링크다.
+  - 보완(2026-10-07, T-216): 검사기는 `src/contracts/clawde.ts`의 zod 스키마 하나이며 엔진 커넥터와 계약 시험이 같이 쓴다. `excerpt`·`sourceUrl`은 `null`일 수 있다(그 조항만 '원문 없음', SPEC-13.12). 체크리스트는 모든 단계의 항목을 돌려주고 `items[].status`는 `verdict`와 같은 네 값이다(`unknown` = 확인 필요). 검색 결과 요약은 `{ref, lawName, article, title, excerpt}`. 2xx가 아닌 응답의 본문은 `{error: {code, message}}`이다(400 요청 형식, 401 토큰, 404 조항, 5xx 서비스).
 - **엔진 검사.** `verdict`가 `unknown`이 아닌데 `citations`가 비면 `unknown`으로 낮춘다. `reasons[].refs`·`constraints[].refs`가 `citations`에 없으면 그 항목에 `unverifiedRef`를 붙이고 `constraints`는 jig 출력에서 뺀다. `figures`는 `<img>`로만 그리고 SVG는 스크립트·외부 참조를 지운 뒤 data URL로 둔다.
 - **엔진 API.** `GET/PUT /api/v1/projects/:id/legal/profile`, `POST …/legal/ask {question, stage?, confirmSendHash?}` → `{answer, number}` 또는 `{needsConfirm: {items[], hash}}`, `GET …/legal/checklist?stage=`, `GET …/legal/answers[?number=]`, `POST …/legal/contribute {keys[]}`. 원격 세션은 `contribute`와 설정 쓰기가 403이다.
 - **저장.** 프로젝트 DB 표 `legal_profile(key, value_json, source, version, updated_at)`, `legal_answers(number, question, stage, sent_json, sent_hash, answer_json, law_db_date, fetched_at, stale)`, `legal_articles(ref, article_json, fetched_at)`, `legal_contributions(key, value_hash, receipt_id, sent_at)`. 캐시 열쇠는 `(question 정규화, stage, sent_hash)`다.

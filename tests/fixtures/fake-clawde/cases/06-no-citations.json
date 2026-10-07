@@ -1,0 +1,18 @@
+{
+  "name": "no-citations",
+  "order": 50,
+  "match": ["근거 없음"],
+  "expect": "valid",
+  "engine": { "downgrade": true },
+  "answer": {
+    "answerId": "fake-no-citations",
+    "verdict": "applies",
+    "conclusion": "[시험 문구] 근거 조항 없이 적용된다고 답합니다.",
+    "reasons": [{ "text": "[시험 문구] 근거를 대지 않은 이유입니다.", "refs": [] }],
+    "citations": [],
+    "interpretation": [],
+    "checks": [],
+    "needs": [],
+    "usedProfile": ["site.zoning"]
+  }
+}

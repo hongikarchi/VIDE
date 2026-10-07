@@ -1,0 +1,51 @@
+{
+  "name": "applies-sunlight",
+  "order": 10,
+  "match": ["일조"],
+  "expect": "valid",
+  "engine": {},
+  "answer": {
+    "answerId": "fake-applies-sunlight",
+    "verdict": "applies",
+    "conclusion": "[시험 문구] 정북 일조 사선 제한을 받습니다.",
+    "reasons": [
+      { "text": "[시험 문구] 대지가 주거지역입니다.", "refs": ["law:건축법/제61조/①"] },
+      {
+        "text": "[시험 문구] 높이별로 띄울 거리가 정해집니다.",
+        "refs": ["law:건축법 시행령/제86조/①"]
+      }
+    ],
+    "citations": ["law:건축법/제61조/①", "law:건축법 시행령/제86조/①"],
+    "interpretation": [
+      {
+        "text": "[시험 문구] 북쪽 인접 대지 쪽 매스 높이가 제한됩니다.",
+        "refs": ["law:건축법 시행령/제86조/①"],
+        "basis": "verified"
+      }
+    ],
+    "checks": [],
+    "needs": [],
+    "usedProfile": ["site.zoning"],
+    "constraints": [
+      {
+        "key": "sunlight.setbackUpTo10m",
+        "value": 1.5,
+        "unit": "m",
+        "refs": ["law:건축법 시행령/제86조/①"]
+      },
+      {
+        "key": "sunlight.setbackRatioAbove10m",
+        "value": 0.5,
+        "unit": "ratio",
+        "refs": ["law:건축법 시행령/제86조/①"]
+      }
+    ],
+    "figures": [
+      {
+        "mime": "image/svg+xml",
+        "url": "{base}/v1/figures/sunlight.svg",
+        "caption": "[시험 문구] 정북 일조 사선 단면"
+      }
+    ]
+  }
+}

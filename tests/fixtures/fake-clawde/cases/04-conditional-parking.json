@@ -1,0 +1,31 @@
+{
+  "name": "conditional-parking",
+  "order": 40,
+  "match": ["주차"],
+  "expect": "valid",
+  "engine": {},
+  "answer": {
+    "answerId": "fake-conditional-parking",
+    "verdict": "conditional",
+    "conclusion": "[시험 문구] 연면적이 정해지면 주차대수가 정해집니다.",
+    "reasons": [
+      { "text": "[시험 문구] 주용도별 기준을 적용합니다.", "refs": ["law:주차장법 시행령/별표1/1"] }
+    ],
+    "citations": ["law:주차장법 시행령/별표1/1"],
+    "interpretation": [
+      {
+        "text": "[시험 문구] 업무시설 기준으로 셉니다.",
+        "refs": ["law:주차장법 시행령/별표1/1"],
+        "basis": "verified"
+      }
+    ],
+    "checks": [
+      {
+        "text": "[시험 문구] 시설면적이 정해지면 대수를 확정합니다.",
+        "dependsOn": ["plan.gfa"]
+      }
+    ],
+    "needs": [],
+    "usedProfile": ["site.zoning", "plan.mainUse"]
+  }
+}

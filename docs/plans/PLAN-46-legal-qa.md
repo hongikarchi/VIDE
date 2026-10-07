@@ -2,7 +2,7 @@
 id: PLAN-46
 title: 법규 Q&A — cLAWde 연결·법규 jig·단계별 법령·역전송 (T-215~T-224)
 status: review
-version: 0.3
+version: 0.4
 updated: 2026-10-07
 owner: agent:claude
 related: [SPEC-13, SPEC-07, SPEC-08, SPEC-02, SPEC-12, ARCH-01, ARCH-03, ADR-026, ADR-030, ADR-037, ADR-039, ADR-040, RESEARCH-04, RESEARCH-16, PLAN-45, C-04, C-06, OQ-16, OQ-17, FR-09, FR-18, FR-24, FR-25]
@@ -56,10 +56,11 @@ related: [SPEC-13, SPEC-07, SPEC-08, SPEC-02, SPEC-12, ARCH-01, ARCH-03, ADR-026
   - `tests/fixtures/fake-clawde/server.mjs`: Node `http` 서버. `/v1/meta`·`ask`·`checklist`·`articles`·`search`·`contributions`. Bearer 토큰 검사.
   - `tests/fixtures/fake-clawde/cases/*.json`: 공개 법령 몇 조(예: 건축법 제61조 일조 사선, 주차장법 시행령 별표1 한 행)로 만든 답 표본. 결론별(적용·적용 안 됨·조건부·판단 불가) 하나씩, `needs`가 있는 답(주용도 되묻기), `constraints`가 있는 답, 근거 없는 결론, 계약 위반(필수 필드 없음), 그림 있는 답.
   - 시험 조종: 응답 지연, 503, 401, 일부 거절(`contributions`).
-  - `tests/contract/clawde-contract.test.mjs`: 가짜 서버의 응답이 계약 스키마(`src/services/clawde-schema.ts`, T-218에서 쓰는 같은 검사기)를 통과하는지.
+  - `tests/contract/clawde-contract.test.mjs`: 가짜 서버의 응답이 계약 스키마(`src/contracts/clawde.ts`, T-218에서 쓰는 같은 검사기. 다른 계약 스키마와 같이 `src/contracts/`에 두어 서버 타입 검사에 든다)를 통과하는지. `npm test`가 `tests/contract/*.test.mjs`를 돈다.
 - **선행:** 없음(T-215와 병렬). T-215 결과로 표본을 고친다.
 - **검증:** 정상 — 모든 표본이 스키마를 통과하고 위반 표본은 정확히 실패한다. 실패 — 토큰이 없거나 틀리면 401.
 - **완료:** 계약 시험이 `npm run verify`에 들어가 통과한다.
+- **상태(2026-10-07): 완료.** 사용자가 0단계(T-215·T-216) 착수를 승인했다. 가짜 서버 `tests/fixtures/fake-clawde/server.mjs`(`startFakeClawde()`, 단독 실행 `--port`·`--token`, 같은 토큰의 `POST /__control`), 표본 `cases/01~08`(적용·적용 안 됨·조건부·판단 불가, `needs` 되묻기 → 답한 뒤 조건부, `constraints`·그림 있는 답, 근거 없는 결론, `citations`에 없는 ref·원문 없는 조항, 필수 필드 없는 계약 위반), `articles.json`·`checklist.json`(조항 번호만 공개 법령이고 발췌는 '[시험 문구]'로 표시한 지어낸 요약), 시험 조종(지연·401·500·503·`lawDbDate` 갱신·`contributions` 일부 거절, `idempotencyKey` 중복은 첫 접수 그대로). `tests/contract/clawde-contract.test.mjs` 16건 통과. 계약 보완은 ARCH-01 「cLAWde 연결 계약」의 '보완' 줄과 `meta` 행(`stages[{id,label}]`·`profileKeys`)에 적었다. T-215 결과로 표본을 고칠 수 있다.
 - **의존:** T-218 이후 모든 티켓의 시험이 이 서버를 쓴다.
 
 ## T-217 연결 설정과 토큰 보관
@@ -79,7 +80,7 @@ related: [SPEC-13, SPEC-07, SPEC-08, SPEC-02, SPEC-12, ARCH-01, ARCH-03, ADR-026
 
 - **기준:** SPEC-13.5의 근거 규칙, SPEC-13.9, SPEC-13.12, ARCH-01 「엔진 검사」「저장」「jig 능력」.
 - **변경:**
-  - `src/services/clawde.ts`: 끝점 호출(시간 상한, 401 → 상태 '로그인 필요', 재시도 없음), `src/services/clawde-schema.ts`로 응답 검사, 엔진 검사(근거 없는 결론 낮추기, `unverifiedRef`, 그림 정리).
+  - `src/services/clawde.ts`: 끝점 호출(시간 상한, 401 → 상태 '로그인 필요', 재시도 없음), `src/contracts/clawde.ts`로 응답 검사, 엔진 검사(근거 없는 결론 낮추기, `unverifiedRef`, 그림 정리).
   - 프로젝트 DB 이행: `legal_profile`·`legal_answers`·`legal_articles`·`legal_contributions`(`src/core/migrations.ts`에 다음 번호).
   - 캐시: 열쇠 `(질문 정규화, stage, sent_hash)`, '다시 확인 필요'(프로필 변경·`lawDbDate` 갱신), 오프라인 표시.
   - jig 검사기: ARCH-03 `Capability`에 `service.clawde` 추가, 공식 jig만 허용, 그 밖의 출처는 등록 거절. ARCH-03 문서를 같이 고친다.
@@ -191,4 +192,4 @@ related: [SPEC-13, SPEC-07, SPEC-08, SPEC-02, SPEC-12, ARCH-01, ARCH-03, ADR-026
 
 ## 현재 상태
 
-계획만 썼다(2026-10-07). 같은 날 범위 채택과 cLAWde의 자리(새 저장소, 세 출처 종합)가 정해졌고, 사용자의 계획 검토를 기다린다. 코드는 없다. 진행 현황은 [PLAN](PLAN.md) §6.5가 소유한다.
+2026-10-07 계획을 쓰고 같은 날 범위 채택과 cLAWde의 자리(새 저장소, 세 출처 종합)가 정해졌으며, 사용자가 0단계(T-215·T-216)를 승인했다. T-216(가짜 서버·계약 시험)은 완료했고 T-217 이후는 코드가 없다. 진행 현황은 [PLAN](PLAN.md) §6.5가 소유한다.

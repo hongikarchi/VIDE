@@ -15,7 +15,7 @@
     "desktop:release": "node src/desktop/build.mjs --installer",
     "predesktop:release": "npm run build:web",
     "test:desktop": "npm run desktop:build && npm run build:web && node tests/integration/desktop-shell.mjs",
-    "test": "node --test tests/core/*.test.mjs tests/ai/*.test.mjs tests/server/*.test.mjs",
+    "test": "node --test tests/core/*.test.mjs tests/ai/*.test.mjs tests/server/*.test.mjs tests/contract/*.test.mjs",
     "docs:build": "npm --prefix tools/docs run build",
     "docs:check": "npm --prefix tools/docs run check",
     "package:windows": "node src/desktop/build.mjs",

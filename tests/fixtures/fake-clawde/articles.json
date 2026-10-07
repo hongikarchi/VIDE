@@ -1,0 +1,65 @@
+{
+  "note": "Fixture text for the fake cLAWde server (PLAN-46 T-216). Excerpts are short invented summaries marked [시험 문구], not the statute text; the engine must never treat them as law.",
+  "articles": [
+    {
+      "ref": "law:건축법/제61조/①",
+      "lawName": "건축법",
+      "article": "제61조 제1항",
+      "title": "일조 등의 확보를 위한 건축물의 높이 제한",
+      "excerpt": "[시험 문구] 주거지역 안의 건축물은 정북 방향의 인접 대지 경계선에서 일정 거리 이상 띄어 짓는다.",
+      "effectiveDate": "2026-01-01",
+      "sourceUrl": "https://www.law.go.kr/법령/건축법",
+      "lawDbDate": "2026-09-01"
+    },
+    {
+      "ref": "law:건축법 시행령/제86조/①",
+      "lawName": "건축법 시행령",
+      "article": "제86조 제1항",
+      "title": "일조 등의 확보를 위한 건축물의 높이 제한",
+      "excerpt": "[시험 문구] 높이 10미터 이하 부분은 1.5미터 이상, 10미터를 넘는 부분은 그 높이의 2분의 1 이상 띄운다.",
+      "effectiveDate": "2026-01-01",
+      "sourceUrl": "https://www.law.go.kr/법령/건축법시행령",
+      "lawDbDate": "2026-09-01"
+    },
+    {
+      "ref": "law:건축법/제58조",
+      "lawName": "건축법",
+      "article": "제58조",
+      "title": "대지 안의 공지",
+      "excerpt": "[시험 문구] 건축선과 인접 대지 경계선에서 조례로 정한 거리 이상을 띄운다.",
+      "effectiveDate": "2026-01-01",
+      "sourceUrl": "https://www.law.go.kr/법령/건축법",
+      "lawDbDate": "2026-09-01"
+    },
+    {
+      "ref": "law:건축법/제42조/①",
+      "lawName": "건축법",
+      "article": "제42조 제1항",
+      "title": "대지의 조경",
+      "excerpt": "[시험 문구] 면적이 일정 이상인 대지에는 조례로 정한 기준에 따라 조경을 한다.",
+      "effectiveDate": "2026-01-01",
+      "sourceUrl": "https://www.law.go.kr/법령/건축법",
+      "lawDbDate": "2026-09-01"
+    },
+    {
+      "ref": "law:주차장법 시행령/별표1/1",
+      "lawName": "주차장법 시행령",
+      "article": "별표 1 제1호",
+      "title": "부설주차장의 설치대상 시설물 종류 및 설치기준",
+      "excerpt": "[시험 문구] 시설물의 용도별로 시설면적에 따른 주차대수를 둔다.",
+      "effectiveDate": "2026-01-01",
+      "sourceUrl": "https://www.law.go.kr/법령/주차장법시행령",
+      "lawDbDate": "2026-09-01"
+    },
+    {
+      "ref": "law:장애인등편의법/제10조의2/①",
+      "lawName": "장애인·노인·임산부 등의 편의증진 보장에 관한 법률",
+      "article": "제10조의2 제1항",
+      "title": "장애물 없는 생활환경 인증",
+      "excerpt": "[시험 문구] 대상 시설은 장애물 없는 생활환경 인증을 받는다.",
+      "effectiveDate": "2026-01-01",
+      "sourceUrl": "https://www.law.go.kr/법령/장애인노인임산부등의편의증진보장에관한법률",
+      "lawDbDate": "2026-09-01"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "name": "needs-main-use",
+  "order": 30,
+  "match": ["주차"],
+  "unlessProfile": "plan.mainUse",
+  "expect": "valid",
+  "engine": {},
+  "answer": {
+    "answerId": "fake-needs-main-use",
+    "verdict": "conditional",
+    "conclusion": "[시험 문구] 주용도에 따라 주차대수가 달라집니다.",
+    "reasons": [
+      {
+        "text": "[시험 문구] 용도별로 주차 기준이 다릅니다.",
+        "refs": ["law:주차장법 시행령/별표1/1"]
+      }
+    ],
+    "citations": ["law:주차장법 시행령/별표1/1"],
+    "interpretation": [],
+    "checks": [
+      {
+        "text": "[시험 문구] 주용도를 정하면 대수를 셀 수 있습니다.",
+        "dependsOn": ["plan.mainUse"]
+      }
+    ],
+    "needs": [
+      {
+        "key": "plan.mainUse",
+        "question": "주용도가 무엇인가요?",
+        "options": ["업무시설", "제1종 근린생활시설"],
+        "recommended": "업무시설",
+        "why": "[시험 문구] 용도에 따라 시설면적당 주차대수가 다릅니다."
+      }
+    ],
+    "usedProfile": ["site.zoning"]
+  }
+}

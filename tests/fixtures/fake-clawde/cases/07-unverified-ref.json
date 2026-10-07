@@ -1,0 +1,41 @@
+{
+  "name": "unverified-ref",
+  "order": 60,
+  "match": ["조경"],
+  "expect": "valid",
+  "engine": {
+    "unverifiedRefs": ["law:건축법/제99조/①"],
+    "noExcerpt": ["law:건축법/제42조/①"]
+  },
+  "answer": {
+    "answerId": "fake-unverified-ref",
+    "verdict": "applies",
+    "conclusion": "[시험 문구] 조경 기준을 받습니다.",
+    "reasons": [
+      { "text": "[시험 문구] 대지 면적이 기준 이상입니다.", "refs": ["law:건축법/제42조/①"] },
+      {
+        "text": "[시험 문구] 근거 목록에 없는 조항을 가리키는 이유입니다.",
+        "refs": ["law:건축법/제99조/①"]
+      }
+    ],
+    "citations": [
+      {
+        "ref": "law:건축법/제42조/①",
+        "lawName": "건축법",
+        "article": "제42조 제1항",
+        "title": "대지의 조경",
+        "excerpt": null,
+        "effectiveDate": "2026-01-01",
+        "sourceUrl": null,
+        "lawDbDate": "2026-09-01"
+      }
+    ],
+    "interpretation": [],
+    "checks": [],
+    "needs": [],
+    "usedProfile": ["site.area"],
+    "constraints": [
+      { "key": "landscape.ratio", "value": 0.1, "unit": "ratio", "refs": ["law:건축법/제99조/①"] }
+    ]
+  }
+}
