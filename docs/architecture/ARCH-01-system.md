@@ -2,10 +2,10 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.91
+version: 0.92
 updated: 2026-10-07
 owner: agent:codex
-related: [ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35, PLAN-36, ADR-039, PLAN-38, PLAN-39, PLAN-42]
+related: [ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35, PLAN-36, ADR-039, PLAN-38, PLAN-39, PLAN-42, ADR-040, ADR-041, PLAN-43]
 ---
 
 # VIDE 기술 구조와 구현 계약
@@ -966,6 +966,22 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 - **화면:** `src/ui/shell/telemetry.tsx`(`TelemetryCards`: 세션이 열린 뒤 `GET /telemetry`로 첫 실행 카드 또는 충돌 카드, 호스트 패널 제외; `TelemetrySection`: 설정 ‘상태 · 오류’ 탭이 보일 때 읽음). 문구 원본은 `src/contracts/telemetry-notice.ts`(사이트 `/privacy`와 공유).
 - **사이트(`src/sharing/telemetry.ts`, D1 `0010-telemetry.sql`):** `telemetry_reports(id, install_id, version, kind, received_at, day, size, payload)`(색인 day·kind / version·received_at / install_id·received_at / received_at), `telemetry_limits(key, window_start, count)`(하루 고정 창: `report|bundle:install:<id>:<day>`, `…:ip:<SHA-256 앞 32자>:<day>`), `telemetry_bundles(id, install_id, version, received_at, size, object_key, dumps)`. `POST /api/telemetry/reports`는 공개(계정·Origin 검사 없음)이며 `TELEMETRY_REPORTS_ENABLED='false'`면 503, 본문 48 KB(413), 설치 번호 UUID·버전·`kind: summary`·객체 `payload`(400), 경로·`/Users/`·`/home/`·이메일이 남은 본문 422, 설치당 하루 `TELEMETRY_INSTALL_DAILY`(24)·주소당 `TELEMETRY_IP_DAILY`(300) 초과 429, 저장 201 `{id}`. 약 2%의 쓰기에서 이틀 지난 카운터와 `TELEMETRY_KEEP_DAYS`(180)일 지난 보고를 지운다. `POST /api/telemetry/bundles`는 `TELEMETRY_BUNDLES_ENABLED='true'`일 때만(기본 503 `BUNDLES_DISABLED`): zip·`Content-Length` 필수, `TELEMETRY_BUNDLE_MAX_MB`(8)/`TELEMETRY_BUNDLE_DUMP_MAX_MB`(95), 설치당 하루 3건, R2 `ASSETS`의 `telemetry/bundles/<day>/<install>/<id>.zip`.
 - **관리자:** `GET /api/admin/telemetry/{summary|reports|reports.csv|bundles|bundles/:id}`는 `Authorization: Bearer <TELEMETRY_ADMIN_TOKEN>`(32자 이상, 다이제스트 비교) 또는 로그인 계정의 아이디·이메일이 `ADMIN_USERS`(쉼표 구분)에 있을 때만(401 `LOGIN_REQUIRED`, 403 `ADMIN_REQUIRED`). 거르기 `day|from|to|version|kind|install`, `reports`는 `limit`(≤500)·`before`(받은 시각) 쪽 넘기기, CSV(UTF-8 BOM, 최대 5,000행)는 `id, received_at, day, install_id, version, kind, size, os, errors, top_error, exits, truncated, payload`이고 `= + - @`로 시작하는 칸은 `'`를 붙인다. `GET /api/me`에 `admin`. 화면은 `/?admin=reports`(`web/reports.tsx`), 공개 안내 `/privacy`(`web/privacy.tsx`). 개발 도구 `node tools/diagnostics/reports.mjs`(환경 `VIDE_TELEMETRY_ADMIN_TOKEN`, `--site`·`--day`·`--days`·`--version`·`--install`·`--json`·`--csv`·`--out`)가 버전별 설치 수·실패 종류(설치 수 순)·종료 코드·주요 시간을 보인다.
+
+### 외부 도메인 서비스(ADR-040, 계약만)
+
+cLAWde·ArchiDB·Site Modeling·Structure Analysis는 각자의 저장소와 배포를 가진다. VIDE 저장소에는 연결 계약만 둔다. 2026-10-07 기준으로 코드는 없다.
+
+- **연결 주체.** 서비스 호출은 엔진이 한다. 화면과 jig 계산 상자(compute box)는 서비스에 직접 닿지 않는다.
+  - jig는 `service.<name>` 능력을 선언한다. 이것은 ARCH-03의 예약 능력이며, 지금은 검사기가 거절한다.
+  - 엔진은 선언한 jig에만 그 서비스의 읽기 결과를 입력으로 넘긴다.
+- **인증.** 사용자 VIDE 계정(ADR-039)으로 서비스 토큰을 받는다. 토큰은 엔진 데이터 폴더의 비밀 저장소에 두고, 화면·기록·검수 증거에 남기지 않는다.
+- **읽기.** HTTP JSON으로 읽는다. 응답에는 다음이 들어 있어야 한다.
+  - 출처: 서비스, 문서 ID, 판, 원문 링크
+  - 조회 시각
+  - 자료가 공유되어 서비스 DB 정본에 쌓인 것인지, AI 해석인지를 나누는 구분(PRD §6.3)
+  - 엔진은 프로젝트 자료 DB에 출처와 함께 캐시한다. 공유 방식(직접 읽기·API·사본 동기화)은 OQ-16에서 정한다.
+- **역전송.** VIDE가 쌓은 진술·결정을 서비스로 보내는 요청은 사용자가 확인한 묶음만 보낸다(OQ-17). 무엇을 보냈는지는 작업 기록에 남긴다.
+- **형상과 메타데이터.** 대지·법규 결과의 형상은 기존 jig 만들기 경로(호스트 만들기, Link ID ADR-030)로 넣는다. 속성에는 서비스 출처 ID를 둔다.
 
 ## 7. 개발 기반과 변경 경계
 
