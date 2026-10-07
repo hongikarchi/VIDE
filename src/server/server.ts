@@ -127,6 +127,9 @@ interface ServerOptions {
     account?: AccountTokens;
     fetcher?: typeof fetch;
     timeoutMs?: number;
+    /** The answer prose runner and the writers this PC has (T-236; default the real CLIs). */
+    proseRunner?: ProseRunner;
+    writers?: () => Promise<WriterAvailability>;
   };
 }
 import { readWebAsset } from './web-assets.ts';
@@ -204,6 +207,13 @@ import {
   type AccountTokens,
 } from '../services/settings.ts';
 import { ClawdeClient } from '../services/clawde.ts';
+import {
+  LegalWriter,
+  ModelCerts,
+  cliProseRunner,
+  type ProseRunner,
+  type WriterAvailability,
+} from '../services/legal-writer.ts';
 import { SharedNotes } from './shared-notes.ts';
 import { notesRoutes, notesStatuses } from './notes-routes.ts';
 import { SharedProjects } from './shared-project.ts';
@@ -469,7 +479,30 @@ export async function startServer({
     timeoutMs: serviceOptions?.timeoutMs,
     version: appVersion(),
   });
-  const legal = new LegalService({ store, client: clawde, settings: serviceSettings });
+  // Answer prose (SPEC-13.13): the user's own CLI with the recipe's model; the writers this PC has
+  // are the signed-in CLIs (checked only when an answer carries a recipe) and the Codex catalog.
+  const legalWriter = new LegalWriter({
+    client: clawde,
+    runner:
+      serviceOptions?.proseRunner ?? cliProseRunner((provider) => execution.executable(provider)),
+    availability:
+      serviceOptions?.writers ??
+      (async () => ({
+        signedIn: (await signedInServices()).map((id) =>
+          id === 'claude-cli' ? 'claude' : 'codex',
+        ),
+        codexModels: (await execution.models())
+          .filter((model) => model.provider === 'codex-cli')
+          .map((model) => model.id),
+      })),
+    certs: new ModelCerts(serviceDirectory),
+  });
+  const legal = new LegalService({
+    store,
+    client: clawde,
+    settings: serviceSettings,
+    writer: legalWriter,
+  });
   // Shared notes (SPEC-10): this PC as a member of the site; a Markdown copy for the AI.
   const sharedNotes =
     filename === ':memory:'

@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto';
 import {
   clawdeAnswerSchema,
+  clawdeProseSchema,
+  clawdeWriterSchema,
   type ClawdeAnswer,
+  type ClawdeProse,
+  type ClawdeWriter,
   type ClawdeModelSummary,
   type ClawdeProfile,
   type ClawdeStageId,
@@ -9,6 +13,7 @@ import {
 import { DomainError } from '../contracts/errors.ts';
 import type { Store } from '../core/store.ts';
 import { checkAnswer } from './clawde-check.ts';
+import type { ProseFailure, ProseRecord, ProseStatus } from './legal-writer.ts';
 
 /**
  * The project's legal answer record and cache (SPEC-13.9, ARCH-01 「저장」, PLAN-46 T-218, schema
@@ -68,6 +73,21 @@ export interface LegalAnswerView {
   constraints: NonNullable<ClawdeAnswer['constraints']>;
   unverifiedConstraints: string[];
   answer: ClawdeAnswer;
+  /**
+   * The answer prose (SPEC-13.13): only a prose that passed is here, shown as 'AI 문장(검증됨)'
+   * with its recipe version and writer (`verify:'local-only'` when the service could not check it).
+   * Otherwise null, and the card shows the deterministic fields.
+   */
+  prose:
+    | (ClawdeProse & {
+        recipe: { id: string; version: string };
+        writer: ClawdeWriter;
+        verify: 'server' | 'local-only';
+      })
+    | null;
+  /** 'failed' → '문장 생성 검증 실패' (reasons in `proseFailures`), 'no-model' → '자격 모델 없음'. */
+  proseStatus: ProseStatus;
+  proseFailures: ProseFailure[];
 }
 
 interface Row {
@@ -79,6 +99,51 @@ interface Row {
   law_db_date: string;
   fetched_at: string;
   stale: number;
+  prose_json: string | null;
+  recipe_id: string | null;
+  recipe_version: string | null;
+  writer_provider: string | null;
+  writer_model: string | null;
+  writer_effort: string | null;
+  verify_json: string | null;
+}
+
+/** `verify_json`: the status, the failures and the service's answer of the last writing. */
+interface VerifyRecord {
+  status: ProseStatus;
+  failures: ProseFailure[];
+  server: ProseRecord['server'];
+  at: string;
+  raw?: string;
+}
+
+function proseOf(row: Row): Pick<LegalAnswerView, 'prose' | 'proseStatus' | 'proseFailures'> {
+  if (!row.verify_json) return { prose: null, proseStatus: 'none', proseFailures: [] };
+  const verify = JSON.parse(row.verify_json) as VerifyRecord;
+  const shown = verify.status === 'verified' || verify.status === 'local-only';
+  const parsed =
+    shown && row.prose_json ? clawdeProseSchema.safeParse(JSON.parse(row.prose_json)) : undefined;
+  const writer = clawdeWriterSchema.safeParse({
+    provider: row.writer_provider,
+    model: row.writer_model,
+    effort: row.writer_effort,
+  });
+  if (parsed?.success && writer.success && row.recipe_id && row.recipe_version)
+    return {
+      prose: {
+        ...parsed.data,
+        recipe: { id: row.recipe_id, version: row.recipe_version },
+        writer: writer.data,
+        verify: verify.status === 'verified' ? 'server' : 'local-only',
+      },
+      proseStatus: verify.status,
+      proseFailures: [],
+    };
+  return {
+    prose: null,
+    proseStatus: shown ? 'failed' : verify.status,
+    proseFailures: verify.failures,
+  };
 }
 
 export class LegalAnswers {
@@ -111,6 +176,7 @@ export class LegalAnswers {
       constraints: check.constraints,
       unverifiedConstraints: check.unverifiedConstraints,
       answer,
+      ...proseOf(row),
     };
   }
   /** The newest stored answer for the same question, stage and sent information. */
@@ -168,6 +234,48 @@ export class LegalAnswers {
         .get(projectId, next) as unknown as Row;
     });
     return this.view(row, latestLawDbDate);
+  }
+  /**
+   * Stores one writing in the audit columns (ARCH-01 「저장」): the output (a failed one too, for
+   * the audit; it is never shown), the recipe version, the writer and the check result. A writing
+   * that ran nothing ('none') leaves the columns as they were.
+   */
+  setProse(
+    projectId: string,
+    number: number,
+    record: ProseRecord,
+    latestLawDbDate: string | null,
+  ): LegalAnswerView {
+    this.store.project(projectId);
+    const db = this.store.db(projectId);
+    if (record.status !== 'none') {
+      const verify: VerifyRecord = {
+        status: record.status,
+        failures: record.failures,
+        server: record.server,
+        at: record.at,
+        ...(record.raw !== undefined ? { raw: record.raw } : {}),
+      };
+      db.prepare(
+        'UPDATE legal_answers SET prose_json=?, recipe_id=?, recipe_version=?, writer_provider=?, writer_model=?, writer_effort=?, verify_json=? WHERE projectId=? AND number=?',
+      ).run(
+        record.output === undefined ? null : JSON.stringify(record.output),
+        record.recipe?.id ?? null,
+        record.recipe?.version ?? null,
+        record.writer?.provider ?? null,
+        record.writer?.model ?? null,
+        record.writer?.effort ?? null,
+        JSON.stringify(verify),
+        projectId,
+        number,
+      );
+    }
+    return this.get(projectId, number, latestLawDbDate);
+  }
+  /** The question an answer was asked with and the stored answer (for [다시 쓰기]). */
+  source(projectId: string, number: number) {
+    const view = this.get(projectId, number, null);
+    return { question: view.question, answer: view.answer };
   }
   list(projectId: string, latestLawDbDate: string | null): LegalAnswerView[] {
     this.store.project(projectId);

@@ -3,6 +3,7 @@ import { legalAskInputSchema } from '../contracts/legal.ts';
 import type { ClawdeClient } from './clawde.ts';
 import { LegalAnswers, type LegalAnswerView, type LegalSent } from './legal-answers.ts';
 import { LegalProfile, type LegalSendItem } from './legal-profile.ts';
+import { writerKey, type LegalWriter } from './legal-writer.ts';
 import type { ServiceSettings } from './settings.ts';
 import type { Store } from '../core/store.ts';
 
@@ -13,7 +14,12 @@ import type { Store } from '../core/store.ts';
  * (timeout, 5xx) refuses the new question and leaves the cached ones shown as offline; a response
  * outside the contract is not stored. Nothing is queued to send later.
  */
-export const legalStatuses: Record<string, number> = { LEGAL_PROJECT_OFF: 409 };
+export const legalStatuses: Record<string, number> = {
+  LEGAL_PROJECT_OFF: 409,
+  LEGAL_NO_RECIPE: 409,
+  LEGAL_CERT_RUNNING: 409,
+  LEGAL_WRITER_UNAVAILABLE: 503,
+};
 
 export interface LegalAskResult {
   answer: LegalAnswerView;
@@ -30,21 +36,26 @@ export class LegalService {
   readonly profile: LegalProfile;
   private readonly client: ClawdeClient;
   private readonly settings: ServiceSettings;
+  /** The answer prose writer (T-236); without one only the deterministic fields are shown. */
+  readonly writer: LegalWriter | undefined;
   constructor({
     store,
     client,
     settings,
+    writer,
     now,
   }: {
     store: Store;
     client: ClawdeClient;
     settings: ServiceSettings;
+    writer?: LegalWriter;
     now?: () => Date;
   }) {
     this.answers = new LegalAnswers(store, { now });
     this.profile = new LegalProfile(store, { now });
     this.client = client;
     this.settings = settings;
+    this.writer = writer;
   }
   /** Refused before anything is sent: the project is off, or the service is not connected. */
   async assertCanSend(projectId: string) {
@@ -72,10 +83,32 @@ export class LegalService {
       locale: 'ko',
     });
     const withFigures = await this.client.inlineFigures(answer);
-    return {
-      answer: this.answers.add(projectId, question, sent, withFigures, latest),
-      cached: false,
-    };
+    const stored = this.answers.add(projectId, question, sent, withFigures, latest);
+    return { answer: await this.writeProse(projectId, stored, latest), cached: false };
+  }
+  /**
+   * Writes a new answer's prose once (SPEC-13.13). An answer the engine downgraded, or one without
+   * a recipe, gets none; a failure is stored and shown as '문장 생성 검증 실패', never retried.
+   */
+  private async writeProse(projectId: string, stored: LegalAnswerView, latest: string | null) {
+    if (!this.writer || stored.downgraded) return stored;
+    let record;
+    try {
+      record = await this.writer.write(stored.answer, stored.question);
+    } catch {
+      // Finding the writer failed (the CLI status check): the answer stays with its own fields.
+      return stored;
+    }
+    return this.answers.setProse(projectId, stored.number, record, latest);
+  }
+  /** [다시 쓰기]: the stored answer's prose written again, once, on the user's request. */
+  async rewrite(projectId: string, number: number): Promise<LegalAnswerView> {
+    const latest = await this.settings.lawDbDate();
+    const stored = this.answers.get(projectId, number, latest);
+    if (!this.writer) throw new DomainError('LEGAL_WRITER_UNAVAILABLE');
+    if (stored.downgraded || !stored.answer.recipe) throw new DomainError('LEGAL_NO_RECIPE');
+    await this.assertCanSend(projectId);
+    return this.writeProse(projectId, stored, latest);
   }
   /**
    * The project's answers, newest first, with the service state for the offline mark: while the
@@ -92,6 +125,31 @@ export class LegalService {
   }
   async get(projectId: string, number: number) {
     return this.answers.get(projectId, number, await this.settings.lawDbDate());
+  }
+
+  /**
+   * 설정 › cLAWde [모델 인증] (ARCH-01 「모델 인증」): the qualifying writers the service announces
+   * (`meta.answerModels`) with each one's last certification.
+   */
+  async certView() {
+    if (!this.writer) throw new DomainError('LEGAL_WRITER_UNAVAILABLE');
+    let meta = this.client.lastMeta;
+    if (!meta && (await this.settings.ready()))
+      meta = await this.client.meta().catch(() => undefined);
+    const certs = await this.writer.certs.all();
+    const models = (meta?.answerModels ?? []).flatMap((group) =>
+      group.models.map((model) => ({ provider: group.provider, model, effort: group.effort })),
+    );
+    return {
+      models: models.map((writer) => ({ ...writer, cert: certs[writerKey(writer)] ?? null })),
+      running: this.writer.running,
+    };
+  }
+  /** Runs the golden set with one writer; only when the user presses [모델 인증]. */
+  async certify(input: unknown) {
+    if (!this.writer) throw new DomainError('LEGAL_WRITER_UNAVAILABLE');
+    if (!(await this.settings.ready())) throw new DomainError('SERVICE_NOT_CONNECTED');
+    return this.writer.certify(input);
   }
 
   /** Labels of profile keys and stages from the last `meta` this engine saw. */

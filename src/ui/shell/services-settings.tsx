@@ -1,6 +1,7 @@
 // 설정 › 외부 서비스 (SPEC-13.11, PLAN-46 T-217): the cLAWde row — address, status, law DB date,
 // [연결] (VIDE account) and [끊기], the development token, and this project's '법규 서비스에 보내지
-// 않음'. The engine never sends the token back; a saved token shows only as '저장됨'.
+// 않음', and [모델 인증] for the answer prose writers (T-236). The engine never sends the token
+// back; a saved token shows only as '저장됨'.
 import { memo, useCallback, useEffect, useState } from 'react';
 import { api } from '../gateway.ts';
 import { useStore } from '../store/core.ts';
@@ -31,6 +32,99 @@ const errorText: Record<string, string> = {
   FORBIDDEN: '외부 서비스 설정은 이 PC의 VIDE 창에서만 바꿀 수 있습니다.',
 };
 const quiet = Object.keys(errorText);
+
+interface CertRow {
+  provider: string;
+  model: string;
+  effort: string;
+  cert: { passed: number; total: number; at: string; goldenVersion: string } | null;
+}
+
+/**
+ * [모델 인증] (SPEC-13.13 6, PLAN-46 T-236): the writers cLAWde names for answer prose and each
+ * one's last golden-set result. A run uses this PC's model on every golden question, so it starts
+ * only when pressed; a model whose last run failed writes no prose until it passes.
+ */
+const ModelCertRows = memo(function ModelCertRows({ connected }: { connected: boolean }) {
+  const [rows, setRows] = useState<CertRow[]>([]);
+  const [running, setRunning] = useState('');
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    try {
+      const view = (await api('/legal/model-cert', 'GET', undefined, { quiet: ['FORBIDDEN'] })) as {
+        models: CertRow[];
+      };
+      setRows(view.models);
+    } catch {
+      setRows([]);
+    }
+  }, []);
+  useEffect(() => {
+    if (connected) void load();
+  }, [connected, load]);
+  if (!connected || !rows.length) return null;
+  return (
+    <div className="services-cert">
+      <small>답 문장을 쓸 모델(cLAWde 레시피 기준). 인증은 누를 때만 돌며 토큰을 씁니다.</small>
+      <ul className="settings-rows">
+        {rows.map((row) => {
+          const key = `${row.provider}/${row.model}/${row.effort}`;
+          const passed = row.cert && row.cert.passed === row.cert.total;
+          return (
+            <li key={key}>
+              <strong>{`${row.model} · ${row.effort}`}</strong>
+              <small>
+                {row.cert
+                  ? `${row.cert.passed}/${row.cert.total} 통과 · ${row.cert.at.slice(0, 10)}`
+                  : '인증 전'}
+              </small>
+              {row.cert ? (
+                <span className="pill" data-ok={String(!!passed)}>
+                  {passed ? '인증됨' : '인증 실패 · 문장 쓰기 안 함'}
+                </span>
+              ) : null}
+              <button
+                type="button"
+                disabled={!!running}
+                onClick={() => {
+                  setRunning(key);
+                  setError('');
+                  void api(
+                    '/legal/model-cert',
+                    'POST',
+                    { provider: row.provider, model: row.model, effort: row.effort },
+                    { quiet: ['FORBIDDEN', 'LEGAL_CERT_RUNNING'], timeoutMs: 60 * 60_000 },
+                  )
+                    .catch((failure) => {
+                      const code = (failure as { code?: string } | null)?.code ?? '';
+                      setError(
+                        code === 'FORBIDDEN'
+                          ? '모델 인증은 이 PC의 VIDE 창에서만 돌립니다.'
+                          : code === 'LEGAL_CERT_RUNNING'
+                            ? '다른 모델 인증이 돌고 있습니다.'
+                            : '모델 인증을 마치지 못했습니다.',
+                      );
+                    })
+                    .finally(() => {
+                      setRunning('');
+                      void load();
+                    });
+                }}
+              >
+                {running === key ? '인증 중…' : '모델 인증'}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {error ? (
+        <p className="remote-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+});
 
 export const ServicesSection = memo(function ServicesSection() {
   const tab = useStore(statusState, (s) => s.tab);
@@ -158,6 +252,7 @@ export const ServicesSection = memo(function ServicesSection() {
           </button>
         </div>
       </form>
+      <ModelCertRows connected={status === 'connected'} />
       {project && view ? (
         <label className="remote-toggle">
           <input

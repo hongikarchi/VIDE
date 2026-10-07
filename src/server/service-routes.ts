@@ -81,8 +81,9 @@ export async function serviceSettingsRoutes(
  * 법규 Q&A for a project (SPEC-13.3·13.4·13.9, ARCH-01 「엔진 API」, PLAN-46 T-219):
  * `GET/PUT …/projects/:id/legal/profile`, `POST …/legal/ask {question, stage?, confirmSendHash?,
  * exclude?, refresh?}` → `{answer, number, cached}` or `{needsConfirm: {items, hash, stage}}`,
- * `GET …/legal/answers[?number=]`. Remote sessions may ask and read answers (SPEC-13.11) but not
- * change the profile.
+ * `GET …/legal/answers[?number=]`, `POST …/legal/answers/:number/rewrite` ([다시 쓰기], T-236) and
+ * `GET/POST /api/v1/legal/model-cert` ([모델 인증]). Remote sessions may ask, read answers and
+ * rewrite (SPEC-13.11) but not change the profile or run a certification.
  */
 export async function legalRoutes(
   url: URL,
@@ -99,6 +100,24 @@ export async function legalRoutes(
     remote: boolean;
   },
 ) {
+  // 모델 인증 (ARCH-01 「모델 인증」): the last results, and a run on the user's request.
+  if (url.pathname === '/api/v1/legal/model-cert') {
+    if (method === 'GET') send(200, await legal.certView());
+    else if (method === 'POST') {
+      if (remote) throw new DomainError('FORBIDDEN');
+      send(200, await legal.certify(await body()));
+    } else throw new DomainError('NOT_FOUND');
+    return true;
+  }
+  // [다시 쓰기] (SPEC-13.12): one answer's prose written again, once.
+  const rewrite = /^\/api\/v1\/projects\/([^/]+)\/legal\/answers\/([1-9]\d{0,8})\/rewrite$/.exec(
+    url.pathname,
+  );
+  if (rewrite) {
+    if (method !== 'POST') throw new DomainError('NOT_FOUND');
+    send(200, { answer: await legal.rewrite(rewrite[1], Number(rewrite[2])) });
+    return true;
+  }
   const match = /^\/api\/v1\/projects\/([^/]+)\/legal\/(profile|ask|answers)$/.exec(url.pathname);
   if (!match) return false;
   const [, projectId, name] = match;

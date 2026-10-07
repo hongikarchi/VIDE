@@ -16,8 +16,8 @@ export type CollectProvider = 'claude-cli' | 'codex-cli';
 export interface ModelChoice {
   provider: CollectProvider;
   model: string | undefined;
-  /** Undefined: the model's own default (Haiku has no effort levels). */
-  effort: 'low' | 'medium' | 'high' | undefined;
+  /** Undefined: the model's own default (Haiku has no effort levels). A recipe may name others. */
+  effort: 'low' | 'medium' | 'high' | (string & {}) | undefined;
 }
 export type ModelPlan = Record<CollectRole, ModelChoice>;
 export interface AiCall {
@@ -81,16 +81,23 @@ export function replyJson<T>(text: string): T {
   return JSON.parse(text.slice(start, end + 1)) as T;
 }
 
-/** The CLI runner: one process per call, killed when the run stops. */
+/**
+ * The CLI runner: one process per call, killed when the run stops. `system` replaces Claude Code's
+ * default system prompt (and leads a Codex prompt); `null` adds no text of the caller's own, so the
+ * prompt goes out as given with only the single-run isolation (the legal answer writer, T-236).
+ */
 export class CliRunner implements CollectRunner {
   private readonly executable: (provider: CollectProvider) => string | undefined;
   private readonly timeoutMs: number;
+  private readonly system: string | null;
   constructor(
     executable: (provider: CollectProvider) => string | undefined,
     timeoutMs = 15 * 60_000,
+    system: string | null = SYSTEM,
   ) {
     this.executable = executable;
     this.timeoutMs = timeoutMs;
+    this.system = system;
   }
   async run({ choice, prompt, signal }: AiCall): Promise<AiReply> {
     const executable = this.executable(choice.provider);
@@ -102,8 +109,10 @@ export class CliRunner implements CollectRunner {
       if (claude) {
         args = cliArguments('');
         // The collector's own short system prompt replaces Claude Code's default one.
-        const appended = args.indexOf('--append-system-prompt');
-        args.splice(appended, 2, '--system-prompt', SYSTEM);
+        if (this.system !== null) {
+          const appended = args.indexOf('--append-system-prompt');
+          args.splice(appended, 2, '--system-prompt', this.system);
+        }
         if (choice.model) args.push('--model', choice.model);
         if (choice.effort) args.push('--effort', choice.effort);
       } else {
@@ -125,7 +134,7 @@ export class CliRunner implements CollectRunner {
       child.stdout?.setEncoding('utf8');
       child.stdout?.on('data', (d: string) => (out += d));
       child.stderr?.on('data', (d: Buffer) => (err += d.toString().slice(0, 4000)));
-      child.stdin?.end(claude ? prompt : `${SYSTEM}\n\n${prompt}`);
+      child.stdin?.end(claude || this.system === null ? prompt : `${this.system}\n\n${prompt}`);
       const code = await new Promise<number | null>((resolve, reject) => {
         child.on('error', reject);
         child.on('close', resolve);

@@ -2,7 +2,7 @@
 id: PLAN-46
 title: 법규 Q&A — cLAWde 연결·법규 jig·단계별 법령·역전송·답 문장 품질 (T-215~T-224, T-236)
 status: review
-version: 0.7
+version: 0.8
 updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-13, SPEC-07, SPEC-08, SPEC-02, SPEC-12, ARCH-01, ARCH-03, ADR-026, ADR-030, ADR-037, ADR-039, ADR-040, RESEARCH-04, RESEARCH-16, PLAN-45, C-04, C-06, OQ-16, OQ-17, FR-09, FR-18, FR-24, FR-25]
@@ -180,6 +180,7 @@ related: [SPEC-13, SPEC-07, SPEC-08, SPEC-02, SPEC-12, ARCH-01, ARCH-03, ADR-026
 - **검증:** `tests/core/legal-writer.test.mjs` — 가짜 CLI 출력으로: 정상 통과·저장, 근거 팩 밖 `ref` → `REF_OUTSIDE`, 원문·계산값에 없는 수치 → `NUMBER_UNSUPPORTED`, `conditional` → `applies` → `VERDICT_CHANGED`, 구조 위반 → `SCHEMA`, 가짜 서버 `/v1/verify` 실패 → 실패 저장·답 카드 숨김, 서버 닿지 않음 → `local-only`, 자격 모델 없음 → CLI 실행 0회, 인증 실패 모델 제외, 레시피 없는 답 → 문장 생성 안 함. 실제 Claude·Codex 한 번씩 가짜 서버로 문장 생성·검증(VERIFY 메모).
 - **완료:** 시험과 `npm run verify` 통과. 실제 CLI 확인은 남은 조건으로 따로 표시할 수 있다.
 - **의존:** T-221·T-223의 답 카드 문장.
+- **상태(2026-10-08): 완료(엔진).** `src/services/legal-writer.ts`(자격 모델 고르기·모델 인증 기록 `ModelCerts`·단발 실행·검사 ①~⑤·`/v1/verify`·낡은 레시피 한 번 교체), `legal-answers.ts`의 감사 열 저장과 답 보기의 `prose`·`proseStatus`·`proseFailures`, `legal.ts`의 새 답 문장 쓰기·`rewrite`·`certView`·`certify`, 엔진 API `POST …/legal/answers/:number/rewrite`·`GET/POST /api/v1/legal/model-cert`, 설정 cLAWde 칸의 [모델 인증]. 단발 실행은 자료 정리의 `CliRunner`를 VIDE 문장 없이 쓴다. 감사 열은 T-218의 schema 13에 이미 있어 이행을 더하지 않았다(세부는 ARCH-01 「답 문장」의 구현). 시험: `tests/core/legal-writer.test.mjs` 18건(가짜 CLI·가짜 서버) — 정상 통과·저장·캐시 답은 다시 안 씀, `REF_OUTSIDE`·`NUMBER_UNSUPPORTED`(값·단위)·`VERDICT_CHANGED`·`SCHEMA`(구조·JSON 아님·길이)는 저장되고 숨겨지며 `/v1/verify` 호출 0·재실행 0, `conditional`/`unknown`을 올리면 실패, 서버 실패(`MODEL_NOT_QUALIFIED` 포함) 숨김, 서버 닿지 않음 → `local-only`, 자격 모델 없음 → CLI 0회, 레시피 없는 답 → 안 씀, 낡은 판 1.0.0 → 1.1.0으로 한 번 다시 씀, 인증 실패 모델 제외·다시 통과하면 복귀, HTTP [다시 쓰기]. 답 카드의 표시는 T-221, `legal_ask`의 `prose`는 T-223이 잇는다. **남은 조건:** 실제 Claude·Codex 한 번씩 가짜 서버로 문장 생성·검증(VERIFY 메모).
 
 ## 순서
 
