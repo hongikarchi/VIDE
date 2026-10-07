@@ -1,8 +1,14 @@
 import { DomainError } from '../contracts/errors.ts';
-import { legalAskInputSchema } from '../contracts/legal.ts';
+import {
+  legalAskInputSchema,
+  legalChecklistQuerySchema,
+  legalConfirmInputSchema,
+  legalProfileUpdateSchema,
+} from '../contracts/legal.ts';
+import type { ClawdeChecklist, ClawdeStageId } from '../contracts/clawde.ts';
 import type { ClawdeClient } from './clawde.ts';
 import { LegalAnswers, type LegalAnswerView, type LegalSent } from './legal-answers.ts';
-import { LegalProfile, type LegalSendItem } from './legal-profile.ts';
+import { LegalProfile, type LegalChecklistCache, type LegalSendItem } from './legal-profile.ts';
 import { writerKey, type LegalWriter } from './legal-writer.ts';
 import type { ServiceSettings } from './settings.ts';
 import type { Store } from '../core/store.ts';
@@ -26,10 +32,27 @@ export interface LegalAskResult {
   cached: boolean;
 }
 
+/** The '보낼 정보' card (SPEC-13.3): nothing was sent. */
+export interface LegalNeedsConfirm {
+  needsConfirm: { items: LegalSendItem[]; hash: string; stage: string };
+}
+
 /** `POST …/legal/ask`: the answer with its number, or the '보낼 정보' card to confirm first. */
-export type LegalProjectAskResult =
-  | (LegalAskResult & { number: number })
-  | { needsConfirm: { items: LegalSendItem[]; hash: string; stage: string } };
+export type LegalProjectAskResult = (LegalAskResult & { number: number }) | LegalNeedsConfirm;
+
+/** `GET …/legal/checklist` (SPEC-13.6): every stage's items; the screen folds the other stages. */
+export interface LegalChecklistView {
+  stage: ClawdeStageId;
+  items: ClawdeChecklist['items'];
+  lawDbDate: string;
+  fetchedAt: string;
+  /** Shown from the project's record without a call. */
+  cached: boolean;
+  /** The last service call found it unreachable: '오프라인 · n일 전 조회'. */
+  offline: boolean;
+  /** Received with other sent information than the profile now gives (or a newer law DB). */
+  stale: boolean;
+}
 
 export class LegalService {
   readonly answers: LegalAnswers;
@@ -38,6 +61,7 @@ export class LegalService {
   private readonly settings: ServiceSettings;
   /** The answer prose writer (T-236); without one only the deterministic fields are shown. */
   readonly writer: LegalWriter | undefined;
+  private readonly now: (() => Date) | undefined;
   constructor({
     store,
     client,
@@ -56,6 +80,7 @@ export class LegalService {
     this.client = client;
     this.settings = settings;
     this.writer = writer;
+    this.now = now;
   }
   /** Refused before anything is sent: the project is off, or the service is not connected. */
   async assertCanSend(projectId: string) {
@@ -164,13 +189,104 @@ export class LegalService {
       stage: this.profile.stage(projectId),
       items: this.profile.items(projectId, this.labels()),
       stages: this.client.lastMeta?.stages ?? [],
+      permitPhases: this.client.lastMeta?.permitPhases ?? [],
+      profileKeys: this.client.lastMeta?.profileKeys ?? [],
     };
   }
-  /** `PUT …/legal/profile`: the answers that used a changed value become '다시 확인 필요'. */
+  /** Reads `meta` once when this engine has not seen it (labels of stages, phases and keys). */
+  async ensureMeta() {
+    if (this.client.lastMeta || !(await this.settings.ready())) return;
+    await this.client.meta().catch(() => undefined);
+  }
+  /**
+   * `PUT …/legal/profile`: the answers that used a changed value become '다시 확인 필요'. With
+   * `answered` (back-question answers, SPEC-13.7) the answer is the confirmation: a send list that
+   * was confirmed before stays confirmed with the answered values.
+   */
   updateProfile(projectId: string, input: unknown) {
+    const { answered } = legalProfileUpdateSchema.parse(input);
+    const confirmedBefore =
+      answered && this.profile.payload(projectId).hash === this.profile.confirmedHash(projectId);
     const changed = this.profile.update(projectId, input);
+    if (confirmedBefore) this.profile.setConfirmed(projectId, this.profile.payload(projectId).hash);
     const stale = this.answers.profileChanged(projectId, changed);
     return { ...this.profileView(projectId), changed, stale };
+  }
+
+  /**
+   * `POST …/legal/confirm`: the card's [보내기] outside an ask (the stage checklist). The hash must
+   * be the card's; otherwise the new card comes back and nothing is confirmed.
+   */
+  confirm(projectId: string, input: unknown): { confirmed: true } | LegalNeedsConfirm {
+    const { hash, exclude, stage } = legalConfirmInputSchema.parse(input);
+    const card = this.profile.candidates(projectId, this.labels());
+    if (hash !== card.hash)
+      return {
+        needsConfirm: {
+          items: card.items,
+          hash: card.hash,
+          stage: stage ?? this.profile.stage(projectId),
+        },
+      };
+    if (exclude) this.profile.applyExclusions(projectId, exclude);
+    this.profile.setConfirmed(projectId, this.profile.payload(projectId).hash);
+    return { confirmed: true };
+  }
+
+  /**
+   * `GET …/legal/checklist?stage=` (SPEC-13.6·13.9): the stage checklist for the confirmed send
+   * information. A checklist kept for the same stage and sent information is shown without a call
+   * (`refresh` asks again). A project switched off, a service not connected or unreachable shows
+   * the kept list with its time; with nothing kept the error stands. The send list is confirmed as
+   * for a question: a changed list returns the card and sends nothing.
+   */
+  async checklist(
+    projectId: string,
+    input: unknown,
+  ): Promise<LegalChecklistView | LegalNeedsConfirm> {
+    const { stage, refresh } = legalChecklistQuerySchema.parse(input);
+    const chosen = stage ?? this.profile.stage(projectId);
+    const payload = this.profile.payload(projectId);
+    const kept = this.profile.checklist(projectId, chosen);
+    const latest = await this.settings.lawDbDate();
+    const view = (cache: LegalChecklistCache, cached: boolean): LegalChecklistView => ({
+      stage: chosen,
+      items: cache.items,
+      lawDbDate: cache.lawDbDate,
+      fetchedAt: cache.fetchedAt,
+      cached,
+      offline: cached && this.settings.status === 'unreachable',
+      stale: cache.sentHash !== payload.hash || (!!latest && latest > cache.lawDbDate),
+    });
+    if (kept && !refresh && kept.sentHash === payload.hash) return view(kept, true);
+    // Unreachable at the last call: the kept list (stale if the profile changed), no new card.
+    if (kept && !refresh && this.settings.status === 'unreachable') return view(kept, true);
+    try {
+      await this.assertCanSend(projectId);
+    } catch (error) {
+      if (kept) return view(kept, true);
+      throw error;
+    }
+    if (payload.hash !== this.profile.confirmedHash(projectId)) {
+      const card = this.profile.candidates(projectId, this.labels());
+      return { needsConfirm: { items: card.items, hash: card.hash, stage: chosen } };
+    }
+    let list: ClawdeChecklist;
+    try {
+      list = await this.client.checklist({ stage: chosen, profile: payload.profile });
+    } catch (error) {
+      if (kept && error instanceof DomainError && error.code === 'SERVICE_UNAVAILABLE')
+        return view(kept, true);
+      throw error;
+    }
+    const cache: LegalChecklistCache = {
+      sentHash: payload.hash,
+      fetchedAt: (this.now?.() ?? new Date()).toISOString(),
+      lawDbDate: list.lawDbDate,
+      items: list.items,
+    };
+    this.profile.saveChecklist(projectId, chosen, cache);
+    return view(cache, false);
   }
 
   /**

@@ -44,7 +44,7 @@ export const isJigIcon = (name: unknown): name is JigIcon =>
   typeof name === 'string' && (JIG_ICONS as readonly string[]).includes(name);
 
 /**
- * The built-in screen jigs (Sync, 구조 분석, 프로젝트 자료, 마감 일람표) have no `jig.json`; their icons are
+ * The built-in screen jigs (Sync, 구조 분석, 프로젝트 자료, 마감 일람표, 법규 검토) have no `jig.json`; their icons are
  * fixed here. Other catalog entries without a package show the default.
  */
 export const LEGACY_JIG_ICONS: Record<string, JigIcon> = {
@@ -52,4 +52,5 @@ export const LEGACY_JIG_ICONS: Record<string, JigIcon> = {
   structure: 'columns',
   knowledge: 'database',
   finish: 'table',
+  legal: 'scale',
 };

@@ -19,11 +19,23 @@ export const legalProfileUpdateSchema = z
     values: z
       .record(
         legalProfileKeySchema,
-        z.object({ value: profileValueSchema, unit: z.string().max(20).optional() }).nullable(),
+        z
+          .object({
+            value: profileValueSchema,
+            unit: z.string().max(20).optional(),
+            /** [권장값으로 진행] on a back-question: sent marked '가정', not user-confirmed. */
+            assumed: z.boolean().optional(),
+          })
+          .nullable(),
       )
       .optional(),
     exclude: z.record(legalProfileKeySchema, z.boolean()).optional(),
     stage: clawdeStageIdSchema.optional(),
+    /**
+     * The values are answers to the service's back-questions (SPEC-13.7): answering is the send
+     * confirmation for them, so a send list that was confirmed before stays confirmed with them.
+     */
+    answered: z.boolean().optional(),
   })
   .strict();
 export type LegalProfileUpdate = z.infer<typeof legalProfileUpdateSchema>;
@@ -48,3 +60,20 @@ export type LegalAskInput = z.infer<typeof legalAskInputSchema>;
 
 export const legalProfileSourceSchema = z.enum(['service', 'model', 'user', 'assumed', 'ai']);
 export type LegalProfileSource = z.infer<typeof legalProfileSourceSchema>;
+
+/** `POST …/legal/confirm`: the '보낼 정보' card confirmed outside an ask (the stage checklist). */
+export const legalConfirmInputSchema = z
+  .object({
+    hash: z.string().regex(/^[a-f0-9]{64}$/),
+    exclude: z.array(legalProfileKeySchema).max(200).optional(),
+    stage: clawdeStageIdSchema.optional(),
+  })
+  .strict();
+
+/** `GET …/legal/checklist?stage=&refresh=1`. */
+export const legalChecklistQuerySchema = z
+  .object({
+    stage: clawdeStageIdSchema.optional(),
+    refresh: z.boolean().optional(),
+  })
+  .strict();

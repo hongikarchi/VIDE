@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
   clawdeStageIdSchema,
+  type ClawdeChecklist,
   type ClawdeProfile,
   type ClawdeStageId,
 } from '../contracts/clawde.ts';
@@ -64,7 +65,17 @@ interface Row {
   updated_at: string;
 }
 
+/** A stage checklist as received, with what was sent for it. */
+export interface LegalChecklistCache {
+  sentHash: string;
+  fetchedAt: string;
+  lawDbDate: string;
+  items: ClawdeChecklist['items'];
+}
+
 const STAGE_KEY = 'vide:stage';
+/** `vide:checklist:<stage>`: the last checklist of that stage (an engine state row, not sent). */
+const CHECKLIST_KEY = 'vide:checklist:';
 const CONFIRMED_KEY = 'vide:confirmed';
 export const DEFAULT_STAGE: ClawdeStageId = 'scale-review';
 
@@ -121,13 +132,26 @@ export class LegalProfile {
   setConfirmed(projectId: string, hash: string) {
     this.setState(projectId, CONFIRMED_KEY, hash);
   }
+  /** The last stage checklist received for `stage` (SPEC-13.9: kept for offline display). */
+  checklist(projectId: string, stage: ClawdeStageId): LegalChecklistCache | undefined {
+    const raw = this.state(projectId, `${CHECKLIST_KEY}${stage}`);
+    if (!raw) return undefined;
+    try {
+      return JSON.parse(raw) as LegalChecklistCache;
+    } catch {
+      return undefined;
+    }
+  }
+  saveChecklist(projectId: string, stage: ClawdeStageId, cache: LegalChecklistCache) {
+    this.setState(projectId, `${CHECKLIST_KEY}${stage}`, JSON.stringify(cache));
+  }
 
   /**
    * `PUT …/legal/profile`: the user's values (source 'user', a notice is cleared), removals,
    * exclusions and the stage. Returns the keys whose value changed (their answers go stale).
    */
   update(projectId: string, input: unknown): string[] {
-    const { values = {}, exclude = {}, stage } = legalProfileUpdateSchema.parse(input);
+    const { values = {}, exclude = {}, stage, answered } = legalProfileUpdateSchema.parse(input);
     this.store.project(projectId);
     const db = this.store.db(projectId);
     const at = this.now().toISOString();
@@ -144,16 +168,23 @@ export class LegalProfile {
           continue;
         }
         const valueJson = JSON.stringify(entry.value);
-        if (old?.value_json !== valueJson || (old?.unit ?? undefined) !== entry.unit)
+        const source = entry.assumed ? 'assumed' : 'user';
+        if (
+          old?.value_json !== valueJson ||
+          (old?.unit ?? undefined) !== entry.unit ||
+          old?.source !== source
+        )
           changed.push(key);
+        // An answer to a back-question goes out even if the key was left out before.
         db.prepare(
-          "INSERT INTO legal_profile(projectId,key,value_json,unit,source,version,excluded,basis,notice_json,updated_at) VALUES(?,?,?,?,'user',NULL,?,?,NULL,?) ON CONFLICT(projectId,key) DO UPDATE SET value_json=excluded.value_json, unit=excluded.unit, source='user', version=NULL, notice_json=NULL, updated_at=excluded.updated_at",
+          'INSERT INTO legal_profile(projectId,key,value_json,unit,source,version,excluded,basis,notice_json,updated_at) VALUES(?,?,?,?,?,NULL,?,?,NULL,?) ON CONFLICT(projectId,key) DO UPDATE SET value_json=excluded.value_json, unit=excluded.unit, source=excluded.source, version=NULL, excluded=excluded.excluded, notice_json=NULL, updated_at=excluded.updated_at',
         ).run(
           projectId,
           key,
           valueJson,
           entry.unit ?? null,
-          old?.excluded ?? 0,
+          source,
+          answered ? 0 : (old?.excluded ?? 0),
           old?.basis ?? null,
           at,
         );

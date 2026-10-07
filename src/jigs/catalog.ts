@@ -70,13 +70,14 @@ export const JIGS: JigEntry[] = [
     basis: 'S-01·S-11·S-13',
   },
   {
-    id: 'law-1',
+    id: 'legal',
     code: 'J-03',
-    name: '법규 검토 1',
-    summary: '용도지역·건폐율·용적률·높이 등 규모 검토.',
-    inputs: ['주소', '계획 매스'],
-    status: 'planned',
-    basis: 'S-01·S-03·S-04',
+    name: '법규 검토',
+    summary:
+      '대충 물어도 이 프로젝트의 대지·용도·규모·설계 단계를 붙여 cLAWde 법령 DB에 묻고, 결론·근거 조항(원문 링크·발췌·시행일)·해석·확인 필요 사항을 답 카드로 보여 줍니다. 설계 단계별로 봐야 할 법령 목록과 인허가 시점도 봅니다.',
+    inputs: ['질문', '법규 프로필', 'cLAWde 연결'],
+    status: 'available',
+    basis: 'SPEC-13 · PLAN-46 T-221·T-222',
   },
   {
     id: 'law-2',

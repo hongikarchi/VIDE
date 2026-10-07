@@ -5,6 +5,7 @@ import { api } from './gateway.ts';
 import { DeclaredJig } from './jig-panel/declared-jig.tsx';
 import { KnowledgeJig } from './knowledge-jig.tsx';
 import { FinishJig } from './finish-jig.tsx';
+import { LegalJig } from './legal-jig.tsx';
 import { JigIconMark, legacyJigIcon, noteJigIcon } from './jig-icons.ts';
 import { behindCard, listedTools, openDrafts, type PinnedRow } from './jig-list.ts';
 import { createDraft, listDrafts, type DraftSummary } from './make-api.ts';
@@ -291,15 +292,18 @@ dialog.setAttribute('aria-label', 'JIG');
 workspace.append(dialog);
 const root = createRoot(dialog);
 
-type LegacyKind = 'sync' | 'structure' | 'knowledge' | 'finish';
+type LegacyKind = 'sync' | 'structure' | 'knowledge' | 'finish' | 'legal';
 const LEGACY: Record<LegacyKind, { title: string; purpose: string }> = {
   sync: { title: 'Sync · 도면↔모델', purpose: 'Sync' },
   structure: { title: '구조 분석', purpose: '구조' },
   knowledge: { title: '프로젝트 자료 · 시험판', purpose: '자료' },
   finish: { title: '마감 일람표', purpose: '마감' },
+  legal: { title: '법규 검토', purpose: '법규' },
 };
 const legacyKind = (instanceId: string) =>
-  /^legacy:(sync|structure|knowledge|finish)$/.exec(instanceId)?.[1] as LegacyKind | undefined;
+  /^legacy:(sync|structure|knowledge|finish|legal)$/.exec(instanceId)?.[1] as
+    | LegacyKind
+    | undefined;
 interface OpenJig {
   instanceId: string;
   kind: LegacyKind | 'instance';
@@ -1711,6 +1715,8 @@ const JigBody = memo(function JigBody({ jig }: { jig: OpenJig; generation: numbe
       return <KnowledgeJig projectId={jig.context.projectId} />;
     case 'finish':
       return <FinishJig projectId={jig.context.projectId} />;
+    case 'legal':
+      return <LegalJig projectId={jig.context.projectId} />;
     case 'instance':
       // A jig with a declared screen draws it (T-048); otherwise the plain instance view.
       return <DeclaredJig host={jig.host!} plain={<InstanceJig host={jig.host!} />} />;

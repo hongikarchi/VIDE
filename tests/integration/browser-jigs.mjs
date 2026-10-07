@@ -249,7 +249,7 @@ try {
   assert.equal(await official.count(), 12);
   assert.equal(
     await dialog.locator('.jig-card[data-source="official"][data-status="planned"]').count(),
-    8,
+    7,
   );
   assert.equal(await official.getByRole('button', { name: '삭제', exact: true }).count(), 0);
   const installed = dialog.locator('.jig-card[data-source="project"]', {
