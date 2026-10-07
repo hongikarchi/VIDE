@@ -5,7 +5,7 @@
 import { access, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { launchOwnedHost } from '../common/owned-process.ts';
+import { launchHiddenZwcad } from './crash-prompt.ts';
 import { inspectorOptions } from './inspector.ts';
 import type { DwgReader, DwgResult } from '../../src/knowledge/collect/dwg.ts';
 
@@ -33,7 +33,7 @@ export function zwcadKnowledgeReader(options = inspectorOptions()): DwgReader {
         script,
         `(command "_NETLOAD" ${JSON.stringify(options.plugin.replaceAll('\\', '/'))})\nVIDEKNOWLEDGEDWG\n`,
       );
-      const owner = await launchOwnedHost({
+      const owner = await launchHiddenZwcad({
         executable: options.executable,
         args: ['/b', script],
         visible: false,
@@ -69,6 +69,7 @@ export function zwcadKnowledgeReader(options = inspectorOptions()): DwgReader {
           await collect();
           if (results.size !== seen) {
             seen = results.size;
+            owner.settled();
             last = Date.now();
             progress(seen);
           } else if (Date.now() - last > STALL_MS) break;

@@ -6,7 +6,7 @@ import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { launchOwnedHost } from '../common/owned-process.ts';
+import { launchHiddenZwcad } from './crash-prompt.ts';
 import { inspectorOptions } from './inspector.ts';
 import type {
   XrefDisplayRead,
@@ -34,7 +34,7 @@ async function runWorker(
     script,
     `(command "_NETLOAD" ${JSON.stringify(options.plugin.replaceAll('\\', '/'))})\n${command}\n`,
   );
-  const owner = await launchOwnedHost({
+  const owner = await launchHiddenZwcad({
     executable: options.executable,
     args: ['/b', script],
     visible: false,
@@ -66,6 +66,7 @@ async function runWorker(
       await collect();
       if (rows.size !== seen) {
         seen = rows.size;
+        owner.settled();
         last = Date.now();
         progress(seen);
       } else if (Date.now() - last > STALL_MS) break;

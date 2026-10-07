@@ -2,7 +2,7 @@
 id: HOST-ZWCAD
 title: ZWCAD 호스트 계약과 검증 범위
 status: review
-version: 0.26
+version: 0.27
 updated: 2026-10-07
 owner: agent:codex
 related: [SPEC-01, SPEC-02, PLAN-43, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10, ADR-022, ADR-027]
@@ -31,6 +31,7 @@ SDK의 AI query는 기본 50개·최대 100개/64 KiB 페이지와 ID 필터를 
 | H-ZWCAD-10 | Rhino 대상 요청에서 열린 연결 도면의 실시간 조회·바로 실행(2026-10-01, [ADR-027](../../decisions/ADR-027-multi-file-coordination.md)) | 구현: `queryEntities`·`direct-execute`·`direct-undo`를 Rhino 턴의 `linkId`로 부른다. 보기 메서드가 없어 `capture_view`·`measure`는 `NO_VIEW`. ZWCAD 도면이 대상인 턴은 다른 파일을 저장된 Sync로만 읽는다(이번 범위 밖). Rhino 턴의 자동 모드 목표 문장이 ZWCAD 실행 래퍼(`Database db`·`Transaction tr`, Commit/Abort 금지)를 알린다. 쓰기는 모의 편집기 단위 검증만 했다 | 실제 ZWCAD 왕복(H-ZWCAD-09 확인 뒤), ZWCAD 대상 턴의 여러 파일 |
 | H-ZWCAD-11 | 열린 도면의 Live Sync: 바뀐 개체만 읽기(2026-10-06, T-128, [ARCH-01](../../architecture/ARCH-01-system.md) §7 「ZWCAD Live Sync」) | 구현: 연결 플러그인이 바뀐 ObjectId·revision을 남기고 `displayChanges`가 바뀐 모형 공간 개체의 줄·지운 Handle·도면 전체 표시 수를 준다. 레이어·블록 정의·문자/치수 스타일·XCLIP 변경과 이전 플러그인은 전체 읽기. 자동 Sync·⟳·`LiveSync`가 Rhino와 같은 경로. 가짜 플러그인·호스트로 단위·서버 시험(`zwcad-live-sync`), 플러그인 빌드 통과 | 별도 자체 .NET 연결 DLL | 실제 ZWCAD 2023에서: 이벤트로 받은 개체 열기(지운 개체·실행 취소한 추가), 속성·폴리선 정점 변경이 소유 개체로 가는지, 치수 편집의 익명 블록 판정, 큰 도면의 표시 수가 전체 읽기와 같은지 |
 | H-ZWCAD-12 | 프로젝트 폴더 DWG의 xref 관계 읽기와 [모델에 반영] 표시(2026-10-07, SPEC-01.11의 11, PLAN-43 T-200) | 구현: 엔진이 띄운 숨은 ZWCAD 2023이 원본의 사본만 사이드 DB로 읽는다(`VIDEXREFGRAPH`: xref 이름·저장 경로·부착/오버레이·XrefStatus, 삽입의 공간·위치·회전·축척·BlockTransform; `display`: 연결 Sync와 같은 모형 공간 표시). 실제 ZWCAD 2023에서 합성 도면(`VIDEXREFFIXTURE`: 절대·상대(`sub\grand.dwg`)·누락·순환·오버레이, 90° 회전·2배 삽입)으로 읽기 7.1초·반영 7.2초, 상대 경로 해석·누락·순환·배치 행렬 확인(`tests/integration/zwcad-xref.mjs`). 원본은 바뀌지 않았고 띄운 ZWCAD만 종료 | 자체 worker DLL(숨은 ZWCAD) | 실제 프로젝트 도면(서버 공유 경로, 큰 도면의 표시 시간), INSUNITS가 다른 도면 사이의 단위 환산(지금은 BlockTransform 그대로), 블록 안 xref 삽입의 배치, 바인드된 xref |
+| H-ZWCAD-13 | 엔진이 띄운 숨은 ZWCAD의 "이전 실행 충돌 — 진단 정보 전송" 안내 응답(2026-10-07, PLAN-43 T-200 후속) | 구현: ZWCAD 2023은 비정상 종료 뒤 `%APPDATA%\ZWSOFT\ZWCAD\2023\ko-KR\CrashReport`에 덤프를 남기고, 다음 시작에서 플러그인보다 먼저 모달 대화상자(#32770, [아니오])를 띄운다. 숨은 `/b` 실행은 여기서 멈춘다. 엔진은 자기가 띄운 숨은 ZWCAD(자료 정리 DWG 문자, xref 읽기·반영, 검사기, worker 세션)를 `launchHiddenZwcad`로 띄우고, 준비 파일·첫 결과가 보이거나 90초가 지날 때까지 500 ms마다 그 PID의 대화상자만 찾아 [아니오]를 누른다. 누르면 진단 로그에 `zwcad-crash-prompt`("ZWCAD 이전 충돌 안내를 닫음")를 한 번 쓴다. 다른 프로세스(사용자가 연 ZWCAD 포함)의 창은 건드리지 않고 덤프 파일도 지우거나 옮기지 않는다. 사용자가 보는 편집 세션(visible)에는 적용하지 않는다. 안내 창이 ZWCAD 프로세스 자체의 창임은 SPIKE-2026-10-07-drawing-export에서 확인했다. 단위 시험과 Windows 메시지 상자 응답 시험 통과(`tests/core/zwcad-crash-prompt.test.mjs`) | `hosts/zwcad/crash-prompt.ts`(PowerShell 1회 실행 도우미, 디스크에 스크립트 없음) | 대기 중인 덤프가 있는 상태에서 제품 경로로 다시 확인, 다른 언어판(버튼 문구) |
 | H-ZWCAD-07 | 현재 열린 도면의 명시적 연결·패널·읽기 Sync | 합성 CAD의 브라우저 표시·재열기·다중 도면·Live Sync 통과, 실제 작업 도면 연결/패널·부분 Sync·재열기 확인(3,369개 표시, 472개 제외)([검수](../../tdd/VERIFY-2026-09-28-zwcad-attached-sync.md)) | 별도 자체 .NET 연결 DLL | 실제 대형 외부참조 표시·문자/해치·원본 AI 편집 |
 
 편집용 사본 읽기 지원 범위: 모델 공간의 mm(또는 정확히 환산되는 m) 독립 직선 XY LWPolyline과 같은 Z의 두 끝점을 가진 LINE. 그룹·확장 사전·XData·잠긴 레이어·선폭/두께를 확인하지 못하면 참고 전용이며, 단위 미상·bulge 호·지원 밖 객체가 있으면 일부만 성공으로 취득하지 않고 거절한다. 별도 읽기 표시는 §1.1을 따르며 새 지원을 과거 취득 자료에 소급하지 않는다.

@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, isAbsolute } from 'node:path';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { launchOwnedHost } from '../common/owned-process.ts';
+import { launchHiddenZwcad } from './crash-prompt.ts';
 import { sendHostCommand } from '../common/transport.ts';
 import { inspectorOptions } from './inspector.ts';
 
@@ -55,7 +55,7 @@ export async function launchZwcadWorker(options: {
     `(command "_NETLOAD" ${JSON.stringify(config.plugin.replaceAll('\\', '/'))})\nVIDESdkSession\n`,
     { flag: 'wx' },
   );
-  const owner = await launchOwnedHost({
+  const owner = await launchHiddenZwcad({
     executable: config.executable,
     args: ['/b', script],
     visible: config.visible ?? false,
@@ -104,6 +104,7 @@ export async function launchZwcadWorker(options: {
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
     if (!ready) throw failure('WORKER_START_TIMEOUT');
+    owner.settled();
     if (
       ready.pid !== owner.identity.pid ||
       ready.startTicks !== owner.identity.startTicks ||

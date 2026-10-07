@@ -4,7 +4,7 @@ import { resolve, join, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
-import { launchOwnedHost } from '../common/owned-process.ts';
+import { launchHiddenZwcad } from './crash-prompt.ts';
 import { sendHostCommand } from '../common/transport.ts';
 import { packageRoot } from '../../src/core/package-root.ts';
 
@@ -64,7 +64,8 @@ export async function inspectDwg(
   )
     throw failure('UNSUPPORTED_DWG_EDIT');
   const before = await fingerprint(filename),
-    directory = join(outputRoot, randomUUID());
+    // Short: ZWCAD refuses a `/b` script path longer than about 250 characters (T-200).
+    directory = join(outputRoot, 'i' + randomBytes(4).toString('hex'));
   await mkdir(outputRoot, { recursive: true });
   await mkdir(directory);
   const report = join(directory, 'ready.json'),
@@ -80,7 +81,7 @@ export async function inspectDwg(
     await writeFile(join(directory, 'edits.json'), JSON.stringify({ objects: edit.objects }), {
       flag: 'wx',
     });
-  const owner = await launchOwnedHost({
+  const owner = await launchHiddenZwcad({
     executable: options.executable,
     args: ['/b', script],
     visible: false,
@@ -120,6 +121,7 @@ export async function inspectDwg(
       await new Promise((accept) => setTimeout(accept, 200));
     }
     if (!ready) throw failure('WORKER_START_TIMEOUT');
+    owner.settled();
     if (
       ready.pid !== owner.identity.pid ||
       ready.startTicks !== owner.identity.startTicks ||

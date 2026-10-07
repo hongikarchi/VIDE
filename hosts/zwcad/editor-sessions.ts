@@ -1,4 +1,4 @@
-import { randomUUID, createHash } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { join, resolve, relative, isAbsolute, dirname } from 'node:path';
 import { AttachedZwcadDocuments } from './attached-documents.ts';
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
@@ -115,7 +115,8 @@ export class ZwcadEditors {
       throw failure('SOURCE_CHANGED');
     await mkdir(this.directory, { recursive: true });
     const worker = await launchZwcadWorker({
-      directory: join(this.directory, 'editor-' + randomUUID()),
+      // Short: ZWCAD refuses a `/b` script path longer than about 250 characters (T-200).
+      directory: join(this.directory, 'editor-' + randomBytes(4).toString('hex')),
       source,
       editor: true,
       visible: true,

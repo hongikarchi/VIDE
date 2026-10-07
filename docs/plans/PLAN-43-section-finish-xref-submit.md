@@ -2,7 +2,7 @@
 id: PLAN-43
 title: 단면 보기·마감 일람표 jig·도면 내보내기 실험·xref 관계·jig 관리자 제출·외부 서비스 연동 계약 (T-197~T-202)
 status: review
-version: 0.4
+version: 0.5
 updated: 2026-10-07
 owner: agent:claude
 related: [SPEC-01, SPEC-07, SPEC-08, SPEC-11, ARCH-01, DESIGN, ADR-037, ADR-040, ADR-041, RESEARCH-16, FR-01, FR-03, FR-04, FR-09, FR-14, FR-21, FR-24, C-04, C-05, C-06, C-07, C-08]
@@ -119,6 +119,7 @@ related: [SPEC-01, SPEC-07, SPEC-08, SPEC-11, ARCH-01, DESIGN, ADR-037, ADR-040,
   - 합성 DWG로 그래프 단위 시험을 한다. ZWCAD가 없으면 건너뛰었다고 표시한다.
   - 브라우저 시험은 트리와 반영 후 링크 수를 본다.
 - **완료:** 합성 폴더에서 트리와 함께 표시가 동작한다.
+- **후속: 숨은 ZWCAD 충돌 안내(2026-10-07):** ZWCAD가 비정상 종료한 뒤에는 다음 시작이 "진단 정보를 전송하시겠습니까?" 창에서 멈춘다([SPIKE-2026-10-07-drawing-export](../tdd/SPIKE-2026-10-07-drawing-export.md)). 엔진이 띄운 숨은 ZWCAD(자료 정리 DWG 문자, xref 읽기·반영, 검사기, worker 세션)는 `hosts/zwcad/crash-prompt.ts`의 `launchHiddenZwcad`로 띄운다. 그 PID의 대화상자에서만 [아니오]를 누르고(H-ZWCAD-13), 진단 로그에 한 번 남긴다. 검사기·편집 worker의 실행 폴더 이름도 xref처럼 짧게 했다(`/b` 스크립트 경로 약 250자 제한). 증거: `tests/core/zwcad-crash-prompt.test.mjs`(PID 거름·[아니오]·기한·정지, Windows에서 실제 예/아니요 메시지 상자 응답). 실제 ZWCAD 안내 창의 응답은 SPIKE에서 확인했다. 지금 대기 중인 덤프가 없어 제품 경로로는 다시 재현하지 않았다.
 
 ## T-201 jig 관리자 제출
 
