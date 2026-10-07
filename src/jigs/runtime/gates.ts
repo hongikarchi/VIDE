@@ -54,6 +54,7 @@ const GATE_TABLE = {
   'hidden-target': { timing: 'before-bake', level: 'block', implemented: true },
   'bake-args-safe': { timing: 'before-bake', level: 'block', implemented: false },
   'analysis-confirmed': { timing: 'before-bake', level: 'block', implemented: true },
+  'target-confirmed': { timing: 'before-bake', level: 'block', implemented: true },
 } as const satisfies Record<string, GateSpec>;
 export type GateName = keyof typeof GATE_TABLE;
 export const GATES: { readonly [K in GateName]: GateSpec } = GATE_TABLE;
@@ -95,7 +96,11 @@ export interface GateContext {
     targets?: { key: string; layer: string; visible: boolean; locked: boolean }[];
     layers?: string[];
   };
-  hooks?: { analysisConfirmed?: (inputHash: string) => boolean };
+  hooks?: {
+    analysisConfirmed?: (inputHash: string) => boolean;
+    /** A `confirm-target` human step is confirmed (SPEC-12.3의 3). */
+    targetConfirmed?: () => boolean;
+  };
 }
 
 export interface GateRun {
@@ -329,7 +334,12 @@ const checks: Record<GateName, Check> = {
   'non-empty': (ctx, args) => {
     const { items } = itemsOf(ctx.output, args);
     const empty = !items.length;
-    return { failed: empty ? ['(empty)'] : [], message: empty ? '결과가 비어 있습니다' : '' };
+    // `args.message`: the jig's own sentence for why an empty list stops the flow.
+    const said = typeof args.message === 'string' && args.message ? args.message.slice(0, 200) : '';
+    return {
+      failed: empty ? ['(empty)'] : [],
+      message: empty ? said || '결과가 비어 있습니다' : '',
+    };
   },
   'no-nan': (ctx) => {
     const failed = hasNaN(ctx.output).slice(0, 20);
@@ -490,6 +500,13 @@ const checks: Record<GateName, Check> = {
     return {
       failed: ok ? [] : ['(analysis)'],
       message: ok ? '' : '같은 입력의 확정 해석이 없습니다',
+    };
+  },
+  'target-confirmed': (ctx) => {
+    const ok = !!ctx.hooks?.targetConfirmed?.();
+    return {
+      failed: ok ? [] : ['(target)'],
+      message: ok ? '' : '대상 필지를 확정하지 않았습니다',
     };
   },
   // Not implemented yet: fail closed at the declared level (see the module comment).

@@ -148,6 +148,10 @@ const inputDecl = z.discriminatedUnion('kind', [
   z
     .object({ ...inputBase, kind: z.literal('table-file'), accept: z.array(z.string()).min(1) })
     .strict(),
+  // Public site data (SPEC-12.3·12.4, PLAN-45 T-207): the read-copies the engine's collector keeps
+  // for this instance (address, candidates, chosen parcels, collection, SHP). Official jigs only;
+  // steps read its parts as `input.<key>.<part>` (SITE_DATA_PARTS).
+  z.object({ ...inputBase, kind: z.literal('site-data'), required: z.boolean() }).strict(),
   z
     .object({
       ...inputBase,
@@ -157,6 +161,8 @@ const inputDecl = z.discriminatedUnion('kind', [
     .strict(),
 ]);
 export type InputDecl = z.infer<typeof inputDecl>;
+/** Parts of a `site-data` input a step may read as `input.<key>.<part>` (ARCH-03 §8.3). */
+export const SITE_DATA_PARTS = ['query', 'lookup', 'targets', 'collection', 'shp'] as const;
 
 const paramDecl = z
   .object({
@@ -238,7 +244,12 @@ const stepBase = {
     .strict()
     .optional(),
 };
-export const HUMAN_SLOTS = ['confirm-inputs', 'confirm-analysis', 'draw-zone'] as const;
+export const HUMAN_SLOTS = [
+  'confirm-inputs',
+  'confirm-analysis',
+  'draw-zone',
+  'confirm-target',
+] as const;
 const stepDecl = z.discriminatedUnion('kind', [
   z
     .object({
@@ -639,8 +650,12 @@ export function validateManifest(
         const input = inputs.get(read.key);
         if (!input) error('JIG_REF_MISSING', `${path}.reads`, `없는 입력: ${text}`);
         else if (read.role !== undefined) {
-          if (input.kind !== 'assembly' || !input.roles.some((r) => r.role === read.role))
-            error('JIG_REF_MISSING', `${path}.reads`, `없는 입력 역할: ${text}`);
+          const known =
+            input.kind === 'assembly'
+              ? input.roles.some((r) => r.role === read.role)
+              : input.kind === 'site-data' &&
+                (SITE_DATA_PARTS as readonly string[]).includes(read.role);
+          if (!known) error('JIG_REF_MISSING', `${path}.reads`, `없는 입력 역할: ${text}`);
         }
       }
     }
@@ -733,6 +748,11 @@ export function validateManifest(
       need('sync.read', `입력 ${input.key}`);
     if (input.kind === 'facts') need('facts.read', `입력 ${input.key}`);
     if (input.kind === 'jig-output') need('jig.read', `입력 ${input.key}`);
+    if (input.kind === 'site-data') {
+      need('net.fetch', `입력 ${input.key}`);
+      if (!official)
+        error('JIG_CAPABILITY', `inputs.${input.key}`, '공공 자료 입력은 공식 jig만 씁니다');
+    }
   }
   for (const step of manifest.steps) {
     if (step.kind === 'library') need('library.call', `단계 ${step.id}`);

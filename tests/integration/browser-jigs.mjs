@@ -246,11 +246,14 @@ try {
   // The list shows the official catalogue: the working jigs and the planned ones.
   const official = dialog.locator('.jig-card[data-source="official"]');
   await official.first().waitFor();
-  assert.equal(await official.count(), 12);
+  // J-01 사이트 모델링 is the official tool jig vide/site-model now (T-207): one card, available;
+  // the official tool jig 건축 가능 영역·매스 (vide/buildable-mass) is listed too.
+  assert.equal(await official.count(), 13);
   assert.equal(
     await dialog.locator('.jig-card[data-source="official"][data-status="planned"]').count(),
-    7,
+    6,
   );
+  assert.equal(await official.filter({ hasText: '사이트 모델링' }).count(), 1);
   assert.equal(await official.getByRole('button', { name: '삭제', exact: true }).count(), 0);
   const installed = dialog.locator('.jig-card[data-source="project"]', {
     hasText: '합성 점검 jig',

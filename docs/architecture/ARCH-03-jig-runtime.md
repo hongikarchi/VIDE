@@ -2,7 +2,7 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 0.97
+version: 0.98
 updated: 2026-10-08
 owner: agent:claude
 related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, PLAN-45, SPEC-12, RESEARCH-10, RESEARCH-12, SPEC-13, PLAN-46]
@@ -21,7 +21,7 @@ related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-
 | 구성요소 | 위치 | 책임 |
 |---|---|---|
 | 설명서·설정값 | `src/jigs/runtime/manifest.ts`, `params.ts` | `jig.json` v3 zod 스키마, 파생 값 재계산, 단위 변환(저장 SI, 표시 건축 관행) |
-| 등록부·적재 | `src/jigs/runtime/loader.ts` | 공식(빌드 포함) + 설치(`jig_packages`) + 초안을 한 목록으로, 적재 때 digest 확인 |
+| 등록부·적재 | `src/jigs/runtime/loader.ts` | 공식(빌드 포함: 라이브러리와 `src/jigs/official/jigs/<name>/` 작업 jig) + 설치(`jig_packages`) + 초안을 한 목록으로, 적재 때 digest 확인 |
 | 단계 실행 | `src/jigs/runtime/graph.ts`, `runner.ts`, `child-runner.ts`, `compute-box.ts` | 단계 DAG·캐시, 실행기 규약, 출처별 실행기(§6) |
 | 점검 | `src/jigs/runtime/gates.ts` | 점검 구현 전부. jig는 이름으로 고른다(§11) |
 | 묶기·점검 명령 | `src/jigs/runtime/pack.ts`, `npm run jig:pack`·`jig:validate`·`jig:test` | 제작 대화 도구 `jig_validate`·`jig_test`와 같은 코드 |
@@ -66,7 +66,8 @@ related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-
 
 | 대상 | 위치 | 성격 |
 |---|---|---|
-| 공식 jig·라이브러리 | `src/jigs/official/<name>/` | 빌드에 포함, 설치본과 함께 갱신 |
+| 공식 라이브러리 | `src/jigs/official/<name>/` | 빌드에 포함, 설치본과 함께 갱신 |
+| 공식 작업 jig | `src/jigs/official/jigs/<name>/`(`site-model` T-207, `buildable-mass` T-209) | 빌드에 포함. 등록부가 `jig.json`의 `vide/*` id만 `source: builtin`·`stage: official`로 적재하고(`officialJigRoot`), `vide/*` id는 설치본·저장소 소스보다 먼저 찾는다. 계산 단계는 엔진에서 돈다(§6.1). 화면은 `panel.json`을 페이지 빌드에 함께 묶는다(`declared-jig.tsx`). `npm run jig:validate·jig:test`는 이 폴더를 `builtin`으로 본다 |
 | 프로젝트 jig 소스(개발) | `extensions/jigs/<name>/` | 저장소. 설치본 빌드 제외 |
 | 설치된 버전 | `<data>/jigs/installed/<id>@<version>/` | 읽기 전용, 바꾸지 않음. `id`의 `/`는 `~`로 바꾼 폴더 이름(잠정) |
 | 초안 | `<data>/jigs/drafts/<draftId>/` | 제작 대화의 쓰기 범위. 개발 모드(`.vide/dev-data`는 저장소 안)의 초안 폴더는 저장소 밖에 둔다(잠정, ADR-021 SPIKE) |
@@ -137,7 +138,8 @@ export type InputDecl =
   | { key: string; title: string; kind: 'facts'; query?: { discipline?: string[]; kinds?: string[] } }
   | { key: string; title: string; kind: 'zone'; shape: 'polygon' | 'line'; meaning: string; required: boolean }
   | { key: string; title: string; kind: 'table-file'; accept: string[] }
-  | { key: string; title: string; kind: 'jig-output'; from: { jig: string; output: string } };
+  | { key: string; title: string; kind: 'jig-output'; from: { jig: string; output: string } }
+  | { key: string; title: string; kind: 'site-data'; required: boolean };   // 공식 jig만, net.fetch 필요(§8.2)
 
 export interface RoleDecl {
   role: string; title: string;
@@ -161,7 +163,7 @@ export type StepDecl = {
   | { kind: 'library'; use: string; args?: Record<string, string> }   // 'vide/structure-analysis#analyzeSummary'
   | { kind: 'host'; bake: string[] }                                  // bake 선언 id
   | { kind: 'ai'; prompt: string; tools?: string[]; authority: 'draft-only' }
-  | { kind: 'human'; slot: string; blocks: string[] }                 // 'confirm-inputs' | 'confirm-analysis' | 'draw-zone'
+  | { kind: 'human'; slot: string; blocks: string[] }                 // 'confirm-inputs' | 'confirm-analysis' | 'draw-zone' | 'confirm-target'
 );
 
 export interface GateUse { use: GateName; level?: 'block' | 'warn' | 'isolate'; args?: Record<string, unknown> }
@@ -272,7 +274,7 @@ export type Binding = `step.${string}` | `$${string}` | 'params' | `inputs.${str
 
   | 자리 | 부품 |
   |---|---|
-  | `left` | `step-rail`, `param-group`, `slider`, `choice`, `stepper`, `toggle`, `fact-badge`, `role-card`, `verdict-legend`, `bake-card`, `conflict-banner` |
+  | `left` | `step-rail`, `param-group`, `slider`, `choice`, `stepper`, `toggle`, `fact-badge`, `role-card`, `verdict-legend`, `bake-card`, `conflict-banner`, `site-picker` |
   | `center.views` | `viewport-overlay`, `plan-map`, `report` |
   | `center.board` | `slider-board` |
   | `center.kpis` | `kpi-strip` |
@@ -280,6 +282,7 @@ export type Binding = `step.${string}` | `$${string}` | 'params' | `inputs.${str
   | `result-tabs`의 탭 | `issue-table`, `table`, `schedule`, `bake-card`, `compare-bars`, `ledger` |
 
 - 4차 물결에 더한 부품의 속성: `bake-card`는 `{title?, from?, bake?}`이며 `bake`는 내놓을 만들기 id(jig 자체 또는 VIDE 기본 `lines`·`members`) 최대 10개, 생략하면 전부다. 누르면 §7 `POST …/bake`로 간다. `compare-bars`는 `{title?, from, label, value, shade?, unit?, decimals?, limit?, limitLabel?}`이고 `shade`는 행 필드로 `base`·`alt`·`strong`·`actual`·`na` 중 하나를 준다. `report`는 `{report}`로 보고서 틀 이름(§5.2)을 가리키고 §7 `…/reports/:name`의 해석된 보고서를 부품으로 그린다. `ledger`는 `{title?, from, group?, columns?}`이며 `from`은 보통 `ledger.<name>`이다.
+- `site-picker`(T-207)는 `{input, title?}`이며 `input`은 `site-data` 입력(`inputs.<key>`)이다. 프로젝트의 전송 고지 확인·끄기(`…/site-data/notice`), 주소 찾기, 후보 질문 카드(SCR-15의 카드 모양과 후보 위치 SVG), 대상 필지 고르기·더하기, [대상 필지 확정](그 사람 단계의 확인 경로), [가져오기]·바뀐 항목의 받기·유지, SHP 넣기를 §7의 `site-data` 경로로 한다.
 - 근거 칩: 설정값을 그리는 부품(`slider`·`choice`·`stepper`·`toggle`·`param-group`·`slider-board`)과 `fact-badge`는 값마다 칩 하나를 붙인다. 칩은 값의 출처(`by`: `default` 기본값·`user` 사용자·`decision` 사용자 결정·`fact` 프로젝트 자료·`ai` AI 제안·`rhino` 모델·`sketch` 스케치)와 그 상태(기본값이면 선언된 근거의 `status`: 가정·선택·물어볼 것, 자료면 진술의 검토 상태: 미확정·근거 무효·대체됨, 확정이면 상태 글자 없음)를 보인다(SPEC-07.6). 진술에 기댄 칩은 `data-fact-statement`를 달아 누르면 진술 창을 연다(`src/ui/kit/settings.tsx` `FactBadge`).
 - 연결은 단계 출력 경로(`step.<id>.<field>…`), 설정값(`$<key>`), `params`, `inputs.<key>…`, `ledger.<name>`뿐이다. 식·코드는 넣지 않는다.
 - 색은 Design §02의 토큰 이름만 쓴다. `#`·`rgb(`·`hsl(`로 시작하는 값은 거절한다.
@@ -427,6 +430,11 @@ jig·보고서 경로는 `src/server/jig-routes.ts`, 초안 경로(`jig-drafts`)
 | `GET …/:iid/bakes?linkId=` | — | 만들기 기록(새 것 먼저, `pendingBaseline`) |
 | `POST …/:iid/bakes/:recordId/baseline` | — | 반영한 문서를 다시 읽어 기준 지문을 기록(§9.3 6). 그 실행의 객체가 하나도 없으면 409 `NOT_APPLIED` |
 | `POST …/:iid/bakes/:recordId/undo` | — | 바로 적용한 만들기 실행의 [되돌리기](§9.3의 7). 바로 적용 드라이버나 실행 기록이 없으면 409 `BAKE_UNDO_UNAVAILABLE`, 문서의 마지막 기록이 아니면 409 `BAKE_UNDO_NOT_LATEST`, 호스트 실패는 409 `BAKE_UNDO_FAILED` |
+| `POST …/:iid/site-data/:key/lookup` | `{query}` | 주소·PNU 조회(T-207, §8.3). 고지 미확인이면 `{needsConfirm, state}`(아무것도 보내지 않고 주소만 둠), 끈 프로젝트면 `{off: true, state}`. 결과 사본을 두고 하나로 맞는 후보는 `targets {by: 'proposal'}`로 둔다(사람이 고른 필지는 유지) |
+| `PUT …/:iid/site-data/:key/targets` | `{pnus}`(최대 20) | 사람이 고른 대상 필지(합필). 바뀌면 그 부분을 읽는 단계가 다시 계산 필요, 사람 단계는 지문으로 다시 확인 |
+| `POST …/:iid/site-data/:key/collect` | — | 대상 필지와 주변(설정값 `radius`)을 수집. 대상 필지 없음 422 `SITE_TARGETS_MISSING`, 끈 프로젝트 409 `SITE_DATA_OFF`. 같은 대상의 사본이 있으면 새 사본은 `pending`(바뀐 항목 목록)으로 기다리고, 바뀐 것이 없거나 대상이 달라졌으면 바로 쓰고 이전 사본을 `previous`(최대 5)에 둔다 |
+| `POST …/:iid/site-data/:key/pending` | `{take}` | 기다리는 사본을 받거나 버림. 어느 쪽도 덮어쓰지 않음 |
+| `POST …/:iid/site-data/:key/shp` | `{files: [{name, data(base64)}]}` 또는 `{clear: true}` | SHP 넣기(§8.1). 앞서 넣은 파일과 함께 EPSG:5186으로 다시 넣고, 이 작업본의 사본으로만 둔다. 응답은 레이어·거절·쓰지 않음 목록 |
 | `GET /api/v1/projects/:id/jig-reports` | — | 보고서 탭 목록: 보고서 틀이 있는 작업본마다 `{instance, reports[]}` |
 | `GET …/:iid/reports` | — | 그 작업본 jig의 보고서 틀 목록(설명서 `reports`, 없으면 패키지의 `reports/*.json`) |
 | `GET …/:iid/reports/:name` | — | 해석된 보고서(§5.2). 보관된 단계 결과·설정값 원장·남은 조건·해석 보기를 읽고, `previewOnly` 결과는 확정으로 쓰지 않는다. 화면이 부품으로 그린다(CSP가 인라인 스타일을 막으므로 HTML을 내려보내지 않음). 일람표 CSV는 표 부품의 `csv`로 화면이 만든다 |
@@ -485,6 +493,15 @@ jig 입력은 표시용 Sync가 아니라 jig 입력 읽기로 받는다.
 - **`massing-kit/`(규칙):** `rules.ts`(규제 조건 항목의 닫힌 목록 `REGULATION_ITEMS`, 항목 형식 `{id, group, title, value, unit, applies, status, origin, basis, source, target?}`, 닫힌 규칙 목록 `RULES`, 설정값 → 항목 `regulationsFromParams`, 사람 값 우선 병합 `mergeRegulations`), `legal-adapter.ts`(SPEC-13 결과 → 항목의 자리 `regulationsFromLegal`, T-220 전에는 늘 '법규 결과 없음'), `boundary-segments.ts`(대지 변을 도로·인접 필지 변과 겹치는 구간으로 나눔, 둘 다·아무것도 아니면 `unknown`·'확인 필요', 닫힌 도로 영역에서 구간 바깥 법선으로 잰 도로 너비), `setback.ts`(제한선 자료 `Cutter`: 선분 캡슐(둥근 끝은 외접 64각형, 같은 규칙의 다음 구간이 볼록·일직선 모퉁이에서 같거나 큰 거리로 덮으면 평평한 끝) · 다각형(가각 삼각형, 건축한계선의 도로 쪽), 일조 `SunRule`(기준선 선분·기준 높이·이하 거리·비율·거리 정의·정북 단위 벡터·적용 구역), 1 m 판으로 잰 2D 가능 영역과 규칙별 감소), `envelope.ts`(돌출·일조 사선·최대 외피), `solid-check.ts`(점검과 만들기 면 목록), `steps.ts`(jig 단계 함수).
 - **일조 거리:** `euclidean`이면 기준선 선분까지의 최단 거리(벽 = 캡슐 기둥, 사선 = 반경 `비율 × z`인 캡슐 사이 솔리드), `north`이면 정북으로 잰 거리(벽·사선 = 선분을 남쪽으로 `r`만큼 민 평행사변형, 사선은 `r = 비율 × z`). 정해지지 않았으면(`ask`) 최단 거리로 계산하고 미확정 1개를 더한다(최단 거리 ≤ 정북 거리라 더 많이 깎는다).
 - **jig 단계 출력(`vide/buildable-mass`):** `site`(로컬 고리·구간·모퉁이·도로 영역·정북 벡터), `regulations`(항목·법규 결과 유무·차이·사람 입력 필요·미확정), `plan`, `limits`(`cutters`·`sun`·미반영 조건·구간별 규칙 표·`sides`), `buildable`(면적·영역 고리·변형별 면적·규칙별 감소와 근거 항목·건폐율 비교·빈 영역 메시지·만들기용 곡선 `lines`), `envelope`(변형 `base`/`without`별 높이 상한과 출처·외피 부피·점검·층 중간 높이 단면·일조가 줄인 부피, 만들기 항목 `items`). 외피 항목은 `{key: env:<변형>:<종류>, kind, faces, volume, volumeText, rules, unconfirmed}`이고 만들기 선언 `envelopes`가 `vide.bake.brep-faces@1`로 보낸다. 엔진은 보내기 전에 병합한 면의 감긴 부피가 점검 부피와 상대 1e-9 안인지 확인한다.
+
+### 8.3 공공 자료 입력 `site-data` (T-207)
+
+사이트 모델링(SPEC-12.3·12.4)의 입력이다. 수집은 엔진이 `vide/site-data`(키는 엔진만 가짐)로 하고, 단계는 엔진이 둔 읽기 사본만 읽는다(계산 단계에 네트워크·키가 없음, SPEC-07.9).
+
+- **보관:** 작업본 본문 `siteData[<key>] = {query?, lookup?, targets?: {pnus, by: 'proposal' | 'user', at}, collection?, pending?: {…, changes[]}, previous?: […], shp?: {…, files, raw}}`. 사본 참조는 `{ref, hash, at}`(수집 사본은 `fetchedAt`·`pnus`·`radius`를 더함)이고 내용은 `<data>/jigs/site/<instanceId>/<key>-<이름>-<hash16>.json.gz`다. `shp.raw`는 넣은 파일(base64) 사본이라 더 넣을 때 함께 다시 넣고, `shp`는 지오메트리·역할·건물/필지/높이 값만 남긴 가져오기 결과다(원 속성은 버림).
+- **단계에 주는 값:** `input.<key>`는 `{query, lookup, targets: {pnus, by}, collection: {…수집 결과, radius}, shp}`이고 부분을 `input.<key>.<part>`(`query`·`lookup`·`targets`·`collection`·`shp`, 설명서 검사 `SITE_DATA_PARTS`)로 따로 읽는다. 지문은 부분마다 사본 해시로 낸다. `targets`의 지문은 PNU 목록만이라 누가 제안했는지는 대상 필지 확정(`confirm-target` 사람 단계)을 다시 묻지 않는다.
+- **바뀜:** 경로가 바꾼 부분을 읽는 단계만 `stale`이 되고 사람 단계는 지문 비교로 다시 확인한다.
+- **만들기:** 사이트 jig의 만들기 선언은 `requires: ['target-confirmed']`로 확정 전 만들기를 막는다(§11).
 
 ## 9. Rhino에 만들기
 
@@ -709,9 +726,9 @@ CREATE TABLE IF NOT EXISTS project_roots(projectId TEXT PRIMARY KEY REFERENCES p
 | after-run | `mark-unique`, `schedule-complete`, `combo-echo`, `unchecked-listed` | block |
 | after-ai | `ref-whitelist`, `numbers-in-source`, `quote-exists`, `no-formula-invented`, `no-plan-dependent-conclusion` | block. AI 단계는 하나 이상 필수 |
 | before-render | `claim-consistent` | block(틀 문장으로 되돌림) |
-| before-bake | `solid-closed`, `tag-scope`, `count-match`, `layer-scope`, `hidden-target`, `bake-args-safe`, `inputs-confirmed`, `analysis-confirmed` | block |
+| before-bake | `solid-closed`, `tag-scope`, `count-match`, `layer-scope`, `hidden-target`, `bake-args-safe`, `inputs-confirmed`, `analysis-confirmed`, `target-confirmed` | block |
 
-`analysis-confirmed`는 부재 만들기에 같은 입력 지문의 확정 해석이 있어야 통과한다(SPEC-06). 점검 실패 이유는 단계 레일에 건축 문장으로 보인다(문구는 Design). 목록에 있으나 아직 구현되지 않은 점검은 선언한 수준으로 실패한다(fail closed)—설명서 검사가 `JIG_GATE_PENDING` 경고로 알린다. 항목 점검의 인자는 `items`(출력 안 배열 경로)·`key`(안정 키 필드)·`field`(다각형·점 필드)·`boundary`(입력 경로 또는 `output.` 접두 출력 경로)다.
+`analysis-confirmed`는 부재 만들기에 같은 입력 지문의 확정 해석이 있어야 통과한다(SPEC-06). `target-confirmed`는 `confirm-target` 사람 단계가 확정 상태여야 통과한다(SPEC-12.3의 3). `non-empty`는 `args.message`로 jig의 문장을 줄 수 있다(예: 대상 필지 경계 없음). 점검 실패 이유는 단계 레일에 건축 문장으로 보인다(문구는 Design). 목록에 있으나 아직 구현되지 않은 점검은 선언한 수준으로 실패한다(fail closed)—설명서 검사가 `JIG_GATE_PENDING` 경고로 알린다. 항목 점검의 인자는 `items`(출력 안 배열 경로)·`key`(안정 키 필드)·`field`(다각형·점 필드)·`boundary`(입력 경로 또는 `output.` 접두 출력 경로)다.
 
 ## 12. 가져오기와 서명(1차)
 

@@ -1,0 +1,337 @@
+{
+  "contractVersion": 3,
+  "id": "vide/site-model",
+  "version": "0.1.0",
+  "kind": "tool",
+  "name": "사이트 모델링",
+  "summary": "주소·PNU로 대상 필지를 확정하고 지적·도로·주변 건물·지형·용도지역을 모아 대지 요약과 함께 Rhino에 형상과 메타데이터로 만듭니다(탐색용 규모검토).",
+  "icon": "map-pin",
+  "hosts": { "rhino": "optional" },
+  "uses": [{ "id": "vide/site-data", "range": "^0.1.0" }],
+  "inputs": [{ "key": "site", "title": "대지 자료", "kind": "site-data", "required": true }],
+  "params": [
+    {
+      "key": "radius",
+      "title": "주변 반경",
+      "group": "수집",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "m", "decimals": 0 },
+      "default": 200,
+      "range": { "min": 50, "max": 600, "step": 10 },
+      "words": { "more": ["넓게"], "less": ["좁게"], "sign": 1 },
+      "basis": { "status": "assumed", "note": "SPEC-12.4 기본 200 m" },
+      "affects": ["collect"]
+    },
+    {
+      "key": "storyHeight",
+      "title": "추정 층고",
+      "help": "높이 자료가 없는 건물은 층수 × 이 값으로 올리고 높이 출처를 '추정'으로 남깁니다.",
+      "group": "건물",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "m", "decimals": 1 },
+      "default": 3.3,
+      "range": { "min": 2.4, "max": 6, "step": 0.1 },
+      "basis": { "status": "assumed", "note": "SPEC-12.5 기본 3.3 m" },
+      "affects": ["buildings"]
+    },
+    {
+      "key": "terrain",
+      "title": "지형 포함",
+      "help": "켜면 넣은 수치지형도 SHP의 등고선·표고점으로 지형 메쉬를 만듭니다. 끄면 평지(높이 0)입니다.",
+      "group": "지형",
+      "type": "toggle",
+      "default": false,
+      "basis": { "status": "assumed", "note": "SPEC-12.5 기본 끔" },
+      "affects": ["terrain"]
+    },
+    {
+      "key": "originMode",
+      "title": "원점",
+      "group": "좌표",
+      "type": "choice",
+      "default": "site",
+      "choices": [
+        {
+          "value": "site",
+          "label": "대지 기준점",
+          "consequence": "대지 근처 정수 m 기준점을 문서 원점에 둡니다"
+        },
+        {
+          "value": "survey",
+          "label": "측량 좌표 그대로",
+          "consequence": "EPSG:5186 큰 좌표를 그대로 씁니다"
+        }
+      ],
+      "basis": { "status": "assumed", "note": "SPEC-12.6 기본 대지 기준점" },
+      "affects": ["frame"]
+    },
+    {
+      "key": "north",
+      "title": "정북 기준",
+      "group": "좌표",
+      "type": "choice",
+      "default": "true",
+      "choices": [
+        { "value": "true", "label": "진북" },
+        { "value": "grid", "label": "도북" }
+      ],
+      "basis": {
+        "status": "assumed",
+        "note": "SPEC-12.5 기본 진북. 법상 정북은 법규 검토나 사람이 확정"
+      },
+      "affects": ["frame"]
+    }
+  ],
+  "steps": [
+    {
+      "id": "candidates",
+      "title": "필지 후보",
+      "kind": "code",
+      "entry": "steps/candidates.ts#candidates",
+      "reads": ["input.site.query", "input.site.lookup", "input.site.shp", "input.site.targets"],
+      "writes": "candidates",
+      "speed": "live",
+      "gates": [{ "use": "no-nan" }]
+    },
+    {
+      "id": "confirmTarget",
+      "title": "대상 필지 확정",
+      "kind": "human",
+      "slot": "confirm-target",
+      "needs": ["candidates"],
+      "reads": ["input.site.targets"],
+      "writes": "targetConfirmation",
+      "speed": "confirm",
+      "blocks": ["make"]
+    },
+    {
+      "id": "collect",
+      "title": "수집",
+      "kind": "code",
+      "entry": "steps/collect.ts#collect",
+      "reads": ["input.site.targets", "input.site.collection", "input.site.shp", "param.radius"],
+      "writes": "collection",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "non-empty",
+          "args": {
+            "items": "targets",
+            "message": "대상 필지 경계가 없어 뒤 단계를 멈췄습니다. 대상 필지를 고르고 가져오세요"
+          }
+        },
+        { "use": "no-nan" }
+      ]
+    },
+    {
+      "id": "frame",
+      "title": "좌표 통일",
+      "kind": "code",
+      "entry": "steps/frame.ts#frame",
+      "reads": ["step.collect", "param.originMode", "param.north"],
+      "writes": "frame",
+      "speed": "release",
+      "gates": [{ "use": "no-nan" }]
+    },
+    {
+      "id": "roads",
+      "title": "도로와 접도",
+      "kind": "code",
+      "entry": "steps/roads.ts#roads",
+      "reads": ["step.frame"],
+      "writes": "roads",
+      "speed": "release",
+      "gates": [{ "use": "no-nan" }]
+    },
+    {
+      "id": "terrain",
+      "title": "지형",
+      "kind": "code",
+      "entry": "steps/terrain.ts#terrain",
+      "reads": ["step.frame", "param.terrain"],
+      "writes": "terrain",
+      "speed": "release",
+      "gates": [{ "use": "no-nan" }],
+      "budget": { "wallClockMs": 30000 }
+    },
+    {
+      "id": "buildings",
+      "title": "건물 매스",
+      "kind": "code",
+      "entry": "steps/buildings.ts#buildings",
+      "reads": ["step.collect", "step.frame", "step.terrain", "param.storyHeight"],
+      "writes": "masses",
+      "speed": "release",
+      "gates": [
+        { "use": "no-nan" },
+        { "use": "ids-stable", "args": { "items": "buildings", "key": "key" } }
+      ],
+      "budget": { "wallClockMs": 30000 }
+    },
+    {
+      "id": "summary",
+      "title": "대지 요약",
+      "kind": "code",
+      "entry": "steps/summary.ts#summary",
+      "reads": ["step.collect", "step.frame", "step.roads", "step.buildings", "step.terrain"],
+      "writes": "summary",
+      "speed": "release",
+      "gates": [{ "use": "no-nan" }]
+    },
+    {
+      "id": "make",
+      "title": "Rhino에 만들기",
+      "kind": "host",
+      "bake": [
+        "targets",
+        "outline",
+        "parcels",
+        "roads",
+        "buildings",
+        "terrain",
+        "contours",
+        "siteInfo"
+      ],
+      "needs": ["summary"],
+      "reads": ["step.summary"],
+      "writes": "made",
+      "speed": "button"
+    }
+  ],
+  "panel": "panel.json",
+  "reports": [{ "id": "site-summary", "file": "reports/site-summary.json", "title": "대지 요약" }],
+  "bake": [
+    {
+      "id": "targets",
+      "template": "vide.bake.curves@1",
+      "host": "rhino",
+      "items": "step.frame.targets",
+      "layer": "대상 필지",
+      "key": "key",
+      "attrs": {
+        "vide-pnu": "pnu",
+        "vide-jibun": "lot",
+        "vide-jimok": "landCategory",
+        "vide-area-m2": "areaText",
+        "vide-source": "source",
+        "vide-fetched-at": "fetchedAt"
+      },
+      "mode": "replace-own",
+      "requires": ["target-confirmed"]
+    },
+    {
+      "id": "outline",
+      "template": "vide.bake.curves@1",
+      "host": "rhino",
+      "items": "step.frame.outline",
+      "layer": "대지 경계",
+      "key": "key",
+      "attrs": { "vide-area-m2": "area" },
+      "mode": "replace-own",
+      "requires": ["target-confirmed"]
+    },
+    {
+      "id": "parcels",
+      "template": "vide.bake.curves@1",
+      "host": "rhino",
+      "items": "step.frame.parcels",
+      "layer": "주변 필지",
+      "key": "key",
+      "attrs": {
+        "vide-pnu": "pnu",
+        "vide-jibun": "lot",
+        "vide-jimok": "landCategory",
+        "vide-area-m2": "areaText",
+        "vide-source": "source",
+        "vide-fetched-at": "fetchedAt"
+      },
+      "mode": "replace-own",
+      "requires": ["target-confirmed"]
+    },
+    {
+      "id": "roads",
+      "template": "vide.bake.curves@1",
+      "host": "rhino",
+      "items": "step.roads.curves",
+      "layer": "도로",
+      "key": "key",
+      "attrs": {
+        "vide-width-min": "widthMin",
+        "vide-width-avg": "widthAvg",
+        "vide-width-source": "widthSource",
+        "vide-source": "source"
+      },
+      "mode": "replace-own",
+      "requires": ["target-confirmed"]
+    },
+    {
+      "id": "buildings",
+      "template": "vide.bake.extrude-polygon@1",
+      "host": "rhino",
+      "items": "step.buildings.buildings",
+      "layer": "건물",
+      "key": "key",
+      "attrs": {
+        "vide-floors": "floorsText",
+        "vide-height": "heightText",
+        "vide-height-source": "heightSource",
+        "vide-use": "use",
+        "vide-source": "source",
+        "vide-fetched-at": "fetchedAt"
+      },
+      "mode": "replace-own",
+      "requires": ["target-confirmed"]
+    },
+    {
+      "id": "terrain",
+      "template": "vide.bake.mesh@1",
+      "host": "rhino",
+      "items": "step.terrain.mesh",
+      "layer": "지형",
+      "key": "key",
+      "attrs": { "vide-source": "source" },
+      "mode": "replace-own",
+      "requires": ["target-confirmed"]
+    },
+    {
+      "id": "contours",
+      "template": "vide.bake.curves@1",
+      "host": "rhino",
+      "items": "step.terrain.contours",
+      "layer": "등고선",
+      "key": "key",
+      "attrs": { "vide-elevation": "elevation" },
+      "mode": "replace-own",
+      "requires": ["target-confirmed"]
+    },
+    {
+      "id": "siteInfo",
+      "template": "vide.bake.textdot@1",
+      "host": "rhino",
+      "items": "step.summary.siteInfo",
+      "layer": "대지 정보",
+      "key": "key",
+      "attrs": {
+        "vide-site-summary": "summary",
+        "vide-crs": "crs",
+        "vide-origin-survey": "originSurvey",
+        "vide-true-north": "trueNorth"
+      },
+      "mode": "replace-own",
+      "requires": ["target-confirmed"]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "net.fetch",
+      "reason": "확인한 뒤 주소·PNU·좌표 범위를 공공 자료원(브이월드·주소 검색·건축HUB)에 보내 자료를 가져옵니다"
+    },
+    { "name": "host.bake", "reason": "필지·도로·건물·지형·대지 정보를 Rhino에 만듭니다" }
+  ],
+  "selftest": { "fixtures": "fixtures", "requiresHost": false },
+  "skill": "skill.md",
+  "open": { "reuse": "last", "layerRoot": "VIDE::대지" },
+  "autorun": { "until": "first-hard" }
+}

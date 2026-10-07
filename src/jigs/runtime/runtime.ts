@@ -24,6 +24,8 @@ import {
   type AssembledRole,
   type InstanceBody,
   type Override,
+  type SiteCopyRef,
+  type SiteDataState,
   type Zone,
 } from './instance.ts';
 import type { JigRegistry, LoadedJig } from './loader.ts';
@@ -718,8 +720,99 @@ export class JigRuntime {
         }
         inputs[input.key] = roles;
       } else if (input.kind === 'zone') inputs[input.key] = body.zones[input.key] ?? [];
+      else if (input.kind === 'site-data')
+        inputs[input.key] = this.siteDataInput(body.siteData?.[input.key] ?? {});
     }
     return inputs;
+  }
+
+  // --- site data (ARCH-03 §8.3, SPEC-12.3·12.4) ------------------------------------------------
+  /** A kept copy read back with its hash, so a step's fingerprint never hashes the whole copy. */
+  private siteCopy(ref: SiteCopyRef | undefined) {
+    if (!ref) return null;
+    const value = this.readGz<Record<string, unknown>>(ref.ref);
+    return value ? { ...value, snapshot: { hash: ref.hash } } : null;
+  }
+  /** What steps receive for a `site-data` input: its parts, each fingerprinted by its own hash. */
+  private siteDataInput(state: SiteDataState) {
+    const pnus = [...(state.targets?.pnus ?? [])];
+    const value = {
+      query: state.query ?? null,
+      lookup: this.siteCopy(state.lookup),
+      // The person confirms the parcels, not who proposed them: only the PNUs are fingerprinted.
+      targets: { pnus, by: state.targets?.by ?? null, snapshot: { hash: hashValue(pnus) } },
+      collection: state.collection
+        ? (() => {
+            const copy = this.siteCopy(state.collection);
+            return copy ? { ...copy, radius: state.collection.radius } : null;
+          })()
+        : null,
+      shp: this.siteCopy(state.shp),
+    };
+    return {
+      ...value,
+      snapshot: {
+        hash: hashValue([
+          value.query,
+          state.lookup?.hash ?? null,
+          pnus,
+          state.collection?.hash ?? null,
+          state.shp?.hash ?? null,
+        ]),
+      },
+    };
+  }
+  /** The `site-data` state of one input and a reader for its kept copies. */
+  async siteData(projectId: string, instanceId: string, key: string) {
+    const instance = this.store.instance(projectId, instanceId);
+    const jig = await this.jigOf(instance);
+    const input = jig.manifest.inputs.find((i) => i.key === key);
+    if (!input || input.kind !== 'site-data') throw new DomainError('NOT_FOUND');
+    const body = bodyOf(instance.body);
+    return {
+      jig,
+      params: body.params,
+      state: body.siteData?.[key] ?? {},
+      read: <T>(ref: SiteCopyRef | undefined) => (ref ? this.readGz<T>(ref.ref) : undefined),
+    };
+  }
+  /**
+   * Change one `site-data` input: `change` gets the current state and `keep` (writes a copy and
+   * returns its reference) and returns the next state and which parts changed; the steps reading
+   * those parts become stale.
+   */
+  async updateSiteData(
+    projectId: string,
+    instanceId: string,
+    key: string,
+    change: (
+      state: SiteDataState,
+      keep: (name: string, value: unknown) => SiteCopyRef,
+    ) => { state: SiteDataState; parts: string[] },
+  ): Promise<SiteDataState> {
+    const instance = this.store.instance(projectId, instanceId);
+    const jig = await this.jigOf(instance);
+    const input = jig.manifest.inputs.find((i) => i.key === key);
+    if (!input || input.kind !== 'site-data') throw new DomainError('NOT_FOUND');
+    const body = bodyOf(instance.body);
+    const keep = (name: string, value: unknown): SiteCopyRef => {
+      const hash = hashValue(value);
+      const ref = `site/${instanceId}/${key}-${name}-${hash.slice(0, 16)}.json.gz`;
+      if (!existsSync(this.file(ref))) this.writeGz(ref, value);
+      return { ref, hash, at: new Date().toISOString() };
+    };
+    const next = change(body.siteData?.[key] ?? {}, keep);
+    body.siteData = { ...(body.siteData ?? {}), [key]: next.state };
+    if (next.parts.length) {
+      this.markStale(
+        jig,
+        instanceId,
+        this.graphOf(jig).affectedByInputs(next.parts.map((part) => `${key}.${part}`)),
+      );
+      this.bump(instanceId);
+    }
+    this.save(instance, body, next.parts.length && instance.status !== 'new' ? 'stale' : undefined);
+    return next.state;
   }
 
   // --- runs ----------------------------------------------------------------------------------

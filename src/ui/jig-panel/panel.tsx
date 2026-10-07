@@ -37,6 +37,7 @@ import {
   type PanelData,
 } from './bindings.ts';
 import { BakePart } from './bake-parts.tsx';
+import { SitePicker } from './site-parts.tsx';
 import { useInstance, type InstanceView, type StepReport } from './instance.ts';
 import { InstanceReportPart, renderReportPart } from './report-parts.tsx';
 import { scopeOf, validatePanel, type PanelAction } from './spec.ts';
@@ -620,6 +621,17 @@ export function JigPanel({
               </p>
             ) : null}
           </div>
+        );
+      case 'site-picker':
+        return (
+          <SitePicker
+            key={key}
+            projectId={host.projectId}
+            instanceId={instanceId}
+            inputKey={part.input.slice('inputs.'.length)}
+            title={part.title}
+            jig={jig}
+          />
         );
       case 'compare-bars':
       case 'ledger':

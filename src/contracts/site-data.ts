@@ -65,3 +65,36 @@ function versionOf(value: unknown) {
 
 export const SITE_DATA_NOTICE = { ...content, version: versionOf(content) };
 export type SiteDataNotice = typeof SITE_DATA_NOTICE;
+
+const REGION = /(특별시|광역시|특별자치시|특별자치도|시|도|구|군|읍|면|동|가|리|로|길)$/;
+const PROVINCE =
+  /^(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)$/;
+const LOT = /^(산)?\d{1,5}(-\d{1,4})?(번지)?(?:[,.]|의|에|을|를|은|는)?$/;
+
+/**
+ * The address or PNU in a request that opens site modeling ("○○동 123-4 대지 모델링해 줘" →
+ * "○○동 123-4"; skill start, SPEC-12.3의 1): the first lot or building number that follows a
+ * place name, with the place names before it. Null when the words name none; the person types it.
+ */
+export function addressFromRequest(text: string): string | null {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  const pnu = /(?<!\d)(\d{10}[12]\d{8})(?!\d)/.exec(flat);
+  if (pnu) return pnu[1];
+  // "산 12-3" written apart is one lot.
+  const tokens = flat
+    .split(' ')
+    .flatMap((token, i, all) =>
+      token === '산' && LOT.test(all[i + 1] ?? '')
+        ? []
+        : [all[i - 1] === '산' && /^\d/.test(token) ? `산${token}` : token],
+    );
+  for (let i = 1; i < tokens.length; i++) {
+    if (!LOT.test(tokens[i]) || !REGION.test(tokens[i - 1])) continue;
+    let start = i - 1;
+    while (start > 0 && (REGION.test(tokens[start - 1]) || PROVINCE.test(tokens[start - 1])))
+      start--;
+    const lot = tokens[i].replace(/(번지)?(?:[,.]|의|에|을|를|은|는)?$/, '');
+    return [...tokens.slice(start, i), lot.replace(/^산/, '산 ')].join(' ');
+  }
+  return null;
+}

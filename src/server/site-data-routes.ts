@@ -26,7 +26,11 @@ import {
 } from '../jigs/official/site-data/index.ts';
 import type { PublicDataKeyStore } from './public-data-keys.ts';
 
-export const siteDataStatuses: Record<string, number> = { SITE_DATA_OFF: 409 };
+export const siteDataStatuses: Record<string, number> = {
+  SITE_DATA_OFF: 409,
+  // A collect for a site-model instance with no target parcel chosen (T-207).
+  SITE_TARGETS_MISSING: 422,
+};
 
 interface ProjectChoice {
   /** The notice version the person confirmed, and when. */

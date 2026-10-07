@@ -52,13 +52,15 @@ export const JIGS: JigEntry[] = [
     basis: 'SPEC-11 · PLAN-43 T-198',
   },
   {
-    id: 'site-modeling',
+    // The official tool jig `vide/site-model` (PLAN-45 T-207); the JIG list shows its card.
+    id: 'vide/site-model',
     code: 'J-01',
     name: '사이트 모델링',
-    summary: '주소·지적·지형 자료로 대지와 주변 매스를 모델링합니다.',
-    inputs: ['주소', 'Rhino'],
-    status: 'planned',
-    basis: 'S-02·S-03·S-04',
+    summary:
+      '주소·PNU로 대상 필지를 확정하고 지적·도로·주변 건물·지형·용도지역을 모아 대지 요약과 함께 Rhino에 만듭니다.',
+    inputs: ['주소·PNU', '수치지형도·연속지적도 SHP(선택)', 'Rhino'],
+    status: 'available',
+    basis: 'S-02·S-03·S-04·S-19 · SPEC-12.3~12.6',
   },
   {
     id: 'site-analysis',

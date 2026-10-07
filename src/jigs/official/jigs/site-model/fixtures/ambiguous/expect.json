@@ -1,0 +1,11 @@
+{
+  "steps": {
+    "candidates": {
+      "status": "ambiguous",
+      "proposal": null,
+      "targets": [],
+      "question": { "allowFree": true, "blocks": "대상 필지 확정" }
+    }
+  },
+  "statuses": { "collect": "gate-failed", "frame": "blocked", "make": "blocked" }
+}

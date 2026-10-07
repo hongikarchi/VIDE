@@ -1,0 +1,11 @@
+{
+  "tolerance": { "length": 0.001, "ratio": 0.001 },
+  "steps": {
+    "candidates": { "added": ["1199910100100030000"] },
+    "frame": {
+      "site": { "area": 900, "pieces": 2, "separated": true },
+      "checks": ["떨어진 필지: 대상 필지가 2덩어리로 나뉩니다. 사람이 확정해야 합니다"]
+    },
+    "summary": { "computedArea_m2": 900 }
+  }
+}

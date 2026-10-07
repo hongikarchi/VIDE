@@ -255,6 +255,12 @@
   border-radius: var(--radius-pill);
   background: var(--paper);
 }
+/* A choice row's chips are words, not the −/+ squares of the same control row. */
+.kit-setting-control .kit-chips button {
+  width: auto;
+  height: auto;
+  min-height: 26px;
+}
 .kit-chips button[aria-pressed='true'] {
   border-color: var(--ink);
   font-weight: 600;
@@ -974,4 +980,59 @@
   .kit-report-section {
     break-inside: avoid-page;
   }
+}
+
+/* --- site picker (SPEC-12.3, T-207) ----------------------------------------------------------- */
+.site-picker {
+  display: grid;
+  gap: var(--s2);
+}
+.site-search {
+  display: flex;
+  gap: var(--s2);
+}
+.site-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 var(--s2);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+}
+.site-targets {
+  gap: var(--s2);
+}
+.site-target-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--s1);
+}
+.site-map {
+  width: 100%;
+  max-width: 240px;
+  height: auto;
+}
+.site-map-frame {
+  fill: var(--paper);
+  stroke: var(--line);
+}
+.site-map-dot {
+  fill: var(--soft);
+  stroke: var(--ink);
+}
+.site-map g[data-chosen] .site-map-dot {
+  fill: var(--zone-ok);
+}
+.site-map-label,
+.site-map-north,
+.site-map-scale {
+  font-size: 8px;
+  fill: var(--ink);
+}
+.site-shp {
+  display: grid;
+  gap: var(--s1);
 }

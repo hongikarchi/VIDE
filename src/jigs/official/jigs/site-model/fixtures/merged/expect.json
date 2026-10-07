@@ -1,0 +1,14 @@
+{
+  "tolerance": { "length": 0.001, "ratio": 0.001 },
+  "steps": {
+    "candidates": { "targets": ["1199910100100010000", "1199910100100010001"], "question": null },
+    "frame": {
+      "origin": [200020, 550015, 0],
+      "site": { "area": 1200, "pieces": 1, "separated": false },
+      "outline": [{ "key": "site:outline", "area": "1200" }]
+    },
+    "roads": { "contact_m": 40 },
+    "buildings": { "count": 2 },
+    "summary": { "computedArea_m2": 1200, "officialArea_m2": null }
+  }
+}

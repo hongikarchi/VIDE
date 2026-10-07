@@ -2,18 +2,18 @@ import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
 import { JigPanel, type PanelHost } from './panel.tsx';
 
 // A jig instance's context tab drawn from its declared screen (PLAN-22 T-048, SPEC-07.10). The
-// screens of the jig packages in this checkout (`extensions/jigs/*`: `jig.json` + `panel.json`)
-// are bundled with the page; a jig without one here (an imported package, until the engine serves
-// panels) keeps the plain instance view.
+// screens of the official tool jigs (`src/jigs/official/jigs/*`, T-207) and of the jig packages in
+// this checkout (`extensions/jigs/*`: `jig.json` + `panel.json`) are bundled with the page; a jig
+// without one here (an imported package, until the engine serves panels) keeps the plain view.
 
 const manifests = import.meta.glob<{ id?: unknown; version?: unknown; panel?: unknown }>(
-  '../../../extensions/jigs/*/jig.json',
+  ['../../jigs/official/jigs/*/jig.json', '../../../extensions/jigs/*/jig.json'],
   { eager: true, import: 'default' },
 );
-const panels = import.meta.glob<unknown>('../../../extensions/jigs/*/panel.json', {
-  eager: true,
-  import: 'default',
-});
+const panels = import.meta.glob<unknown>(
+  ['../../jigs/official/jigs/*/panel.json', '../../../extensions/jigs/*/panel.json'],
+  { eager: true, import: 'default' },
+);
 
 /** The declared `panel.json` of a jig package in this checkout; undefined when there is none. */
 export function panelOf(jigId: string, version?: string): unknown {

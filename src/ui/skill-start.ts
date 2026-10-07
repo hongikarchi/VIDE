@@ -8,6 +8,7 @@
 // closes what this start opened and undoes its settings. Older jigs without instances only open.
 // The screen's parts come in as `SkillDeps`, so the sequence is tested without a page.
 
+import { addressFromRequest } from '../contracts/site-data.ts';
 import { instanceRouteContext, requestValues, type RouteParam } from './request-route.ts';
 import type { SkillEntry } from './skill-catalog.ts';
 
@@ -110,6 +111,8 @@ export interface SkillStart {
   aiRequest?: string;
   /** What the computation left for a person (human steps waiting, failures). */
   summary?: { done: number; waiting: string[]; failed: string[] };
+  /** The address the request names, for a jig with a `site-data` input (SPEC-12.3의 1). */
+  site?: { key: string; query: string };
 }
 
 const code = (error: unknown) => (error as { code?: unknown } | null)?.code;
@@ -130,6 +133,7 @@ interface InstanceView {
   jig: { id: string; name: string; version?: string };
   params?: unknown;
   steps?: { id: string; title?: string; kind?: string; status?: string }[];
+  inputs?: { key: string; kind?: string }[];
 }
 interface ConversationRow {
   id: string | null;
@@ -376,6 +380,10 @@ async function open(
   start.instanceTitle = view.title;
   if (start.until) start.untilTitle = titles.get(start.until) ?? start.until;
   start.values = skillValues(options.request, view.params, entry.fromRequest);
+  // Site modeling: the address in the words is looked up as the computation starts.
+  const siteInput = (view.inputs ?? []).find((input) => input.kind === 'site-data');
+  const query = siteInput && options.request ? addressFromRequest(options.request) : null;
+  if (siteInput && query) start.site = { key: siteInput.key, query };
   const conversation = await bindConversation(deps, entry, start.instanceId, options);
   start.conversationId = conversation.id;
   start.conversationCreated = conversation.created;
@@ -408,6 +416,13 @@ async function run(
 ) {
   const instance = path(deps, `/jig-instances/${encodeURIComponent(start.instanceId)}`);
   const values = start.values.filter((value) => value.ok && value.value !== undefined);
+  // The address the request named: candidates for the first person step (or the send notice).
+  if (start.site)
+    await deps
+      .api(`${instance}/site-data/${encodeURIComponent(start.site.key)}/lookup`, 'POST', {
+        query: start.site.query,
+      })
+      .catch(() => undefined);
   if (values.length) {
     const done = (await deps.api(`${instance}/params`, 'PUT', {
       values: values.map(({ key, value }) => ({ key, value })),
@@ -451,6 +466,7 @@ async function run(
         }
       : {}),
     until: start.until ?? null,
+    ...(start.site ? { siteQuery: start.site.query } : {}),
     computed: start.summary,
   });
   return start;

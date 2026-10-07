@@ -2,7 +2,8 @@
 // the printed report. The work itself is `src/jigs/runtime/pack.ts`, the same code the
 // make-conversation's `jig_validate`/`jig_test` tools use.
 
-import { resolve } from 'node:path';
+import { isAbsolute, relative, resolve } from 'node:path';
+import { officialJigRoot } from '../../src/jigs/runtime/loader.ts';
 
 export function parseArgs(argv) {
   const options = { _: [] };
@@ -24,7 +25,12 @@ export function sourceDir(options, usage) {
     console.error(usage);
     process.exit(2);
   }
-  return resolve(dir);
+  const folder = resolve(dir);
+  // An official tool jig (`src/jigs/official/jigs/<name>`) is built in: its steps run in the engine.
+  const inside = relative(officialJigRoot(), folder);
+  if (options.source === undefined && inside && !inside.startsWith('..') && !isAbsolute(inside))
+    options.source = 'builtin';
+  return folder;
 }
 
 export function printIssues(issues) {

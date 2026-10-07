@@ -1,0 +1,19 @@
+{
+  "tolerance": { "length": 0.01, "ratio": 0.001 },
+  "steps": {
+    "candidates": { "source": "shp", "proposal": "1199920100100120004" },
+    "frame": { "origin": [203010, 551015, 0], "site": { "area": 600 } },
+    "roads": { "roads": [{ "direction": "남", "widthMin_m": 8, "contact_m": 20 }] },
+    "terrain": { "included": true, "range": { "min": 30, "max": 36 } },
+    "buildings": {
+      "count": 2,
+      "estimated": 2,
+      "buildings": [
+        { "height": 13.2, "heightSource": "추정", "onSite": true },
+        { "height": 6.6, "heightSource": "추정", "onSite": false }
+      ],
+      "unmade": [{ "reason": "무벽건물 — 매스·면적에서 뺌" }]
+    },
+    "summary": { "computedArea_m2": 600, "zones": "용도지역 미확인" }
+  }
+}

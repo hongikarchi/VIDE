@@ -18,6 +18,7 @@ export type { Provenance, Snapshot, SnapshotStatus } from './snapshot.ts';
 export { lookupParcel } from './lookup.ts';
 export type { LookupResult, LookupStatus, ParcelCandidate } from './lookup.ts';
 export { RADIUS, collectSite } from './collect.ts';
+export { collectionChanges } from './changes.ts';
 export type { CollectOptions, SiteCollection } from './collect.ts';
 export { isPnu, lotLabel, splitPnu } from './pnu.ts';
 export type { Bounds, Polygons, Position } from './geometry.ts';

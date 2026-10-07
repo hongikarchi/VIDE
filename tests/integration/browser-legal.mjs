@@ -94,7 +94,8 @@ try {
   // Open the jig from the JIG list: J-03 is available.
   await page.getByRole('button', { name: 'JIG', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'JIG', exact: true });
-  const card = dialog.locator('.jig-card[data-status="available"]', { hasText: '법규 검토' });
+  // By its code: the official 건축 가능 영역·매스 card also mentions 법규 검토 (T-207 lists it).
+  const card = dialog.locator('.jig-card[data-status="available"]', { hasText: 'J-03' });
   await card.getByRole('button', { name: '열기' }).click();
   const jig = page.locator('.legal-jig');
   await jig.locator('.legal-status', { hasText: '연결됨' }).waitFor();

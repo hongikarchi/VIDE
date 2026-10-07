@@ -1,0 +1,1262 @@
+{
+  "site": {
+    "query": "합성시 가나구 가나동 1",
+    "lookup": {
+      "query": "합성시 가나구 가나동 1",
+      "kind": "jibun",
+      "candidates": [
+        {
+          "pnu": "1199910100100010000",
+          "jibunAddress": "합성시 가나구 가나동 1",
+          "roadAddress": "합성시 가나구 가나로 10",
+          "buildingName": null,
+          "legalDong": "1199910100",
+          "mountain": false,
+          "main": 1,
+          "sub": 0,
+          "source": "juso",
+          "landCategory": "대",
+          "officialArea": 600,
+          "point": [200010, 550015],
+          "matchesInput": true,
+          "assembled": false,
+          "verified": true
+        },
+        {
+          "pnu": "1199910100100010001",
+          "jibunAddress": "합성시 가나구 가나동 1-1",
+          "roadAddress": "합성시 가나구 가나로 12",
+          "buildingName": null,
+          "legalDong": "1199910100",
+          "mountain": false,
+          "main": 1,
+          "sub": 1,
+          "source": "juso",
+          "landCategory": "대",
+          "officialArea": null,
+          "point": [200030, 550015],
+          "matchesInput": false,
+          "assembled": false,
+          "verified": true
+        }
+      ],
+      "proposal": "1199910100100010000",
+      "status": "ok",
+      "checks": [],
+      "fetchedAt": "2026-10-08T03:00:00.000Z",
+      "provenance": [
+        {
+          "service": "vide/site-data",
+          "source": "juso",
+          "requests": [
+            {
+              "endpoint": "https://business.juso.go.kr/addrlink/addrLinkApi.do",
+              "params": {
+                "currentPage": "1",
+                "countPerPage": "100",
+                "keyword": "합성시 가나구 가나동 1",
+                "resultType": "json"
+              }
+            }
+          ],
+          "ids": [],
+          "basis": "source"
+        },
+        {
+          "service": "vide/site-data",
+          "source": "vworld-cadastral",
+          "requests": [
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LP_PA_CBND_BUBUN",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "true",
+                "size": "10",
+                "page": "1",
+                "attrFilter": "pnu:=:1199910100100010000"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LP_PA_CBND_BUBUN",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "true",
+                "size": "10",
+                "page": "1",
+                "attrFilter": "pnu:=:1199910100100010001"
+              }
+            }
+          ],
+          "layers": ["LP_PA_CBND_BUBUN"],
+          "ids": [],
+          "basis": "source"
+        },
+        {
+          "service": "vide/site-data",
+          "source": "vworld-land-characteristics",
+          "requests": [
+            {
+              "endpoint": "https://api.vworld.kr/ned/data/getLandCharacteristics",
+              "params": {
+                "pnu": "1199910100100010000",
+                "stdrYear": "2026",
+                "format": "json",
+                "numOfRows": "100",
+                "pageNo": "1"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/ned/data/getLandCharacteristics",
+              "params": {
+                "pnu": "1199910100100010000",
+                "stdrYear": "2025",
+                "format": "json",
+                "numOfRows": "100",
+                "pageNo": "1"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/ned/data/getLandCharacteristics",
+              "params": {
+                "pnu": "1199910100100010001",
+                "stdrYear": "2026",
+                "format": "json",
+                "numOfRows": "100",
+                "pageNo": "1"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/ned/data/getLandCharacteristics",
+              "params": {
+                "pnu": "1199910100100010001",
+                "stdrYear": "2025",
+                "format": "json",
+                "numOfRows": "100",
+                "pageNo": "1"
+              }
+            }
+          ],
+          "ids": [],
+          "basis": "source"
+        }
+      ]
+    },
+    "targets": { "pnus": ["1199910100100010000", "1199910100100030000"], "by": "user" },
+    "collection": {
+      "crs": "EPSG:5186",
+      "fetchedAt": "2026-10-08T03:00:00.000Z",
+      "sent": {
+        "pnus": ["1199910100100010000", "1199910100100030000"],
+        "radius": 200,
+        "box": { "minX": 199800, "minY": 549800, "maxX": 200315, "maxY": 550230 }
+      },
+      "target": {
+        "source": "vworld-cadastral",
+        "items": [
+          {
+            "pnu": "1199910100100010000",
+            "address": "합성시 가나동 1",
+            "landCategory": "대",
+            "lot": "1",
+            "polygons": [
+              [
+                [
+                  [200000, 550000],
+                  [200020, 550000],
+                  [200020, 550030],
+                  [200000, 550030],
+                  [200000, 550000]
+                ]
+              ]
+            ],
+            "computedArea": 600,
+            "featureId": "LP_PA_CBND_BUBUN.010000"
+          },
+          {
+            "pnu": "1199910100100030000",
+            "address": "합성시 가나동 3",
+            "landCategory": "대",
+            "lot": "3",
+            "polygons": [
+              [
+                [
+                  [200100, 550000],
+                  [200115, 550000],
+                  [200115, 550020],
+                  [200100, 550020],
+                  [200100, 550000]
+                ]
+              ]
+            ],
+            "computedArea": 300,
+            "featureId": "LP_PA_CBND_BUBUN.3"
+          }
+        ],
+        "fetchedAt": "2026-10-08T03:00:00.000Z",
+        "provenance": {
+          "service": "vide/site-data",
+          "source": "vworld-cadastral",
+          "requests": [
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LP_PA_CBND_BUBUN",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "true",
+                "size": "10",
+                "page": "1",
+                "attrFilter": "pnu:=:1199910100100010000"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LP_PA_CBND_BUBUN",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "true",
+                "size": "10",
+                "page": "1",
+                "attrFilter": "pnu:=:1199910100100030000"
+              }
+            }
+          ],
+          "layers": ["LP_PA_CBND_BUBUN"],
+          "crs": "EPSG:5186",
+          "ids": ["1199910100100010000", "1199910100100030000"],
+          "basis": "source"
+        },
+        "status": "check",
+        "checks": ["대지면적 차이 50.0% (공부 600.0 m², 계산 900.0 m²)"]
+      },
+      "landCharacteristics": {
+        "source": "vworld-land-characteristics",
+        "items": [
+          {
+            "pnu": "1199910100100010000",
+            "officialArea": 600,
+            "landCategory": "대",
+            "zoning": ["제2종일반주거지역"],
+            "roadSide": "세로한면(가)",
+            "terrainHeight": null,
+            "terrainShape": null,
+            "year": 2025
+          }
+        ],
+        "fetchedAt": "2026-10-08T03:00:00.000Z",
+        "provenance": {
+          "service": "vide/site-data",
+          "source": "vworld-land-characteristics",
+          "requests": [
+            {
+              "endpoint": "https://api.vworld.kr/ned/data/getLandCharacteristics",
+              "params": {
+                "pnu": "1199910100100010000",
+                "stdrYear": "2026",
+                "format": "json",
+                "numOfRows": "100",
+                "pageNo": "1"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/ned/data/getLandCharacteristics",
+              "params": {
+                "pnu": "1199910100100010000",
+                "stdrYear": "2025",
+                "format": "json",
+                "numOfRows": "100",
+                "pageNo": "1"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/ned/data/getLandCharacteristics",
+              "params": {
+                "pnu": "1199910100100030000",
+                "stdrYear": "2026",
+                "format": "json",
+                "numOfRows": "100",
+                "pageNo": "1"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/ned/data/getLandCharacteristics",
+              "params": {
+                "pnu": "1199910100100030000",
+                "stdrYear": "2025",
+                "format": "json",
+                "numOfRows": "100",
+                "pageNo": "1"
+              }
+            }
+          ],
+          "ids": ["1199910100100010000"],
+          "basis": "source"
+        },
+        "status": "check",
+        "checks": ["3: 공부 면적 없음"]
+      },
+      "landUse": {
+        "source": "vworld-land-use",
+        "items": [
+          {
+            "pnu": "1199910100100010000",
+            "point": [200010, 550015],
+            "entries": [
+              {
+                "name": "제2종일반주거지역",
+                "code": "UQA122",
+                "conflict": "포함",
+                "notices": [{ "year": "2020", "number": "0123", "layer": "LT_C_UQ111" }],
+                "kinds": ["용도지역(도시)"],
+                "from": ["attr", "layer"],
+                "registeredAt": "2020-01-01"
+              },
+              {
+                "name": "지구단위계획구역",
+                "code": "UQQ300",
+                "conflict": "포함",
+                "notices": [{ "year": "2019", "number": "0456", "layer": "LT_C_UQ141" }],
+                "kinds": ["지구단위계획구역 등"],
+                "from": ["attr", "layer"],
+                "registeredAt": "2019-01-01"
+              },
+              {
+                "name": "가축사육제한구역",
+                "code": "UMD200",
+                "conflict": "저촉",
+                "notices": [],
+                "kinds": [],
+                "from": ["attr"],
+                "registeredAt": "2018-01-01"
+              }
+            ],
+            "districtPlans": [
+              {
+                "name": "합성 지구단위계획구역",
+                "area": 50000,
+                "decisionId": "W-1",
+                "noticeId": "N-1"
+              }
+            ]
+          },
+          {
+            "pnu": "1199910100100030000",
+            "point": [200107.5, 550010],
+            "entries": [
+              {
+                "name": "제2종일반주거지역",
+                "code": null,
+                "conflict": null,
+                "notices": [{ "year": "2020", "number": "0123", "layer": "LT_C_UQ111" }],
+                "kinds": ["용도지역(도시)"],
+                "from": ["layer"],
+                "registeredAt": null
+              },
+              {
+                "name": "지구단위계획구역",
+                "code": null,
+                "conflict": null,
+                "notices": [{ "year": "2019", "number": "0456", "layer": "LT_C_UQ141" }],
+                "kinds": ["지구단위계획구역 등"],
+                "from": ["layer"],
+                "registeredAt": null
+              }
+            ],
+            "districtPlans": [
+              {
+                "name": "합성 지구단위계획구역",
+                "area": 50000,
+                "decisionId": "W-1",
+                "noticeId": "N-1"
+              }
+            ]
+          }
+        ],
+        "fetchedAt": "2026-10-08T03:00:00.000Z",
+        "provenance": {
+          "service": "vide/site-data",
+          "source": "vworld-land-use",
+          "requests": [
+            {
+              "endpoint": "https://api.vworld.kr/ned/data/getLandUseAttr",
+              "params": {
+                "pnu": "1199910100100010000",
+                "format": "json",
+                "numOfRows": "100",
+                "pageNo": "1"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ111",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200010 550015)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ112",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200010 550015)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ113",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200010 550015)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ114",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200010 550015)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ121",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200010 550015)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ123",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200010 550015)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ124",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200010 550015)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ125",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200010 550015)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ126",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200010 550015)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ128",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200010 550015)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ129",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200010 550015)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ130",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200010 550015)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ141",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200010 550015)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ162",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200010 550015)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UD801",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200010 550015)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UPISUQ161",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200010 550015)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/ned/data/getLandUseAttr",
+              "params": {
+                "pnu": "1199910100100030000",
+                "format": "json",
+                "numOfRows": "100",
+                "pageNo": "1"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ111",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200107.5 550010)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ112",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200107.5 550010)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ113",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200107.5 550010)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ114",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200107.5 550010)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ121",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200107.5 550010)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ123",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200107.5 550010)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ124",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200107.5 550010)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ125",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200107.5 550010)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ126",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200107.5 550010)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ128",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200107.5 550010)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ129",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200107.5 550010)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ130",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200107.5 550010)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ141",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200107.5 550010)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UQ162",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200107.5 550010)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UD801",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200107.5 550010)"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_UPISUQ161",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "false",
+                "size": "100",
+                "page": "1",
+                "geomFilter": "POINT(200107.5 550010)"
+              }
+            }
+          ],
+          "layers": [
+            "LT_C_UQ111",
+            "LT_C_UQ112",
+            "LT_C_UQ113",
+            "LT_C_UQ114",
+            "LT_C_UQ121",
+            "LT_C_UQ123",
+            "LT_C_UQ124",
+            "LT_C_UQ125",
+            "LT_C_UQ126",
+            "LT_C_UQ128",
+            "LT_C_UQ129",
+            "LT_C_UQ130",
+            "LT_C_UQ141",
+            "LT_C_UQ162",
+            "LT_C_UD801",
+            "LT_C_UPISUQ161"
+          ],
+          "ids": ["1199910100100010000", "1199910100100030000"],
+          "basis": "source"
+        },
+        "status": "check",
+        "checks": ["3: 토지이용계획 속성 0건"]
+      },
+      "parcels": {
+        "source": "vworld-cadastral",
+        "items": [
+          {
+            "pnu": "1199910100100010000",
+            "address": "합성시 가나동 1",
+            "landCategory": "대",
+            "lot": "1",
+            "polygons": [
+              [
+                [
+                  [200000, 550000],
+                  [200020, 550000],
+                  [200020, 550030],
+                  [200000, 550030],
+                  [200000, 550000]
+                ]
+              ]
+            ],
+            "computedArea": 600,
+            "featureId": "LP_PA_CBND_BUBUN.010000"
+          },
+          {
+            "pnu": "1199910100100010001",
+            "address": "합성시 가나동 1-1",
+            "landCategory": "대",
+            "lot": "1-1",
+            "polygons": [
+              [
+                [
+                  [200020, 550000],
+                  [200040, 550000],
+                  [200040, 550030],
+                  [200020, 550030],
+                  [200020, 550000]
+                ]
+              ]
+            ],
+            "computedArea": 600,
+            "featureId": "LP_PA_CBND_BUBUN.010001"
+          },
+          {
+            "pnu": "1199910100100020000",
+            "address": "합성시 가나동 2",
+            "landCategory": "도",
+            "lot": "2",
+            "polygons": [
+              [
+                [
+                  [199990, 549990],
+                  [200050, 549990],
+                  [200050, 550000],
+                  [199990, 550000],
+                  [199990, 549990]
+                ]
+              ]
+            ],
+            "computedArea": 600,
+            "featureId": "LP_PA_CBND_BUBUN.020000"
+          },
+          {
+            "pnu": "1199910100100030000",
+            "address": "합성시 가나동 3",
+            "landCategory": "대",
+            "lot": "3",
+            "polygons": [
+              [
+                [
+                  [200100, 550000],
+                  [200115, 550000],
+                  [200115, 550020],
+                  [200100, 550020],
+                  [200100, 550000]
+                ]
+              ]
+            ],
+            "computedArea": 300,
+            "featureId": "LP_PA_CBND_BUBUN.3"
+          }
+        ],
+        "fetchedAt": "2026-10-08T03:00:00.000Z",
+        "provenance": {
+          "service": "vide/site-data",
+          "source": "vworld-cadastral",
+          "requests": [
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LP_PA_CBND_BUBUN",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "true",
+                "size": "1000",
+                "page": "1",
+                "geomFilter": "BOX(199800,549800,200315,550230)"
+              }
+            }
+          ],
+          "layers": ["LP_PA_CBND_BUBUN"],
+          "crs": "EPSG:5186",
+          "ids": [
+            "1199910100100010000",
+            "1199910100100010001",
+            "1199910100100020000",
+            "1199910100100030000"
+          ],
+          "basis": "source"
+        },
+        "status": "ok",
+        "checks": []
+      },
+      "buildings": {
+        "source": "vworld-buildings",
+        "items": [
+          {
+            "id": "1199910100100010000000001",
+            "pnu": "1199910100100010000",
+            "name": "합성 업무동",
+            "dongName": null,
+            "floorsAbove": 5,
+            "floorsBelow": 1,
+            "height": 17.5,
+            "heightSource": "vworld-building-info",
+            "mainUse": "업무시설",
+            "polygons": [
+              [
+                [
+                  [200005, 550005],
+                  [200015, 550005],
+                  [200015, 550025],
+                  [200005, 550025],
+                  [200005, 550005]
+                ]
+              ]
+            ]
+          },
+          {
+            "id": "1199910100100010001000001",
+            "pnu": "1199910100100010001",
+            "name": "합성 상가",
+            "dongName": "가동",
+            "floorsAbove": 3,
+            "floorsBelow": 1,
+            "height": 10.2,
+            "heightSource": "building-register",
+            "mainUse": "근린생활시설",
+            "polygons": [
+              [
+                [
+                  [200025, 550010],
+                  [200035, 550010],
+                  [200035, 550020],
+                  [200025, 550020],
+                  [200025, 550010]
+                ]
+              ]
+            ]
+          }
+        ],
+        "fetchedAt": "2026-10-08T03:00:00.000Z",
+        "provenance": {
+          "service": "vide/site-data",
+          "source": "vworld-buildings",
+          "requests": [
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_SPBD",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "true",
+                "size": "1000",
+                "page": "1",
+                "geomFilter": "BOX(199800,549800,200315,550230)"
+              }
+            }
+          ],
+          "layers": ["LT_C_SPBD"],
+          "crs": "EPSG:5186",
+          "ids": ["1199910100100010000000001", "1199910100100010001000001"],
+          "basis": "source"
+        },
+        "status": "ok",
+        "checks": []
+      },
+      "buildingInfo": {
+        "source": "vworld-building-info",
+        "items": [
+          {
+            "id": "LT_C_BLDGINFO.1",
+            "height": 17.5,
+            "floorsAbove": 5,
+            "floorsBelow": 1,
+            "use": "업무시설",
+            "name": null,
+            "dongName": null,
+            "polygons": [
+              [
+                [
+                  [200006, 550006],
+                  [200014, 550006],
+                  [200014, 550024],
+                  [200006, 550024],
+                  [200006, 550006]
+                ]
+              ]
+            ]
+          },
+          {
+            "id": "LT_C_BLDGINFO.2",
+            "height": null,
+            "floorsAbove": null,
+            "floorsBelow": null,
+            "use": null,
+            "name": null,
+            "dongName": null,
+            "polygons": [
+              [
+                [
+                  [200026, 550011],
+                  [200034, 550011],
+                  [200034, 550019],
+                  [200026, 550019],
+                  [200026, 550011]
+                ]
+              ]
+            ]
+          }
+        ],
+        "fetchedAt": "2026-10-08T03:00:00.000Z",
+        "provenance": {
+          "service": "vide/site-data",
+          "source": "vworld-building-info",
+          "requests": [
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LT_C_BLDGINFO",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "true",
+                "size": "1000",
+                "page": "1",
+                "geomFilter": "BOX(199800,549800,200315,550230)"
+              }
+            }
+          ],
+          "layers": ["LT_C_BLDGINFO"],
+          "crs": "EPSG:5186",
+          "ids": ["LT_C_BLDGINFO.1", "LT_C_BLDGINFO.2"],
+          "basis": "source"
+        },
+        "status": "ok",
+        "checks": []
+      },
+      "register": {
+        "source": "building-register",
+        "items": [
+          {
+            "pnu": "1199910100100010000",
+            "pk": "0000",
+            "name": null,
+            "dongName": null,
+            "main": true,
+            "mainUse": "근린생활시설",
+            "height": null,
+            "floorsAbove": 3,
+            "floorsBelow": 1,
+            "siteArea": 600,
+            "buildingArea": 100,
+            "totalArea": 500,
+            "coverage": 16.7,
+            "floorAreaRatio": 50,
+            "approvedOn": "20000101"
+          },
+          {
+            "pnu": "1199910100100010001",
+            "pk": "0001가동",
+            "name": null,
+            "dongName": "가동",
+            "main": true,
+            "mainUse": "근린생활시설",
+            "height": 10.2,
+            "floorsAbove": 3,
+            "floorsBelow": 1,
+            "siteArea": 600,
+            "buildingArea": 100,
+            "totalArea": 300,
+            "coverage": 16.7,
+            "floorAreaRatio": 50,
+            "approvedOn": "20000101"
+          },
+          {
+            "pnu": "1199910100100010001",
+            "pk": "0001나동",
+            "name": null,
+            "dongName": "나동",
+            "main": true,
+            "mainUse": "근린생활시설",
+            "height": null,
+            "floorsAbove": 3,
+            "floorsBelow": 1,
+            "siteArea": 600,
+            "buildingArea": 100,
+            "totalArea": 120,
+            "coverage": 16.7,
+            "floorAreaRatio": 50,
+            "approvedOn": "20000101"
+          }
+        ],
+        "fetchedAt": "2026-10-08T03:00:00.000Z",
+        "provenance": {
+          "service": "vide/site-data",
+          "source": "building-register",
+          "requests": [
+            {
+              "endpoint": "https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo",
+              "params": {
+                "sigunguCd": "11999",
+                "bjdongCd": "10100",
+                "platGbCd": "0",
+                "bun": "0001",
+                "ji": "0000",
+                "_type": "json",
+                "numOfRows": "100",
+                "pageNo": "1"
+              }
+            },
+            {
+              "endpoint": "https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo",
+              "params": {
+                "sigunguCd": "11999",
+                "bjdongCd": "10100",
+                "platGbCd": "0",
+                "bun": "0003",
+                "ji": "0000",
+                "_type": "json",
+                "numOfRows": "100",
+                "pageNo": "1"
+              }
+            },
+            {
+              "endpoint": "https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo",
+              "params": {
+                "sigunguCd": "11999",
+                "bjdongCd": "10100",
+                "platGbCd": "0",
+                "bun": "0001",
+                "ji": "0001",
+                "_type": "json",
+                "numOfRows": "100",
+                "pageNo": "1"
+              }
+            }
+          ],
+          "ids": ["0000", "0001가동", "0001나동"],
+          "basis": "source"
+        },
+        "status": "check",
+        "checks": ["3: 건축물대장 없음(나대지일 수 있음)"]
+      },
+      "blocked": false,
+      "checks": [
+        "대지면적 차이 50.0% (공부 600.0 m², 계산 900.0 m²)",
+        "3: 공부 면적 없음",
+        "3: 토지이용계획 속성 0건",
+        "3: 건축물대장 없음(나대지일 수 있음)"
+      ],
+      "radius": 200
+    },
+    "shp": null
+  }
+}

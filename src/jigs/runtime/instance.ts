@@ -46,6 +46,35 @@ export interface InstanceBody {
   overrides: Override[];
   conversationId?: string;
   bakeStale?: boolean;
+  /** `site-data` inputs by key (ARCH-03 §8.3): references to the kept read-copies. */
+  siteData?: Record<string, SiteDataState>;
+}
+
+/** A kept copy under `<data>/jigs/` (gzip JSON) and the hash of its content. */
+export interface SiteCopyRef {
+  ref: string;
+  hash: string;
+  at: string;
+}
+export interface SiteCollectionRef extends SiteCopyRef {
+  fetchedAt: string;
+  pnus: string[];
+  radius: number;
+}
+/**
+ * One `site-data` input (SPEC-12.3·12.4): the address asked, the candidate lookup, the chosen
+ * parcels, the collection in use, a newer collection waiting to be taken ([다시 가져오기]) with
+ * what changed, earlier collections (never overwritten) and the SHP files put in.
+ */
+export interface SiteDataState {
+  query?: string;
+  lookup?: SiteCopyRef;
+  targets?: { pnus: string[]; by: 'proposal' | 'user'; at: string };
+  collection?: SiteCollectionRef;
+  pending?: SiteCollectionRef & { changes: string[] };
+  previous?: SiteCollectionRef[];
+  /** The SHP import (`ref`) and the files put in (`raw`, re-imported together when more come). */
+  shp?: SiteCopyRef & { files: string[]; raw: SiteCopyRef };
 }
 
 const identity = z.record(z.string(), z.union([z.string(), z.number()]));
@@ -101,5 +130,6 @@ export function bodyOf(value: unknown): InstanceBody {
     overrides: body.overrides ?? [],
     ...(body.conversationId ? { conversationId: body.conversationId } : {}),
     ...(body.bakeStale ? { bakeStale: true } : {}),
+    ...(body.siteData ? { siteData: body.siteData } : {}),
   };
 }

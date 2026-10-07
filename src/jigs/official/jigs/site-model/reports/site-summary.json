@@ -1,0 +1,114 @@
+{
+  "template": "study",
+  "title": "대지 요약",
+  "eyebrow": "사이트 모델링 · 탐색용 규모검토 — 인허가 도서·면적 산정·법규 검토를 대체하지 않음",
+  "headline": {
+    "cases": [
+      {
+        "when": "step.summary.computedArea_m2 > 0 && step.summary.checks > 0",
+        "template": "대지 {step.summary.computedArea_m2:1} m²에 주변 건물 {step.summary.buildings}동을 모았고, 확인할 것이 {step.summary.checks}건 있습니다.",
+        "tone": "warn"
+      },
+      {
+        "when": "step.summary.computedArea_m2 > 0",
+        "template": "대지 {step.summary.computedArea_m2:1} m²에 주변 건물 {step.summary.buildings}동을 모았습니다.",
+        "tone": "ok"
+      },
+      {
+        "template": "아직 대상 필지를 정하지 않았습니다. 주소를 찾고 대상 필지를 고른 뒤 가져오세요.",
+        "tone": "na"
+      }
+    ]
+  },
+  "kpis": [
+    {
+      "label": "대지면적(공부)",
+      "from": "step.summary.officialArea_m2",
+      "unit": "m²",
+      "decimals": 1
+    },
+    {
+      "label": "대지면적(계산)",
+      "from": "step.summary.computedArea_m2",
+      "unit": "m²",
+      "decimals": 1
+    },
+    { "label": "주변 건물", "from": "step.summary.buildings", "unit": "동" },
+    { "label": "최고 높이", "from": "step.summary.maxHeight_m", "unit": "m", "decimals": 1 }
+  ],
+  "sections": [
+    {
+      "id": "site",
+      "from": ["step.summary.rows"],
+      "title": { "cases": [{ "template": "대지 요약과 출처" }] },
+      "blocks": [
+        {
+          "kind": "table",
+          "from": "step.summary.rows",
+          "columns": [
+            { "field": "item", "label": "항목" },
+            { "field": "value", "label": "값" },
+            { "field": "basis", "label": "출처 구분" },
+            { "field": "source", "label": "자료" },
+            { "field": "at", "label": "조회 시각" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sources",
+      "from": ["step.collect.sources"],
+      "title": { "cases": [{ "template": "자료별 수집 상태" }] },
+      "blocks": [
+        {
+          "kind": "table",
+          "from": "step.collect.sources",
+          "columns": [
+            { "field": "name", "label": "자료" },
+            { "field": "text", "label": "상태" },
+            { "field": "count", "label": "개수" },
+            { "field": "checks", "label": "확인 필요" }
+          ]
+        },
+        { "kind": "list", "title": "확인 필요", "from": "step.collect.checks" }
+      ]
+    },
+    {
+      "id": "buildings",
+      "from": ["step.buildings.buildings", "step.buildings.estimated"],
+      "title": {
+        "cases": [
+          {
+            "when": "step.buildings.estimated > 0",
+            "template": "건물 {step.buildings.estimated}동은 층수로 높이를 추정했습니다"
+          },
+          { "template": "주변 건물 높이" }
+        ]
+      },
+      "blocks": [
+        {
+          "kind": "table",
+          "from": "step.buildings.buildings",
+          "columns": [
+            { "field": "name", "label": "건물" },
+            { "field": "floors", "label": "층수" },
+            { "field": "height", "label": "높이", "unit": "m", "decimals": 2 },
+            { "field": "heightSource", "label": "높이 출처" },
+            { "field": "use", "label": "주용도" }
+          ],
+          "max": 200
+        }
+      ]
+    }
+  ],
+  "assumptions": [
+    "도로 폭은 지적 도로 필지 안의 수직 폭으로 계산한 값이며, 법상 도로 여부와 인정 폭은 법규 검토나 사람이 정합니다",
+    "높이 자료가 없는 건물은 층수 × 추정 층고로 올렸고 높이 출처를 '추정'으로 남겼습니다",
+    "용도지역은 필지 안의 한 점과 토지이용계획 속성으로 읽었으며, 두 지역에 걸친 면적 비율은 계산하지 않았습니다"
+  ],
+  "unchecked": [
+    "법상 도로·접도 요건",
+    "용도지역이 걸친 면적 비율",
+    "지구단위계획 결정도·고시 도면의 값"
+  ]
+}

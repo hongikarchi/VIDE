@@ -176,6 +176,7 @@ import { attachmentPathRoutes } from './attachment-paths.ts';
 import { checkFolder, deniedPath, folderRoutes } from './project-files.ts';
 import { collectRoutes, collectStatuses } from './collect-routes.ts';
 import { SiteDataSettings, siteDataRoutes, siteDataStatuses } from './site-data-routes.ts';
+import { siteModelRoutes } from './site-model-routes.ts';
 import { PublicDataKeyStore } from './public-data-keys.ts';
 import { xrefRoutes, xrefStatuses } from './xref-routes.ts';
 import { XrefService } from './xref.ts';
@@ -1308,6 +1309,20 @@ export async function startServer({
           keys: publicDataKeys,
           settings: siteDataSettings,
           requireProject: (projectId) => void store.project(projectId),
+          body: () => body(request),
+          send,
+          context: siteDataOptions?.fetch ? { fetch: siteDataOptions.fetch } : undefined,
+          log: (event, fields) => diagnostics.write(event, fields),
+        })
+      )
+        return;
+      // 사이트 모델링 jig의 대지 자료 입력 (SPEC-12.3·12.4, PLAN-45 T-207).
+      if (
+        await siteModelRoutes(url, request.method, {
+          workspace,
+          dataDirectory: dirname(filename),
+          keys: publicDataKeys,
+          settings: siteDataSettings,
           body: () => body(request),
           send,
           context: siteDataOptions?.fetch ? { fetch: siteDataOptions.fetch } : undefined,

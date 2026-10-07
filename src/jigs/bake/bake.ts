@@ -232,6 +232,14 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
         step.slot === 'confirm-analysis' &&
         view.steps.find((s) => s.id === step.id)?.status === 'confirmed',
     );
+  // SPEC-12.3의 3: a site is made only after a person confirmed the target parcels.
+  const targetConfirmed = () =>
+    jig.manifest.steps.some(
+      (step) =>
+        step.kind === 'human' &&
+        step.slot === 'confirm-target' &&
+        view.steps.find((s) => s.id === step.id)?.status === 'confirmed',
+    );
   for (const { decl, items, inputHash, stepId } of extracted) {
     const layerPath = layerPathOf(view.body.layerRoot, decl);
     layers.push(layerPath);
@@ -275,7 +283,7 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
       inputHash,
       layerRoot: view.body.layerRoot,
       bake: { targets, layers: [layerPath] },
-      hooks: { analysisConfirmed },
+      hooks: { analysisConfirmed, targetConfirmed },
     });
     gates.push(...run.results);
     run.blocked.forEach((name) => blocked.add(name));

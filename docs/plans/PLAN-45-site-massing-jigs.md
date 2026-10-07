@@ -2,7 +2,7 @@
 id: PLAN-45
 title: 규모검토 jig 세 개 — 사이트 모델링·건축 가능 영역과 매스·건축개요 (T-203~T-214)
 status: draft
-version: 0.10
+version: 0.11
 updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-12, SPEC-07, SPEC-02, SPEC-08, SPEC-13, ARCH-01, ARCH-03, DESIGN, ADR-026, ADR-030, ADR-040, RESEARCH-04, RESEARCH-16, FR-09, FR-12, FR-14, FR-18, FR-21, FR-24, FR-25, C-05, OQ-08, OQ-09, OQ-16]
@@ -111,10 +111,12 @@ related: [SPEC-12, SPEC-07, SPEC-02, SPEC-08, SPEC-13, ARCH-01, ARCH-03, DESIGN,
   - 필지 후보가 여럿이면 jig 단계의 VIDE 질문 카드(SPEC-02.19의 6)로 묻는다. 카드의 위치 그림은 후보 경계를 그린 작은 SVG다.
   - 지형: 등고선·표고점으로 삼각망 메쉬. 기본 끔.
   - 화면은 공식 부품만 쓴다. 필요한 부품이 없으면(후보 위치 그림 등) Design §12의 부품 목록에 먼저 더한다.
-  - `src/jigs/catalog.ts`의 J-01 항목을 이 jig로 바꾼다(`status: 'available'`은 T-214 검수 뒤).
+  - `src/jigs/catalog.ts`의 J-01 항목을 이 jig로 바꾼다. 2026-10-08 진행 지시("쭉 진행")로 T-207 완료와 함께 `available`로 둔다(T-214 검수는 세 jig 묶음으로 그대로 한다).
 - **검증:**
   - `tests/core/site-model-jig.test.mjs`: fixture 셋(단일 필지, 합필 두 필지, 떨어진 필지, 후보 여럿)에서 단계 결과·대지 요약·출처 구분·'대상 필지 미확정' 상태와 만들기 막힘.
   - jig 자체 시험(`npm run jig:test`).
+  - 브라우저 `tests/integration/browser-site-model.mjs`(합성 공공 자료: 고지 → 질문 카드 → 미확정 → 가져오기 → 확정 → 끄기).
+  - 실제 Rhino `tests/integration/rhino-site-model.mjs`(합성 공공 자료 + 합성 SHP 지형, 확정 전 만들기 거절, 레이어·속성·부피, 측량 좌표 그대로의 위치 1 mm 이내, 되돌리기). 키 실호출(선택) `tests/integration/site-model-live.mjs`(서울시청, 키 이름·개수만 출력).
   - 실패: 키 없음 → 그 자료만 '키 없음', 대상 필지 경계 없음 → 뒤 단계 막힘, 다시 가져오기의 바뀐 항목 목록과 이전 사본 보존.
 - **완료:** 시험 통과, 말로 열기(skill 시작)에서 첫 사람 단계 앞까지 계산.
 
@@ -224,7 +226,8 @@ T-204 SPIKE 기하 ─ T-208 만들기 틀 ┘                            │
 | T-206 | 완료(2026-10-08) — SHP·DBF·PRJ·CPG·ZIP 읽기(새 의존성 없음), `.prj` 매개변수 판별(5179·5180~5188·32651·32652·4326·4737, 매개변수가 다 있는 GRS80 TM), Bessel·다른 타원체·TM 아닌 투영·m 아닌 단위 거절, Krüger 6차 TM과 격자 수렴각, 한 좌표계·한 정수 m 기준점의 로컬 f64 좌표 + `packOffsets` f32 전달, 포함 깊이로 고리 정리(바깥 반시계·구멍 시계), `.cpg`/DBF 0x79 인코딩(선언 없으면 엄격 UTF-8), 국토지리정보원 코드 사전(건물·도로경계·등고선·표고점, 연속지적도 필지). 공개 기준점(OS GB Annex C ±1 mm, EPSG GN7-2 ±1 cm) 대조, 5179→5186 합성 대지 어긋남 < 1 cm. 라이브러리 등록은 T-205·T-207 | `src/jigs/official/site-data/shp/`, `site-data/assets/`(사전·NOTICE), `tests/core/site-shp.test.mjs`(12건), SPEC-12.4·12.5, ARCH-03 §8.1 |
 | T-209 | 완료(2026-10-08) — 공식 라이브러리 `vide/massing-kit`(`LIBRARY_MODULES` 등록): 규제 조건 항목의 닫힌 목록과 형식(값·단위·적용 여부·확정 상태·출처 구분·근거·출처·대상 구간), 설정값 → 항목(빈 값·0은 '사람 입력 필요', 코드에 법정 값 없음), 사람 값 우선 병합과 차이 목록, SPEC-13 어댑터 자리(`regulationsFromLegal`, T-220 전에는 '법규 결과 없음'). 경계 구간(도로·인접 대지·확인 필요), 선분 캡슐 후퇴(외접 64각형, 같은 규칙이 덮는 볼록 모퉁이 끝은 평평), 가각, 건축한계선(도로 쪽 제거)·기타 이격(그린 선), 일조 지면 벽(기준선 = 정북 쪽 인접 대지 구간, 정북 도로는 '기준선 위치' 항목대로 도로 너비만큼 이동), '판단 필요'는 미반영 목록 또는 일조 두 변형, 건폐율 비교, 빈 영역 메시지, 자기 교차·열린 경계의 위치. 공식 작업 jig 패키지 `vide/buildable-mass`(대지 입력·규제 조건·계획 조건·제한선·가능 영역, 주용도 질문은 `basis-required`) — 등록부 적재는 T-207. 합성 대지 다섯 곳 면적·규칙별 감소가 손계산과 1e-6 ㎡ 안(L형 참 원 대비 −0.0025 ㎡, 꺾인 북측은 격자 참값과 0.011 ㎡) | `src/jigs/official/massing-kit/`, `src/jigs/official/jigs/buildable-mass/`, `tests/core/massing-setback.test.mjs`(11건), `tests/fixtures/massing-sites.mjs`, SPEC-12.7·12.8, ARCH-03 §8.2 |
 | T-210 | 완료(2026-10-08) — `geometry-kit/solid.ts`(스파이크 `csg.ts`·`mesh.ts`를 옮김: BSP 불리언·용접·점검·단면 + 같은 평면 면 병합(구멍 포함, 꼭짓점 보존)·짧은 변 경고, 판 0.2.1), `massing-kit` `envelope.ts`(돌출·일조 사선·최대, 높이 상한 = 적용된 높이 중 최저 → 층수 × 층고 → 검토 높이(미반영 표시)), `solid-check.ts`(점검 실패면 단계를 멈추고 뒤집지 않음, 병합 면 부피 대조), 일조 거리 정의 항목(최단 거리 · 정북 방향, 기본 '사람 입력 필요' → 최단 거리로 계산하고 미확정 1), 정북 기준 전환, '판단 필요' 일조·높이의 두 변형, 만들기 선언(`vide.bake.curves@1` 제한선, `vide.bake.brep-faces@1` 외피). 외피 부피: 직사각형 세 곳·정북 경사 대지 해석값과 1e-6 m³, L형 −1.3e-4·꺾인 북측 −7.7e-5(격자 참값 대비). 숨은 Rhino 8 워커(이 시험이 띄우고 그 PID만 종료): 7개 대지 21개 외피 모두 한 조각·`IsSolid`·`IsValid`·`Outward`, Brep 면 수 = 병합 면 수, 부피 상대 차 최대 1.1e-8, 뒤집은 사본 7개는 모두 `failed[]` | `src/jigs/official/geometry-kit/solid.ts`, `src/jigs/official/massing-kit/`, `tests/core/massing-envelope.test.mjs`(8건), `tests/integration/rhino-massing-envelope.mjs`, SPEC-12.9, ARCH-03 §8.2 |
-| T-207·T-211~T-214 | 계획(2026-10-08 사용자 1단계 착수 승인) | — |
+| T-207 | 완료(2026-10-08) — 공식 작업 jig `vide/site-model`(`src/jigs/official/jigs/site-model/`) 단계 9개(필지 후보 · 대상 필지 확정(사람) · 수집 · 좌표 통일 · 도로와 접도 · 지형 · 건물 매스 · 대지 요약 · Rhino에 만들기), 공식 작업 jig 적재(`officialJigRoot`, `builtin`·`official`, T-209의 `vide/buildable-mass`도 JIG 목록·skill 목록에 오름), 입력 종류 `site-data`와 작업본 사본·경로 5개(찾기·대상 필지·가져오기·새 사본 받기·SHP), 사람 단계 `confirm-target`과 만들기 점검 `target-confirmed`, 화면 부품 `site-picker`(전송 고지 카드·끄기, 후보 질문 카드와 위치 그림, 합필, 다시 가져오기의 바뀐 항목), 말로 열기의 주소 읽기, 만들기 8종(대상·대지 경계·주변 필지·도로·건물·지형·등고선·대지 정보), J-01 → `available`. 자체 시험 5건(단일·합필·떨어진 필지·후보 여럿·SHP와 지형), 서울시청 키 실호출: 9단계 모두 계산(필지 191·건물 매스 53, 추정 29·만들지 않음 10, 공부 12709.4 / 계산 12738.9 m² 0.23%). 실제 Rhino 8.35: 12개 만들기 실패 0, 건물 부피 오차 1.9e-8, 측량 좌표 그대로 위치 오차 0 m, 확정 전 `GATE_BLOCKED`, 되돌리기 | `src/jigs/official/jigs/site-model/`, `src/server/site-model-routes.ts`, `src/ui/jig-panel/site-parts.tsx`, `tests/core/site-model-jig.test.mjs`(7건), `tests/integration/browser-site-model.mjs`, `tests/integration/rhino-site-model.mjs`, `tests/integration/site-model-live.mjs`, SPEC-12.3·12.5·12.6, ARCH-03 §2.3·§3·§5.1·§7·§8.3·§11, Design §14 |
+| T-211~T-214 | 계획(2026-10-08 사용자 1단계 착수 승인) | — |
 
 ## 결정이 필요한 질문
 

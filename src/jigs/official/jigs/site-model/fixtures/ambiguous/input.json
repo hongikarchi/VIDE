@@ -1,0 +1,156 @@
+{
+  "site": {
+    "query": "합성시 가나구 가나로 10",
+    "lookup": {
+      "query": "합성시 가나구 가나로 10",
+      "kind": "road",
+      "candidates": [
+        {
+          "pnu": "1199910100100010000",
+          "jibunAddress": "합성시 가나구 가나동 1",
+          "roadAddress": "합성시 가나구 가나로 10",
+          "buildingName": null,
+          "legalDong": "1199910100",
+          "mountain": false,
+          "main": 1,
+          "sub": 0,
+          "source": "juso",
+          "landCategory": "대",
+          "officialArea": 600,
+          "point": [200010, 550015],
+          "matchesInput": null,
+          "assembled": false,
+          "verified": true
+        },
+        {
+          "pnu": "1199910100100010001",
+          "jibunAddress": "합성시 가나구 가나동 1-1",
+          "roadAddress": "합성시 가나구 가나로 10",
+          "buildingName": null,
+          "legalDong": "1199910100",
+          "mountain": false,
+          "main": 1,
+          "sub": 1,
+          "source": "juso",
+          "landCategory": "대",
+          "officialArea": null,
+          "point": [200030, 550015],
+          "matchesInput": null,
+          "assembled": false,
+          "verified": true
+        }
+      ],
+      "proposal": null,
+      "status": "ambiguous",
+      "checks": [],
+      "fetchedAt": "2026-10-08T03:00:00.000Z",
+      "provenance": [
+        {
+          "service": "vide/site-data",
+          "source": "juso",
+          "requests": [
+            {
+              "endpoint": "https://business.juso.go.kr/addrlink/addrLinkApi.do",
+              "params": {
+                "currentPage": "1",
+                "countPerPage": "100",
+                "keyword": "합성시 가나구 가나로 10",
+                "resultType": "json"
+              }
+            }
+          ],
+          "ids": [],
+          "basis": "source"
+        },
+        {
+          "service": "vide/site-data",
+          "source": "vworld-cadastral",
+          "requests": [
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LP_PA_CBND_BUBUN",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "true",
+                "size": "10",
+                "page": "1",
+                "attrFilter": "pnu:=:1199910100100010000"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/req/data",
+              "params": {
+                "service": "data",
+                "request": "GetFeature",
+                "data": "LP_PA_CBND_BUBUN",
+                "format": "json",
+                "crs": "EPSG:5186",
+                "geometry": "true",
+                "size": "10",
+                "page": "1",
+                "attrFilter": "pnu:=:1199910100100010001"
+              }
+            }
+          ],
+          "layers": ["LP_PA_CBND_BUBUN"],
+          "ids": [],
+          "basis": "source"
+        },
+        {
+          "service": "vide/site-data",
+          "source": "vworld-land-characteristics",
+          "requests": [
+            {
+              "endpoint": "https://api.vworld.kr/ned/data/getLandCharacteristics",
+              "params": {
+                "pnu": "1199910100100010000",
+                "stdrYear": "2026",
+                "format": "json",
+                "numOfRows": "100",
+                "pageNo": "1"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/ned/data/getLandCharacteristics",
+              "params": {
+                "pnu": "1199910100100010000",
+                "stdrYear": "2025",
+                "format": "json",
+                "numOfRows": "100",
+                "pageNo": "1"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/ned/data/getLandCharacteristics",
+              "params": {
+                "pnu": "1199910100100010001",
+                "stdrYear": "2026",
+                "format": "json",
+                "numOfRows": "100",
+                "pageNo": "1"
+              }
+            },
+            {
+              "endpoint": "https://api.vworld.kr/ned/data/getLandCharacteristics",
+              "params": {
+                "pnu": "1199910100100010001",
+                "stdrYear": "2025",
+                "format": "json",
+                "numOfRows": "100",
+                "pageNo": "1"
+              }
+            }
+          ],
+          "ids": [],
+          "basis": "source"
+        }
+      ]
+    },
+    "targets": { "pnus": [], "by": null },
+    "collection": null,
+    "shp": null
+  }
+}

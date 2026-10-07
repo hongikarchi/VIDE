@@ -1,0 +1,38 @@
+{
+  "tolerance": { "length": 0.001, "ratio": 0.001 },
+  "steps": {
+    "candidates": {
+      "status": "ok",
+      "proposal": "1199910100100010000",
+      "targets": ["1199910100100010000"],
+      "question": null
+    },
+    "frame": {
+      "origin": [200010, 550015, 0],
+      "offset": [200010, 550015, 0],
+      "site": { "area": 600, "pieces": 1, "separated": false }
+    },
+    "roads": {
+      "contact_m": 20,
+      "roads": [{ "direction": "남", "widthMin_m": 10, "widthAvg_m": 10, "contact_m": 20 }]
+    },
+    "terrain": { "included": false },
+    "buildings": {
+      "count": 2,
+      "estimated": 0,
+      "maxHeight_m": 17.5,
+      "buildings": [
+        { "height": 17.5, "heightSource": "건물 정보", "onSite": true },
+        { "height": 10.2, "heightSource": "대장", "onSite": false }
+      ]
+    },
+    "summary": {
+      "officialArea_m2": 600,
+      "computedArea_m2": 600,
+      "areaGap_pct": 0,
+      "buildings": 2,
+      "siteInfo": [{ "key": "site-info", "point": [0, 0, 0], "originSurvey": "200010, 550015" }]
+    }
+  },
+  "statuses": { "confirmTarget": "confirmed", "make": "waiting" }
+}

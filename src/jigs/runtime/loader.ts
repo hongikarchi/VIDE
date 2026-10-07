@@ -1,6 +1,7 @@
 // Loading and the registry (ARCH-03 §1·§2): read a package folder, list its files, compute the
 // digest (§12), validate the manifest against the files and the official libraries, and keep one
-// list of what this VIDE can run — official libraries (built in), installed packages
+// list of what this VIDE can run — official libraries and official tool jigs
+// (`src/jigs/official/jigs/<name>/`, source `builtin`, both built in), installed packages
 // (`jig_packages`, digest checked on load) and, in a repository checkout, the jig sources under
 // `extensions/jigs/` (source `dev-source`, never in the installed build).
 
@@ -232,39 +233,61 @@ export function repositoryJigRoot(): string | undefined {
   return existsSync(root) ? root : undefined;
 }
 
+/** Official tool jigs (`vide/*`, ARCH-03 §2.3): built in, updated with the installed VIDE. */
+export function officialJigRoot(): string {
+  return resolve(here, '..', 'official', 'jigs');
+}
+
+/** Folders under a root that hold a `jig.json`, with the id and version each declares. */
+function packagesUnder(roots: readonly string[]): { dir: string; id: string; version: string }[] {
+  const out: { dir: string; id: string; version: string }[] = [];
+  for (const root of roots) {
+    if (!existsSync(root)) continue;
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const dir = join(root, entry.name);
+      try {
+        const raw = JSON.parse(readFileSync(join(dir, 'jig.json'), 'utf8')) as {
+          id?: unknown;
+          version?: unknown;
+        };
+        if (typeof raw.id === 'string' && typeof raw.version === 'string')
+          out.push({ dir, id: raw.id, version: raw.version });
+      } catch {
+        /* not a jig folder */
+      }
+    }
+  }
+  return out;
+}
+
 /** One list of runnable jigs; resolves a jig by id (and version) to its loaded package. */
 export class JigRegistry {
   private readonly store: JigStore | undefined;
   private readonly dataDir: string;
   private readonly devRoots: string[];
+  private readonly officialRoots: string[];
   private readonly loaded = new Map<string, Promise<LoadedJig>>();
-  constructor(options: { store?: JigStore; dataDir: string; devRoots?: string[] }) {
+  constructor(options: {
+    store?: JigStore;
+    dataDir: string;
+    devRoots?: string[];
+    /** Official tool jig roots; default the built-in folder. */
+    officialRoots?: string[];
+  }) {
     this.store = options.store;
     this.dataDir = options.dataDir;
     this.devRoots = options.devRoots ?? [];
+    this.officialRoots = options.officialRoots ?? [officialJigRoot()];
   }
 
   /** Repository jig folders that hold a `jig.json`, with the id and version each declares. */
-  private devPackages(): { dir: string; id: string; version: string }[] {
-    const out: { dir: string; id: string; version: string }[] = [];
-    for (const root of this.devRoots) {
-      if (!existsSync(root)) continue;
-      for (const entry of readdirSync(root, { withFileTypes: true })) {
-        if (!entry.isDirectory()) continue;
-        const dir = join(root, entry.name);
-        try {
-          const raw = JSON.parse(readFileSync(join(dir, 'jig.json'), 'utf8')) as {
-            id?: unknown;
-            version?: unknown;
-          };
-          if (typeof raw.id === 'string' && typeof raw.version === 'string')
-            out.push({ dir, id: raw.id, version: raw.version });
-        } catch {
-          /* not a jig folder */
-        }
-      }
-    }
-    return out;
+  private devPackages() {
+    return packagesUnder(this.devRoots);
+  }
+  /** Official tool jigs (only `vide/*` ids count). */
+  private officialPackages() {
+    return packagesUnder(this.officialRoots).filter((p) => p.id.startsWith('vide/'));
   }
 
   async list(): Promise<RegistryEntry[]> {
@@ -280,6 +303,30 @@ export class JigRegistry {
         stage: 'official',
         capabilities: [],
       });
+    for (const official of this.officialPackages()) {
+      try {
+        const jig = await this.load(official.dir, 'builtin', undefined, `official:${official.dir}`);
+        entries.push({
+          ...summary(jig),
+          stage: 'official',
+          path: official.dir,
+          digest: jig.digest,
+        });
+      } catch {
+        entries.push({
+          id: official.id,
+          version: official.version,
+          kind: 'tool',
+          name: official.id,
+          summary: '',
+          source: 'builtin',
+          stage: 'official',
+          path: official.dir,
+          capabilities: [],
+          corrupt: true,
+        });
+      }
+    }
     for (const row of this.store?.packages() ?? []) {
       try {
         const jig = await this.load(row.path, row.source, row.digest, `${row.id}@${row.version}`);
@@ -345,8 +392,15 @@ export class JigRegistry {
       if (key.startsWith(`${id}@${version}`) || key.startsWith('dev:')) this.loaded.delete(key);
   }
 
-  /** Installed first, then repository sources; without a version the newest installed one. */
+  /**
+   * Official jigs (built in) for `vide/*` ids, else installed first, then repository sources;
+   * without a version the newest installed one.
+   */
   async resolve(id: string, version?: string): Promise<LoadedJig> {
+    const official = this.officialPackages()
+      .filter((p) => p.id === id && (!version || p.version === version))
+      .at(-1);
+    if (official) return this.load(official.dir, 'builtin', undefined, `official:${official.dir}`);
     const rows = this.store?.packages(id) ?? [];
     const row = version ? rows.find((r) => r.version === version) : rows.at(-1);
     if (row) return this.load(row.path, row.source, row.digest, `${row.id}@${row.version}`);

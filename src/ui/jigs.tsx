@@ -780,9 +780,11 @@ function Gallery({ context }: { context: JigContext }) {
   }, [projectId, loaded]);
   // One card per jig: installed jigs show only in the project they are pinned to, at that version.
   const tools = useMemo(() => listedTools(packages, pinned), [packages, pinned]);
-  const official = (legacy?.length ?? 0) + tools.filter((t) => sourceOf(t) === 'official').length;
+  // A catalogue entry that is now an official tool jig (J-01 → vide/site-model) shows as its tool card.
+  const shownLegacy = (legacy ?? []).filter((jig) => !tools.some((tool) => tool.id === jig.id));
+  const official = shownLegacy.length + tools.filter((t) => sourceOf(t) === 'official').length;
   const counts: Record<Source, number> = {
-    all: (legacy?.length ?? 0) + tools.length + drafts.length,
+    all: shownLegacy.length + tools.length + drafts.length,
     official,
     project: tools.filter((t) => sourceOf(t) === 'project').length,
     draft: drafts.length,
@@ -1027,7 +1029,7 @@ function Gallery({ context }: { context: JigContext }) {
         <div className="jig-grid">
           {listed('project') ? tools.filter((t) => sourceOf(t) === 'project').map(toolCard) : null}
           {listed('official')
-            ? (legacy ?? []).map((jig) => {
+            ? shownLegacy.map((jig) => {
                 const kind = legacyKind(`legacy:${jig.id}`);
                 return (
                   <article

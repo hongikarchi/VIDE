@@ -32,6 +32,7 @@ export const PART_NAMES = [
   'conflict-banner',
   'report',
   'ledger',
+  'site-picker',
 ] as const;
 export type PartName = (typeof PART_NAMES)[number];
 
@@ -217,6 +218,14 @@ export const PART_PROPS = {
       columns: z.array(column).min(1).max(12).optional(),
     })
     .strict(),
+  // 대상 필지 고르기 (SPEC-12.3, PLAN-45 T-207): a `site-data` input's notice, address search,
+  // candidate question card, chosen parcels, collect and SHP put-in.
+  'site-picker': z
+    .object({
+      input: z.string().regex(new RegExp(`^inputs\\.${WORD}$`)),
+      title: title.optional(),
+    })
+    .strict(),
 } satisfies Record<PartName, z.ZodType>;
 
 /** Parts not built yet: listed, but a panel that uses them is refused (none since T-057). */
@@ -236,6 +245,7 @@ export const PLACES = {
     'verdict-legend',
     'bake-card',
     'conflict-banner',
+    'site-picker',
   ],
   views: ['viewport-overlay', 'plan-map', 'report'],
   board: ['slider-board'],

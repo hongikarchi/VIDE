@@ -108,6 +108,7 @@ const bakeHints: Record<string, string> = {
   'layer-scope': '출력 레이어 밖에는 만들지 않습니다',
   'bake-args-safe': '키·부호 문자에 허용되지 않는 글자가 있습니다',
   'analysis-confirmed': '해석을 확정한 뒤 만드세요',
+  'target-confirmed': '대상 필지를 확정한 뒤 만드세요',
 };
 
 // A diagnosis has no cap on the Syncs, layers or objects it reads (ADR-031 7).

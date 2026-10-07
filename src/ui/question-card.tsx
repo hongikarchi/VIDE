@@ -66,6 +66,7 @@ export function Card({
   choice,
   choose,
   disabled,
+  freeLabel,
 }: {
   question: TurnQuestion;
   index: number;
@@ -73,6 +74,8 @@ export function Card({
   choice: Choice;
   choose: (choice: Choice) => void;
   disabled: boolean;
+  /** The free answer field's placeholder (default: 직접 적기). */
+  freeLabel?: string;
 }) {
   const recommended = question.options.find((option) => option.recommended)?.id;
   return (
@@ -111,7 +114,7 @@ export function Card({
           type="text"
           maxLength={500}
           disabled={disabled}
-          placeholder="직접 적기 (선택)"
+          placeholder={freeLabel ?? '직접 적기 (선택)'}
           value={choice.text ?? ''}
           onChange={(event) => choose({ ...choice, text: event.target.value })}
         />
