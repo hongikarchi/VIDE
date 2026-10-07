@@ -8,9 +8,17 @@
 // largest outline whose prism fits between the floor's bottom and top. The floor outline is that
 // top section; `floorFits` checks it against the envelope in the tests.
 
-import { signedArea, type Polygon, type Vec2, type Vec3 } from '../geometry-kit/plan.ts';
+import {
+  pointInPolygon,
+  signedArea,
+  type Polygon,
+  type Vec2,
+  type Vec3,
+} from '../geometry-kit/plan.ts';
+import { boundaryDistance, segmentsCross } from '../geometry-kit/polygon.ts';
 import {
   prismSolid,
+  regionPrismSolid,
   solidIntersect,
   solidPolygon,
   solidSubtract,
@@ -19,7 +27,14 @@ import {
   type Solid,
   type SolidMesh,
 } from '../geometry-kit/solid.ts';
-import { ARC_SIDES, buildableArea, slabRegions, type Cutter, type PlanRegion } from './setback.ts';
+import {
+  ARC_SIDES,
+  buildableArea,
+  cutSlab,
+  slabRegions,
+  type Cutter,
+  type PlanRegion,
+} from './setback.ts';
 
 const r6 = (x: number) => Math.round(x * 1e6) / 1e6;
 
@@ -33,41 +48,90 @@ export const regionsArea = (regions: readonly PlanRegion[]) =>
     0,
   );
 
-/** Closed solid of a plan region between z0 and z1 (holes subtracted). */
+/**
+ * Closed solid of a plan region between z0 and z1: the prism with holes built directly (T-214
+ * F-6), or — when its rings cannot be triangulated — the outer prism less the hole prisms.
+ */
 export function regionSolid(region: PlanRegion, z0: number, z1: number): Solid {
-  const outer = prismSolid(region.outer, z0, z1);
-  if (!region.holes.length) return outer;
-  return solidSubtract(
-    outer,
-    solidUnionAll(region.holes.map((h) => prismSolid(h, z0 - 1, z1 + 1))),
-  );
+  try {
+    return regionPrismSolid(region.outer, region.holes, z0, z1);
+  } catch {
+    const outer = prismSolid(region.outer, z0, z1);
+    if (!region.holes.length) return outer;
+    return solidSubtract(
+      outer,
+      solidUnionAll(region.holes.map((h) => prismSolid(h, z0 - 1, z1 + 1))),
+    );
+  }
 }
 const regionsSolid = (regions: readonly PlanRegion[], z0: number, z1: number) =>
   solidUnionAll(regions.map((r) => regionSolid(r, z0, z1)));
 
+/** The same outline on several floors is one region (no boolean of coincident prisms, T-214 F-6). */
+const distinct = (lists: readonly (readonly PlanRegion[])[]) => [
+  ...new Map(lists.flat().map((r) => [JSON.stringify(r), r])).values(),
+];
+
 /** Area of the union of several region lists in plan (건축면적 = 수평 투영 면적). */
 export function unionArea(lists: readonly (readonly PlanRegion[])[]) {
-  const all = lists.flat();
+  const all = distinct(lists);
   if (!all.length) return 0;
+  if (all.length === 1) return regionsArea(all);
   return Math.max(0, solidVolume(regionsSolid(all, 0, 1)));
 }
 
 /** Plan regions of the union of several region lists. */
 export function unionRegions(lists: readonly (readonly PlanRegion[])[]): PlanRegion[] {
-  const all = lists.flat();
+  const all = distinct(lists);
   if (!all.length) return [];
-  return slabRegions(regionsSolid(all, 0, 1), 1);
+  if (all.length === 1) return [...all];
+  // Retried in the other order when the faces do not close (T-214 F-6).
+  try {
+    return slabRegions(regionsSolid(all, 0, 1), 1);
+  } catch (error) {
+    try {
+      return slabRegions(regionsSolid([...all].reverse(), 0, 1), 1);
+    } catch {
+      throw error;
+    }
+  }
 }
 
-/** Regions minus regions (plan). */
+/** Regions minus regions (plan), retried in another order when the faces do not close. */
 export function subtractRegions(
   from: readonly PlanRegion[],
   cut: readonly PlanRegion[],
 ): PlanRegion[] {
   if (!from.length) return [];
   if (!cut.length) return [...from];
-  const left = solidSubtract(regionsSolid(from, 0, 1), regionsSolid(cut, -1, 2));
-  return left.length ? slabRegions(left, 1) : [];
+  try {
+    return cutSlab(
+      regionsSolid(from, 0, 1),
+      cut.map((r) => regionSolid(r, -1, 2)),
+      1,
+    ).regions;
+  } catch (error) {
+    // One region less disjoint regions strictly inside it (the ground left around the floor
+    // outlines, T-214 F-6): the cuts are its holes, no boolean needed.
+    const [outer] = from;
+    const inside = (ring: readonly Vec2[]) =>
+      ring.every(
+        (p) => pointInPolygon(p, outer.outer, 0) && boundaryDistance(p, outer.outer) > 1e-6,
+      ) &&
+      ring.every((p, i) => {
+        const q = ring[(i + 1) % ring.length];
+        return outer.outer.every(
+          (a, j) => !segmentsCross(p, q, a, outer.outer[(j + 1) % outer.outer.length], 0),
+        );
+      });
+    if (
+      from.length === 1 &&
+      !outer.holes.length &&
+      cut.every((r) => !r.holes.length && inside(r.outer))
+    )
+      return [{ outer: outer.outer, holes: cut.map((r) => r.outer) }];
+    throw error;
+  }
 }
 
 /** Regions ∩ regions (plan). */
@@ -133,6 +197,13 @@ export function floorRegions(envelope: Solid, site: Polygon, z0: number, z1: num
     [Math.max(...xs) + pad, Math.max(...ys) + pad],
     [Math.min(...xs) - pad, Math.max(...ys) + pad],
   ];
+  // A vertical prism (no 일조 사선: 최대 = 돌출 외피) has the same outline at every height: its top
+  // face, without a boolean (T-214 F-6).
+  const zs = new Set(envelope.flatMap((p) => p.v.map((v) => v[2])));
+  if (zs.size === 2) {
+    const top = Math.max(...zs);
+    if (z1 <= top + 1e-9) return slabRegions(envelope, top);
+  }
   const slab = solidIntersect(envelope, prismSolid(box, z0, z1));
   return slab.length ? slabRegions(slab, z1) : [];
 }

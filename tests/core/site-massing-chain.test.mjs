@@ -133,9 +133,16 @@ test('synthetic chain: address → site model → legal → buildable mass → �
   const kept = JSON.stringify([site.report.outputs, out.handoff, s, summary.page.html]);
   for (const key of Object.values(KEYS)) assert.ok(!kept.includes(key), 'no key in the chain');
 
-  // The zoning changes: the 일조 answer is '다시 확인 필요'. (The mass instance is not marked by
-  // this by itself — VERIFY-2026-10-08-site-massing 「발견」 — the next run reads it.)
+  // The legal input card: the service gives it (nothing to pick), current after the run.
+  const legalCard = () => f.runtime.jigOutputState(f.project.id, mass.id, 'legal');
+  const card = await legalCard();
+  assert.deepEqual([card.service, card.ready, card.stale], [true, true, false]);
+  assert.deepEqual(card.candidates, []);
+
+  // The zoning changes: the 일조 answer is '다시 확인 필요', so `legal.constraints` moves and the
+  // mass instance's legal card says '다시 계산 필요' before anything runs (VERIFY F-8).
   f.legal.updateProfile(f.project.id, { values: { 'site.zoning': { value: '일반상업지역' } } });
+  assert.equal((await legalCard()).stale, true);
   // Computed again: the 일조 numbers leave, the envelope changes, the 고른 대안 waits for the
   // person again and its handed-over result is no longer current (stale, not 'done').
   const again = await f.runtime.run(f.project.id, mass.id, { mode: 'confirmed' });
@@ -145,6 +152,7 @@ test('synthetic chain: address → site model → legal → buildable mass → �
     regs.legal.left.some((l) => l.key === 'sunlight.baseHeight' && l.reason === '다시 확인 필요'),
   );
   assert.equal(statusOf(again, 'confirmChoice'), 'reconfirm');
+  assert.equal((await legalCard()).stale, false, 'computed on the new legal result');
   const view = await f.runtime.view(f.project.id, mass.id);
   assert.equal(view.steps.find((s) => s.id === 'handoff').status, 'stale');
 
@@ -154,6 +162,66 @@ test('synthetic chain: address → site model → legal → buildable mass → �
   assert.match(stepOf(rerun, 'sources').error.message, /다시 계산 필요/);
   const refused = (await f.jig('GET', `${f.base}/${summary.id}/reports/summary`)).data;
   assert.ok(refused.model.exportRefused?.length, 'export refused');
+});
+
+test('F-9: the mass reads 정북 from the site model; a person who picks 진북·도북 overrides it', async (t) => {
+  const f = await engine(t);
+  await f.client.meta();
+  const site = await siteModel(f, { query: ADDRESS });
+  const summary = site.report.outputs.summary;
+  assert.equal(summary.northBasis, 'true');
+  assert.ok(Number.isFinite(summary.convergenceDeg));
+  const rows = siteLayerRows(site.report.outputs, 'VIDE::대지');
+  // '사이트 모델링 따름' (the default): the site model's 진북 and convergence, sign as its frame
+  // (true north = +Y turned counter-clockwise by the convergence).
+  const followed = await buildableMass(f, {
+    model: { scene: rows },
+    title: '따름',
+    params: { northBasis: 'site', convergenceDeg: 3 },
+  });
+  const s = followed.report.outputs.site;
+  assert.equal(s.northBasis, 'true');
+  assert.ok(Math.abs(s.northDeg + summary.convergenceDeg) < 1e-12, `${s.northDeg}`);
+  const frameNorth = site.report.outputs.frame.trueNorth;
+  assert.ok(
+    Math.abs(s.north[0] - frameNorth[0]) < 1e-8 && Math.abs(s.north[1] - frameNorth[1]) < 1e-8,
+  );
+  assert.match(s.northSource, /사이트 모델링/);
+  const card = await f.runtime.jigOutputState(f.project.id, followed.id, 'siteModel');
+  assert.deepEqual([card.ready, card.current.title, card.stale], [true, '대지', false]);
+  // The person's choice wins: 도북 → +Y; 진북 → the typed convergence.
+  const grid = await buildableMass(f, {
+    model: { scene: rows },
+    title: '도북',
+    params: { northBasis: 'grid' },
+  });
+  assert.equal(grid.report.outputs.site.northDeg, 0);
+  const typed = await buildableMass(f, {
+    model: { scene: rows },
+    title: '진북',
+    params: { northBasis: 'true', convergenceDeg: 0.5 },
+  });
+  assert.equal(typed.report.outputs.site.northDeg, 0.5);
+  assert.match(typed.report.outputs.site.northSource, /사람이 고른/);
+});
+
+test('F-7 stays as is but is named: a 일조 기준선 almost square to north is 판단 필요', async () => {
+  const { limitStep, regulationStep, siteStep } =
+    await import('../../src/jigs/official/massing-kit/index.ts');
+  const { SITES, paramsOf } = await import('../fixtures/massing-sites.mjs');
+  const rect = SITES[0];
+  // The east boundary leans north by 0.001° under this north: it becomes a datum, as before.
+  const params = { ...paramsOf(rect), sunDatumRoad: 'boundary', convergenceDeg: 0.001 };
+  const own = rect.inputs.site;
+  const s = siteStep({ site: own }, params);
+  const limits = limitStep({
+    site: own,
+    steps: { site: s, regulations: regulationStep({}, params) },
+  });
+  const named = limits.unresolved.filter((u) => /정북과 거의 수직인 구간/.test(u.reason));
+  assert.equal(named.length, 1);
+  assert.match(named[0].reason, /^판단 필요 — /);
+  assert.ok(limits.sun.datum.length >= 2, 'the near-square segment is still a datum');
 });
 
 test('no keys: the address is not looked up, a typed PNU collects nothing and the later steps wait', async (t) => {

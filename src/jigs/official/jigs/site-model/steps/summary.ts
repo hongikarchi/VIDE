@@ -31,6 +31,8 @@ export interface SummaryOutput {
   roads: string;
   convergenceDeg: number;
   north: string;
+  /** 정북 기준 as a value ('true' 진북 · 'grid' 도북): what `vide/buildable-mass` reads (T-214 F-9). */
+  northBasis: 'true' | 'grid';
   relief_m: number | null;
   buildings: number;
   maxHeight_m: number;
@@ -211,6 +213,7 @@ export function summary(inputs: {
     roads: roads.text,
     convergenceDeg: frame.convergenceDeg,
     north,
+    northBasis: frame.northBasis,
     relief_m: terrain.relief_m,
     buildings: buildings.count,
     maxHeight_m: buildings.maxHeight_m,

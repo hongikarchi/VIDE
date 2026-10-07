@@ -205,6 +205,16 @@ try {
   await recompute.click();
   await rail(massPanel, 'confirmChoice', 'confirmed').waitFor();
   await rail(massPanel, 'handoff', 'done').waitFor();
+  // The two earlier results the mass reads (VERIFY-2026-10-08 F-8·F-9): the legal service's
+  // current result (nothing to pick, current) and the site model's 대지 요약.
+  const legalCard = massPanel.locator('.jig-source[aria-label="법규 결과(규제 조건)"]');
+  await legalCard.locator('.jig-source-current').waitFor();
+  assert.match(await legalCard.textContent(), /서비스가 주는 현재 결과/);
+  assert.equal(await legalCard.locator('select').count(), 0);
+  assert.equal(await legalCard.getAttribute('data-stale'), null);
+  const modelCard = massPanel.locator('.jig-source[aria-label="대지 요약(사이트 모델링)"]');
+  await modelCard.locator('.jig-source-current').waitFor();
+  assert.match(await modelCard.textContent(), /대지/);
   const regulations = (await engine(`${massBase}/steps/regulations/output`)).output;
   const sunNear = regulations.items.find((i) => i.id === 'sunNearDistance');
   assert.deepEqual([sunNear.value, sunNear.origin], [1.5, '서비스 확정']);

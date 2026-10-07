@@ -1,7 +1,7 @@
 {
   "contractVersion": 3,
   "id": "vide/buildable-mass",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "kind": "tool",
   "name": "건축 가능 영역·매스",
   "summary": "대지와 규제 조건으로 2D 건축 가능 영역·3D 가능 외피를 계산하고, 층을 나눠 대안(최대·기준 용적률·인센티브·공개공지·사람 수정)을 비교해 하나를 고르며 용도·주차·조경을 본다. 탐색용 규모검토로 인허가 도서·면적 산정·법규 검토를 대체하지 않는다.",
@@ -144,6 +144,15 @@
       "from": {
         "jig": "vide/legal",
         "output": "constraints"
+      }
+    },
+    {
+      "key": "siteModel",
+      "title": "대지 요약(사이트 모델링)",
+      "kind": "jig-output",
+      "from": {
+        "jig": "vide/site-model",
+        "output": "summary"
       }
     }
   ],
@@ -922,10 +931,15 @@
     {
       "key": "northBasis",
       "title": "정북 기준",
+      "help": "사이트 모델링 따름: 사이트 모델링 결과의 정북 기준과 격자 수렴각을 씀(없으면 진북과 아래 수렴각). 진북·도북을 고르면 아래 설정값을 씀",
       "group": "계획 조건",
       "type": "choice",
-      "default": "true",
+      "default": "site",
       "choices": [
+        {
+          "value": "site",
+          "label": "사이트 모델링 따름"
+        },
         {
           "value": "true",
           "label": "진북"
@@ -955,7 +969,7 @@
       },
       "basis": {
         "status": "assumed",
-        "note": "사이트 모델링 또는 사람이 확인"
+        "note": "사람이 진북·도북을 고르거나 사이트 모델링 결과가 없을 때 씀(사이트 모델링 문서의 +Y는 도북)"
       },
       "affects": ["site"]
     },
@@ -973,7 +987,7 @@
       },
       "basis": {
         "status": "assumed",
-        "note": "사이트 모델링의 대지 정보 또는 사람이 확인"
+        "note": "사람이 진북을 고르거나 사이트 모델링 결과가 없을 때 씀; 사이트 모델링 따름이면 그 결과의 수렴각"
       },
       "affects": ["site"]
     },
@@ -1740,6 +1754,7 @@
         "input.site.boundary",
         "input.site.roads",
         "input.site.neighbors",
+        "input.siteModel",
         "param.segmentTolerance",
         "param.northBasis",
         "param.gridNorthDeg",

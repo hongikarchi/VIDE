@@ -738,6 +738,7 @@
       "roads": "남측 2 폭 최소 10.00 m · 평균 10.00 m · 접도 20 m",
       "convergenceDeg": 0.000069,
       "north": "진북 기준 (도북과 0.000° 차이)",
+      "northBasis": "true",
       "relief_m": null,
       "buildings": 2,
       "maxHeight_m": 17.5,

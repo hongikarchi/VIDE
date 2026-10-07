@@ -361,8 +361,8 @@ except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback
     buildableMass(f, {
       boundary,
       title,
-      // The site model's 진북 correction, typed by the person (the mass jig does not read it).
-      params: { convergenceDeg: so.frame.convergenceDeg ?? 0, northBasis: 'true', ...params },
+      // 정북 from the site model's summary (VERIFY-2026-10-08 F-9), not typed by the person.
+      params: { northBasis: 'site', ...params },
       layerRoot: MASS_ROOT,
       readFrom: async (instanceId, layers) => {
         const started = performance.now();
@@ -400,6 +400,8 @@ except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback
       'done',
       `${id}: ${JSON.stringify(mass.report.steps.find((s) => s.id === id)?.error)}`,
     );
+  assert.match(mo.site.northSource, /사이트 모델링/);
+  assert.ok(Math.abs(mo.site.northDeg + (so.frame.convergenceDeg ?? 0)) < 1e-12);
   const sunItem = mo.regulations.items.find((i) => i.id === 'sunNearDistance');
   assert.deepEqual([sunItem.value, sunItem.origin], [1.5, '서비스 확정']);
   result.mass = {
@@ -407,6 +409,11 @@ except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback
     segments: mo.site.segments.map((s) => s.kind).join(','),
     alternatives: mo.alternatives.rows.map((r) => `${r.id} ${r.floorsAbove}F ${r.farArea}`),
     unresolved: mo.limits.unresolved.length,
+    roadSetback: mo.regulations.items.find((i) => i.id === 'roadSetback')?.applies,
+    buildableArea_m2: mo.buildable.area,
+    envelopes: mo.envelope.variants[0].envelopes.map((e) => `${e.kind} ${e.volume}`),
+    north: `${mo.site.northBasis} ${mo.site.northDeg}° (${mo.site.northSource})`,
+    squareDatum: mo.limits.unresolved.filter((u) => /정북과 거의 수직/.test(u.reason)).length,
   };
 
   // 7. Rhino에 만들기 of the masses: closed outward solids with the engine's volumes.

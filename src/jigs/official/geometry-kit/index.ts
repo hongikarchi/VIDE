@@ -3,7 +3,7 @@
 // step and a step-runner bundle can carry a copy (with `delaunator` and `@kninnug/constrainautor`,
 // its only dependencies). Project-specific rules do not belong here.
 
-export const library = { id: 'vide/geometry-kit', version: '0.2.2' } as const;
+export const library = { id: 'vide/geometry-kit', version: '0.2.3' } as const;
 
 export {
   GeometryError,
@@ -50,7 +50,7 @@ export {
   segmentsCross,
 } from './polygon.ts';
 export type { Region } from './polygon.ts';
-export { cellPolygon, triangulate, triangulateRegion } from './triangulate.ts';
+export { cellPolygon, regionTriangles, triangulate, triangulateRegion } from './triangulate.ts';
 export type {
   DiagonalRule,
   RemovedReason,
@@ -79,12 +79,14 @@ export {
   SHORT_EDGE,
   SOLID_EPS,
   checkSolid,
+  cleanRing,
   earClip,
   facesVolume,
   loftSolid,
   mergeCoplanar,
   planeOf,
   prismSolid,
+  regionPrismSolid,
   reversedMesh,
   sectionArea,
   solidIntersect,

@@ -21,6 +21,8 @@
     "zones": { "type": "string" },
     "roads": { "type": "string" },
     "fetchedAt": { "type": ["string", "null"] },
+    "convergenceDeg": { "type": "number" },
+    "northBasis": { "enum": ["true", "grid"] },
     "rows": {
       "type": "array",
       "items": {

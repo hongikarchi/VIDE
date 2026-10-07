@@ -762,6 +762,16 @@ export class JigRuntime {
     return inputs;
   }
   /**
+   * What a registered producer gives for a `jig-output` input (the legal jig's
+   * `legal.constraints`) with the fingerprint of its content; null when none is registered or it
+   * gives nothing. The fingerprint is what '다시 계산 필요' compares (SPEC-07.5 6, T-214 F-8).
+   */
+  private async providedOutput(projectId: string, from: { jig: string; output: string }) {
+    const value = await this.jigOutput?.(projectId, from);
+    if (value === undefined || value === null) return null;
+    return { value, hash: `service:${from.jig}#${from.output}:${hashValue(value)}` };
+  }
+  /**
    * A `jig-output` input's value: what a registered producer gives (the legal jig's
    * `legal.constraints`, fingerprinted by its content); else the earlier instance of that jig in
    * the project with its source (§8.5); null when there is neither.
@@ -771,8 +781,8 @@ export class JigRuntime {
     input: { key: string; from: { jig: string; output: string } },
     body: InstanceBody,
   ) {
-    const provided = await this.jigOutput?.(projectId, input.from);
-    if (provided !== undefined && provided !== null) return provided;
+    const provided = await this.providedOutput(projectId, input.from);
+    if (provided) return provided.value;
     const source = await this.resolveJigOutput(projectId, input, body.jigOutputs?.[input.key]);
     if (!source.info && !this.store.instances(projectId).some((r) => r.jigId === input.from.jig))
       return null;
@@ -981,6 +991,32 @@ export class JigRuntime {
     const input = jig.manifest.inputs.find((i) => i.key === key);
     if (!input || input.kind !== 'jig-output') throw new DomainError('NOT_FOUND');
     const body = bodyOf(instance.body);
+    const used = body.jigOutputsUsed?.[key] ?? null;
+    // A service gives the value (법규 서비스 → `legal.constraints`): no earlier instance to choose;
+    // '다시 계산 필요' when its content moved since this instance last computed (T-214 F-8).
+    const provided = await this.providedOutput(projectId, input.from);
+    if (provided)
+      return {
+        input: { key: input.key, title: input.title, from: input.from },
+        chosen: null,
+        current: {
+          instanceId: '',
+          title: '서비스 결과',
+          jig: input.from.jig,
+          version: '',
+          updatedAt: '',
+          step: input.from.output,
+          status: 'done' as StepStatus,
+          at: null,
+          hash: provided.hash,
+        },
+        ready: true,
+        reason: null,
+        candidates: [],
+        used,
+        service: true,
+        stale: !!used && used.hash !== provided.hash,
+      };
     const current = await this.resolveJigOutput(projectId, input, body.jigOutputs?.[key]);
     const rows = this.store
       .instances(projectId)
@@ -998,7 +1034,6 @@ export class JigRuntime {
         };
       }),
     );
-    const used = body.jigOutputsUsed?.[key] ?? null;
     return {
       input: { key: input.key, title: input.title, from: input.from },
       chosen: body.jigOutputs?.[key] ?? null,
@@ -1134,7 +1169,10 @@ export class JigRuntime {
     // The earlier jigs' results this run read: a later change shows '다시 계산 필요' (SPEC-07.5 6).
     for (const decl of jig.manifest.inputs) {
       if (decl.kind !== 'jig-output') continue;
-      const used = (await this.resolveJigOutput(projectId, decl, body.jigOutputs?.[decl.key])).info;
+      const provided = await this.providedOutput(projectId, decl.from);
+      const used = provided
+        ? { instanceId: `service:${decl.from.jig}`, hash: provided.hash }
+        : (await this.resolveJigOutput(projectId, decl, body.jigOutputs?.[decl.key])).info;
       if (used?.hash)
         body.jigOutputsUsed = {
           ...(body.jigOutputsUsed ?? {}),

@@ -22,7 +22,7 @@ import {
   regulationStep,
   siteStep,
 } from '../../src/jigs/official/massing-kit/index.ts';
-import { SITES, SLANTED, paramsOf, star } from '../fixtures/massing-sites.mjs';
+import { SITES, SLANTED, nearStraightLot, paramsOf, star } from '../fixtures/massing-sites.mjs';
 import { runDirectory } from './run-directory.mjs';
 
 const probe = sdkOptions('.');
@@ -71,7 +71,8 @@ const execute = async (code) => {
 const result = { directory, sites: [] };
 try {
   worker = await launchRhinoWorker({ ...options, directory: join(directory, 'bake') });
-  const sites = [...SITES, SLANTED, star(16)];
+  // near-straight-1: the many-segment lot of T-214 F-6 (돌출 외피 as a prism of the 2D area).
+  const sites = [...SITES, SLANTED, star(16), nearStraightLot(1, 0.5)];
   for (const site of sites) {
     const out = envelopeOf(site);
     const { items, problems } = extractItems(decl, out);

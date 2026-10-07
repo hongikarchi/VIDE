@@ -9,7 +9,13 @@ import type { AltFloor } from './alternatives.ts';
 import type { AlternativesOutput, FloorsOutput } from './mass-steps.ts';
 import type { ParkingTypeRow, LegalParking } from './parking.ts';
 import type { RegulationItem } from './rules.ts';
-import { STUDY_NOTE, type PlanOutput, type RegulationsOutput, type SiteOutput } from './steps.ts';
+import {
+  SQUARE_DATUM,
+  STUDY_NOTE,
+  type PlanOutput,
+  type RegulationsOutput,
+  type SiteOutput,
+} from './steps.ts';
 import type { FloorUse, UseTotal } from './use-mix.ts';
 
 const r6 = (x: number) => Math.round(x * 1e6) / 1e6;
@@ -202,7 +208,8 @@ export function handoffStep(inputs: Record<string, unknown>): ChosenHandoff {
       ...regs.unconfirmed.map((u) => ({ title: u.title, status: u.status })),
       ...(envelope?.unresolved ?? []).map((u) => ({
         title: `${u.title}: ${u.reason}`,
-        status: '미반영',
+        // Computed with it, the reading open (F-7); everything else was left out.
+        status: SQUARE_DATUM.test(u.reason) ? '판단 필요' : '미반영',
       })),
       ...flags,
     ],

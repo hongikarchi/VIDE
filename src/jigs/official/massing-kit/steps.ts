@@ -91,6 +91,10 @@ function sameRing(a: Line, b: Line, tol: number) {
 const num = (v: unknown, fallback: number) =>
   typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 const r6 = (x: number) => Math.round(x * 1e6) / 1e6;
+/** cos 80°: a 일조 기준선 segment whose outward normal leans north by less is named (F-7). */
+const SQUARE_TO_NORTH = Math.cos((80 * Math.PI) / 180);
+/** The 판단 필요 note of those segments (computed with them, the reading open). */
+export const SQUARE_DATUM = /정북과 거의 수직인 구간/;
 
 // ── 대지 입력 ────────────────────────────────────────────────────────────────────────────────────
 
@@ -105,8 +109,52 @@ export interface SiteOutput {
   north: Vec2;
   northDeg: number;
   northBasis: 'true' | 'grid';
+  /** Where the north came from: the site model's summary or the person's settings (F-9). */
+  northSource: string;
   tolerance: number;
   note: string;
+}
+
+/**
+ * 정북 (SPEC-12.7 1, T-214 F-9): with 정북 기준 '사이트 모델링 따름' (the default) and a computed
+ * `vide/site-model` summary, its basis (진북·도북) and grid convergence (its document +Y is grid
+ * north, so 도북 방향 is 0). A person who picks 진북 or 도북 here overrides it with the settings.
+ * Without a site model result the settings are used (진북, 수렴각 setting).
+ */
+export function northOf(params: Record<string, unknown>, siteModel: unknown) {
+  const summary = (siteModel as { value?: unknown } | null | undefined)?.value as
+    | { convergenceDeg?: unknown; northBasis?: unknown; north?: unknown }
+    | null
+    | undefined;
+  const fromModel =
+    params.northBasis !== 'true' &&
+    params.northBasis !== 'grid' &&
+    summary &&
+    typeof summary.convergenceDeg === 'number' &&
+    Number.isFinite(summary.convergenceDeg);
+  if (fromModel) {
+    const basis =
+      summary.northBasis === 'grid' ||
+      (summary.northBasis === undefined && /^도북/.test(String(summary.north ?? '')))
+        ? 'grid'
+        : 'true';
+    // The site model's convergence is 진북 → 도북 clockwise (its true north is +Y turned
+    // counter-clockwise by it); here the angle is 진북 clockwise from +Y, so the sign flips.
+    return {
+      northBasis: basis as 'true' | 'grid',
+      northDeg: basis === 'true' ? -(summary.convergenceDeg as number) + 0 : 0,
+      northSource: `사이트 모델링 대지 요약(${basis === 'true' ? '진북' : '도북'}, 수렴각 ${summary.convergenceDeg}°)`,
+    };
+  }
+  const basis = params.northBasis === 'grid' ? 'grid' : 'true';
+  return {
+    northBasis: basis as 'true' | 'grid',
+    northDeg: num(params.gridNorthDeg, 0) + (basis === 'true' ? num(params.convergenceDeg, 0) : 0),
+    northSource:
+      params.northBasis === 'true' || params.northBasis === 'grid'
+        ? '사람이 고른 정북 기준과 설정값'
+        : '설정값(사이트 모델링 결과 없음)',
+  };
 }
 
 /**
@@ -149,9 +197,7 @@ export function siteStep(inputs: Record<string, unknown>, params: Record<string,
     (n) => !roads.some((r) => sameRing(n, r, Math.max(tol, 1e-6))),
   );
   const { segments, corners } = boundarySegments(ring, edgesOf(roads), edgesOf(neighbours), tol);
-  const northBasis = params.northBasis === 'grid' ? 'grid' : 'true';
-  const northDeg =
-    num(params.gridNorthDeg, 0) + (northBasis === 'true' ? num(params.convergenceDeg, 0) : 0);
+  const { northBasis, northDeg, northSource } = northOf(params, inputs.siteModel);
   const t = (northDeg * Math.PI) / 180;
   const roadRings = roads.filter((l) => l.closed && l.points.length >= 3).map((l) => l.points);
   return {
@@ -163,6 +209,7 @@ export function siteStep(inputs: Record<string, unknown>, params: Record<string,
     north: [Math.sin(t), Math.cos(t)],
     northDeg,
     northBasis,
+    northSource,
     tolerance: tol,
     note: STUDY_NOTE,
   } satisfies SiteOutput;
@@ -534,6 +581,9 @@ function sunRule(
     }
   else {
     const datumRoad = itemOf(items, 'sunDatumRoad');
+    // A segment whose outward side is almost square to north still counts (its normal leans
+    // north by more than 1e-9): which range of directions is '정북 쪽' is a legal reading not made
+    // yet (VERIFY-2026-10-08 F-7), so such segments are named as 판단 필요, not changed.
     for (const seg of site.segments) {
       const facing = seg.normal[0] * site.north[0] + seg.normal[1] * site.north[1];
       if (!(facing > 1e-9)) continue;
@@ -565,6 +615,17 @@ function sunRule(
           );
       } else miss('sun-ground', '정북 쪽 구간 확인 필요 — 그 구간의 일조 없이 계산', seg.id);
     }
+    const square = site.segments
+      .filter((seg) => datum.some((d) => d.target === seg.id))
+      .filter(
+        (seg) => seg.normal[0] * site.north[0] + seg.normal[1] * site.north[1] < SQUARE_TO_NORTH,
+      )
+      .map((seg) => seg.id);
+    if (square.length)
+      miss(
+        'sun-ground',
+        `판단 필요 — 정북과 거의 수직인 구간(${square.join(', ')}, 바깥 방향이 정북과 80° 넘게 벌어짐)도 일조 기준선으로 계산함: 어느 방향 범위의 경계를 정북 쪽으로 볼지 법규 결과·사람의 결정 필요`,
+      );
   }
   if (distance.value !== 'euclidean' && distance.value !== 'north')
     miss(
@@ -732,7 +793,10 @@ export function envelopeStep(inputs: Record<string, unknown>) {
   const unresolved = [...limits.unresolved];
   const unconfirmed =
     regs.unconfirmed.length +
-    (limits.unresolved.some((u) => u.rule === 'sun-slope' && /거리의 정의/.test(u.reason)) ? 1 : 0);
+    (limits.unresolved.some((u) => u.rule === 'sun-slope' && /거리의 정의/.test(u.reason))
+      ? 1
+      : 0) +
+    (limits.unresolved.some((u) => SQUARE_DATUM.test(u.reason)) ? 1 : 0);
   const items: Record<string, unknown>[] = [];
   const variants = ids.map((id) => {
     const cap = heightCap(regs.items, plan, id === 'base');

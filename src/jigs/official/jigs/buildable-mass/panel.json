@@ -3,6 +3,8 @@
   "left": [
     { "part": "step-rail" },
     { "part": "role-card", "input": "inputs.site" },
+    { "part": "jig-source", "input": "inputs.siteModel" },
+    { "part": "jig-source", "input": "inputs.legal" },
     { "part": "param-group" }
   ],
   "center": {
@@ -138,14 +140,14 @@
         "csv": "경계-구간"
       },
       {
-        "title": "미반영 조건",
+        "title": "미반영·판단 필요 조건",
         "part": "table",
         "from": "step.envelope.unresolved",
         "columns": [
           { "field": "title", "label": "규칙" },
           { "field": "reason", "label": "이유" }
         ],
-        "csv": "미반영-조건"
+        "csv": "미반영-판단필요-조건"
       },
       {
         "title": "규제 조건",

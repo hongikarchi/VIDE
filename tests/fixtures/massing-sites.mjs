@@ -402,6 +402,70 @@ export function star(n) {
   };
 }
 
+/**
+ * A large lot with many short road segments bent by millimetres (T-214 F-6), invented: a 120 × 105
+ * rounded rectangle whose corners are arcs of 3 segments and whose straight sides are split in 6
+ * pieces bent by up to ±5 mm, read back at 1e-5 m (36 segments, every one a road). The 3D 돌출
+ * 외피 of such a lot failed the closed-solid check with any 건축선 후퇴 ('열린 변 3, 비다양체 변
+ * 30', seed 1 at 0.5 m) while the 2D 가능 영역 was computed — the failure of 서울시청 (38 road
+ * segments) on synthetic geometry; no real parcel is used.
+ */
+export function nearStraightLot(seed, setback = 0.5) {
+  let s = seed;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  const W = 120,
+    H = 105,
+    R = 14,
+    arc = 3,
+    pieces = 6,
+    bend = 0.01;
+  const centres = [
+    [W - R, R, -90],
+    [W - R, H - R, 0],
+    [R, H - R, 90],
+    [R, R, 180],
+  ];
+  const pts = [];
+  for (let c = 0; c < 4; c++) {
+    const [cx, cy, a0] = centres[c];
+    for (let k = 0; k <= arc; k++) {
+      const t = ((a0 + (90 * k) / arc) * Math.PI) / 180;
+      pts.push([cx + R * Math.cos(t), cy + R * Math.sin(t)]);
+    }
+    const [x0, y0] = pts[pts.length - 1];
+    const [nx, ny, na] = centres[(c + 1) % 4];
+    const x1 = nx + R * Math.cos((na * Math.PI) / 180),
+      y1 = ny + R * Math.sin((na * Math.PI) / 180);
+    const dx = x1 - x0,
+      dy = y1 - y0,
+      L = Math.hypot(dx, dy);
+    for (let k = 1; k < pieces; k++) {
+      const u = k / pieces + (rnd() - 0.5) * 0.1;
+      const off = (rnd() - 0.5) * bend;
+      pts.push([x0 + dx * u - (dy / L) * off, y0 + dy * u + (dx / L) * off]);
+    }
+  }
+  const site = pts.map(([x, y]) => [
+    Math.round((x + 0.123) * 1e5) / 1e5,
+    Math.round((y - 0.456) * 1e5) / 1e5,
+  ]);
+  // Each road is an 8 m quad outside its edge, so every edge is a road segment.
+  const roads = site.map((a, i) => {
+    const b = site[(i + 1) % site.length];
+    const ex = b[0] - a[0],
+      ey = b[1] - a[1],
+      l = Math.hypot(ex, ey);
+    const ox = (ey / l) * 8,
+      oy = (-ex / l) * 8;
+    return [a, [a[0] + ox, a[1] + oy], [b[0] + ox, b[1] + oy], b];
+  });
+  return {
+    id: `near-straight-${seed}`,
+    inputs: { site: { boundary: rows('site', [site]), roads: rows('road', roads) } },
+    params: { roadSetback: setback, civilSetbackState: 'none', sunState: 'none', heightMax: 40 },
+  };
+}
+
 export const paramsOf = (site) => ({ ...BASE_PARAMS, ...(site.params ?? {}) });
 
 /**

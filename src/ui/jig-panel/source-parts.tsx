@@ -8,6 +8,8 @@ import { messageOf, type InstanceState } from './instance.ts';
 // one (작업본 · 계산 시각), why it cannot be read yet, and '다시 계산 필요' when that result moved
 // after this instance last computed; the person may pick another instance or go back to the
 // latest computed one. Values come from `…/jig-outputs/:key`; the steps recompute after a change.
+// A service-given input (법규 서비스 → `legal.constraints`) has no instance to pick: the card says
+// it reads the service's current result and '다시 계산 필요' when that moved (T-214 F-8).
 
 const info = z
   .object({
@@ -39,6 +41,8 @@ const stateSchema = z
         .passthrough(),
     ),
     stale: z.boolean(),
+    /** A service gives the value (법규 서비스): nothing to choose, only '다시 계산 필요'. */
+    service: z.boolean().optional(),
   })
   .passthrough();
 type SourceState = z.infer<typeof stateSchema>;
@@ -110,7 +114,12 @@ export function JigSource({
         </p>
       ) : (
         <>
-          {current ? (
+          {state.service ? (
+            <p className="jig-source-current">
+              <strong>{current?.jig.replace(/^vide\//, '') ?? '서비스'}</strong>
+              <span className="kit-muted"> · 서비스가 주는 현재 결과를 읽습니다</span>
+            </p>
+          ) : current ? (
             <p className="jig-source-current">
               <strong>{current.title}</strong>
               <span className="kit-muted">
@@ -126,28 +135,33 @@ export function JigSource({
           ) : null}
           {state.stale ? (
             <p className="kit-notice" role="status" data-stale-note="">
-              다시 계산 필요 — 앞 작업본의 결과가 이 작업본을 계산한 뒤에 바뀌었습니다.{' '}
+              다시 계산 필요 —{' '}
+              {state.service
+                ? '서비스의 결과가 이 작업본을 계산한 뒤에 바뀌었습니다.'
+                : '앞 작업본의 결과가 이 작업본을 계산한 뒤에 바뀌었습니다.'}{' '}
               <button type="button" disabled={busy} onClick={() => void jig.recompute()}>
                 다시 계산
               </button>
             </p>
           ) : null}
-          <label className="jig-source-pick">
-            앞 작업본{' '}
-            <select
-              value={state.chosen?.instanceId ?? ''}
-              disabled={busy}
-              onChange={(event) => void choose(event.currentTarget.value || null)}
-            >
-              <option value="">최근 계산된 작업본(자동)</option>
-              {state.candidates.map((c) => (
-                <option key={c.instanceId} value={c.instanceId}>
-                  {c.title}
-                  {c.ready ? ` · ${when(c.at)}` : ' · 받을 수 없음'}
-                </option>
-              ))}
-            </select>
-          </label>
+          {state.service ? null : (
+            <label className="jig-source-pick">
+              앞 작업본{' '}
+              <select
+                value={state.chosen?.instanceId ?? ''}
+                disabled={busy}
+                onChange={(event) => void choose(event.currentTarget.value || null)}
+              >
+                <option value="">최근 계산된 작업본(자동)</option>
+                {state.candidates.map((c) => (
+                  <option key={c.instanceId} value={c.instanceId}>
+                    {c.title}
+                    {c.ready ? ` · ${when(c.at)}` : ' · 받을 수 없음'}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {message ? (
             <p className="kit-muted" role="alert">
               {message}

@@ -10,6 +10,7 @@
 // Coordinates must be local (a few hundred metres around a site origin): EPS is absolute (1e-7 m).
 
 import { GeometryError, signedArea, type Polygon, type Vec2, type Vec3 } from './plan.ts';
+import { regionTriangles } from './triangulate.ts';
 
 export interface Plane {
   n: Vec3;
@@ -349,6 +350,96 @@ export function prismSolid(ring: Polygon, z0: number, z1: number): Solid {
       ]),
     );
   }
+  return out;
+}
+
+/** Points closer than this (m) are one vertex of a cleaned ring (10 × SOLID_EPS: the weld). */
+const RING_MERGE = 1e-6;
+
+/**
+ * A plan ring without repeated points (closer than RING_MERGE), straight-run vertices (turn below
+ * 1e-10 rad, as `earClip`) or zero-width spikes, so its triangulation has no zero-area triangle.
+ */
+export function cleanRing(ring: Polygon): Polygon {
+  let r: Polygon = [];
+  for (const p of ring) {
+    const q = r[r.length - 1];
+    if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > RING_MERGE) r.push([p[0], p[1]]);
+  }
+  while (
+    r.length > 1 &&
+    Math.hypot(r[0][0] - r[r.length - 1][0], r[0][1] - r[r.length - 1][1]) <= RING_MERGE
+  )
+    r.pop();
+  for (let changed = true; changed && r.length > 3; ) {
+    changed = false;
+    const n = r.length;
+    const keep = r.filter((b, i) => {
+      const a = r[(i + n - 1) % n],
+        c = r[(i + 1) % n];
+      const ux = b[0] - a[0],
+        uy = b[1] - a[1],
+        vx = c[0] - b[0],
+        vy = c[1] - b[1];
+      // A straight-run vertex, or the tip of a zero-width spike (the ring turns back on itself).
+      return !(Math.abs(ux * vy - uy * vx) <= 1e-10 * Math.hypot(ux, uy) * Math.hypot(vx, vy));
+    });
+    if (keep.length < n && keep.length >= 3) {
+      r = keep;
+      changed = true;
+    }
+  }
+  return r;
+}
+
+/**
+ * Closed prism of a plan region (outer ring less holes) between z0 and z1, built directly: the caps
+ * are a constrained triangulation of the ring vertices and every ring edge gives one wall quad, so
+ * every edge is shared by exactly two polygons by construction — no boolean, no weld repair
+ * (T-214 F-6: the 돌출 외피 of a real lot whose capsule booleans left open edges).
+ */
+export function regionPrismSolid(
+  outer: Polygon,
+  holes: readonly Polygon[],
+  z0: number,
+  z1: number,
+  /** Caps from the constrained triangulation even without holes (ear clipping can overlap). */
+  triangulated = false,
+): Solid {
+  if (!(z1 > z0)) throw new GeometryError('polygon-valid', 'prism height must be positive');
+  const o = ccwRing(cleanRing(outer));
+  const hs = holes.map((h) => {
+    const c = cleanRing(h);
+    return signedArea(c) > 0 ? [...c].reverse() : c;
+  });
+  if (o.length < 3 || hs.some((h) => h.length < 3))
+    throw new GeometryError('polygon-valid', 'region ring has fewer than 3 points');
+  const out: Solid = [];
+  // Without holes: one convex cap or ear-clipped convex pieces (fewer, larger polygons for later
+  // booleans); with holes, when ear clipping stops, or when asked, the constrained triangulation.
+  let caps: Polygon[];
+  try {
+    caps = hs.length || triangulated ? regionTriangles(o, hs) : isConvex(o) ? [o] : earClip(o);
+  } catch {
+    caps = regionTriangles(o, hs);
+  }
+  for (const t of caps) {
+    out.push(solidPolygon(t.map(([x, y]): Vec3 => [x, y, z1])));
+    out.push(solidPolygon([...t].reverse().map(([x, y]): Vec3 => [x, y, z0])));
+  }
+  for (const r of [o, ...hs])
+    for (let i = 0; i < r.length; i++) {
+      const p = r[i],
+        q = r[(i + 1) % r.length];
+      out.push(
+        solidPolygon([
+          [p[0], p[1], z0],
+          [q[0], q[1], z0],
+          [q[0], q[1], z1],
+          [p[0], p[1], z1],
+        ]),
+      );
+    }
   return out;
 }
 

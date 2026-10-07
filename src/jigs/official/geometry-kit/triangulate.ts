@@ -528,3 +528,98 @@ export function triangulateRegion(
 export function cellPolygon(points: readonly PlanPoint[], cell: TriCell): Polygon {
   return cell.vertices.map((v): Vec2 => [points[v][0], points[v][1]]);
 }
+
+/**
+ * Triangles covering a plan region exactly (outer ring less its holes), every corner a ring vertex
+ * (T-214 F-6: the caps of an extruded 2D buildable area). Constrained Delaunay of the ring
+ * vertices; a triangle is inside when it lies left of a ring edge (outer counter-clockwise, holes
+ * clockwise) or is reached from one without crossing a ring edge, so no point-in-polygon test has
+ * to decide a sliver along the boundary. Rings must be simple, without straight-run or coincident
+ * vertices (the caller cleans them). Triangles come out counter-clockwise.
+ */
+export function regionTriangles(
+  outer: readonly Vec2[],
+  holes: readonly (readonly Vec2[])[] = [],
+): Vec2[][] {
+  const oriented = (r: readonly Vec2[], sign: number) =>
+    Math.sign(signedArea([...r])) === sign ? [...r] : [...r].reverse();
+  const rings = [oriented(outer, 1), ...holes.map((h) => oriented(h, -1))];
+  const points: Vec2[] = [];
+  const directed: [number, number][] = [];
+  for (const ring of rings) {
+    const base = points.length;
+    for (const p of ring) points.push([p[0], p[1]]);
+    for (let i = 0; i < ring.length; i++) directed.push([base + i, base + ((i + 1) % ring.length)]);
+  }
+  const n = points.length;
+  if (n < 3) throw new GeometryError('polygon-valid', 'region has fewer than 3 points');
+  const ox = points[0][0],
+    oy = points[0][1];
+  const coords = new Float64Array(2 * n);
+  for (let i = 0; i < n; i++) {
+    coords[2 * i] = points[i][0] - ox;
+    coords[2 * i + 1] = points[i][1] - oy;
+  }
+  const del = new Delaunator(coords);
+  const con = new Constrainautor(del);
+  for (const [a, b] of directed) {
+    try {
+      con.constrainOne(a, b);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new GeometryError('polygon-valid', `ring edge ${a}–${b}: ${message}`);
+    }
+  }
+  const tri = del.triangles,
+    half = del.halfedges;
+  const count = tri.length / 3;
+  const ccwTri = (t: number) => {
+    const a = tri[3 * t],
+      b = tri[3 * t + 1],
+      c = tri[3 * t + 2];
+    return (
+      (coords[2 * b] - coords[2 * a]) * (coords[2 * c + 1] - coords[2 * a + 1]) -
+        (coords[2 * b + 1] - coords[2 * a + 1]) * (coords[2 * c] - coords[2 * a]) >
+      0
+    );
+  };
+  const halfOf = new Map<string, number>();
+  for (let e = 0; e < tri.length; e++) halfOf.set(`${tri[e]},${tri[nextEdge(e)]}`, e);
+  const ringEdge = new Set(directed.map(([a, b]) => key(a, b)));
+  // 0 unknown, 1 inside, −1 outside.
+  const state = new Int8Array(count);
+  const queue: number[] = [];
+  for (const [a, b] of directed)
+    for (const [p, q, leftWhenCcw] of [
+      [a, b, true],
+      [b, a, false],
+    ] as const) {
+      const e = halfOf.get(`${p},${q}`);
+      if (e === undefined) continue;
+      const t = Math.floor(e / 3);
+      if (ccwTri(t) === leftWhenCcw) {
+        if (state[t] === 0) queue.push(t);
+        state[t] = 1;
+      } else if (state[t] === 0) state[t] = -1;
+    }
+  while (queue.length) {
+    const t = queue.pop()!;
+    for (let k = 0; k < 3; k++) {
+      const e = 3 * t + k;
+      if (ringEdge.has(key(tri[e], tri[nextEdge(e)]))) continue;
+      const o = half[e];
+      if (o < 0) continue;
+      const u = Math.floor(o / 3);
+      if (state[u] !== 0) continue;
+      state[u] = 1;
+      queue.push(u);
+    }
+  }
+  const out: Vec2[][] = [];
+  for (let t = 0; t < count; t++) {
+    if (state[t] !== 1) continue;
+    const vs = [tri[3 * t], tri[3 * t + 1], tri[3 * t + 2]].map((i) => points[i]);
+    out.push(ccwTri(t) ? vs : vs.reverse());
+  }
+  return out;
+}

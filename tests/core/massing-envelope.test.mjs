@@ -2,24 +2,35 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
+  MERGE_DEVIATION,
+  buildableStep,
   envelopeStep,
   limitStep,
   planStep,
   regulationStep,
   siteStep,
+  solidCutters,
 } from '../../src/jigs/official/massing-kit/index.ts';
 import {
   checkSolid,
   facesVolume,
   mergeCoplanar,
   prismSolid,
+  regionPrismSolid,
   reversedMesh,
   solidSubtract,
   weldSolid,
 } from '../../src/jigs/official/geometry-kit/index.ts';
 import { extractItems } from '../../src/jigs/bake/plan.ts';
 import { renderChunks } from '../../src/jigs/bake/templates.ts';
-import { SITES, SLANTED, paramsOf, star } from '../fixtures/massing-sites.mjs';
+import {
+  SITES,
+  SLANTED,
+  nearStraightLot,
+  paramsOf,
+  runMass,
+  star,
+} from '../fixtures/massing-sites.mjs';
 
 // PLAN-45 T-210 (SPEC-12.9): 돌출 · 일조 사선 · 최대 외피 as closed polyhedra in the engine, the
 // closed/orientation/volume check, the engine's coplanar merge for `vide.bake.brep-faces@1`, the
@@ -265,4 +276,88 @@ test('a floor section with a long straight cut edge (one point 7e-15 m off) clos
   const check = checkSolid(weldSolid(prismSolid(ring, 0, 3)));
   assert.ok(check.ok, check.reasons.join(', '));
   assert.ok(Math.abs(check.volume - area * 3) < 1e-6, `${check.volume} vs ${area * 3}`);
+});
+
+test('F-6: a lot of 36 short road segments bent by millimetres gives closed envelopes with any 건축선 후퇴 (T-214)', () => {
+  // Before the fix the 돌출 외피 of these lots failed the check ('열린 변 3, 비다양체 변 30' for seed
+  // 1 at 0.5 m, 16 of the 18 seed × setback cases) while the 2D 가능 영역 was computed.
+  for (const seed of [1, 2, 5])
+    for (const setback of [0.5, 1, 3]) {
+      const site = nearStraightLot(seed, setback);
+      const { site: s, limits, out } = run(site);
+      assert.equal(s.segments.length, 36);
+      assert.ok(s.segments.every((g) => g.kind === 'road'));
+      const params = paramsOf(site);
+      const area = buildableStep({
+        steps: { site: s, regulations: regulationStep({}, params), limits },
+      }).area;
+      const v = out.variants[0];
+      for (const env of v.envelopes)
+        assert.equal(
+          env.check.ok,
+          true,
+          `seed ${seed} ${setback} m ${env.kind}: ${env.check.reasons}`,
+        );
+      // The 돌출 외피 is the 2D 가능 영역 extruded to the height cap (40 m).
+      close(volumes(v).extrude, area * 40, 1e-6 * area * 40, `seed ${seed} ${setback} m`);
+      // Every floor section of the prism is the 2D area.
+      for (const sec of v.sections) close(sec.extrude, area, 1e-6 * area, `section ${sec.z}`);
+    }
+});
+
+test('F-6: the whole mass chain (floors, 대안, 주차) runs on the many-segment lot', async () => {
+  const { steps } = await runMass(nearStraightLot(1, 0.5));
+  assert.ok(steps.alternatives.rows.length >= 1);
+  assert.ok(steps.parking.ground.free > 0);
+});
+
+test('F-6: near-straight runs are cut as one capsule grown by their deviation (≤ 1 mm, safe side)', () => {
+  const site = nearStraightLot(1, 0.5);
+  const params = paramsOf(site);
+  const s = siteStep({ site: site.inputs.site }, params);
+  const limits = limitStep({
+    site: site.inputs.site,
+    steps: { site: s, regulations: regulationStep({}, params) },
+  });
+  const merged = solidCutters(limits.cutters);
+  assert.ok(merged.length < limits.cutters.length, 'some runs merged');
+  const byTarget = new Map(limits.cutters.map((c) => [c.target, c]));
+  const distance = (p, a, b) => {
+    const dx = b[0] - a[0],
+      dy = b[1] - a[1];
+    const t = Math.max(
+      0,
+      Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy)),
+    );
+    return Math.hypot(a[0] + dx * t - p[0], a[1] + dy * t - p[1]);
+  };
+  for (const { cutter, targets } of merged) {
+    if (targets.length < 2) continue;
+    const grown = cutter.radius - 0.5;
+    assert.ok(grown >= 0 && grown <= MERGE_DEVIATION, `grown ${grown}`);
+    // Every piece lies within the growth of the chord, so the merged capsule covers it.
+    for (const t of targets)
+      for (const p of [byTarget.get(t).a, byTarget.get(t).b])
+        assert.ok(distance(p, cutter.a, cutter.b) <= grown + 1e-12);
+  }
+});
+
+test('a region with a hole and near-straight vertices is a closed prism with the exact volume (F-6)', () => {
+  const outer = [];
+  for (let k = 0; k <= 40; k++) outer.push([k, k % 2 ? 1e-9 : 0]);
+  outer.push([40, 30], [0, 30]);
+  const hole = [
+    [10, 10],
+    [10, 20],
+    [20, 20],
+    [20, 10],
+  ];
+  const check = checkSolid(weldSolid(regionPrismSolid(outer, [hole], 0, 5)));
+  // Closed and manifold; a hole through the prism makes it a torus (Euler 0), which the
+  // envelope check rightly refuses as one shell of Euler 2.
+  assert.deepEqual([check.boundaryEdges, check.nonManifoldEdges, check.euler], [0, 0, 0]);
+  close(check.volume, (40 * 30 - 100) * 5, 1e-6);
+  const triangulated = checkSolid(weldSolid(regionPrismSolid(outer, [], 0, 5, true)));
+  assert.ok(triangulated.ok, triangulated.reasons.join(', '));
+  close(triangulated.volume, 40 * 30 * 5, 1e-6);
 });

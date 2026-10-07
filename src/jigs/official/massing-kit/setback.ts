@@ -19,7 +19,6 @@ import {
   solidIntersect,
   solidSubtract,
   solidUnionAll,
-  solidVolume,
   weldSolid,
   type Solid,
 } from '../geometry-kit/solid.ts';
@@ -130,8 +129,120 @@ export function cutterRing(c: Cutter, sides = ARC_SIDES): Polygon {
 export const cutterSolid = (c: Cutter, z0: number, z1: number, sides = ARC_SIDES): Solid =>
   prismSolid(cutterRing(c, sides), z0, z1);
 
+// ── 거의 한 직선인 구간 합치기 (T-214 F-6) ──────────────────────────────────────────────────────
+// A real lot's boundary has runs of short segments bent by millimetres. Their capsules have nearly
+// coplanar sides, and the solid booleans then leave open edges and spikes. Before the solids are
+// made, consecutive pieces of one rule whose endpoints all lie within MERGE_DEVIATION of one chord
+// become one capsule on the chord whose radius grows by that deviation: every point within r of a
+// piece is within r + deviation of the chord (distance to a segment is convex), so the merge only
+// removes more (safe side, as the 64-gon round ends). The cutters in the step output stay per
+// segment; only the solids are made from the merged pieces.
+
+/** Endpoints within this distance (m) of the chord merge consecutive pieces. */
+export const MERGE_DEVIATION = 1e-3;
+/** Consecutive pieces join when one ends this close (m) to where the next starts. */
+const MERGE_GAP = 0.05;
+
+function segmentDistance(p: Vec2, a: Vec2, b: Vec2) {
+  const dx = b[0] - a[0],
+    dy = b[1] - a[1];
+  const L2 = dx * dx + dy * dy;
+  const t = L2 > 0 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L2)) : 0;
+  return Math.hypot(a[0] + dx * t - p[0], a[1] + dy * t - p[1]);
+}
+
+/** Runs of consecutive pieces that lie within MERGE_DEVIATION of one chord, with that deviation. */
+function nearStraightRuns<T>(
+  items: readonly T[],
+  ends: (t: T) => [Vec2, Vec2],
+  same: (x: T, y: T) => boolean,
+): { items: T[]; a: Vec2; b: Vec2; deviation: number }[] {
+  const out: { items: T[]; a: Vec2; b: Vec2; deviation: number }[] = [];
+  const deviation = (run: readonly T[]) => {
+    const a = ends(run[0])[0],
+      b = ends(run[run.length - 1])[1];
+    if (!(Math.hypot(b[0] - a[0], b[1] - a[1]) > 0)) return Infinity;
+    let d = 0;
+    for (const t of run) for (const p of ends(t)) d = Math.max(d, segmentDistance(p, a, b));
+    return d;
+  };
+  let run: T[] = [];
+  const flush = () => {
+    if (!run.length) return;
+    const dev = run.length > 1 ? deviation(run) : 0;
+    out.push({ items: run, a: ends(run[0])[0], b: ends(run[run.length - 1])[1], deviation: dev });
+    run = [];
+  };
+  for (const item of items) {
+    const last = run[run.length - 1];
+    if (last !== undefined && same(last, item)) {
+      const p = ends(last)[1],
+        q = ends(item)[0];
+      if (
+        Math.hypot(p[0] - q[0], p[1] - q[1]) <= MERGE_GAP &&
+        deviation([...run, item]) <= MERGE_DEVIATION
+      ) {
+        run.push(item);
+        continue;
+      }
+    }
+    flush();
+    run = [item];
+  }
+  flush();
+  return out;
+}
+
+/** Cutters for the solids: near-straight runs of capsules merged (see above), with their targets. */
+export function solidCutters(cutters: readonly Cutter[]): { cutter: Cutter; targets: string[] }[] {
+  const out: { cutter: Cutter; targets: string[] }[] = [];
+  const runs = nearStraightRuns<Cutter>(
+    cutters,
+    (c) => (c.kind === 'capsule' ? [c.a, c.b] : [c.ring[0], c.ring[0]]),
+    (x, y) =>
+      x.kind === 'capsule' &&
+      y.kind === 'capsule' &&
+      x.rule === y.rule &&
+      Math.abs(x.radius - y.radius) <= 1e-12,
+  );
+  for (const r of runs) {
+    const first = r.items[0],
+      last = r.items[r.items.length - 1];
+    if (r.items.length === 1 || first.kind !== 'capsule' || last.kind !== 'capsule') {
+      for (const c of r.items) out.push({ cutter: c, targets: [c.target] });
+      continue;
+    }
+    const grown = r.deviation > 0;
+    out.push({
+      cutter: {
+        ...first,
+        a: r.a,
+        b: r.b,
+        radius: first.radius + r.deviation,
+        // A grown capsule is wider than the neighbour that made its end flat: round it again.
+        roundA: grown || first.roundA,
+        roundB: grown || last.roundB,
+      },
+      targets: [...new Set(r.items.map((c) => c.target))],
+    });
+  }
+  return out;
+}
+
+/** 일조 기준선 pieces for the solids: shortest-distance runs merged, with the radius growth. */
+function sunPieces(s: SunRule): { a: Vec2; b: Vec2; pad: number }[] {
+  const usable = s.datum.filter((d) => s.measure === 'euclidean' || sweepable(d, s.north));
+  // Measured due north the sweep of a chord is not a superset of its pieces' sweeps: no merge.
+  if (s.measure !== 'euclidean') return usable.map((d) => ({ a: d.a, b: d.b, pad: 0 }));
+  return nearStraightRuns(
+    usable,
+    (d) => [d.a, d.b],
+    () => true,
+  ).map((r) => ({ a: r.a, b: r.b, pad: r.deviation }));
+}
+
 /** Plan region within `r` of the datum measured due north: the segment swept south by r. */
-export function northSweep(d: SunDatum, north: Vec2, r: number): Polygon {
+export function northSweep(d: Pick<SunDatum, 'a' | 'b'>, north: Vec2, r: number): Polygon {
   return [
     d.a,
     d.b,
@@ -141,7 +252,7 @@ export function northSweep(d: SunDatum, north: Vec2, r: number): Polygon {
 }
 
 /** True when the datum segment can be swept due north (not parallel to north). */
-const sweepable = (d: SunDatum, north: Vec2) => {
+const sweepable = (d: Pick<SunDatum, 'a' | 'b'>, north: Vec2) => {
   const dx = d.b[0] - d.a[0],
     dy = d.b[1] - d.a[1];
   return Math.abs(dx * north[1] - dy * north[0]) > 1e-9 * Math.hypot(dx, dy);
@@ -150,17 +261,15 @@ const sweepable = (d: SunDatum, north: Vec2) => {
 /** 일조 지면 벽: within the 기준 높이 이하 거리 of the datum, from below the ground to `z1`. */
 export function sunWallSolid(s: SunRule, z0: number, z1: number, sides = ARC_SIDES): Solid {
   if (!(s.nearDistance > 0)) return [];
-  const pieces = s.datum
-    .filter((d) => s.measure === 'euclidean' || sweepable(d, s.north))
-    .map((d) =>
-      prismSolid(
-        s.measure === 'euclidean'
-          ? capsuleRing(d.a, d.b, s.nearDistance, sides)
-          : ccw(northSweep(d, s.north, s.nearDistance)),
-        z0,
-        z1,
-      ),
-    );
+  const pieces = sunPieces(s).map((d) =>
+    prismSolid(
+      s.measure === 'euclidean'
+        ? capsuleRing(d.a, d.b, s.nearDistance + d.pad, sides)
+        : ccw(northSweep(d, s.north, s.nearDistance)),
+      z0,
+      z1,
+    ),
+  );
   return zoned(s, solidUnionAll(pieces), z0, z1);
 }
 
@@ -174,14 +283,63 @@ export function sunSlopeSolid(s: SunRule, z1: number, sides = ARC_SIDES): Solid 
   if (!(z1 > z0)) return [];
   const r0 = s.ratio * z0,
     r1 = s.ratio * z1;
-  const pieces = s.datum
-    .filter((d) => s.measure === 'euclidean' || sweepable(d, s.north))
-    .map((d) =>
-      s.measure === 'euclidean'
-        ? loftSolid(capsuleRing(d.a, d.b, r0, sides), z0, capsuleRing(d.a, d.b, r1, sides), z1)
-        : loftSolid(northSweep(d, s.north, r0), z0, northSweep(d, s.north, r1), z1),
-    );
+  const pieces = sunPieces(s).map((d) =>
+    s.measure === 'euclidean'
+      ? loftSolid(
+          capsuleRing(d.a, d.b, r0 + d.pad, sides),
+          z0,
+          capsuleRing(d.a, d.b, r1 + d.pad, sides),
+          z1,
+        )
+      : loftSolid(northSweep(d, s.north, r0), z0, northSweep(d, s.north, r1), z1),
+  );
   return zoned(s, solidUnionAll(pieces), z0 - 1, z1 + 1);
+}
+
+/**
+ * The 일조 cut (지면 벽 from −1 to `top` and 사선) as separate solids before their union, for a
+ * boolean retried in another order (T-214 F-6). Each piece is limited to the zones on its own;
+ * the union of the pieces is `sunWallSolid ∪ sunSlopeSolid`.
+ */
+export function sunCutPieces(s: SunRule, top: number, sides = ARC_SIDES): Solid[] {
+  const one = (solid: Solid, z0: number, z1: number) => zoned(s, solid, z0, z1);
+  const out: Solid[] = [];
+  const near = s.nearDistance > 0;
+  const z0 = s.baseHeight,
+    r0 = s.ratio * z0,
+    r1 = s.ratio * top;
+  for (const d of sunPieces(s)) {
+    if (near)
+      out.push(
+        one(
+          prismSolid(
+            s.measure === 'euclidean'
+              ? capsuleRing(d.a, d.b, s.nearDistance + d.pad, sides)
+              : ccw(northSweep(d, s.north, s.nearDistance)),
+            -1,
+            top,
+          ),
+          -1,
+          top,
+        ),
+      );
+    if (top > z0)
+      out.push(
+        one(
+          s.measure === 'euclidean'
+            ? loftSolid(
+                capsuleRing(d.a, d.b, r0 + d.pad, sides),
+                z0,
+                capsuleRing(d.a, d.b, r1 + d.pad, sides),
+                top,
+              )
+            : loftSolid(northSweep(d, s.north, r0), z0, northSweep(d, s.north, r1), top),
+          z0 - 1,
+          top + 1,
+        ),
+      );
+  }
+  return out.filter((p) => p.length);
 }
 
 function zoned(s: SunRule, solid: Solid, z0: number, z1: number) {
@@ -246,34 +404,75 @@ export function buildableArea(
 ): Buildable {
   const slab = prismSolid(site, 0, 1);
   const siteArea = Math.abs(signedArea(site));
-  const byRule = new Map<RuleId, { solid: Solid; targets: string[] }>();
-  const add = (rule: RuleId, solid: Solid, target: string) => {
-    const entry = byRule.get(rule) ?? { solid: [], targets: [] };
-    entry.solid = solidUnionAll([entry.solid, solid]);
-    if (!entry.targets.includes(target)) entry.targets.push(target);
+  const byRule = new Map<RuleId, { pieces: Solid[]; targets: string[] }>();
+  const add = (rule: RuleId, solid: Solid, targets: readonly string[]) => {
+    const entry = byRule.get(rule) ?? { pieces: [], targets: [] };
+    if (solid.length) entry.pieces.push(solid);
+    for (const target of targets) if (!entry.targets.includes(target)) entry.targets.push(target);
     byRule.set(rule, entry);
   };
-  for (const c of cutters) add(c.rule, cutterSolid(c, -1, 2, sides), c.target);
+  for (const { cutter, targets } of solidCutters(cutters))
+    add(cutter.rule, cutterSolid(cutter, -1, 2, sides), targets);
   if (sun) {
     const wall = sunWallSolid(sun, -1, 2, sides);
     if (wall.length)
-      for (const d of sun.datum) {
-        const entry = byRule.get('sun-ground') ?? { solid: wall, targets: [] };
-        entry.targets.push(d.target);
-        byRule.set('sun-ground', entry);
-      }
+      add(
+        'sun-ground',
+        wall,
+        sun.datum.map((d) => d.target),
+      );
   }
-  const all = solidUnionAll([...byRule.values()].map((e) => e.solid));
-  const left = solidSubtract(slab, all);
+  const left = cutSlab(
+    slab,
+    [...byRule.values()].flatMap((e) => e.pieces),
+    1,
+  );
   const reductions = RULE_ORDER.filter((r) => byRule.has(r)).map((rule) => {
-    const rest = solidSubtract(slab, byRule.get(rule)!.solid);
+    const rest = cutSlab(slab, byRule.get(rule)!.pieces, 1);
     return {
       rule,
-      area: siteArea - Math.max(0, solidVolume(rest)),
+      area: siteArea - Math.max(0, rest.volume),
       targets: byRule.get(rule)!.targets,
-      regions: slabRegions(rest, 1),
+      regions: rest.regions,
     };
   });
-  const area = left.length ? Math.max(0, checkSolid(weldSolid(left)).volume) : 0;
-  return { area, siteArea, regions: area > 0 ? slabRegions(left, 1) : [], reductions };
+  const area = Math.max(0, left.volume);
+  return { area, siteArea, regions: area > 0 ? left.regions : [], reductions };
+}
+
+/**
+ * Slab − ∪ cuts with its plan regions (top faces at `top`). The BSP result depends on the order
+ * of the booleans; when one leaves open or non-manifold edges (or faces that do not close into
+ * regions), the same cut is made again in another order (T-214 F-6: near-straight runs of a real
+ * lot). Throws the first failure when no order gives a clean slab.
+ */
+export function cutSlab(
+  slab: Solid,
+  cuts: readonly Solid[],
+  top: number,
+): { solid: Solid; regions: PlanRegion[]; volume: number } {
+  const orders: (() => Solid)[] = [
+    () => solidSubtract(slab, solidUnionAll(cuts)),
+    () => solidSubtract(slab, solidUnionAll([...cuts].reverse())),
+    () => cuts.reduce<Solid>((acc, c) => solidSubtract(acc, c), slab),
+  ];
+  let first: Solid | null = null;
+  for (const make of cuts.length ? orders : [() => slab]) {
+    const solid = make();
+    if (!solid.length) return { solid, regions: [], volume: 0 };
+    first ??= solid;
+    const check = checkSolid(weldSolid(solid));
+    if (check.boundaryEdges || check.nonManifoldEdges || check.degenerate) continue;
+    try {
+      return { solid, regions: slabRegions(solid, top), volume: check.volume };
+    } catch {
+      // another order
+    }
+  }
+  // No order closed: the first result as before (its regions throw when faces do not close).
+  return {
+    solid: first!,
+    regions: slabRegions(first!, top),
+    volume: checkSolid(weldSolid(first!)).volume,
+  };
 }

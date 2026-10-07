@@ -4,7 +4,7 @@
 // without node: imports; the solid booleans are `vide/geometry-kit` (`solid.ts`). No legal value is
 // written here: every number a rule uses is a 규제 조건 item with its source (SPEC-12.7 5·6).
 
-export const library = { id: 'vide/massing-kit', version: '0.3.1' } as const;
+export const library = { id: 'vide/massing-kit', version: '0.3.2' } as const;
 
 export {
   CHOICE_LABELS,
@@ -45,8 +45,11 @@ export {
   capsuleRing,
   cutterRing,
   cutterSolid,
+  MERGE_DEVIATION,
   northSweep,
   slabRegions,
+  solidCutters,
+  sunCutPieces,
   sunSlopeSolid,
   sunWallSolid,
 } from './setback.ts';
