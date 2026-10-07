@@ -2686,6 +2686,18 @@ body.panel-mode .chat-heading h2 {
   background: var(--ok-subtle);
   color: var(--ok);
 }
+.settings-public-data .settings-rows li {
+  flex-wrap: wrap;
+}
+.settings-key-edit {
+  display: flex;
+  gap: 6px;
+  flex-basis: 100%;
+}
+.settings-key-edit input {
+  flex: 1;
+  min-width: 0;
+}
 .workspace-status-dialog .remote-toggle {
   padding: 10px 0 2px;
 }

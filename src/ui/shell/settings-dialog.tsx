@@ -13,6 +13,7 @@ import { sessionState } from '../store/session.ts';
 import { ConnectionLines } from './status-lines.tsx';
 import { problemNotices } from './status-bar.tsx';
 import { dumpLabel, TelemetrySection, useNewestDump } from './telemetry.tsx';
+import { PublicDataSection } from './public-data-section.tsx';
 
 const tabs: [SettingsTab, string][] = [
   ['account', '계정 · 원격 접속'],
@@ -306,6 +307,7 @@ export const SettingsDialog = memo(function SettingsDialog() {
               </div>
             </section>
             <section />
+            <PublicDataSection />
           </Pane>
           <Pane id="programs">
             <section className="remote-panel" />

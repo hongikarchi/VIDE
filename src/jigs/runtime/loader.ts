@@ -87,6 +87,9 @@ const LIBRARY_MODULES: Record<string, () => Promise<Record<string, unknown>>> = 
     import('../official/structure-analysis/index.ts') as Promise<Record<string, unknown>>,
   'vide/finish-codes': () =>
     import('../official/finish-codes/index.ts') as Promise<Record<string, unknown>>,
+  // SHP reading and PNU helpers only; public-data calls stay with the engine (keys, T-205).
+  'vide/site-data': () =>
+    import('../official/site-data/library.ts') as Promise<Record<string, unknown>>,
 };
 /** The official library ids, known without loading the libraries. */
 export const OFFICIAL_LIBRARY_IDS: readonly string[] = Object.keys(LIBRARY_MODULES);

@@ -116,6 +116,11 @@ interface ServerOptions {
   xrefReader?: XrefReader | null;
   /** Test seam for 도면 읽기 (SPEC-14.3): the drawing inspector (null: no ZWCAD). */
   drawingInspector?: DrawingInspector | null;
+  /**
+   * Test seams for 공공 자료 수집 (T-205): the fetch the site-data library uses and the
+   * environment its keys are read from (default process.env).
+   */
+  siteDataOptions?: { fetch?: typeof fetch; environment?: NodeJS.ProcessEnv };
 }
 import { readWebAsset } from './web-assets.ts';
 import { tmpdir } from 'node:os';
@@ -158,6 +163,8 @@ import { AttachmentStore } from './attachments.ts';
 import { attachmentPathRoutes } from './attachment-paths.ts';
 import { checkFolder, deniedPath, folderRoutes } from './project-files.ts';
 import { collectRoutes, collectStatuses } from './collect-routes.ts';
+import { SiteDataSettings, siteDataRoutes, siteDataStatuses } from './site-data-routes.ts';
+import { PublicDataKeyStore } from './public-data-keys.ts';
 import { xrefRoutes, xrefStatuses } from './xref-routes.ts';
 import { XrefService } from './xref.ts';
 import { XrefStore } from '../core/xref-store.ts';
@@ -286,6 +293,7 @@ const statuses: Record<string, number> = {
   ...collectStatuses,
   ...jigSubmitStatuses,
   ...finishStatuses,
+  ...siteDataStatuses,
   ...xrefStatuses,
   ...drawingLayerStatuses,
 };
@@ -308,6 +316,7 @@ export async function startServer({
   collectOptions,
   xrefReader,
   drawingInspector,
+  siteDataOptions,
 }: ServerOptions) {
   const { store, event: storeEvent } = await openStore(filename, storeSplit),
     bootstrap = randomBytes(32).toString('hex'),
@@ -709,6 +718,14 @@ export async function startServer({
   // Settings → AI 「AI가 작업 도중에 묻기」 (T-075): the providers' own questions mid-turn, default on.
   const questionSettings = new QuestionSettings(
     filename === ':memory:' ? undefined : join(dirname(filename), 'question-settings.json'),
+  );
+  // 공공 자료 키 and each project's send notice choice (PLAN-45 T-205): PC-only files.
+  const publicDataKeys = new PublicDataKeyStore(
+    filename === ':memory:' ? undefined : dirname(filename),
+    siteDataOptions?.environment,
+  );
+  const siteDataSettings = new SiteDataSettings(
+    filename === ':memory:' ? undefined : join(dirname(filename), 'site-data-settings.json'),
   );
   // Settings → AI 「AI 웹 검색」 (ADR-028, T-105): the providers' own web tools, default on.
   const webSettings = new WebSettings(
@@ -1192,6 +1209,20 @@ export async function startServer({
           body: () => body(request),
           send,
           remote,
+        })
+      )
+        return;
+      // 공공 자료 수집 (SPEC-12.3·12.4, PLAN-45 T-205): keys, the send notice, lookup and collect.
+      if (
+        await siteDataRoutes(url, request.method, {
+          remote,
+          keys: publicDataKeys,
+          settings: siteDataSettings,
+          requireProject: (projectId) => void store.project(projectId),
+          body: () => body(request),
+          send,
+          context: siteDataOptions?.fetch ? { fetch: siteDataOptions.fetch } : undefined,
+          log: (event, fields) => diagnostics.write(event, fields),
         })
       )
         return;

@@ -1,6 +1,6 @@
 // [진단 묶음 내보내기] (T-126, ADR-031 9): one zip the user can send for a bug report — the dated
 // logs of every VIDE part, the engine exit records, versions and a settings summary. It never
-// holds keys or logins (launch.json, local-session.key, remote-host.json, typesafe.env,
+// holds keys or logins (launch.json, local-session.key, remote-host.json, typesafe.env, public-data.env,
 // cli-profiles), the workspace DB, models or request text: only the files named here go in.
 // Crash dumps go in only when asked (`dumps`), the newest one, stored uncompressed.
 import { createReadStream } from 'node:fs';
@@ -36,7 +36,7 @@ const SETTINGS = [
 ];
 /** Never in a bundle, whatever else changes (checked again on every entry). */
 const FORBIDDEN =
-  /(^|[\\/])(launch\.json|local-session\.key|remote-host\.json|typesafe\.env|[^\\/]*\.sqlite[^\\/]*|cli-profiles)([\\/]|$)/i;
+  /(^|[\\/])(launch\.json|local-session\.key|remote-host\.json|typesafe\.env|public-data\.env|[^\\/]*\.sqlite[^\\/]*|cli-profiles)([\\/]|$)/i;
 const KEEP_BUNDLES = 3;
 
 export interface DumpInfo {

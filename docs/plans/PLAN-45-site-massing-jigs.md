@@ -2,7 +2,7 @@
 id: PLAN-45
 title: 규모검토 jig 세 개 — 사이트 모델링·건축 가능 영역과 매스·건축개요 (T-203~T-214)
 status: draft
-version: 0.8
+version: 0.9
 updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-12, SPEC-07, SPEC-02, SPEC-08, SPEC-13, ARCH-01, ARCH-03, DESIGN, ADR-026, ADR-030, ADR-040, RESEARCH-04, RESEARCH-16, FR-09, FR-12, FR-14, FR-18, FR-21, FR-24, FR-25, C-05, OQ-08, OQ-09, OQ-16]
@@ -36,8 +36,8 @@ related: [SPEC-12, SPEC-07, SPEC-02, SPEC-08, SPEC-13, ARCH-01, ARCH-03, DESIGN,
 ## 공공 자료 키
 
 - 종류: VWorld 키, 주소 검색 키, 공공데이터포털 키(건축물대장 등). 실제 필요한 조합은 T-203이 정한다.
-- 보관: 이 PC의 VIDE 데이터 폴더 `public-data.env`(PC 전용, `typesafe.env`와 같은 취급). 설정 → 외부 자료에서 넣고 지운다. 화면에는 끝 네 글자만 보인다. 개발 중에는 같은 이름의 환경 변수가 우선한다.
-- 지키는 것: 저장소·fixture·검수 증거·진단 묶음·계정 사이트 업로드·AI 문맥에 넣지 않는다. 로그에는 키 대신 `key:****abcd`만 남긴다. 저장소 커밋 검사(Gitleaks)는 기존 설정 그대로 돈다.
+- 보관: 이 PC의 VIDE 데이터 폴더 `public-data.env`(PC 전용, `typesafe.env`와 같은 취급). 설정 → AI → 외부 자료에서 넣고 지운다. 화면에는 있음/없음(과 환경 변수인지)만 보인다. 개발 중에는 같은 이름의 환경 변수가 우선한다.
+- 지키는 것: 저장소·fixture·검수 증거·진단 묶음·계정 사이트 업로드·AI 문맥에 넣지 않는다. 로그·API 응답에는 키 이름과 있음/없음만 남긴다. 저장소 커밋 검사(Gitleaks)는 기존 설정 그대로 돈다.
 - 공식 수집 라이브러리만 키를 읽는다. jig 단계·계산 상자·화면은 키를 받지 않는다(SPEC-07.9).
 
 ## T-203 SPIKE · 공공 자료 접근
@@ -76,13 +76,14 @@ related: [SPEC-12, SPEC-07, SPEC-02, SPEC-08, SPEC-13, ARCH-01, ARCH-03, DESIGN,
     - `sources/*.ts`: T-203이 정한 자료원 어댑터. 각 어댑터는 요청 만들기 · 응답 형식 검증(zod) · 정규화만 한다. 페이지 나눔을 끝까지 읽고 개수를 확인한다.
     - `lookup.ts`: 주소·PNU → 후보 필지.
     - `collect.ts`: 대상·주변 필지, 용도지역, 건물, 도로 필지를 범위로 모아 `{items, source, fetchedAt, provenance}` 사본을 만든다. 개수 0·대상 필지 누락·면적 차이를 '확인 필요'로 표시한다.
-    - 금지 목록: 개인정보를 돌려주는 엔드포인트는 어댑터에 두지 않는다.
-  - 능력 `net.fetch`(공식 전용, `src/jigs/runtime/manifest.ts`에 이미 있음)를 이 라이브러리만 쓴다.
-  - 키: `src/server/public-data-keys.ts`(읽기·쓰기·끝 네 글자), 설정 화면 「외부 자료」, 진단 묶음 제외 목록(`src/server/diagnostic-bundle.ts`)에 `public-data.env` 추가. ARCH-01 「PC 설정·키」 표에 행 추가.
-  - 전송 고지: 프로젝트에서 처음 수집할 때 보내는 항목(주소·PNU·좌표 범위)과 받는 곳 카드, 프로젝트 설정의 끄기(FR-18).
+    - 금지 목록: 개인정보를 돌려주는 엔드포인트는 어댑터에 두지 않는다. 허용 끝점 목록 밖은 부르지 않는다(`http.ts`).
+    - `library.ts`: `LIBRARY_MODULES`에 등록하는 jig용 면(SHP 읽기·PNU 도움 함수). 키가 필요한 수집 함수는 넣지 않는다.
+  - 능력 `net.fetch`(공식 전용, `src/jigs/runtime/manifest.ts`에 이미 있음)를 이 라이브러리만 쓴다. 수집은 엔진이 키를 넣어 부른다.
+  - 키: `src/server/public-data-keys.ts`(읽기·쓰기·있음/없음), 설정 → AI 탭 「외부 자료」(`src/ui/shell/public-data-section.tsx`), 진단 묶음 제외 목록(`src/server/diagnostic-bundle.ts`)에 `public-data.env` 추가. ARCH-01 「PC 설정·키」 표와 「공공 자료 수집」.
+  - 전송 고지(FR-18): `src/contracts/site-data.ts`의 고지 내용(보내는 항목·받는 곳·보내지 않는 것, 판 해시)과 엔진 API(`src/server/site-data-routes.ts`). 고지를 확인하기 전에는 아무것도 보내지 않고 `needsConfirm`을, 끈 프로젝트는 `SITE_DATA_OFF`를 준다. 고지 카드와 프로젝트 설정의 끄기 화면은 수집을 시작하는 사이트 모델링 jig 패널과 함께 T-207이 붙인다.
 - **검증:**
   - `tests/core/site-data.test.mjs`: 합성 응답으로 정규화·페이지 나눔·빈 결과 감지·면적 차이 경고·형식 다른 응답 거절·키 없는 자료만 '키 없음'.
-  - `tests/server/public-data-keys.test.mjs`: 키 저장·마스킹·진단 묶음 제외·원격 세션 거절.
+  - `tests/server/public-data-keys.test.mjs`: 키 저장·있음/없음만 보임·환경 변수 우선·진단 묶음 제외·원격 세션 거절, 고지 전 미전송·확인 뒤 조회·수집·끄기, 진단 기록에 키·주소·PNU 없음.
   - 실호출(선택): 키 환경 변수가 있을 때만 도는 `tests/integration/site-data-live.mjs`(비프로젝트 공개 필지 1곳, 결과는 개수·좌표계만 출력하고 저장하지 않음).
 - **완료:** 시험 통과, 키가 저장소·로그·진단 묶음 어디에도 없음을 Gitleaks와 묶음 목록으로 확인.
 
@@ -219,9 +220,9 @@ T-204 SPIKE 기하 ─ T-208 만들기 틀 ┘                            │
 |---|---|---|
 | T-203 | 완료(2026-10-08) — 키 실호출 43단계 응답(공개 지점 2곳). 어댑터 6개 동작 확인, 건물 높이용 `LT_C_BLDGINFO` 추가 | [SPIKE-2026-10-07-public-site-data](../tdd/SPIKE-2026-10-07-public-site-data.md), `tools/spikes/2026-10-07-public-site-data/` |
 | T-204 | 완료(SPIKE) — 엔진(TS) 계산 + Rhino는 평면 면 목록 만들기만(`vide.bake.brep-faces@1`), Rhino 불리언 틀 불필요. Rhino 결합은 1e-5 m, `MergeCoplanarFaces` 쓰지 않음. 점검은 닫힘 + `SolidOrientation` Outward·부피 양수·엔진 부피 대조 | [SPIKE-2026-10-07-envelope](../tdd/SPIKE-2026-10-07-envelope.md), `tools/spikes/2026-10-07-envelope/` |
+| T-205 | 완료(2026-10-08) — 어댑터 8개(`juso`, `vworld-search`, `vworld-cadastral`(PNU·상자 1000건 쪽 넘김·2 km² 타일), `vworld-land-use`(속성 + `LT_C_UQ*`·`UD801` 고시 번호 + `UPISUQ161` 지구단위계획, 필지 안쪽 점), `vworld-land-characteristics`(올해 → 지난해), `vworld-buildings`(`LT_C_SPBD`), `vworld-building-info`(`LT_C_BLDGINFO`, 높이 1순위), `building-register`(늘 `pageNo`)), 200 안의 오류·NOT_FOUND 판정, 허용 끝점만 호출, 출처 붙은 사본·빈 결과·면적 차이 '확인 필요', PC 전용 키·설정 「외부 자료」(있음/없음만)·진단 묶음 제외, 전송 고지 API(카드 화면은 T-207), `LIBRARY_MODULES` 등록(SHP·PNU만). 서울시청 실호출: 후보 6·제안 1, 7개 사본 모두 `ok`(필지 91·건물 27·건물 정보 34·대장 11·용도 17항목 중 고시 번호 3·지구단위계획 1), 키 이름·있음만 출력 | `src/jigs/official/site-data/`, `src/server/public-data-keys.ts`·`site-data-routes.ts`, `tests/core/site-data.test.mjs`(11건), `tests/server/public-data-keys.test.mjs`(3건), `tests/integration/site-data-live.mjs`, `tests/integration/browser-public-data.mjs`, SPEC-12.5, ARCH-01 「공공 자료 수집」, ARCH-03 §8.1 |
 | T-206 | 완료(2026-10-08) — SHP·DBF·PRJ·CPG·ZIP 읽기(새 의존성 없음), `.prj` 매개변수 판별(5179·5180~5188·32651·32652·4326·4737, 매개변수가 다 있는 GRS80 TM), Bessel·다른 타원체·TM 아닌 투영·m 아닌 단위 거절, Krüger 6차 TM과 격자 수렴각, 한 좌표계·한 정수 m 기준점의 로컬 f64 좌표 + `packOffsets` f32 전달, 포함 깊이로 고리 정리(바깥 반시계·구멍 시계), `.cpg`/DBF 0x79 인코딩(선언 없으면 엄격 UTF-8), 국토지리정보원 코드 사전(건물·도로경계·등고선·표고점, 연속지적도 필지). 공개 기준점(OS GB Annex C ±1 mm, EPSG GN7-2 ±1 cm) 대조, 5179→5186 합성 대지 어긋남 < 1 cm. 라이브러리 등록은 T-205·T-207 | `src/jigs/official/site-data/shp/`, `site-data/assets/`(사전·NOTICE), `tests/core/site-shp.test.mjs`(12건), SPEC-12.4·12.5, ARCH-03 §8.1 |
-| T-205~T-207, T-209~T-214 | 계획(PRD 채택 완료, 사용자 계획 검토 대기) | — |
-| T-205·T-207·T-209~T-214 | 계획(2026-10-08 사용자 1단계 착수 승인) | — |
+| T-207·T-209~T-214 | 계획(2026-10-08 사용자 1단계 착수 승인) | — |
 
 ## 결정이 필요한 질문
 

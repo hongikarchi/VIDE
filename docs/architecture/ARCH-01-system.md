@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 1.0
+version: 1.1
 updated: 2026-10-08
 owner: agent:codex
 related: [PLAN-47, SPEC-14, ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35, PLAN-36, ADR-039, PLAN-38, PLAN-39, PLAN-42, ADR-040, ADR-041, PLAN-43, SPEC-13, PLAN-46]
@@ -889,7 +889,7 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 | PC `<데이터>/models/`·`cad-models/`·`sdk-models/`·`zwcad-sdk-models/` | 작업 사본·가져오기 사본·호스트 실행본 | 원본(사이트에 올리지 않음) | §4 |
 | PC `<데이터>/attachments/`·`reference-boards/`·`outputs/`·`structure/` | 첨부·참고 이미지 보드·산출물·구조 jig 설정 | 원본(올리지 않음) | §3, SPEC-09 |
 | PC 사용자 폴더 | 프로젝트 폴더·원본 도면·자료 원본 | 사용자 원본. VIDE는 경로만 기록 | SPEC-01.13, SPEC-08.4 |
-| PC 설정·키 | `remote-host.json`(PC 호스트 키), `local-session.key`, `typesafe.env`(Jev 키), `*-settings.json`(질문·웹·경로·사용량), `cli-profiles/`, `desktop.json`, `offline-view.json`, `conversation-mirror.json`(올린 대화 기록 지문), `removed-projects.json`, `launch.json` | PC 전용(올리지 않음) | 「PC 프로그램」 |
+| PC 설정·키 | `remote-host.json`(PC 호스트 키), `local-session.key`, `typesafe.env`(Jev 키), `public-data.env`(공공 자료 키), `*-settings.json`(질문·웹·경로·사용량·`site-data-settings.json` 공공 자료 전송 고지), `cli-profiles/`, `desktop.json`, `offline-view.json`, `conversation-mirror.json`(올린 대화 기록 지문), `removed-projects.json`, `launch.json` | PC 전용(올리지 않음) | 「PC 프로그램」 |
 | PC 기록 | `logs/`(진단 기록), `crashdumps/`, 오류·성능 보고 보낼 상자 | PC 전용. 보고는 동의한 요약만 사이트로(ADR-036) | 「진단 기록」·「오류·성능 보고」 |
 | PC 창·도구 | `webview/`·`webview-zwcad/`(WebView2 저장소), `plugins/`, `bin/`, `tools/` | PC 전용 | 「PC 프로그램」 |
 | 사이트 D1 계정 | `user`·`session`·`account`·`verification`·`rateLimit`(0001), 아이디 계정(0006) | 원본 | 「로그인·프로젝트 공유 계약」 |
@@ -954,7 +954,7 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 - **쓰기:** 엔진은 줄을 메모리에 모아 1초 또는 64 KB마다 한 번 붙여 쓴다(호출 쪽은 디스크를 기다리지 않음, 10,000줄 측정 줄당 약 3 µs, 이전의 줄마다 동기 append는 약 85 µs). 브레드크럼·충돌·`exit` 줄은 즉시 쓰고, 프로세스가 끝날 때 모인 줄을 동기로 쓴다. 하루 파일은 64 MB(플러그인·셸 32 MB)에서 멈추고 `log-cap` 한 줄과 버린 줄 수(`log-cap-dropped`)를 남긴다. 같은 경로·코드의 반복 `api-error`는 10초에 한 줄과 `repeated` 수로 줄인다. 플러그인·셸은 같은 방식으로 1초마다 풀 스레드에서 쓴다.
 - **요청 연결:** 요청 실행은 `withTrace`(AsyncLocalStorage, `src/core/breadcrumbs.ts`) 안에서 돌아 그 안의 줄에 `requestId`가 붙는다. AI 도구 범위는 발급 때의 요청을 기억한다. 바깥 텍스트(CLI 오류 출력, 화면 오류)는 `scrub`으로 키·토큰·Windows 사용자 이름을 지우고 2 KB로 자른다.
 - **화면 오류:** `POST /api/v1/diagnostics/client {kind, message, stack?, source?, line?, column?, route?, version?}` → `client-error`(분당 20줄, 같은 메시지는 1분에 한 번).
-- **진단 묶음:** `POST /api/v1/diagnostics/bundle {days?, dumps?}`(이 PC만) 또는 `node tools/diagnostics/bundle.mjs`가 `<데이터>\diagnostics\vide-diagnostics-<시각>.zip`(최근 3개)을 만든다. 날짜 로그·종료 기록·`about.json`(버전·OS·플러그인 파일 목록·데이터 폴더 파일 이름과 크기)·`settings.json`(설정 파일 요약)만 넣고, `launch.json`·`local-session.key`·`remote-host.json`·`typesafe.env`·`cli-profiles`·DB는 넣지 않는다. 덤프는 `dumps`일 때 최신 하나만. `GET /api/v1/diagnostics/bundle`(이 PC만) → `{dump: {bytes, modified, sendable}|null}`이 설정의 [크래시 덤프 포함 (약 N MB)](기본 켬)에 크기를 준다. 읽기는 `node tools/diagnostics/view.mjs [--day] [--failures] [--request <id>]`.
+- **진단 묶음:** `POST /api/v1/diagnostics/bundle {days?, dumps?}`(이 PC만) 또는 `node tools/diagnostics/bundle.mjs`가 `<데이터>\diagnostics\vide-diagnostics-<시각>.zip`(최근 3개)을 만든다. 날짜 로그·종료 기록·`about.json`(버전·OS·플러그인 파일 목록·데이터 폴더 파일 이름과 크기)·`settings.json`(설정 파일 요약)만 넣고, `launch.json`·`local-session.key`·`remote-host.json`·`typesafe.env`·`public-data.env`·`cli-profiles`·DB는 넣지 않는다. 덤프는 `dumps`일 때 최신 하나만. `GET /api/v1/diagnostics/bundle`(이 PC만) → `{dump: {bytes, modified, sendable}|null}`이 설정의 [크래시 덤프 포함 (약 N MB)](기본 켬)에 크기를 준다. 읽기는 `node tools/diagnostics/view.mjs [--day] [--failures] [--request <id>]`.
 - **덤프:** ProcDump는 `-accepteula -e -ma <pid>`로 붙어 처리되지 않은 예외(엔진의 `0xC0000409` fail-fast 포함, 디버거에는 2차 예외로 온다)에만 전체 덤프를 쓰고 최근 3개만 남긴다(`CrashDumps.cs`). 종료 감시(`-t`)는 쓰지 않는다(T-191: 정상 종료마다 230~785 MB 덤프가 생겨 크래시 덤프를 밀어냈다). 바깥에서의 강제 종료는 덤프 없이 `engine-exits.jsonl`의 종료 코드로만 남는다.
 
 ### 오류·성능 보고(ADR-036, [PLAN-34](../plans/PLAN-34-telemetry.md))
@@ -1061,6 +1061,20 @@ cLAWde·ArchiDB·Site Modeling·Structure Analysis는 각자의 저장소와 배
 - **저장.** 프로젝트 DB 표 `legal_profile(key, value_json, source, version, updated_at)`, `legal_answers(number, question, stage, sent_json, sent_hash, answer_json, law_db_date, fetched_at, stale, prose_json, recipe_id, recipe_version, writer_provider, writer_model, writer_effort, verify_json)`(뒤 일곱 열은 문장 생성 감사 기록이며 실패한 문장도 남긴다), `legal_articles(ref, article_json, fetched_at)`, `legal_contributions(key, value_hash, receipt_id, sent_at)`. 캐시 열쇠는 `(question 정규화, stage, sent_hash)`다.
 - **jig 능력.** `service.clawde`(ARCH-03 `Capability`에 추가). 공식 jig만 선언할 수 있고, 엔진이 읽기 결과(답·체크리스트·`constraints`)만 입력으로 넘긴다. 역전송은 어떤 jig에도 능력으로 주지 않는다.
 - **대화 도구.** `legal_ask`·`legal_checklist`·`legal_article`·`legal_answers`는 VIDE MCP 도구이며, `legal_ask`는 결정적 답과 검증을 통과한 문장(`prose`, 없으면 `proseStatus:'failed'|'no-model'|'none'`)을 함께 돌려준다. 대화 AI는 답 카드 문장을 대신 쓰지 않는다. 도구는 서비스가 연결되고 프로젝트에서 켜져 있을 때만 턴의 도구 목록에 넣는다. 오류 코드는 `SERVICE_UNAVAILABLE`·`SERVICE_AUTH`·`SERVICE_BAD_RESPONSE`·`SEND_NOT_CONFIRMED`.
+
+### 공공 자료 수집(`vide/site-data`, PLAN-45 T-205)
+
+동작은 SPEC-12.3·12.4·12.16, 자료원 조사는 [SPIKE-2026-10-07-public-site-data](../tdd/SPIKE-2026-10-07-public-site-data.md)가 정한다. 아래는 엔진 쪽 물리 계약이다. 수집 결과는 위 「외부 도메인 서비스」의 읽기 응답(출처·조회 시각·출처 구분)과 같은 모양이라, Site Modeling 서비스가 생기면 수집기만 바꾼다(OQ-16).
+
+- **코드.** `src/jigs/official/site-data/`: `http.ts`(허용 끝점·키 요구·오류 코드), `sources/*.ts`(어댑터: `juso`, `vworld-search`, `vworld-cadastral`, `vworld-land-use`, `vworld-land-characteristics`, `vworld-buildings`, `vworld-building-info`, `building-register`), `lookup.ts`, `collect.ts`, `snapshot.ts`. 어댑터는 요청 만들기·봉투 검사(zod)·정규화만 하고, 모든 쪽을 읽어 `record.total`·`totalCount`와 받은 수를 견준다.
+- **허용 끝점만 부른다.** `business.juso.go.kr/addrlink/addrLinkApi.do`, `api.vworld.kr/req/data`·`req/search`·`ned/data/getLandUseAttr`·`ned/data/getLandCharacteristics`, `apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo`. 금지 목록(서울도시공간포털 `kras`, `1611000/nsdi`, NED 토지소유, GIS건물통합 WFS)은 허용 목록과 별도로 거절한다. VWorld 레이어도 목록(`LP_PA_CBND_BUBUN`, `LT_C_SPBD`, `LT_C_BLDGINFO`, `LT_C_UQ111~114·121·123~126·128~130·141·162`, `LT_C_UD801`, `LT_C_UPISUQ161`) 밖은 부르지 않는다.
+- **봉투 판정.** 세 자료원 모두 HTTP 200 안에 오류를 담는다. VWorld `status` OK/NOT_FOUND(빈 결과)/ERROR`{code}`, NED `resultCode`(빈 값 = 정상), 주소 `results.common.errorCode`('0' = 정상), 건축HUB `response.header.resultCode`('00' 정상, '03' 없음, '22' 한도)와 게이트웨이 `OpenAPI_ServiceResponse`(401·403, JSON 또는 XML). 오류 코드는 `NO_KEY`·`REJECTED`·`LIMIT`·`BAD_RESPONSE`·`NETWORK`·`FORBIDDEN_ENDPOINT`이고, 자료원의 코드는 `detail`로만 남긴다.
+- **좌표·범위.** 형상은 모두 `crs=EPSG:5186`으로 요청하고 사본에 그 값을 적는다. 범위 조회는 2 km² 이하 정사각 타일로 나누고 `size=1000`으로 쪽을 넘기며(최대 30쪽), 타일 사이 중복은 PNU·건물관리번호로 지운다. 용도지역 레이어는 필지 안쪽 점(경계 위 점은 NOT_FOUND)으로 읽는다. 건축HUB는 늘 `pageNo`를 보낸다. data.go.kr의 이미 인코딩된 키(`%2B…`)는 다시 인코딩하지 않는다.
+- **건물 높이.** `LT_C_BLDGINFO`(PNU 없음)의 안쪽 점이 `LT_C_SPBD` 윤곽 안에 있고 높이가 0보다 크면 1순위, 아니면 `bd_mgt_sn` 앞 19자리 PNU의 표제부에서 동 이름이 같은 것, 주건축물이 하나면 그것, 여럿이면 연면적 최대의 `heit`. 둘 다 없으면 `height: null`이고 추정은 jig 계산이 한다. 표제부는 대상 필지부터 가까운 필지 순으로 최대 40필지.
+- **사본 `Snapshot<T>`.** `{source, items, fetchedAt, provenance{service:'vide/site-data', source, requests[{endpoint, params}], layers?, crs?, ids[], basis:'source'}, status:'ok'|'check'|'failed'|'no-key', checks[], reason?, detail?}`. `params`에는 `key`·`domain`·`serviceKey`·`confmKey`를 넣지 않는다. `collectSite`는 `{crs, fetchedAt, sent{pnus, radius, box}, target, landCharacteristics, landUse, parcels, buildings, buildingInfo, register, blocked, checks[]}`를 돌려준다. 대상 필지 경계가 하나라도 없으면 `blocked`.
+- **키.** `src/server/public-data-keys.ts`가 `<데이터>\public-data.env`(`VWORLD_KEY`·`VWORLD_DOMAIN`·`JUSO_KEY`·`DATA_GO_KR_KEY`, 같은 이름의 환경 변수 우선)를 읽고 쓴다. 값은 수집 라이브러리에만 넘기고, API·화면·진단 기록에는 있음/없음과 출처(`env`·`file`)만 둔다. 설정 → AI 탭의 「외부 자료」가 넣고 지운다.
+- **엔진 API.** `GET/PUT /api/v1/settings/public-data {name, value}`(빈 값은 지움, 이 PC만), `GET/PUT /api/v1/projects/:id/site-data/notice {confirm?, off?}`(쓰기는 이 PC만), `POST …/site-data/lookup {query}` → `LookupResult{query, kind, candidates[], proposal, status:'ok'|'ambiguous'|'none'|'failed'|'no-key', checks[], provenance[]}`, `POST …/site-data/collect {pnus[1..20], radius?50..600}` → `SiteCollection`. 고지를 확인하기 전에는 아무것도 보내지 않고 `{needsConfirm: notice}`를, 끈 프로젝트는 `SITE_DATA_OFF`(409)를 준다. 고지 내용과 판(`version`)은 `src/contracts/site-data.ts`, 프로젝트별 선택은 `<데이터>\site-data-settings.json {projects: {[id]: {confirmed?{version, at}, off?}}}`. 진단 기록 `site-data {op, status|blocked, copies{이름: 상태:개수}, ms}`에는 주소·PNU·키를 싣지 않는다.
+- **jig에서.** `LIBRARY_MODULES`의 `vide/site-data`는 `site-data/library.ts`(SHP 읽기·PNU 도움 함수)만 내놓는다. 키가 필요한 `lookupParcel`·`collectSite`는 엔진만 부르며, jig 단계·계산 상자는 결과 사본만 받는다(SPEC-07.9). 사이트 모델링 jig의 연결과 질문 카드·전송 고지 카드는 T-207이 붙인다.
 
 ## 7. 개발 기반과 변경 경계
 

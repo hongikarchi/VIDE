@@ -2,7 +2,7 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 0.95
+version: 0.96
 updated: 2026-10-08
 owner: agent:claude
 related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, PLAN-45, SPEC-12, RESEARCH-10, RESEARCH-12]
@@ -472,7 +472,7 @@ jig 입력은 표시용 Sync가 아니라 jig 입력 읽기로 받는다.
 - **한 좌표계·한 기준점:** 대상 좌표계는 호출자가 고르거나(평면 좌표계만) 첫 연속지적도 레이어 → 첫 평면 레이어 → 경위도뿐이면 경도에 맞는 5185~5188 순으로 정한다. 기준점은 호출자가 주거나, 거절되지 않은 모든 레이어(쓰지 않는 레이어 포함)의 범위 네 모서리를 옮긴 범위의 중심을 m 단위로 내린 값이다. 레이어 순서·선택과 무관하다.
 - **출력:** `{frame, layers[], ignored[], rejected[]}`. `frame = {crs, origin(f64 3), convergenceDeg, trueNorth(로컬 단위 벡터), originLatLon}`. 좌표는 기준점에서의 f64 로컬 m이고, Rhino로 넘길 때만 `packOffsets`로 f32 차이가 된다(§9.2, SPIKE-2026-10-07-envelope). 레이어는 역할(`building`·`road-boundary`·`contour`·`spot-height`·`parcel`)·원 좌표계·옮김 여부·원 격자와의 회전각·인코딩·필드 한글 이름·개수(`records`·`deleted`·`nullShapes`·`features`·`reversedRings`·`skippedParts`)·로컬 범위·경고를 갖는다. 면은 포함 깊이로 바깥 고리·구멍을 나누고 바깥 반시계·구멍 시계로 맞추며 닫는 점을 뺀다. 형상마다 원 레코드 번호·원 속성·코드값 한글 뜻을 남기고, 건물은 층수·종류·용도·이름·무벽건물(BDK005) 표시를, 등고선은 `CONT`, 표고점은 `NUME`(없으면 `ALTI`, 그다음 Z)을 높이로 둔다.
 - **코드 사전:** `site-data/assets/ngii-codes.json`(연속수치지형도 데이터 설명서 Ver 5.1.1에서 뽑은 레이어 107·속성 66·코드값 503·통합코드 423), 출처·해시는 `site-data/assets/NOTICE.json`. 쓰는 레이어는 파일 이름의 지형지물 코드로 정한다: B0010000 건물, A0010000 도로경계, F0010000 등고선, F0020000 표고점. 연속지적도는 `PNU`와 `JIBUN`(또는 `BCHK`) 필드로 알아본다. 나머지는 `ignored`로만 보인다.
-- **보관:** 이 모듈은 아무것도 저장하지 않는다. 넣은 파일과 결과는 호출하는 jig(T-207)가 작업본 사본으로만 둔다. 라이브러리 등록(`LIBRARY_MODULES`의 `vide/site-data`)은 공공 자료 어댑터와 함께 T-205·T-207에서 한다.
+- **보관:** 이 모듈은 아무것도 저장하지 않는다. 넣은 파일과 결과는 호출하는 jig(T-207)가 작업본 사본으로만 둔다. 라이브러리 등록(`LIBRARY_MODULES`의 `vide/site-data`)은 T-205가 했다. 등록된 모듈 `site-data/library.ts`는 이 SHP 읽기와 PNU 도움 함수만 내놓고, 키가 필요한 공공 자료 수집(`lookupParcel`·`collectSite`)은 엔진만 부른다(ARCH-01 「공공 자료 수집」).
 
 ## 9. Rhino에 만들기
 
