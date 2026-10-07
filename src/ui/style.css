@@ -1905,6 +1905,10 @@ body.left-hidden.right-hidden main {
   line-height: 1.5;
   white-space: pre-wrap;
 }
+.activity-log .md p {
+  white-space: normal;
+  margin: 0 0 4px;
+}
 .activity-log li[data-kind='thinking'] p {
   color: var(--muted);
   font-style: italic;

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
 import { api } from './gateway.ts';
+import { Markdown } from './kit/markdown.tsx';
 import { SharedHistory } from './shared-history.tsx';
 import './remote-project.css';
 
@@ -283,7 +284,9 @@ function RemoteProject({
                         · {STATE[item.state] ?? item.state} ·{' '}
                         {item.createdAt.slice(0, 16).replace('T', ' ')}
                       </small>
-                      {item.answer ? <div className="remote-muted">{item.answer}</div> : null}
+                      {item.answer ? (
+                        <Markdown className="remote-muted" text={item.answer} />
+                      ) : null}
                     </li>
                   ))}
                 </ul>

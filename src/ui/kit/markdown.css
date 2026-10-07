@@ -1,0 +1,112 @@
+/* AI answers drawn from Markdown (T-189). Runs in VIDE and on the account site, so tokens fall
+   back to plain values where the site has no VIDE token. No colored side bars. */
+.md {
+  --md-line: var(--border-subtle, #e8e7e3);
+  --md-surface: var(--bg-surface, #f5f4f0);
+  --md-muted: var(--text-2, #555555);
+  --md-radius: var(--radius-sm, 6px);
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.55;
+  min-width: 0;
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md p,
+.md ul,
+.md ol,
+.md blockquote,
+.md pre,
+.md .md-table {
+  margin: 0 0 8px;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4,
+.md h5,
+.md h6 {
+  margin: 12px 0 6px;
+  font-size: var(--fs-md, 13px);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.md h1 {
+  font-size: var(--fs-lg, 15px);
+}
+.md h2 {
+  font-size: calc(var(--fs-md, 13px) + 1px);
+}
+.md ul,
+.md ol {
+  padding-left: 20px;
+}
+.md li + li {
+  margin-top: 2px;
+}
+.md li > p {
+  margin: 0;
+}
+.md li > ul,
+.md li > ol {
+  margin: 2px 0 0;
+}
+.md a {
+  color: var(--accent-strong, #b4532f);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md code {
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  font-size: 0.92em;
+  background: var(--md-surface);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.md pre {
+  background: var(--md-surface);
+  border-radius: var(--md-radius);
+  padding: 8px 10px;
+  overflow-x: auto;
+}
+.md pre code {
+  background: none;
+  padding: 0;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+.md blockquote {
+  padding: 6px 10px;
+  color: var(--md-muted);
+  background: var(--md-surface);
+  border-radius: var(--md-radius);
+}
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--md-line);
+  margin: 10px 0;
+}
+.md .md-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.md table {
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+.md th,
+.md td {
+  border: 1px solid var(--md-line);
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: normal;
+}
+.md th {
+  background: var(--md-surface);
+  font-weight: 600;
+}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { z } from 'zod';
+import { Markdown } from '../../ui/kit/markdown';
 import { ApiError, api, message } from './api';
 
 // PLAN-33: the project's 할 일 (read and written here; the PC applies the changes when it is on)
@@ -289,7 +290,7 @@ export function OfflineHistory({
         {data?.items.map((item) => (
           <li key={item.id} data-state={item.state}>
             <strong>{item.body || '(글 없는 요청)'}</strong>
-            {item.answer ? <p>{item.answer}</p> : null}
+            {item.answer ? <Markdown text={item.answer} /> : null}
             <small className="muted">
               {STATE[item.state] ?? item.state} · {when(item.createdAt)}
               {item.files.length ? ` · ${item.files.join(', ')}` : ''}

@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
+import { Markdown } from './kit/markdown.tsx';
 
 export interface ActivityEntry {
   at: string;
@@ -48,7 +49,7 @@ export function ActivityLog({
             {icons[entry.kind] ?? '·'}
           </span>
           <div>
-            <p>{entry.text}</p>
+            {entry.kind === 'message' ? <Markdown text={entry.text} /> : <p>{entry.text}</p>}
             {entry.detail ? (
               <details>
                 <summary>{entry.kind === 'execute' ? '실행한 코드' : '세부 내용'}</summary>

@@ -5,6 +5,7 @@ import { requestMode, storedAttachments } from '../contracts/workspace.ts';
 import { attachmentPreview } from './attachments.ts';
 import { undoReason } from '../contracts/direct-refusal.ts';
 import { ActivityLog, activityEntries } from './activity.tsx';
+import { Markdown } from './kit/markdown.tsx';
 import { inConversation } from './conversations.tsx';
 import { api } from './gateway.ts';
 import { executeWaitOf, guardOpen, heldRowLabel, waitingText } from './request-scope.ts';
@@ -894,7 +895,9 @@ function WorkView({
               연결 Rhino에 반영했습니다. 아래 AI 답변은 원본 반영 전에 작성된 작업 사본 설명입니다.
             </p>
           ) : null}
-          {result?.text ? <p className="work-answer">{result.text}</p> : null}
+          {result?.text ? (
+            <Markdown className="work-answer" label="AI 답변" text={result.text} />
+          ) : null}
           {result?.extensionResult?.rows.map((row, index) => (
             <details key={index}>
               <summary>

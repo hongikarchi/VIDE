@@ -38,7 +38,9 @@ try {
         state: 'succeeded',
         result: {
           mode: 'auto',
-          text: '기둥 두 개를 추가했습니다.',
+          text:
+            '기둥 **두 개**를 추가했습니다.\n\n| 기둥 | 층 |\n|---|---|\n| c-1 | 1F |\n\n' +
+            '<script>window.injected = true</script> [링크](javascript:alert(1))',
           executions: [
             {
               executionId: 'undo-1',
@@ -337,6 +339,14 @@ try {
   assert.equal(await rows.count(), 2);
   assert.match(await rows.nth(0).textContent(), /기둥 추가.*추가 2 · 변경 0 · 삭제 0.*적용됨/);
   assert.match(await work().locator('.work-conditions').textContent(), /모드자동/);
+  // The answer is drawn from its Markdown (T-189); raw HTML and unsafe links stay text.
+  const answer = work().locator('.work-answer');
+  assert.equal(await answer.locator('strong').textContent(), '두 개');
+  assert.equal(await answer.locator('table td').first().textContent(), 'c-1');
+  assert.doesNotMatch(await answer.textContent(), /\*\*|\|---/);
+  assert.match(await answer.textContent(), /<script>window\.injected = true<\/script>/);
+  assert.equal(await answer.locator('script, a').count(), 0);
+  assert.equal(await page.evaluate(() => window.injected), undefined);
   assert.equal(await work().getByText('이 후보 보기', { exact: true }).count(), 0);
   assert.equal(await work().getByText('문서에 적용', { exact: true }).count(), 0);
   // An older record is refused by the host: the notice says to use Ctrl+Z in order.

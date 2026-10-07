@@ -182,9 +182,12 @@ test('built UI assets load without exposing source files or build metadata', asy
     assert.match(response.headers.get('content-type'), /javascript|css/);
   }
   // Bundled fonts are served from the same assets folder (the desktop app works offline).
-  const stylesheet = scripts.find((path) => path.endsWith('.css'));
-  const css = await (await fetch(app.origin + stylesheet)).text();
-  const font = css.match(/url\(\.\/([A-Za-z0-9_-]+\.woff2)\)/)?.[1];
+  // Shared chunks may bring their own stylesheets first; the fonts are in one of them.
+  let font;
+  for (const stylesheet of scripts.filter((path) => path.endsWith('.css'))) {
+    const css = await (await fetch(app.origin + stylesheet)).text();
+    font ??= css.match(/url\(\.\/([A-Za-z0-9_-]+\.woff2)\)/)?.[1];
+  }
   assert.ok(font, 'a bundled woff2 font');
   const fontResponse = await fetch(app.origin + '/assets/' + font);
   assert.equal(fontResponse.status, 200, font);

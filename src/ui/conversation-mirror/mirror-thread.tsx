@@ -3,6 +3,7 @@ import {
   type MirroredConversation,
   type MirroredThread,
 } from '../../contracts/conversation-mirror.ts';
+import { Markdown } from '../kit/markdown.tsx';
 
 // A project's conversation records from another member's PC (ADR-037 4, Design SCR-25), read-only.
 // The same components run on the account site (src/sharing/web/conversations.tsx) and in VIDE's
@@ -115,9 +116,7 @@ export function MirrorThreadView({
               {request.body.trim() || '(글 없는 요청)'}
             </div>
             {request.answer?.trim() ? (
-              <div className="mirror-answer" aria-label="답">
-                {request.answer.trim()}
-              </div>
+              <Markdown className="mirror-answer" label="답" text={request.answer.trim()} />
             ) : null}
             {request.activity.length ? (
               <details className="mirror-activity">

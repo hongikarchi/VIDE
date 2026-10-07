@@ -105,10 +105,6 @@
   border-radius: var(--m-radius);
   padding: 8px 10px;
 }
-.mirror-answer {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
 .mirror-file {
   border: 1px solid var(--m-line);
   border-radius: var(--m-radius);

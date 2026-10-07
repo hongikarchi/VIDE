@@ -66,6 +66,7 @@
     "delaunator": "5.1.0",
     "lib0": "0.2.119",
     "lucide": "1.49.0",
+    "markdown-it": "15.0.2",
     "quickjs-emscripten": "0.32.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
