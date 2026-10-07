@@ -156,6 +156,11 @@ export const OFFICIAL_JIG_ROUTING: Record<string, { intent: string; words: strin
       'Status report of the project records (mail, minutes, documents, drawings): what is decided, what is blocked and what changed recently.',
     words: ['프로젝트 현황', '현황 보고'],
   },
+  finish: {
+    intent:
+      'Interior finish schedule: choose finish codes from the finish-code library, adjust layer thicknesses, assign floor, wall and ceiling codes to rooms, print the room finish schedule and the finish list.',
+    words: ['마감 일람표', '실 마감표', '실내재료마감표', '마감표', '마감 코드'],
+  },
 };
 
 // Words that name the file itself or change it: these requests always go to the file.
@@ -985,6 +990,7 @@ const OFFICIAL_JIG_NAMES: Record<string, string> = {
   structure: '구조 검토',
   sync: '모델·도면 정합',
   knowledge: '프로젝트 현황',
+  finish: '마감 일람표',
 };
 /** The official jigs as the rules see them (their words open a jig without Jev). */
 export function officialRouteJigs(): RouteJig[] {

@@ -176,6 +176,12 @@ function fill(db, p, n) {
     at,
   );
   run(
+    "INSERT INTO finish_rooms VALUES(?,?,0,'1층','101','합성 실','[\"F0001\"]','[]','[]')",
+    `room-${p}`,
+    p,
+  );
+  run('INSERT INTO finish_sheets VALUES(?,?,?)', p, '{}', at);
+  run(
     "INSERT INTO object_versions VALUES(?,?,'object','{}',?,3)",
     p,
     `v-${p}`,

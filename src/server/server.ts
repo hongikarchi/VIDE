@@ -165,6 +165,8 @@ import { zwcadKnowledgeReader } from '../../hosts/zwcad/knowledge-dwg.ts';
 import { ProjectFolders } from '../core/project-folders.ts';
 import { Agenda } from '../core/agenda.ts';
 import { agendaRoutes, agendaStatuses } from './agenda-routes.ts';
+import { FinishStore } from '../core/finish-store.ts';
+import { finishRoutes, finishStatuses } from './finish-routes.ts';
 import { SharedNotes } from './shared-notes.ts';
 import { notesRoutes, notesStatuses } from './notes-routes.ts';
 import { SharedProjects } from './shared-project.ts';
@@ -269,6 +271,7 @@ const statuses: Record<string, number> = {
   ...notesStatuses,
   ...collectStatuses,
   ...jigSubmitStatuses,
+  ...finishStatuses,
 };
 export async function startServer({
   filename,
@@ -315,6 +318,7 @@ export async function startServer({
     links = new DocumentLinks(store),
     tableViews = new TableViews(store),
     agenda = new Agenda(store),
+    finish = new FinishStore(store),
     structures = new StructureStore(
       filename === ':memory:' ? null : join(dirname(filename), 'structure'),
     ),
@@ -1165,6 +1169,9 @@ export async function startServer({
           },
         })
       )
+        return;
+      // 마감 일람표 jig (SPEC-11): the finish-code library and the project's rooms and sheet.
+      if (await finishRoutes(url, request.method, { finish, body: () => body(request), send }))
         return;
       // 노트·일지 (SPEC-10): the site's shared notes through this PC's account link.
       if (

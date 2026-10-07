@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 /** v5 and later cannot be opened by an older installation (UNSUPPORTED_SCHEMA); see ARCH-03 §10.1. */
-export const schemaVersion = 11;
+export const schemaVersion = 12;
 export const baselineSchema = `
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
@@ -156,6 +156,15 @@ CREATE TABLE IF NOT EXISTS sync_manifest_removed(
   requestId TEXT NOT NULL REFERENCES sync_manifests(requestId) ON DELETE CASCADE,
   kind TEXT NOT NULL, key TEXT NOT NULL, revision INTEGER NOT NULL,
   PRIMARY KEY(requestId, kind, key)) WITHOUT ROWID;`;
+// 마감 일람표 jig (SPEC-11.6, PLAN-43 T-198): a project's rooms (층별·실번호·실명 and the F·W·C
+// code lists as JSON arrays, `ord` is the table order) and one sheet row (채택, 두께 조절, 표제,
+// 프로젝트 일반사항 as JSON). A save replaces the project's rows in one transaction.
+const finishSchedule = `CREATE TABLE IF NOT EXISTS finish_rooms(id TEXT NOT NULL,
+  projectId TEXT NOT NULL REFERENCES projects(id), ord INTEGER NOT NULL, floor TEXT NOT NULL,
+  roomNo TEXT NOT NULL, name TEXT NOT NULL, floorCodes TEXT NOT NULL, wallCodes TEXT NOT NULL,
+  ceilingCodes TEXT NOT NULL, PRIMARY KEY(projectId, id)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS finish_sheets(projectId TEXT PRIMARY KEY REFERENCES projects(id),
+  body TEXT NOT NULL, updatedAt TEXT NOT NULL);`;
 export const migrations: Migration[] = [
   { version: 2, sql: baselineSchema },
   { version: 3, sql: hiddenRequests },
@@ -167,6 +176,7 @@ export const migrations: Migration[] = [
   { version: 9, sql: objectManifests },
   { version: 10, sql: dayLog },
   { version: 11, sql: agendaFields },
+  { version: 12, sql: finishSchedule },
 ];
 
 /** Caller holds the exclusive controller lock. Never migrates user model files. */

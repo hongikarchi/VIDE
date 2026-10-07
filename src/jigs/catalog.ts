@@ -42,6 +42,16 @@ export const JIGS: JigEntry[] = [
     basis: 'S-18·S-10·S-05 · SPEC-06',
   },
   {
+    id: 'finish',
+    code: 'J-10',
+    name: '마감 일람표',
+    summary:
+      '마감코드 체계(코드 477개)에서 프로젝트 마감을 고르고 층별 두께를 맞춘 뒤, 실마다 바닥·벽·천장 코드를 배정해 실 마감표와 마감 일람표를 인쇄·CSV로 냅니다.',
+    inputs: ['실 목록(직접 입력·엑셀 붙여넣기)'],
+    status: 'available',
+    basis: 'SPEC-11 · PLAN-43 T-198',
+  },
+  {
     id: 'site-modeling',
     code: 'J-01',
     name: '사이트 모델링',
