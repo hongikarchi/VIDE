@@ -9,6 +9,13 @@ import type { ClawdeChecklist, ClawdeStageId } from '../contracts/clawde.ts';
 import type { ClawdeClient } from './clawde.ts';
 import { LegalAnswers, type LegalAnswerView, type LegalSent } from './legal-answers.ts';
 import { LegalContributions } from './legal-contribute.ts';
+import {
+  constraintsOutput,
+  profileFromSiteModel,
+  targetChips,
+  type LegalModelSource,
+  type SiteModelRead,
+} from './legal-model.ts';
 import { LegalProfile, type LegalChecklistCache, type LegalSendItem } from './legal-profile.ts';
 import { writerKey, type LegalWriter } from './legal-writer.ts';
 import type { ServiceSettings } from './settings.ts';
@@ -66,17 +73,21 @@ export class LegalService {
   /** The answer prose writer (T-236); without one only the deterministic fields are shown. */
   readonly writer: LegalWriter | undefined;
   private readonly now: (() => Date) | undefined;
+  /** The project's site model (SPEC-13.8): profile values and the answers' target chips. */
+  private readonly model: LegalModelSource | undefined;
   constructor({
     store,
     client,
     settings,
     writer,
+    model,
     now,
   }: {
     store: Store;
     client: ClawdeClient;
     settings: ServiceSettings;
     writer?: LegalWriter;
+    model?: LegalModelSource;
     now?: () => Date;
   }) {
     this.answers = new LegalAnswers(store, { now });
@@ -84,6 +95,7 @@ export class LegalService {
     this.client = client;
     this.settings = settings;
     this.writer = writer;
+    this.model = model;
     this.now = now;
     this.contributions = new LegalContributions({
       store,
@@ -147,6 +159,58 @@ export class LegalService {
     await this.assertCanSend(projectId);
     return this.writeProse(projectId, stored, latest);
   }
+  // --- the model (SPEC-13.8, PLAN-46 T-220) -------------------------------------------------------
+
+  /** The project's site model, or undefined when there is none (or it cannot be read). */
+  private async readModel(projectId: string): Promise<SiteModelRead | undefined> {
+    try {
+      return await this.model?.read(projectId);
+    } catch {
+      return undefined;
+    }
+  }
+  /**
+   * 모델에서 읽기: the site model's 대지 요약 into the profile with the source 'model' and its run. A
+   * user value stays and gets a notice; a value the site model gave before and now gives differently
+   * changes with a notice of the earlier value. Answers that used a changed value go '다시 확인
+   * 필요' (and the next send shows the card). Returns the keys whose value changed.
+   */
+  async syncModel(projectId: string): Promise<string[]> {
+    const read = await this.readModel(projectId);
+    if (!read) return [];
+    const changed: string[] = [];
+    for (const offer of profileFromSiteModel(read))
+      if (
+        this.profile.offer(projectId, offer.key, {
+          value: offer.value,
+          ...(offer.unit ? { unit: offer.unit } : {}),
+          source: 'model',
+          version: read.version,
+        })
+      )
+        changed.push(offer.key);
+    this.answers.profileChanged(projectId, changed);
+    return changed;
+  }
+  /** Answers with their target chips resolved against the site model now. */
+  private async withTargets<T extends LegalAnswerView>(projectId: string, views: T[]) {
+    if (!views.some((view) => view.answer.targets?.length)) return views;
+    const read = await this.readModel(projectId);
+    return views.map((view) =>
+      view.answer.targets?.length
+        ? { ...view, targets: targetChips(view.answer.targets, read) }
+        : view,
+    );
+  }
+  /**
+   * The legal jig's output `legal.constraints` (SPEC-13.8): what `vide/buildable-mass` receives as
+   * its `legal` input. Only constraints whose every article is cited with its text.
+   */
+  async constraints(projectId: string) {
+    const latest = await this.settings.lawDbDate();
+    return constraintsOutput(this.answers.list(projectId, latest));
+  }
+
   /**
    * The project's answers, newest first, with the service state for the offline mark: while the
    * last call found the service unreachable every cached answer shows '오프라인 · 조회 시각'.
@@ -154,14 +218,15 @@ export class LegalService {
   async list(projectId: string) {
     const latest = await this.settings.lawDbDate();
     return {
-      answers: this.answers.list(projectId, latest),
+      answers: await this.withTargets(projectId, this.answers.list(projectId, latest)),
       offline: this.settings.status === 'unreachable',
       status: (await this.settings.view()).clawde.status,
       projectOff: await this.settings.projectOff(projectId),
     };
   }
   async get(projectId: string, number: number) {
-    return this.answers.get(projectId, number, await this.settings.lawDbDate());
+    const view = this.answers.get(projectId, number, await this.settings.lawDbDate());
+    return (await this.withTargets(projectId, [view]))[0];
   }
 
   /**
@@ -257,6 +322,7 @@ export class LegalService {
     input: unknown,
   ): Promise<LegalChecklistView | LegalNeedsConfirm> {
     const { stage, refresh } = legalChecklistQuerySchema.parse(input);
+    await this.syncModel(projectId);
     const chosen = stage ?? this.profile.stage(projectId);
     const payload = this.profile.payload(projectId);
     const kept = this.profile.checklist(projectId, chosen);
@@ -309,13 +375,17 @@ export class LegalService {
    */
   async askProject(projectId: string, input: unknown): Promise<LegalProjectAskResult> {
     const { question, stage, confirmSendHash, exclude, refresh } = legalAskInputSchema.parse(input);
+    await this.syncModel(projectId);
     const chosen = stage ?? this.profile.stage(projectId);
     let payload = this.profile.payload(projectId);
     const sentOf = (): LegalSent => ({ stage: chosen, profile: payload.profile });
     const latest = await this.settings.lawDbDate();
     if (!refresh) {
       const hit = this.answers.cached(projectId, question, sentOf(), latest);
-      if (hit) return { answer: hit, number: hit.number, cached: true };
+      if (hit) {
+        const [answer] = await this.withTargets(projectId, [hit]);
+        return { answer, number: hit.number, cached: true };
+      }
     }
     await this.assertCanSend(projectId);
     if (payload.hash !== this.profile.confirmedHash(projectId)) {
@@ -327,7 +397,8 @@ export class LegalService {
       this.profile.setConfirmed(projectId, payload.hash);
     }
     const result = await this.ask(projectId, question, sentOf(), { refresh });
-    return { ...result, number: result.answer.number };
+    const [answer] = await this.withTargets(projectId, [result.answer]);
+    return { ...result, answer, number: answer.number };
   }
 
   // --- the conversation tools (SPEC-13.9, PLAN-46 T-223) -----------------------------------------

@@ -136,6 +136,15 @@
           "extract": "rows"
         }
       ]
+    },
+    {
+      "key": "legal",
+      "title": "법규 결과(규제 조건)",
+      "kind": "jig-output",
+      "from": {
+        "jig": "vide/legal",
+        "output": "constraints"
+      }
     }
   ],
   "params": [
@@ -1804,7 +1813,8 @@
         "param.parkingRoundScope",
         "param.parkingAreaBasis",
         "param.parkingEntryState",
-        "param.parkingEntryCornerDistance"
+        "param.parkingEntryCornerDistance",
+        "input.legal"
       ],
       "writes": "regulations",
       "speed": "live",
@@ -2187,6 +2197,10 @@
     {
       "name": "sync.read",
       "reason": "대지·도로·인접 대지 경계와 그린 선을 읽습니다"
+    },
+    {
+      "name": "jig.read",
+      "reason": "법규 검토의 규제 조건(근거 조항이 확인된 수치 제한)을 읽습니다"
     },
     {
       "name": "library.call",

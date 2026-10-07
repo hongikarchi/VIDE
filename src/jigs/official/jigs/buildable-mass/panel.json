@@ -154,8 +154,10 @@
         "columns": [
           { "field": "title", "label": "항목" },
           { "field": "value", "label": "값" },
+          { "field": "applies", "label": "적용 여부" },
           { "field": "status", "label": "확정 상태" },
-          { "field": "origin", "label": "출처 구분" }
+          { "field": "origin", "label": "출처 구분" },
+          { "field": "basis.clause", "label": "근거 조항" }
         ],
         "csv": "규제-조건"
       }

@@ -2,7 +2,7 @@
 id: PLAN-46
 title: 법규 Q&A — cLAWde 연결·법규 jig·단계별 법령·역전송·답 문장 품질 (T-215~T-224, T-236)
 status: review
-version: 0.10
+version: 0.11
 updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-13, SPEC-07, SPEC-08, SPEC-02, SPEC-12, ARCH-01, ARCH-03, ADR-026, ADR-030, ADR-037, ADR-039, ADR-040, RESEARCH-04, RESEARCH-16, PLAN-45, C-04, C-06, OQ-16, OQ-17, FR-09, FR-18, FR-24, FR-25]
@@ -122,6 +122,7 @@ related: [SPEC-13, SPEC-07, SPEC-08, SPEC-02, SPEC-12, ARCH-01, ARCH-03, ADR-026
 - **검증:** `tests/core/legal-model-link.test.mjs` — 합성 대지 결과에서 모델 요약 채움, 근거 없는 `constraint`는 출력에서 빠짐, 대상 칩이 Link ID로 풀림/없으면 '모델에 없음'.
 - **완료:** 시험과 `npm run verify` 통과, PLAN-45와 출력 스키마 이름을 서로 가리킨다.
 - **의존:** PLAN-45의 가능 매스 계산이 이 출력을 받는다.
+- **상태(2026-10-08): 완료(엔진·화면, 실제 Rhino 강조 확인은 남음).** 대지 모델 → 프로필: `src/services/legal-model.ts` `profileFromSiteModel`(대지 요약과 `vide-site-summary` 메타데이터에서 `site.pnu`·`site.address`·`site.area`(공부)·`model.siteArea`(계산)·`site.landCategory`·`site.zoning`(고시 포함)·`site.roadAccess`·`site.roadWidth`·`model.northBasis`·`model.convergenceDeg`·`model.surroundingBuildings`·`model.surroundingMaxHeight`), `LegalService.syncModel`(프로필 보기·묻기·단계 목록 앞, 출처 `model`과 대지 모델 판, 사용자 값은 알림만, 다시 계산된 값은 '바뀐 값' 알림과 그 값을 쓴 답 '다시 확인 필요'), 서버의 `siteModelSource`(`src/server/legal-model-source.ts`, 가장 최근 `vide/site-model`의 `summary`·만든 객체). 대상 칩: 서비스 계약 `targets[]`(선택), `targetChips`(만들기 `outline`·`targets`/`parcels`/`roads`의 기록 → Link ID·객체 ID, 없으면 '모델에 없음'), 답 카드 머리 줄의 칩(`src/ui/legal-answer-card.tsx`)과 뷰포트 선택·맞춤(`src/ui/legal-target.ts`, `src/ui/app/viewport.ts`). 제한 → 가능 매스: 계약 `constraints[].basis`(선택), `constraintsOutput`(`vide.legal.constraints@1`, `src/contracts/legal.ts`: 모든 조항이 원문과 함께 인용된 것만, 근거 조항·출처 표시·적용 여부, 빠진 것은 까닭과 함께 `left`), `provideJigOutput` → `JigRuntime`의 `jig-output` 입력, `vide/buildable-mass`의 입력 `legal`(`jig.read`), `massing-kit/legal-adapter.ts`의 닫힌 키 표(PLAN-45 T-209 어댑터 자리). 가짜 cLAWde 표본 01에 `targets`·`sunlight.baseHeight`·`basis:'verified'`를 더함. 시험: `tests/core/legal-model-link.test.mjs` 5건(실제 대지 모델 작업본으로 프로필 채움·사용자 값 알림·다시 계산의 바뀐 값과 답 '다시 확인 필요', 칩이 Link ID로 풀림/'모델에 없음'·되돌린 만들기 제외, 근거 미확인·원문 없음·다시 확인 필요·판단 불가 제외와 가장 새 답 우선, `vide/buildable-mass`가 받아 사람 값 우선), 자체 시험 고정 자료 `buildable-mass/fixtures/legal-feed`(법규 제한이 외피를 만들어 `rect`와 같은 부피, 사람 건폐율 우선과 차이, 연결 안 된 키), `tests/integration/browser-legal-targets.mjs`(대지 모델 → 프로필 '모델에서 읽음', 칩 누르면 뷰포트에서 두 객체 선택, 인접 대지 '모델에 없음'), `browser-legal.mjs`에 대지 모델 없는 칩. **남은 조건:** 실제 Rhino에 만든 대지 객체로 칩 강조를 한 번 확인(T-214 검수와 함께).
 
 ## T-221 법규 jig 패널·답 카드·되묻기
 

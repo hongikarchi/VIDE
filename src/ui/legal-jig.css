@@ -285,6 +285,28 @@ p.legal-mark {
   color: var(--text-1);
   border-color: var(--accent-muted);
 }
+/* Target chips (SPEC-13.8): the composer's target-chip look; '모델에 없음' greyed */
+.legal-targets {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.legal-target {
+  font-size: 11px;
+  padding: 1px 8px;
+  border: var(--hairline) solid var(--accent-muted);
+  border-radius: var(--radius-pill);
+  background: var(--accent-subtle);
+  color: var(--text-1);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.legal-target[data-found='false'] {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text-3);
+  cursor: default;
+}
 .legal-ref {
   font-family: var(--font-mono);
   font-size: 12px;

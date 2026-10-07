@@ -26,18 +26,28 @@
     "checks": [],
     "needs": [],
     "usedProfile": ["site.zoning"],
+    "targets": ["site", "adjacent"],
     "constraints": [
+      {
+        "key": "sunlight.baseHeight",
+        "value": 10,
+        "unit": "m",
+        "refs": ["law:건축법 시행령/제86조/①"],
+        "basis": "verified"
+      },
       {
         "key": "sunlight.setbackUpTo10m",
         "value": 1.5,
         "unit": "m",
-        "refs": ["law:건축법 시행령/제86조/①"]
+        "refs": ["law:건축법 시행령/제86조/①"],
+        "basis": "verified"
       },
       {
         "key": "sunlight.setbackRatioAbove10m",
         "value": 0.5,
         "unit": "ratio",
-        "refs": ["law:건축법 시행령/제86조/①"]
+        "refs": ["law:건축법 시행령/제86조/①"],
+        "basis": "verified"
       }
     ],
     "figures": [

@@ -116,6 +116,11 @@ export const clawdeAnswerSchema = z.object({
     }),
   ),
   usedProfile: z.array(nonEmpty),
+  /**
+   * Numeric limits with their articles (SPEC-13.8). `basis` says whether a person at the service
+   * confirmed the value ('verified' → 서비스 확정) or not ('draft' → 서비스 해석); without it the
+   * engine treats the value as 서비스 해석.
+   */
   constraints: z
     .array(
       z.object({
@@ -123,9 +128,15 @@ export const clawdeAnswerSchema = z.object({
         value: z.number(),
         unit: nonEmpty,
         refs: z.array(clawdeRefSchema),
+        basis: z.enum(['verified', 'draft']).optional(),
       }),
     )
     .optional(),
+  /**
+   * What the answer is about in the model (SPEC-13.8 답에서 모델로): the site, the adjacent lots,
+   * the roads. The engine resolves them to the site-model objects (Link ID) for the target chips.
+   */
+  targets: z.array(z.enum(['site', 'adjacent', 'road'])).optional(),
   figures: z
     .array(
       z.object({

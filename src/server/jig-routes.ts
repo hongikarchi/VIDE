@@ -19,7 +19,13 @@ import type { Execution } from './execution.ts';
 import { JigRegistry, JigInvalidError, repositoryJigRoot } from '../jigs/runtime/loader.ts';
 import { importPack } from '../jigs/runtime/pack.ts';
 import { forkable } from '../jigs/runtime/drafts.ts';
-import { JigRuntime, layersOf, rowsOfLayers, type ReadModel } from '../jigs/runtime/runtime.ts';
+import {
+  JigRuntime,
+  layersOf,
+  rowsOfLayers,
+  type ReadModel,
+  type RuntimeOptions,
+} from '../jigs/runtime/runtime.ts';
 import {
   bakeOffers,
   bakeRecords,
@@ -224,6 +230,19 @@ const fileImport = z.object({
 
 // One runtime per engine (keyed by its workspace); child processes and caches live in it.
 const runtimes = new WeakMap<Workspace, JigRuntime>();
+type JigOutputProvider = NonNullable<RuntimeOptions['jigOutput']>;
+// Producers of `jig-output` inputs per engine, by `<jig>#<output>` (the legal jig's
+// `legal.constraints`, PLAN-46 T-220); registered by the server, read when a step runs.
+const outputProviders = new WeakMap<Workspace, Map<string, JigOutputProvider>>();
+export function provideJigOutput(
+  workspace: Workspace,
+  from: { jig: string; output: string },
+  provider: JigOutputProvider,
+) {
+  let providers = outputProviders.get(workspace);
+  if (!providers) outputProviders.set(workspace, (providers = new Map()));
+  providers.set(`${from.jig}#${from.output}`, provider);
+}
 export function jigRuntimeFor(workspace: Workspace, dataDirectory: string): JigRuntime {
   let runtime = runtimes.get(workspace);
   if (!runtime) {
@@ -234,7 +253,13 @@ export function jigRuntimeFor(workspace: Workspace, dataDirectory: string): JigR
       dataDir: dataDirectory,
       devRoots: devRoot ? [devRoot] : [],
     });
-    runtime = new JigRuntime({ store, dataDir: dataDirectory, registry });
+    runtime = new JigRuntime({
+      store,
+      dataDir: dataDirectory,
+      registry,
+      jigOutput: async (projectId, from) =>
+        outputProviders.get(workspace)?.get(`${from.jig}#${from.output}`)?.(projectId, from),
+    });
     runtimes.set(workspace, runtime);
   }
   return runtime;

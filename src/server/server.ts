@@ -19,7 +19,14 @@ import { gzip } from 'node:zlib';
 import { AccountUsageService, PROVIDERS } from '../ai/account-usage.ts';
 import { JIGS } from '../jigs/catalog.ts';
 import { runSync } from '../jigs/sync.ts';
-import { closeJigRuntime, jigRoutes, jigStatuses } from './jig-routes.ts';
+import {
+  closeJigRuntime,
+  jigRoutes,
+  jigRuntimeFor,
+  jigStatuses,
+  provideJigOutput,
+} from './jig-routes.ts';
+import { siteModelSource } from './legal-model-source.ts';
 import { routeJigsOf, skillCatalog } from './skill-catalog.ts';
 import {
   analysisWorkerStats,
@@ -526,7 +533,13 @@ export async function startServer({
     client: clawde,
     settings: serviceSettings,
     writer: legalWriter,
+    // 모델과 잇기 (SPEC-13.8, T-220): the project's site model fills the profile and the chips.
+    model: siteModelSource(() => jigRuntimeFor(workspace, dirname(filename))),
   });
+  // The legal jig's output `legal.constraints` for `vide/buildable-mass` (SPEC-13.8).
+  provideJigOutput(workspace, { jig: 'vide/legal', output: 'constraints' }, (projectId) =>
+    legal.constraints(projectId),
+  );
   // Shared notes (SPEC-10): this PC as a member of the site; a Markdown copy for the AI.
   const sharedNotes =
     filename === ':memory:'

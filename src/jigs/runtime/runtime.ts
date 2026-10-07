@@ -58,6 +58,19 @@ export interface RuntimeOptions {
   registry: JigRegistry;
   hooks?: GateContext['hooks'];
   child?: ChildRunnerOptions;
+  /**
+   * The value of a `jig-output` input (ARCH-03 §2.3 「다른 jig의 출력」): `{jig, output}` of the
+   * project, e.g. the legal jig's `legal.constraints` (PLAN-46 T-220). Undefined when nothing has
+   * been produced; the step then works without it.
+   */
+  jigOutput?: (projectId: string, from: { jig: string; output: string }) => Promise<unknown>;
+}
+
+/** One bake record's objects still made by the jig (for links from other features, T-220). */
+export interface MadeObjects {
+  bakeId: string;
+  linkId: string;
+  nativeIds: string[];
 }
 
 export interface StepView {
@@ -198,6 +211,7 @@ export class JigRuntime {
   readonly registry: JigRegistry;
   private readonly hooks: GateContext['hooks'];
   private readonly childOptions: ChildRunnerOptions;
+  private readonly jigOutput: RuntimeOptions['jigOutput'];
   private readonly runners = new Map<string, StepRunner>();
   private readonly generations = new Map<string, number>();
   private readonly graphs = new Map<string, StepGraph>();
@@ -208,6 +222,7 @@ export class JigRuntime {
     this.registry = options.registry;
     this.hooks = options.hooks;
     this.childOptions = options.child ?? {};
+    this.jigOutput = options.jigOutput;
   }
 
   // --- files ---------------------------------------------------------------------------------
@@ -703,8 +718,11 @@ export class JigRuntime {
     return body.assembly[roleKey];
   }
 
-  /** Input values for execution: assembled roles (snapshots read back) and zones. */
-  private executionInputs(jig: LoadedJig, body: InstanceBody) {
+  /**
+   * Input values for execution: assembled roles (snapshots read back), zones, site data and other
+   * jigs' outputs (the value as the provider gives it; fingerprinted by its content).
+   */
+  private async executionInputs(projectId: string, jig: LoadedJig, body: InstanceBody) {
     const inputs: Record<string, unknown> = {};
     for (const input of jig.manifest.inputs) {
       if (input.kind === 'assembly') {
@@ -722,6 +740,8 @@ export class JigRuntime {
       } else if (input.kind === 'zone') inputs[input.key] = body.zones[input.key] ?? [];
       else if (input.kind === 'site-data')
         inputs[input.key] = this.siteDataInput(body.siteData?.[input.key] ?? {});
+      else if (input.kind === 'jig-output')
+        inputs[input.key] = (await this.jigOutput?.(projectId, input.from)) ?? null;
     }
     return inputs;
   }
@@ -869,7 +889,7 @@ export class JigRuntime {
       runner: this.runnerFor(jig),
       cache: this.cacheFor(instanceId),
       mode: input.mode,
-      inputs: this.executionInputs(jig, body),
+      inputs: await this.executionInputs(projectId, jig, body),
       params: body.params,
       overrides: body.overrides,
       assembly: body.assembly,
@@ -925,6 +945,27 @@ export class JigRuntime {
     if (!step || step.kind !== 'human') throw new DomainError('NOT_FOUND');
     this.store.saveRun(instanceId, stepId, { inputHash, status: 'confirmed' });
     return this.view(projectId, instanceId);
+  }
+  /**
+   * The objects an instance's bakes made and still own (not undone, item state `jig`), per bake and
+   * linked file: what another feature points at by Link ID (SPEC-13.8 대상 칩).
+   */
+  madeObjects(projectId: string, instanceId: string): MadeObjects[] {
+    this.store.instance(projectId, instanceId);
+    const out: MadeObjects[] = [];
+    for (const record of this.store.instanceBakes(instanceId)) {
+      if (!record.appliedAt && record.baselineReadId) continue; // undone
+      const nativeIds = Object.values(record.items as Record<string, unknown>).flatMap((item) => {
+        const made = item as { nativeId?: unknown; state?: unknown };
+        return made.state === 'jig' && typeof made.nativeId === 'string' ? [made.nativeId] : [];
+      });
+      // A later record of the same bake and file replaces the earlier one (replace-own).
+      const at = out.findIndex((o) => o.bakeId === record.bakeId && o.linkId === record.linkId);
+      const entry = { bakeId: record.bakeId, linkId: record.linkId, nativeIds };
+      if (at >= 0) out[at] = entry;
+      else out.push(entry);
+    }
+    return out;
   }
   /** The kept output of a step's latest run, when it has one. */
   output(projectId: string, instanceId: string, stepId: string): unknown {

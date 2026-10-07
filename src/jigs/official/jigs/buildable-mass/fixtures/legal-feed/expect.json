@@ -1,0 +1,134 @@
+{
+  "tolerance": {
+    "length": 1e-6,
+    "ratio": 1e-9
+  },
+  "steps": {
+    "site": {
+      "area_m2": 600
+    },
+    "buildable": {
+      "area": 522.5,
+      "siteArea": 600,
+      "coverage": {
+        "capArea": 360
+      }
+    },
+    "envelope": {
+      "variants": [
+        {
+          "height": 30,
+          "envelopes": [
+            {
+              "volume": 15675
+            },
+            {
+              "volume": 13700
+            },
+            {
+              "volume": 12445
+            }
+          ]
+        }
+      ]
+    },
+    "floors": {
+      "height": 30,
+      "rows": [
+        {
+          "floor": "1F",
+          "area": 522.5
+        },
+        {
+          "floor": "2F",
+          "area": 522.5
+        },
+        {
+          "floor": "3F",
+          "area": 445.55
+        },
+        {
+          "floor": "4F",
+          "area": 414.2
+        },
+        {
+          "floor": "5F",
+          "area": 382.85
+        },
+        {
+          "floor": "6F",
+          "area": 351.5
+        },
+        {
+          "floor": "7F",
+          "area": 320.15
+        },
+        {
+          "floor": "8F",
+          "area": 288.8
+        }
+      ]
+    },
+    "alternatives": {
+      "rows": [
+        {
+          "id": "max",
+          "gfaAbove": 3248.05,
+          "buildingArea": 522.5,
+          "floorsAbove": 8
+        },
+        {
+          "id": "base",
+          "farArea": 2400,
+          "far": 4,
+          "floorsAbove": 6
+        },
+        {
+          "id": "incentive",
+          "farArea": 2700,
+          "far": 4.5,
+          "floorsAbove": 7
+        }
+      ]
+    },
+    "chosen": {
+      "id": "base",
+      "row": {
+        "farArea": 2400
+      }
+    },
+    "regulations": {
+      "legal": {
+        "available": true,
+        "reason": "",
+        "unmapped": [
+          {
+            "key": "parking.perUnit",
+            "answer": "L1",
+            "reason": "규제 조건 항목에 연결되지 않은 키"
+          }
+        ],
+        "left": [
+          {
+            "key": "landscape.ratio",
+            "answer": "L3",
+            "reason": "근거 미확인"
+          }
+        ]
+      },
+      "differences": [
+        {
+          "id": "coverage",
+          "person": 0.6,
+          "legal": 0.5
+        }
+      ],
+      "unconfirmed": []
+    }
+  },
+  "statuses": {
+    "useDraft": "failed",
+    "acceptUseDraft": "blocked",
+    "useDraftApplied": "blocked"
+  }
+}

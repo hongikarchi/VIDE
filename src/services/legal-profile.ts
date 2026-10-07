@@ -29,13 +29,18 @@ export interface LegalProfileItem {
   excluded: boolean;
   /** A project statement the value rests on (shown, never sent). */
   basis?: string;
-  /** Another source's different value for a user-confirmed key: shown, not applied. */
+  /**
+   * Another source's different value for a user-confirmed key: shown, not applied. With
+   * `replaced`, the earlier value of the same source that a newer one replaced (the site model was
+   * computed again, SPEC-13.8): shown once as '바뀐 값'.
+   */
   notice?: {
     value: Scalar;
     unit?: string;
     source: LegalProfileSource;
     version?: string;
     at: string;
+    replaced?: boolean;
   };
   updatedAt: string;
 }
@@ -228,8 +233,28 @@ export class LegalProfile {
       return false;
     }
     const changed = old?.value_json !== valueJson || (old?.unit ?? undefined) !== offered.unit;
+    // Nothing new: the row (and a notice it shows) stays as it is.
+    if (
+      old &&
+      !changed &&
+      old.source === offered.source &&
+      old.version === (offered.version ?? null)
+    )
+      return false;
+    // The same source gave another value before: that earlier value stays visible as '바뀐 값'.
+    const replaced =
+      old && changed && old.source === offered.source && old.value_json !== null
+        ? JSON.stringify({
+            value: JSON.parse(old.value_json),
+            ...(old.unit ? { unit: old.unit } : {}),
+            source: old.source,
+            ...(old.version ? { version: old.version } : {}),
+            at,
+            replaced: true,
+          })
+        : null;
     db.prepare(
-      'INSERT INTO legal_profile(projectId,key,value_json,unit,source,version,excluded,basis,notice_json,updated_at) VALUES(?,?,?,?,?,?,?,?,NULL,?) ON CONFLICT(projectId,key) DO UPDATE SET value_json=excluded.value_json, unit=excluded.unit, source=excluded.source, version=excluded.version, basis=excluded.basis, notice_json=NULL, updated_at=excluded.updated_at',
+      'INSERT INTO legal_profile(projectId,key,value_json,unit,source,version,excluded,basis,notice_json,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(projectId,key) DO UPDATE SET value_json=excluded.value_json, unit=excluded.unit, source=excluded.source, version=excluded.version, basis=excluded.basis, notice_json=excluded.notice_json, updated_at=excluded.updated_at',
     ).run(
       projectId,
       key,
@@ -239,6 +264,7 @@ export class LegalProfile {
       offered.version ?? null,
       old?.excluded ?? 0,
       offered.basis ?? null,
+      replaced,
       at,
     );
     return changed;

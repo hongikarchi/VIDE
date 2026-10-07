@@ -129,6 +129,7 @@ export async function legalRoutes(
   const [, projectId, name] = match;
   if (name === 'profile' && method === 'GET') {
     await legal.ensureMeta();
+    await legal.syncModel(projectId);
     send(200, legal.profileView(projectId));
   } else if (name === 'checklist' && method === 'GET') {
     await legal.ensureMeta();

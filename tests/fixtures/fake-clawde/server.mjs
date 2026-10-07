@@ -60,6 +60,17 @@ export const PROFILE_KEYS = [
   { key: 'plan.gfa', label: '연면적', unit: '㎡' },
   { key: 'plan.floorsAbove', label: '지상 층수' },
   { key: 'plan.height', label: '높이', unit: 'm' },
+  // Read from the site model (SPEC-13.8, PLAN-46 T-220).
+  { key: 'site.pnu', label: 'PNU' },
+  { key: 'site.address', label: '대지 위치' },
+  { key: 'site.landCategory', label: '지목' },
+  { key: 'site.roadAccess', label: '접한 도로' },
+  { key: 'site.roadWidth', label: '도로 폭(계산)', unit: 'm' },
+  { key: 'model.siteArea', label: '대지 면적(계산)', unit: '㎡' },
+  { key: 'model.northBasis', label: '정북 기준' },
+  { key: 'model.convergenceDeg', label: '진북과 도북의 차', unit: '°' },
+  { key: 'model.surroundingBuildings', label: '주변 건물 수' },
+  { key: 'model.surroundingMaxHeight', label: '주변 건물 최고 높이', unit: 'm' },
 ];
 /** Contribution bases the service never takes (SPEC-13.10: assumed, AI or service guesses). */
 const UNACCEPTED_BASES = new Set(['assumed', 'ai', 'service']);

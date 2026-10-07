@@ -15,6 +15,7 @@ import {
 import { DomainError } from '../contracts/errors.ts';
 import type { Store } from '../core/store.ts';
 import { checkAnswer } from './clawde-check.ts';
+import type { LegalTargetChip } from './legal-model.ts';
 import type { ProseFailure, ProseRecord, ProseStatus } from './legal-writer.ts';
 
 /**
@@ -90,6 +91,11 @@ export interface LegalAnswerView {
   /** 'failed' → '문장 생성 검증 실패' (reasons in `proseFailures`), 'no-model' → '자격 모델 없음'. */
   proseStatus: ProseStatus;
   proseFailures: ProseFailure[];
+  /**
+   * The answer's target chips resolved against the project's site model now (SPEC-13.8, T-220):
+   * added by `LegalService` when it shows the answer, not stored.
+   */
+  targets?: LegalTargetChip[];
 }
 
 interface Row {

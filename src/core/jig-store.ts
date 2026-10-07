@@ -603,6 +603,14 @@ export class JigStore {
     );
     return row ? asBake(row) : notFound();
   }
+  /** Every bake record of an instance, oldest first. */
+  instanceBakes(instanceId: string): JigBake[] {
+    return this.all(
+      this.ofInstance(instanceId),
+      'SELECT * FROM jig_bakes WHERE instanceId=? ORDER BY rowid',
+      instanceId,
+    ).map(asBake);
+  }
   /** Records of one bake to one linked file, oldest first. */
   bakes(instanceId: string, bakeId: string, linkId: string): JigBake[] {
     return this.all(

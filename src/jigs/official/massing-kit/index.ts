@@ -35,7 +35,7 @@ export type {
   RuleId,
   StepOverride,
 } from './rules.ts';
-export { regulationsFromLegal } from './legal-adapter.ts';
+export { LEGAL_KEYS, regulationsFromLegal } from './legal-adapter.ts';
 export type { LegalAdapterResult } from './legal-adapter.ts';
 export { boundarySegments, edgesOf, roadWidthAt, siteRing } from './boundary-segments.ts';
 export type { BoundarySegment, ContactEdge, Corner, SegmentKind } from './boundary-segments.ts';

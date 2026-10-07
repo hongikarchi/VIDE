@@ -14,7 +14,7 @@ import {
   type Corner,
 } from './boundary-segments.ts';
 import { ENVELOPE_TITLES, envelopes, type EnvelopeSet } from './envelope.ts';
-import { regulationsFromLegal } from './legal-adapter.ts';
+import { regulationsFromLegal, type LegalAdapterResult } from './legal-adapter.ts';
 import {
   CHOICE_LABELS,
   isUnconfirmed,
@@ -161,7 +161,13 @@ export function siteStep(inputs: Record<string, unknown>, params: Record<string,
 
 export interface RegulationsOutput {
   items: RegulationItem[];
-  legal: { available: boolean; reason: string };
+  /** The SPEC-13 result: wired or not, why no items, keys that fill nothing, what the engine left out. */
+  legal: {
+    available: boolean;
+    reason: string;
+    unmapped: NonNullable<LegalAdapterResult['unmapped']>;
+    left: NonNullable<LegalAdapterResult['left']>;
+  };
   differences: ReturnType<typeof mergeRegulations>['differences'];
   /** Items still '사람 입력 필요' (SPEC-12.16 사람 투입 칸). */
   needsInput: { id: RegulationId; title: string }[];
@@ -173,7 +179,8 @@ export interface RegulationsOutput {
 
 /**
  * 규제 조건 (SPEC-12.7 2): the person's settings and table entries (수정 사항 of kind
- * `regulation`, T-211·T-212), then the SPEC-13 slot (`input.legal`).
+ * `regulation`, T-211·T-212), then the legal jig's `legal.constraints` (`input.legal`, T-220)
+ * for the items the person left empty.
  */
 export function regulationStep(
   inputs: Record<string, unknown>,
@@ -186,7 +193,12 @@ export function regulationStep(
   const { items, differences } = mergeRegulations(person, legal.items);
   return {
     items,
-    legal: { available: legal.available, reason: legal.reason },
+    legal: {
+      available: legal.available,
+      reason: legal.reason,
+      unmapped: legal.unmapped ?? [],
+      left: legal.left ?? [],
+    },
     differences,
     problems: table.problems,
     needsInput: items

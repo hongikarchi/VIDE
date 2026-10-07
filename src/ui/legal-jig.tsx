@@ -31,7 +31,7 @@ interface ProfileItem {
   source: string;
   version?: string;
   excluded: boolean;
-  notice?: { value: Scalar; unit?: string; source: string; version?: string };
+  notice?: { value: Scalar; unit?: string; source: string; version?: string; replaced?: boolean };
 }
 interface ProfileView {
   stage: ClawdeStageId;
@@ -943,7 +943,12 @@ function ProfileEditor({
                   보내지 않음
                 </label>
               ) : null}
-              {item?.notice ? (
+              {item?.notice?.replaced ? (
+                <small className="legal-notice" data-notice="replaced">
+                  바뀐 값 · 이전 {valueText(item.notice.value, item.notice.unit)}
+                  {item.notice.version ? ` (${item.notice.version})` : ''}
+                </small>
+              ) : item?.notice ? (
                 <small className="legal-notice">
                   {SOURCE_TEXT[item.notice.source] ?? item.notice.source}의 다른 값{' '}
                   {valueText(item.notice.value, item.notice.unit)} · 바꾸지 않았습니다

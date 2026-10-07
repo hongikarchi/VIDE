@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import type { ClawdeAnswer, ClawdeVerdict } from '../contracts/clawde.ts';
+import { LEGAL_TARGET_EVENT, type LegalTargetEventDetail } from './legal-target.ts';
 
 // 법규 답 카드 (SPEC-13.5, Design SCR-29, PLAN-46 T-221): one cLAWde answer in the fixed order 결론
 // → 이유 → 근거 조항(링크·발췌·시행일) → 그림 → 해석 → 확인 필요 사항 → 쓴 정보, each part with its
@@ -7,8 +8,9 @@ import type { ClawdeAnswer, ClawdeVerdict } from '../contracts/clawde.ts';
 // the engine's checked one (a conclusion without citations is '판단 불가(근거 없음)'). Prose written
 // by the user's CLI with the service's recipe (T-236) replaces the conclusion, reasons and
 // interpretation only when it passed verification; otherwise the deterministic service sentences
-// show with the failure note. Figures are images only. The legal jig panel and the conversation
-// (T-223) use the same card.
+// show with the failure note. Figures are images only. Target chips (T-220) name the site-model
+// objects the answer is about and select them in the viewport. The legal jig panel and the
+// conversation (T-223) use the same card.
 
 /** One stored answer as `GET …/legal/answers` gives it (ARCH-01 「엔진 API」). */
 export interface LegalAnswerView {
@@ -33,7 +35,17 @@ export interface LegalAnswerView {
   prose?: LegalProse | null;
   proseStatus?: 'verified' | 'local-only' | 'failed' | 'no-model' | 'none';
   proseFailures?: { code: string; path?: string; message?: string }[];
+  /** Target chips resolved against the site model (SPEC-13.8, T-220). */
+  targets?: LegalTargetChip[];
 }
+/** One target of an answer: the site-model objects by linked file (Link ID) and host id. */
+export interface LegalTargetChip {
+  kind: 'site' | 'adjacent' | 'road';
+  label: string;
+  found: boolean;
+  objects: { linkId: string; nativeIds: string[] }[];
+}
+
 export interface LegalProse {
   conclusion: string;
   reasons: { text: string; refs: string[] }[];
@@ -223,6 +235,34 @@ export function LegalAnswerCard({
         >
           보낸 정보
         </button>
+        {view.targets?.length ? (
+          <span className="legal-targets" role="group" aria-label="대상">
+            {view.targets.map((target) => (
+              <button
+                key={target.kind}
+                type="button"
+                className="legal-target"
+                data-found={String(target.found)}
+                disabled={!target.found}
+                title={
+                  target.found
+                    ? `뷰포트에서 ${target.label} 객체를 강조합니다`
+                    : '대지 모델에서 이 대상을 찾지 못했습니다'
+                }
+                onClick={() =>
+                  window.dispatchEvent(
+                    new CustomEvent<LegalTargetEventDetail>(LEGAL_TARGET_EVENT, {
+                      detail: { label: target.label, objects: target.objects },
+                    }),
+                  )
+                }
+              >
+                {target.label}
+                {target.found ? null : <small> · 모델에 없음</small>}
+              </button>
+            ))}
+          </span>
+        ) : null}
       </header>
       {showSent ? (
         <ul className="legal-sent" aria-label="보낸 정보">

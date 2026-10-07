@@ -141,6 +141,13 @@ try {
   const img = first.locator('.legal-figure img');
   assert.match(await img.getAttribute('src'), /^data:image\/svg\+xml;base64,/);
   assert.equal(await first.locator('svg').count(), 0, 'no inline SVG from the service');
+  // No site model in this project: the target chips say '모델에 없음' and cannot be pressed (T-220).
+  const targets = first.getByRole('group', { name: '대상' }).getByRole('button');
+  assert.deepEqual(await targets.allTextContents(), [
+    '대지 · 모델에 없음',
+    '인접 대지 · 모델에 없음',
+  ]);
+  assert.equal(await targets.first().isDisabled(), true);
   await first.getByRole('button', { name: '보낸 정보' }).click();
   assert.match(await first.getByRole('list', { name: '보낸 정보' }).textContent(), /규모검토/);
   if (shot) await page.screenshot({ path: join(shot, 'legal-answer.png') });

@@ -5,15 +5,26 @@
 // and is listed, never silently taken as 적용 or 미적용.
 //
 // Values come from two places: the person (jig settings, `regulationsFromParams`) and the SPEC-13
-// legal result through the adapter slot (`legal-adapter.ts`, filled by T-220). A person's entry
+// legal result through the adapter (`legal-adapter.ts`, T-220). A person's entry
 // always wins; a legal value only fills an item the person left at '사람 입력 필요'.
 
 /** 적용 여부 (SPEC-12.7 2). `null` = nobody has said yet. */
 export type Applies = '적용' | '미적용' | '판단 필요' | null;
 /** 확정 상태. '사람 입력 필요' = a value no machine can read yet (SPEC-12.16). */
 export type ItemStatus = '확정' | '가정' | '판단 필요' | '사람 입력 필요';
-/** 출처 구분 (SPEC-12.14), plus '없음' for an item with no value at all. */
-export type Origin = '원본에서 읽음' | '도구로 계산함' | '사용자가 확정함' | 'AI가 추정함' | '없음';
+/**
+ * 출처 구분 (SPEC-12.14), plus '없음' for an item with no value at all. An item from the SPEC-13
+ * legal result keeps the service's own label (SPEC-13.5 출처 표시): '서비스 확정' (a person at the
+ * service confirmed it) or '서비스 해석' (not confirmed).
+ */
+export type Origin =
+  | '원본에서 읽음'
+  | '도구로 계산함'
+  | '사용자가 확정함'
+  | 'AI가 추정함'
+  | '서비스 확정'
+  | '서비스 해석'
+  | '없음';
 
 export type RegulationGroup =
   | '밀도'
@@ -26,7 +37,7 @@ export type RegulationGroup =
   | '주차·공지';
 
 export interface RegulationBasis {
-  /** 근거 조항 (e.g. 조문 번호). */
+  /** 근거 조항 (e.g. 조문 번호; several joined with ', '). */
   clause?: string;
   /** 원문 링크. */
   link?: string;

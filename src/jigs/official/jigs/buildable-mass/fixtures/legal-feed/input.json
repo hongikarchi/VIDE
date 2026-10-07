@@ -1,0 +1,143 @@
+{
+  "site": {
+    "boundary": {
+      "rows": [
+        {
+          "id": "site-1",
+          "line": [0, 0, 0, 20, 0, 0, 20, 30, 0, 0, 30, 0, 0, 0, 0]
+        }
+      ]
+    },
+    "roads": {
+      "rows": [
+        {
+          "id": "road-1",
+          "line": [-10, -8, 0, 30, -8, 0, 30, 0, 0, -10, 0, 0, -10, -8, 0]
+        }
+      ]
+    },
+    "neighbors": {
+      "rows": [
+        {
+          "id": "lot-1",
+          "line": [20, 0, 0, 40, 0, 0, 40, 30, 0, 20, 30, 0, 20, 0, 0]
+        },
+        {
+          "id": "lot-2",
+          "line": [0, 30, 0, 20, 30, 0, 20, 50, 0, 0, 50, 0, 0, 30, 0]
+        },
+        {
+          "id": "lot-3",
+          "line": [-20, 0, 0, 0, 0, 0, 0, 30, 0, -20, 30, 0, -20, 0, 0]
+        }
+      ]
+    }
+  },
+  "legal": {
+    "schema": "vide.legal.constraints@1",
+    "constraints": [
+      {
+        "key": "sunlight.baseHeight",
+        "value": 10,
+        "unit": "m",
+        "origin": "서비스 확정",
+        "refs": ["law:건축법 시행령/제86조/①"],
+        "clauses": [
+          {
+            "ref": "law:건축법 시행령/제86조/①",
+            "text": "건축법 시행령 제86조 제1항",
+            "link": "https://law.example.test/86-1"
+          }
+        ],
+        "applies": "적용",
+        "answer": "L1",
+        "question": "일조 사선 제한을 받나요?",
+        "fetchedAt": "2026-10-08T03:00:00.000Z",
+        "lawDbDate": "2026-09-01"
+      },
+      {
+        "key": "sunlight.setbackUpTo10m",
+        "value": 1.5,
+        "unit": "m",
+        "origin": "서비스 확정",
+        "refs": ["law:건축법 시행령/제86조/①"],
+        "clauses": [
+          {
+            "ref": "law:건축법 시행령/제86조/①",
+            "text": "건축법 시행령 제86조 제1항",
+            "link": "https://law.example.test/86-1"
+          }
+        ],
+        "applies": "적용",
+        "answer": "L1",
+        "question": "일조 사선 제한을 받나요?",
+        "fetchedAt": "2026-10-08T03:00:00.000Z",
+        "lawDbDate": "2026-09-01"
+      },
+      {
+        "key": "sunlight.setbackRatioAbove10m",
+        "value": 0.5,
+        "unit": "ratio",
+        "origin": "서비스 확정",
+        "refs": ["law:건축법 시행령/제86조/①"],
+        "clauses": [
+          {
+            "ref": "law:건축법 시행령/제86조/①",
+            "text": "건축법 시행령 제86조 제1항",
+            "link": "https://law.example.test/86-1"
+          }
+        ],
+        "applies": "적용",
+        "answer": "L1",
+        "question": "일조 사선 제한을 받나요?",
+        "fetchedAt": "2026-10-08T03:00:00.000Z",
+        "lawDbDate": "2026-09-01"
+      },
+      {
+        "key": "density.coverageRatio",
+        "value": 0.5,
+        "unit": "ratio",
+        "origin": "서비스 해석",
+        "refs": ["law:건축법/제55조"],
+        "clauses": [
+          {
+            "ref": "law:건축법/제55조",
+            "text": "건축법 제55조",
+            "link": null
+          }
+        ],
+        "applies": "적용",
+        "answer": "L2",
+        "question": "건폐율은?",
+        "fetchedAt": "2026-10-08T03:01:00.000Z",
+        "lawDbDate": "2026-09-01"
+      },
+      {
+        "key": "parking.perUnit",
+        "value": 1,
+        "unit": "대",
+        "origin": "서비스 확정",
+        "refs": ["law:건축법 시행령/제86조/①"],
+        "clauses": [
+          {
+            "ref": "law:건축법 시행령/제86조/①",
+            "text": "건축법 시행령 제86조 제1항",
+            "link": "https://law.example.test/86-1"
+          }
+        ],
+        "applies": "적용",
+        "answer": "L1",
+        "question": "일조 사선 제한을 받나요?",
+        "fetchedAt": "2026-10-08T03:00:00.000Z",
+        "lawDbDate": "2026-09-01"
+      }
+    ],
+    "left": [
+      {
+        "key": "landscape.ratio",
+        "answer": "L3",
+        "reason": "근거 미확인"
+      }
+    ]
+  }
+}

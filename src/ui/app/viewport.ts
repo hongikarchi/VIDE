@@ -12,6 +12,11 @@ import { attachNativeAttributes } from '../native-attributes.ts';
 import { type SelectMode } from '../object-list.ts';
 import { objects, objectById, attachBrushSketch } from '../model.ts';
 import { displayIdOf, sourceIdOf } from '../layers.ts';
+import {
+  LEGAL_TARGET_EVENT,
+  shownTargetIds,
+  type LegalTargetEventDetail,
+} from '../legal-target.ts';
 import { initializeViewportEmpty } from '../viewport-empty.ts';
 import { element as $, readableError } from '../elements.ts';
 import { createViewport } from '../viewport.ts';
@@ -292,6 +297,30 @@ export function initViewport3() {
 
 export function initViewport4() {
   window.addEventListener('pagehide', () => viewerState.viewport?.dispose(), { once: true });
+  window.addEventListener(LEGAL_TARGET_EVENT, (event) =>
+    highlightTarget((event as CustomEvent<LegalTargetEventDetail>).detail),
+  );
+}
+
+/**
+ * A legal answer's target chip (SPEC-13.8): select the named site-model objects the screen shows,
+ * as Rhino's own pick is shown (SPEC-01.11 4), and frame them. VIDE's selection only.
+ */
+function highlightTarget(detail: LegalTargetEventDetail) {
+  if (!detail?.objects) return;
+  const { ids, fileShown } = shownTargetIds(detail, linksState.currentLayers, (basis, id) =>
+    displayIdOf(objects, basis, id),
+  );
+  if (!ids.length) {
+    message(
+      fileShown
+        ? `${detail.label} 객체가 화면의 Sync에 아직 없습니다. Sync 뒤 다시 누르세요.`
+        : `${detail.label} 객체가 있는 연결 파일이 화면에 없습니다.`,
+    );
+    return;
+  }
+  applySelection(ids, 'replace');
+  viewerState.viewport?.fit(ids);
 }
 
 export function initViewport5() {
