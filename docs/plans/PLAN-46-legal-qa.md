@@ -2,8 +2,8 @@
 id: PLAN-46
 title: 법규 Q&A — cLAWde 연결·법규 jig·단계별 법령·역전송·답 문장 품질 (T-215~T-224, T-236)
 status: review
-version: 0.6
-updated: 2026-10-07
+version: 0.7
+updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-13, SPEC-07, SPEC-08, SPEC-02, SPEC-12, ARCH-01, ARCH-03, ADR-026, ADR-030, ADR-037, ADR-039, ADR-040, RESEARCH-04, RESEARCH-16, PLAN-45, C-04, C-06, OQ-16, OQ-17, FR-09, FR-18, FR-24, FR-25]
 ---
@@ -75,12 +75,13 @@ related: [SPEC-13, SPEC-07, SPEC-08, SPEC-02, SPEC-12, ARCH-01, ARCH-03, ADR-026
 - **변경:**
   - `src/services/settings.ts`: `<data>/service-settings.json`, `GET/PUT /api/v1/settings/services`(원격 세션 쓰기 403).
   - `src/services/secrets.ts`: DPAPI 암호화 저장·읽기(`<data>/secrets/services.bin`). 토큰은 API 응답·로그·작업 기록에 나가지 않는다.
-  - 토큰 받기: 계정 사이트 `POST /api/v1/services/clawde/token` 호출과 만료 전 갱신. 개발용 정적 토큰 입력.
+  - 토큰 받기: 계정 사이트 `POST /api/hosts/device/services/clawde/token`(이 PC의 호스트 키, ARCH-01 「토큰 받기」) 호출과 만료 전 갱신. 개발용 정적 토큰 입력.
   - 화면: 설정 → '외부 서비스' 절(주소·상태·법령 DB 기준일·[연결]·[끊기]), 프로젝트 설정의 '이 프로젝트는 법규 서비스에 보내지 않음'.
 - **선행:** 계정 사이트의 토큰 발급 끝점(외부 조건). 없으면 정적 토큰 경로만으로 완료하고 계정 연결은 남은 조건으로 둔다.
 - **검증:** `tests/core/service-settings.test.mjs` — 저장 후 토큰이 응답·로그 파일에 없음, 원격 세션 쓰기 403, 로그인하지 않은 계정의 [연결] 거절. 가짜 서버 `/v1/meta`로 상태가 '연결됨', 401이면 '로그인 필요', 닿지 않으면 '닿지 않음'.
 - **완료:** 시험과 `npm run verify` 통과.
 - **의존:** T-216.
+- **상태(2026-10-08): 완료(정적 토큰 경로).** 사용자가 1단계(T-217~T-219) 착수를 승인했다. `src/services/secrets.ts`(DPAPI는 PowerShell `ProtectedData`에 표준 입력으로 넘김, 시험은 대체 봉인기), `src/services/settings.ts`(보기·저장·[연결]·[끊기]·만료 1분 전 갱신·상태 기록), `src/services/clawde.ts`의 `meta` 호출, `src/server/service-routes.ts`(`GET/PUT /api/v1/settings/services`, `POST …/clawde/connect|disconnect|check`), 화면은 설정의 '외부 서비스' 탭(`src/ui/shell/services-settings.tsx`, Design 「외부 서비스 설정」)이며 프로젝트별 '보내지 않음'도 그 탭에 둔다. 시험: `tests/core/service-settings.test.mjs` 6건(응답·로그·설정 파일에 토큰 없음, 원격 쓰기 403, 로그인 안 한 PC의 [연결] 409, 연결됨·로그인 필요·닿지 않음, 계정 토큰 갱신, 실제 DPAPI 왕복), `tests/integration/browser-services.mjs`. **남은 조건:** 계정 사이트의 토큰 발급 끝점은 만들지 않았다. 엔진은 `POST /api/hosts/device/services/clawde/token`(이 PC의 호스트 키)을 부르고 없으면 `SERVICE_TOKEN_UNAVAILABLE`로 알린다(ARCH-01 「토큰 받기」). 발급과 cLAWde의 검증 방식은 계정 사이트·cLAWde 저장소 작업과 함께 한다.
 
 ## T-218 엔진 커넥터·응답 검사·캐시·`service.clawde` 능력
 

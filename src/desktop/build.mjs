@@ -34,6 +34,7 @@ await copyPackageSources(root, join(directory, 'app'), tracked.split('\0').filte
   'src/contracts',
   'src/jigs',
   'src/knowledge',
+  'src/services',
   'hosts',
   'extensions',
 ]);

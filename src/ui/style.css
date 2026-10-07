@@ -2554,6 +2554,24 @@ body.panel-mode .chat-heading h2 {
 .remote-error {
   color: var(--ng);
 }
+/* 설정 › 외부 서비스 (SPEC-13.11): label above each field, the row's status pill on the right. */
+.services-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.services-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.services-form .settings-actions {
+  padding-top: 4px;
+}
+.services-settings .settings-rows li small {
+  flex: none;
+}
 :root[data-remote='true'] .settings-ai {
   display: none !important;
 }

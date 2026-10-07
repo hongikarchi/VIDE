@@ -1008,7 +1008,7 @@ PC가 jig 묶음을 계정 사이트의 관리자 제출함으로 보내고, 관
 
 ### 외부 도메인 서비스(ADR-040, 계약만)
 
-cLAWde·ArchiDB·Site Modeling·Structure Analysis는 각자의 저장소와 배포를 가진다. VIDE 저장소에는 연결 계약만 둔다. 2026-10-07 기준으로 코드는 없다.
+cLAWde·ArchiDB·Site Modeling·Structure Analysis는 각자의 저장소와 배포를 가진다. VIDE 저장소에는 연결 계약과 엔진 쪽 연결 코드(`src/services/`)만 둔다. 2026-10-08 기준으로 cLAWde 연결(설정·토큰·커넥터)이 있고 나머지 서비스는 코드가 없다.
 
 - **연결 주체.** 서비스 호출은 엔진이 한다. 화면과 jig 계산 상자(compute box)는 서비스에 직접 닿지 않는다.
   - jig는 `service.<name>` 능력을 선언한다. 이것은 ARCH-03의 예약 능력이며, 지금은 검사기가 거절한다.
@@ -1026,8 +1026,11 @@ cLAWde·ArchiDB·Site Modeling·Structure Analysis는 각자의 저장소와 배
 
 동작은 [SPEC-13](../specs/SPEC-13-legal-qa.md)이 정한다. 아래는 VIDE가 cLAWde에 기대는 최소 계약이며, 서비스 내부(온톨로지·수집)는 cLAWde 저장소가 소유한다. 판은 경로의 `/v1`로 나누고, 필드 추가는 하위 호환이다. 모르는 필드는 무시하고 필수 필드가 없으면 그 응답을 버린다(`SERVICE_BAD_RESPONSE`).
 
-- **설정·비밀.** `<data>/service-settings.json {services: {clawde: {baseUrl, enabled, projectsOff[]}}}`, `GET/PUT /api/v1/settings/services`(원격 세션 쓰기 불가). 토큰은 `<data>/secrets/services.bin`에 Windows DPAPI(현재 사용자)로 암호화해 두고 API 응답·로그·작업 기록에 싣지 않는다.
-- **토큰 받기.** 계정 사이트 `POST /api/v1/services/clawde/token`(VIDE 계정 세션) → `{accessToken, expiresAt}`(짧은 수명, 만료 전 같은 호출로 갱신). 개발·시험은 설정에 정적 토큰을 직접 넣는다. 서비스 호출은 `Authorization: Bearer <token>`, `X-VIDE-Version`.
+- **설정·비밀.** `<data>/service-settings.json {services: {clawde: {baseUrl, enabled, projectsOff[], tokenSource:'static'|'account'|null, tokenExpiresAt, lawDbDate, checkedAt}}}`(`src/services/settings.ts`), `GET/PUT /api/v1/settings/services`(원격 세션 쓰기 불가). 토큰은 `<data>/secrets/services.bin`에 Windows DPAPI(현재 사용자, PowerShell `ProtectedData`에 표준 입력으로 넘김)로 암호화해 두고(`src/services/secrets.ts`) API 응답·로그·작업 기록에 싣지 않는다.
+  - 보기: `{clawde: {baseUrl, enabled, projectsOff[], token{set, source, expiresAt}, status, lawDbDate, checkedAt, accountLinked}}`(`src/contracts/services.ts`). `status`는 `connected`·`unreachable`·`login-required`·`off`·`not-configured`·`unchecked`이며 마지막 서비스 호출의 결과다(엔진 재시작 뒤 첫 호출 전은 `unchecked`).
+  - `PUT`: `{clawde: {baseUrl?, enabled?, projectsOff?, token?}}`. `token`은 개발용 정적 토큰이며 문자열이면 저장하고 계정 토큰을 대신하며 서비스를 켠다. `null`이면 지운다. 모르는 필드는 400.
+  - `POST /api/v1/settings/services/clawde/connect`([연결], 계정 토큰 받기 뒤 `meta`), `…/disconnect`([끊기], 토큰을 지우고 끔, 캐시한 답은 둠), `…/check`(`meta` 한 번으로 상태 갱신). 계정에 로그인하지 않은 PC의 [연결]은 409 `ACCOUNT_NOT_LINKED`.
+- **토큰 받기.** 엔진이 이 PC의 계정 연결 키(ADR-039, `remote-host.json`의 호스트 키)로 계정 사이트 `POST /api/hosts/device/services/clawde/token`을 부른다 → `{accessToken, expiresAt}`(짧은 수명). 엔진은 만료 1분 전부터 같은 호출로 갱신하며(동시에 한 번), 갱신이 실패하면 상태를 `login-required`로 바꾸고 그 호출을 보내지 않는다(`SERVICE_AUTH`). 사이트에 이 끝점이 없으면(404 등) `SERVICE_TOKEN_UNAVAILABLE`이고 정적 토큰만 쓸 수 있다. 사이트의 발급 구현과 cLAWde의 토큰 검증 방식(서명 공유 또는 검증 끝점)은 계정 사이트·cLAWde 저장소의 일이다(PLAN-46 T-217 남은 조건). 개발·시험은 설정에 정적 토큰을 직접 넣는다. 서비스 호출은 `Authorization: Bearer <token>`, `X-VIDE-Version`이며 토큰은 서비스 주소와 같은 origin에만 보낸다.
 - **서비스 끝점(cLAWde가 제공).**
 
 | 끝점 | 요청 | 응답 |

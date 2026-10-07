@@ -121,6 +121,13 @@ interface ServerOptions {
    * environment its keys are read from (default process.env).
    */
   siteDataOptions?: { fetch?: typeof fetch; environment?: NodeJS.ProcessEnv };
+  /** Test seams for external services (SPEC-13.11): secret sealing, the account token, fetch. */
+  serviceOptions?: {
+    protector?: SecretProtector;
+    account?: AccountTokens;
+    fetcher?: typeof fetch;
+    timeoutMs?: number;
+  };
 }
 import { readWebAsset } from './web-assets.ts';
 import { tmpdir } from 'node:os';
@@ -188,6 +195,14 @@ import { Agenda } from '../core/agenda.ts';
 import { agendaRoutes, agendaStatuses } from './agenda-routes.ts';
 import { FinishStore } from '../core/finish-store.ts';
 import { finishRoutes, finishStatuses } from './finish-routes.ts';
+import { accountTokens, serviceSettingsRoutes } from './service-routes.ts';
+import { SecretStore, type SecretProtector } from '../services/secrets.ts';
+import {
+  ServiceSettings,
+  serviceSettingsStatuses,
+  type AccountTokens,
+} from '../services/settings.ts';
+import { ClawdeClient } from '../services/clawde.ts';
 import { SharedNotes } from './shared-notes.ts';
 import { notesRoutes, notesStatuses } from './notes-routes.ts';
 import { SharedProjects } from './shared-project.ts';
@@ -296,6 +311,7 @@ const statuses: Record<string, number> = {
   ...siteDataStatuses,
   ...xrefStatuses,
   ...drawingLayerStatuses,
+  ...serviceSettingsStatuses,
 };
 export async function startServer({
   filename,
@@ -317,6 +333,7 @@ export async function startServer({
   xrefReader,
   drawingInspector,
   siteDataOptions,
+  serviceOptions,
 }: ServerOptions) {
   const { store, event: storeEvent } = await openStore(filename, storeSplit),
     bootstrap = randomBytes(32).toString('hex'),
@@ -436,6 +453,19 @@ export async function startServer({
         })),
       };
     },
+  });
+  // External domain services (ADR-040, SPEC-13.11): settings, the sealed token and the connector.
+  const serviceDirectory = filename === ':memory:' ? undefined : dirname(filename);
+  const serviceSettings = new ServiceSettings({
+    directory: serviceDirectory,
+    secrets: new SecretStore(serviceDirectory, serviceOptions?.protector),
+    account: serviceOptions?.account ?? accountTokens(remoteAccess),
+  });
+  const clawde = new ClawdeClient({
+    settings: serviceSettings,
+    fetcher: serviceOptions?.fetcher,
+    timeoutMs: serviceOptions?.timeoutMs,
+    version: appVersion(),
   });
   // Shared notes (SPEC-10): this PC as a member of the site; a Markdown copy for the AI.
   const sharedNotes =
@@ -1277,6 +1307,17 @@ export async function startServer({
         return;
       // 마감 일람표 jig (SPEC-11): the finish-code library and the project's rooms and sheet.
       if (await finishRoutes(url, request.method, { finish, body: () => body(request), send }))
+        return;
+      // External services (SPEC-13.11): address, token and status; remote sessions read only.
+      if (
+        await serviceSettingsRoutes(url, request.method, {
+          settings: serviceSettings,
+          client: clawde,
+          body: () => body(request),
+          send,
+          remote,
+        })
+      )
         return;
       // 노트·일지 (SPEC-10): the site's shared notes through this PC's account link.
       if (

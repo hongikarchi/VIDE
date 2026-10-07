@@ -14,10 +14,12 @@ import { ConnectionLines } from './status-lines.tsx';
 import { problemNotices } from './status-bar.tsx';
 import { dumpLabel, TelemetrySection, useNewestDump } from './telemetry.tsx';
 import { PublicDataSection } from './public-data-section.tsx';
+import { ServicesSection } from './services-settings.tsx';
 
 const tabs: [SettingsTab, string][] = [
   ['account', '계정 · 원격 접속'],
   ['ai', 'AI'],
+  ['services', '외부 서비스'],
   ['programs', '연결 프로그램'],
   ['desktop', 'PC 프로그램'],
   ['status', '상태 · 오류'],
@@ -308,6 +310,9 @@ export const SettingsDialog = memo(function SettingsDialog() {
             </section>
             <section />
             <PublicDataSection />
+          </Pane>
+          <Pane id="services">
+            <ServicesSection />
           </Pane>
           <Pane id="programs">
             <section className="remote-panel" />

@@ -4,7 +4,7 @@
 // shell components import only stores.
 import { createSlice } from './core.ts';
 
-export type SettingsTab = 'account' | 'ai' | 'programs' | 'desktop' | 'status';
+export type SettingsTab = 'account' | 'ai' | 'services' | 'programs' | 'desktop' | 'status';
 export interface Failure {
   id: string;
   label: string;
@@ -67,6 +67,13 @@ export const statusState = createSlice<StatusFields>({
   },
 });
 
-/** Hidden tabs: PC programs outside the desktop app, AI and programs through the tunnel. */
+/**
+ * Hidden tabs: PC programs outside the desktop app; AI, external services and programs through the
+ * tunnel.
+ */
 export const tabHidden = (tab: SettingsTab, state: Pick<StatusFields, 'remote' | 'desktop'>) =>
-  tab === 'desktop' ? !state.desktop : tab === 'programs' || tab === 'ai' ? state.remote : false;
+  tab === 'desktop'
+    ? !state.desktop
+    : tab === 'programs' || tab === 'ai' || tab === 'services'
+      ? state.remote
+      : false;
