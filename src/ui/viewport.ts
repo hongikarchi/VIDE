@@ -52,12 +52,28 @@ type Triple = [number, number, number];
  */
 export type Section =
   | { mode: 'plane'; axis: SectionAxis; offset: number; flip: boolean }
+  | { mode: 'line'; point: Triple; normal: [number, number]; offset: number; flip: boolean }
   | { mode: 'box'; min: Triple; max: Triple };
+/**
+ * A section line drawn with two clicks (SPEC-01.15 2): the vertical plane through `a` and `b`.
+ * `normal` (horizontal, unit) points to the side that is kept before any flip.
+ */
+export interface SectionLine {
+  a: Triple;
+  b: Triple;
+  normal: [number, number];
+}
 const AXIS_INDEX = { x: 0, y: 1, z: 2 } as const;
 /** The clipping planes of a section: three.js keeps the side where each plane's distance ≥ 0. */
 export function sectionPlanes(value: Section): THREE.Plane[] {
   const unit = (index: number, sign: number) =>
     new THREE.Vector3().setComponent(index, sign) as THREE.Vector3;
+  if (value.mode === 'line') {
+    // The vertical plane through `point`, moved `offset` along its normal.
+    const normal = new THREE.Vector3(value.normal[0], value.normal[1], 0).normalize();
+    const at = normal.x * value.point[0] + normal.y * value.point[1] + value.offset;
+    return value.flip ? [new THREE.Plane(normal.negate(), at)] : [new THREE.Plane(normal, -at)];
+  }
   if (value.mode === 'plane') {
     const index = AXIS_INDEX[value.axis];
     return value.flip
@@ -323,7 +339,14 @@ export function createViewport(
   function syncClipping() {
     if (!clipPlanes.length) return;
     for (const root of scene.children) {
-      if (root === lines || root === overlayRoot || root === live || root === grid) continue;
+      if (
+        root === lines ||
+        root === overlayRoot ||
+        root === live ||
+        root === grid ||
+        root === sectionGuide
+      )
+        continue;
       if (root instanceof THREE.Light) continue;
       root.traverse((item) => {
         const material = (item as THREE.Mesh).material as THREE.Material | THREE.Material[];
@@ -1508,6 +1531,9 @@ export function createViewport(
   }
   const live = new THREE.Group();
   scene.add(live);
+  /** The rubber band, first point and kept-side arrow while a section line is drawn (not cut). */
+  const sectionGuide = new THREE.Group();
+  scene.add(sectionGuide);
   let drawing: {
     points: THREE.Vector3[];
     screen: { x: number; y: number };
@@ -1768,6 +1794,13 @@ export function createViewport(
       penSeen = true;
       configure();
     }
+    if (placing) {
+      // Drawing a section line: a left click places a point, a right click cancels; drags still
+      // navigate (right orbits/pans) and never count as clicks.
+      if (e.button === 0) placing.press = { x: e.clientX, y: e.clientY };
+      else if (e.button === 2) placing.rightPress = { x: e.clientX, y: e.clientY };
+      return;
+    }
     if (e.button !== 0) return;
     if (mode === 'sketch') {
       // A second finger means navigation (pinch/pan): drop the stroke the first finger began.
@@ -1900,6 +1933,10 @@ export function createViewport(
     }
   }
   function pointerMove(e: PointerEvent) {
+    if (placing) {
+      if (!e.buttons) followSectionLine(e);
+      return;
+    }
     if (mode === 'sketch') {
       if (!(e.buttons & 1)) return;
       if (drawing) extendStroke(e);
@@ -2024,6 +2061,19 @@ export function createViewport(
   }
   function pointerUp(e: PointerEvent) {
     touches.delete(e.pointerId);
+    if (placing) {
+      const press = e.button === 0 ? placing.press : e.button === 2 ? placing.rightPress : null;
+      if (e.button === 0) placing.press = null;
+      if (e.button === 2) placing.rightPress = null;
+      // The same 5 px click-versus-drag rule as selection.
+      if (!press || Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) return;
+      if (e.button === 2) {
+        const cancelled = placing.onCancel;
+        endSectionLine();
+        cancelled?.();
+      } else placeSectionPoint(e);
+      return;
+    }
     if (e.button === 0 && mode === 'sketch') {
       erasing = false;
       finishStroke();
@@ -2073,8 +2123,138 @@ export function createViewport(
     if (area) return { ids: [], source: { source: 'overlay', ...area } };
     return { ids: [], source: { source: 'document' } };
   }
+  /*
+   * Two-point section line (SPEC-01.15 2, like Rhino's clipping plane): two clicks give the
+   * vertical plane through both points. A point lands on the shown surface under the cursor, else
+   * on the ground (the model's lowest z, or z = 0), else (a side view looking along the ground) on
+   * the view plane through the orbit centre.
+   */
+  let placing: {
+    first: THREE.Vector3 | null;
+    ground: THREE.Plane;
+    press: { x: number; y: number } | null;
+    rightPress: { x: number; y: number } | null;
+    onFirst?: () => void;
+    onDone: (line: SectionLine) => void;
+    onCancel?: () => void;
+  } | null = null;
+  function sectionPoint(e: { clientX: number; clientY: number }) {
+    if (!placing) return null;
+    rayAt(e);
+    const hit = shownHit(ray.intersectObjects(surfaceMeshes(), false));
+    if (hit) return hit.point.clone();
+    if (Math.abs(ray.ray.direction.z) > 1e-3) {
+      const point = ray.ray.intersectPlane(placing.ground, new THREE.Vector3());
+      if (point) return point;
+    }
+    return ray.ray.intersectPlane(viewPlane(controls.target.clone()), new THREE.Vector3());
+  }
+  /**
+   * The horizontal normal of the line a→b toward the side kept by default: away from the camera,
+   * so the user looks into the cut like an architectural section. Straight down (top view) "away"
+   * is the screen's up direction. Null when a and b coincide in plan.
+   */
+  function keptNormal(a: THREE.Vector3, b: THREE.Vector3) {
+    const dx = b.x - a.x,
+      dy = b.y - a.y,
+      length = Math.hypot(dx, dy);
+    if (length < 1e-6) return null;
+    const normal = new THREE.Vector3(-dy / length, dx / length, 0);
+    const ahead = camera.getWorldDirection(new THREE.Vector3()).setZ(0);
+    if (ahead.lengthSq() < 1e-4) ahead.set(0, 1, 0).applyQuaternion(camera.quaternion).setZ(0);
+    // A line drawn along the looking direction (say, vertical on a plan) keeps its left side.
+    if (normal.dot(ahead) < -0.05 * ahead.length()) normal.negate();
+    return normal;
+  }
+  /** World length of one screen pixel at a point. */
+  function pixelAt(point: THREE.Vector3) {
+    const height = Math.max(renderer.domElement.clientHeight, 1);
+    if (camera instanceof THREE.OrthographicCamera) return viewSpan / camera.zoom / height;
+    return (
+      (2 * camera.position.distanceTo(point) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) /
+      height
+    );
+  }
+  function drawSectionGuide(a: THREE.Vector3, b: THREE.Vector3 | null) {
+    clearGroup(sectionGuide);
+    const color = getComputedStyle(container).getPropertyValue('--accent').trim() || '#d9663f';
+    const material = () =>
+      new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true });
+    const mark = new THREE.Points(
+      new THREE.BufferGeometry().setFromPoints([a]),
+      new THREE.PointsMaterial({
+        color,
+        size: 7,
+        sizeAttenuation: false,
+        depthTest: false,
+        transparent: true,
+      }),
+    );
+    mark.renderOrder = 20;
+    sectionGuide.add(mark);
+    const normal = b && keptNormal(a, b);
+    if (b && normal) {
+      const middle = a.clone().add(b).multiplyScalar(0.5);
+      const unit = pixelAt(middle);
+      const tip = middle.clone().addScaledVector(normal, 28 * unit);
+      const along = b.clone().sub(a).setZ(0).normalize();
+      const head = (sign: number) =>
+        tip
+          .clone()
+          .addScaledVector(normal, -8 * unit)
+          .addScaledVector(along, sign * 6 * unit);
+      const guide = new THREE.LineSegments(
+        new THREE.BufferGeometry().setFromPoints([a, b, middle, tip, tip, head(1), tip, head(-1)]),
+        material(),
+      );
+      guide.renderOrder = 20;
+      sectionGuide.add(guide);
+    }
+    dirty = true;
+  }
+  function followSectionLine(e: PointerEvent) {
+    if (!placing?.first) return;
+    const point = sectionPoint(e);
+    if (point) drawSectionGuide(placing.first, point);
+  }
+  function placeSectionPoint(e: PointerEvent) {
+    if (!placing) return;
+    const point = sectionPoint(e);
+    if (!point) return;
+    const first = placing.first;
+    if (!first) {
+      placing.first = point;
+      renderer.domElement.dataset.sectionPlacing = 'second';
+      drawSectionGuide(point, null);
+      placing.onFirst?.();
+      return;
+    }
+    // A second click on (or within a few pixels of) the first point is ignored: keep waiting.
+    const r = renderer.domElement.getBoundingClientRect();
+    const at = first.clone().project(camera);
+    const x = r.left + ((at.x + 1) / 2) * r.width,
+      y = r.top + ((1 - at.y) / 2) * r.height;
+    if (Math.hypot(e.clientX - x, e.clientY - y) < 4) return;
+    const normal = keptNormal(first, point);
+    if (!normal) return;
+    const done = placing.onDone;
+    endSectionLine();
+    done({
+      a: first.toArray() as Triple,
+      b: point.toArray() as Triple,
+      normal: [normal.x, normal.y],
+    });
+  }
+  function endSectionLine() {
+    placing = null;
+    clearGroup(sectionGuide);
+    delete renderer.domElement.dataset.sectionPlacing;
+    renderer.domElement.style.cursor = '';
+    dirty = true;
+  }
   function cancel(e?: PointerEvent) {
     if (e) touches.delete(e.pointerId);
+    if (placing) placing.press = placing.rightPress = null;
     down = null;
     marquee.hidden = true;
     drawing = null;
@@ -2397,6 +2577,36 @@ export function createViewport(
       dirty = true;
     },
     section: () => section,
+    /**
+     * Starts drawing a section line with two clicks (SPEC-01.15 2). Clicks place points and pick
+     * nothing; a right click calls `onCancel`. Replaces a drawing already in progress.
+     */
+    drawSectionLine(handlers: {
+      onFirst?: () => void;
+      onDone: (line: SectionLine) => void;
+      onCancel?: () => void;
+    }) {
+      endSectionLine();
+      cancel();
+      const bounds = new THREE.Box3();
+      for (const mesh of visibleMeshes()) bounds.expandByObject(mesh);
+      const ground = bounds.isEmpty() ? 0 : bounds.min.z;
+      placing = {
+        first: null,
+        ground: new THREE.Plane(new THREE.Vector3(0, 0, 1), -ground),
+        press: null,
+        rightPress: null,
+        ...handlers,
+      };
+      renderer.domElement.dataset.sectionPlacing = 'first';
+      renderer.domElement.style.cursor = 'crosshair';
+    },
+    /** Stops drawing a section line without a result (no callback). */
+    cancelSectionLine: () => {
+      if (placing) endSectionLine();
+    },
+    /** 'first' or 'second' while a section line is drawn, else null. */
+    sectionPlacing: () => (placing ? (placing.first ? 'second' : 'first') : null),
     /** The shown (not hidden) document objects' bounds, or undefined for an empty view. */
     modelBounds() {
       const bounds = new THREE.Box3();

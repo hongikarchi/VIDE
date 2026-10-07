@@ -2,7 +2,7 @@
 // region B). The camera is set only when its view or projection changes, never per frame
 // (ARCH-01 §1.2).
 import { createSlice } from './core.ts';
-import type { createViewport, SectionAxis } from '../viewport.ts';
+import type { createViewport, SectionAxis, SectionLine } from '../viewport.ts';
 import type { InspectorTab, InspectorView } from '../inspector.ts';
 import type { ViewportEmptyFields } from '../viewport-empty.ts';
 
@@ -14,6 +14,14 @@ type Triple = [number, number, number];
 export interface SectionPanel {
   open: boolean;
   mode: 'off' | 'plane' | 'box';
+  /** A plane from a two-click section line (the default) or on one axis. */
+  kind: 'line' | 'axis';
+  /** Which click the viewer waits for while a section line is drawn. */
+  placing: 'first' | 'second' | null;
+  line: SectionLine | undefined;
+  /** The line plane's move along its normal (m) and the range the model spans along it. */
+  lineOffset: number;
+  lineRange: [number, number];
   axis: SectionAxis;
   offset: number;
   flip: boolean;
@@ -41,6 +49,11 @@ export const viewerState = createSlice<ViewerFields>({
   section: {
     open: false,
     mode: 'off',
+    kind: 'line',
+    placing: null,
+    line: undefined,
+    lineOffset: 0,
+    lineRange: [0, 0],
     axis: 'z',
     offset: 0,
     flip: false,

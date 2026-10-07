@@ -2322,6 +2322,25 @@ body.panel-mode .chat-heading h2 {
   border-radius: var(--radius-sm);
   font-size: 11px;
 }
+.view-navigation .section-popover .section-draw {
+  width: auto;
+  height: 28px;
+  padding: 0 10px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+.view-navigation .section-popover .section-draw[aria-pressed='true'] {
+  background: var(--accent-subtle);
+  border-color: var(--accent-muted);
+  font-weight: 600;
+}
+.section-hint,
+.section-line {
+  margin: 0;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
 .section-note {
   margin: 0;
   color: var(--muted);

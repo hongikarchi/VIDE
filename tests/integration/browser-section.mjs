@@ -1,7 +1,8 @@
 // Section view (SPEC-01.15, PLAN-43 T-197): a plane or a box cuts only VIDE's drawing. The cut side
 // is empty in the captured pixels and cannot be picked, flip keeps the other side, the section
 // stays while walking, turning it off draws everything again, and the work screen's 단면 panel
-// (plane, box sliders, off) drives the same viewer. Synthetic scene; no real host.
+// drives the same viewer: a plane drawn with two clicks in the top view (Escape, right click and
+// a repeated click on the first point), the axis plane, box sliders, off. Synthetic scene.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -174,9 +175,91 @@ try {
   await page.click('#section-panel [data-section="plane"]');
   assert.equal(await section(), null);
   assert.equal(await pressed(), 'false');
+  const slide = (label, value) =>
+    page.evaluate(
+      ([label, value]) => {
+        const input = document.querySelector(`#section-panel input[aria-label="${label}"]`);
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(
+          input,
+          String(value),
+        );
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      },
+      [label, value],
+    );
   await page.evaluate(() => window.appViewport.replace(window.sectionScene()));
-  // Plane: Z by default, at the middle of the model; X puts it at x = 0 and cuts the right box.
+  // Two-point plane (the default for 평면), drawn in the top view like Rhino's clipping plane.
+  const placing = () => page.evaluate(() => window.appViewport.sectionPlacing());
+  const at = (point) => page.evaluate((point) => window.appViewport.screenOf(point), point);
+  const click = async (point, options) => {
+    const { x, y } = await at(point);
+    await page.mouse.click(x, y, options);
+  };
+  const probeAt = (points) =>
+    page.evaluate((points) => window.probe(window.appViewport, points), points);
+  await page.evaluate(() => window.appViewport.plane('XY'));
+  const leftColour = await page.evaluate(() => window.appViewport.colorOf('left'));
   await page.click('#section-panel [data-section="plane"]');
+  assert.equal(await placing(), 'first');
+  assert.equal(await section(), null);
+  assert.equal(await pressed(), 'true');
+  await page.locator('#section-panel .section-hint').waitFor();
+  // Escape before any line: the drawing stops, the plane turns off, the panel stays open.
+  await page.keyboard.press('Escape');
+  assert.equal(await placing(), null);
+  assert.equal(await pressed(), 'false');
+  assert.equal(await page.locator('#section-panel').isVisible(), true);
+  // First point on the left box's top (x = -4), then a click on the same spot is ignored.
+  await page.click('#section-panel [data-section="plane"]');
+  await click([-4, -1, 4]);
+  assert.equal(await placing(), 'second');
+  await click([-4, -1, 4]);
+  assert.equal(await placing(), 'second');
+  await page.mouse.move((await at([-4, 1, 4])).x, (await at([-4, 1, 4])).y);
+  await click([-4, 1, 4]);
+  assert.equal(await placing(), null);
+  const line = await section();
+  assert.equal(line.mode, 'line');
+  assert.ok(
+    Math.abs(line.point[0] + 4) < 0.05 && Math.abs(line.point[2] - 4) < 0.05,
+    `snapped: ${JSON.stringify(line)}`,
+  );
+  assert.ok(
+    Math.abs(line.normal[0] + 1) < 1e-6 && Math.abs(line.normal[1]) < 1e-6,
+    `kept side: ${JSON.stringify(line)}`,
+  );
+  // Placing points picks nothing, and the panel stayed open.
+  assert.equal(await page.evaluate(() => window.appViewport.colorOf('left')), leftColour);
+  assert.equal(await page.locator('#section-panel').isVisible(), true);
+  await page.locator('#section-panel .section-line').waitFor();
+  // Keeps x ≤ -4: the far left of the left box stays, its right part and the right box are cut.
+  const across = [
+    [-4.9, 0.9, 4],
+    [-2.5, 0.9, 4],
+    [4.9, 0.9, 4],
+  ];
+  assert.deepEqual(await probeAt(across), ['model', 'empty', 'empty']);
+  await page.getByLabel('반대쪽 남기기').check();
+  assert.deepEqual(await probeAt(across), ['empty', 'model', 'model']);
+  await page.getByLabel('반대쪽 남기기').uncheck();
+  // 위치 moves the plane along its normal: -3 puts it at x = -1.
+  await slide('단면선 위치', -3);
+  assert.ok(Math.abs((await section()).offset + 3) < 0.05);
+  assert.deepEqual(await probeAt(across), ['model', 'model', 'empty']);
+  // Redrawing, then Escape or a right click: the drawn line stays.
+  await page.click('#section-panel .section-draw');
+  assert.equal(await placing(), 'first');
+  await page.keyboard.press('Escape');
+  assert.equal(await placing(), null);
+  assert.equal((await section()).mode, 'line');
+  await page.click('#section-panel .section-draw');
+  await click([3, 0, 0], { button: 'right' });
+  assert.equal(await placing(), null);
+  assert.equal((await section()).mode, 'line');
+  assert.equal(await page.locator('#section-panel').isVisible(), true);
+  // 축 기준: Z by default, at the middle of the model; X puts it at x = 0 and cuts the right box.
+  await page.evaluate(() => window.appViewport.home());
+  await page.click('#section-panel [data-section="axis"]');
   assert.equal(await pressed(), 'true');
   assert.equal((await section()).axis, 'z');
   await page.click('#section-panel [data-section="x"]');
@@ -196,18 +279,6 @@ try {
   const box = await section();
   assert.ok(box.min[0] < -6 && box.max[0] > 6, `box starts at the bounds: ${JSON.stringify(box)}`);
   assert.deepEqual(await probe(), ['model', 'model']);
-  const slide = (label, value) =>
-    page.evaluate(
-      ([label, value]) => {
-        const input = document.querySelector(`#section-panel input[aria-label="${label}"]`);
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(
-          input,
-          String(value),
-        );
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      },
-      [label, value],
-    );
   await slide('X 최대', 0);
   const slid = await section();
   assert.ok(Math.abs(slid.max[0]) < 0.05, `X 최대 moved: ${slid.max[0]}`);

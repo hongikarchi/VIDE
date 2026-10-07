@@ -1,6 +1,7 @@
 // The 단면 tool of the view toolbar (SPEC-01.15, PLAN-43 T-197): a button and its popover with the
-// plane (axis, position, flip) and box (six faces) controls. Always rendered (hidden when closed),
-// so the nodes next to it that other modules insert keep their place.
+// plane (a two-click section line, or an axis; position, flip) and box (six faces) controls.
+// Always rendered (hidden when closed), so the nodes next to it that other modules insert keep
+// their place.
 import { useEffect, useRef } from 'react';
 import { useStore } from '../store/core.ts';
 import { viewerState } from '../store/viewer.ts';
@@ -76,12 +77,17 @@ export function SectionTool() {
   useEffect(() => {
     if (!s.open) return;
     const outside = (event: PointerEvent) => {
+      // Clicks in the viewport place the section line's points: the panel stays open meanwhile.
+      if (viewerState.section.placing) return;
       const target = event.target as Node;
       if (!panel.current?.contains(target) && !button.current?.contains(target))
         act.sectionPanel(false);
     };
     const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') act.sectionPanel(false);
+      if (event.key !== 'Escape') return;
+      // Escape first cancels a section line being drawn, then closes the panel.
+      if (viewerState.section.placing) act.sectionCancelDraw();
+      else act.sectionPanel(false);
     };
     document.addEventListener('pointerdown', outside);
     document.addEventListener('keydown', escape);
@@ -98,7 +104,7 @@ export function SectionTool() {
       <button
         ref={button}
         id="section-toggle"
-        title={on ? '단면 보기 중 · 눌러서 조절' : '단면 · 평면이나 상자로 잘라 보기'}
+        title={on ? '단면 보기 중 · 눌러서 조절' : '단면 · 두 점을 찍은 평면이나 상자로 잘라 보기'}
         aria-label="단면"
         aria-pressed={on}
         aria-expanded={s.open}
@@ -125,6 +131,60 @@ export function SectionTool() {
           onPick={act.sectionMode}
         />
         {s.mode === 'plane' && bounds && (
+          <Segment
+            label="평면 기준"
+            options={[
+              ['line', '두 점'],
+              ['axis', '축 기준'],
+            ]}
+            value={s.kind}
+            onPick={act.sectionKind}
+          />
+        )}
+        {s.mode === 'plane' && s.kind === 'line' && (
+          <>
+            <button
+              type="button"
+              className="section-draw"
+              aria-pressed={s.placing !== null}
+              onClick={() => act.sectionDraw()}
+            >
+              두 점으로 그리기
+            </button>
+            {s.placing && (
+              <p className="section-hint" role="status">
+                {s.placing === 'first' ? '첫 점을 클릭하세요' : '둘째 점을 클릭하세요'} · Esc나
+                오른쪽 클릭으로 취소
+              </p>
+            )}
+            {s.line && (
+              <>
+                <p className="section-line" aria-label="단면선">
+                  ({s.line.a[0].toFixed(2)}, {s.line.a[1].toFixed(2)}) → ({s.line.b[0].toFixed(2)},{' '}
+                  {s.line.b[1].toFixed(2)}) ·{' '}
+                  {metres(Math.hypot(s.line.b[0] - s.line.a[0], s.line.b[1] - s.line.a[1]))}
+                </p>
+                <div className="section-range">
+                  <span>
+                    위치 <output>{metres(s.lineOffset)}</output>
+                  </span>
+                  <Slider
+                    label="단면선 위치"
+                    value={s.lineOffset}
+                    min={s.lineRange[0]}
+                    max={s.lineRange[1]}
+                    onChange={act.sectionLineOffset}
+                  />
+                </div>
+                <label className="display-check">
+                  <input type="checkbox" checked={s.flip} onChange={() => act.sectionFlip()} />
+                  <span>반대쪽 남기기</span>
+                </label>
+              </>
+            )}
+          </>
+        )}
+        {s.mode === 'plane' && s.kind === 'axis' && bounds && (
           <>
             <Segment
               label="축"

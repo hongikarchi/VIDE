@@ -17,6 +17,10 @@ export const viewportActions: {
   /** Section view (SPEC-01.15): the panel, its mode and the plane or box values. */
   sectionPanel: (open?: boolean) => void;
   sectionMode: (mode: 'off' | 'plane' | 'box') => void;
+  sectionKind: (kind: 'line' | 'axis') => void;
+  sectionDraw: () => void;
+  sectionCancelDraw: () => void;
+  sectionLineOffset: (offset: number) => void;
   sectionAxis: (axis: 'x' | 'y' | 'z') => void;
   sectionOffset: (offset: number) => void;
   sectionFlip: () => void;
@@ -42,6 +46,10 @@ export const viewportActions: {
   fitView: nothing,
   sectionPanel: nothing,
   sectionMode: nothing,
+  sectionKind: nothing,
+  sectionDraw: nothing,
+  sectionCancelDraw: nothing,
+  sectionLineOffset: nothing,
   sectionAxis: nothing,
   sectionOffset: nothing,
   sectionFlip: nothing,

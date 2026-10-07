@@ -49,10 +49,12 @@ related: [SPEC-01, SPEC-07, SPEC-08, SPEC-11, ARCH-01, DESIGN, ADR-037, ADR-040,
   - 연결은 `src/ui/app/viewport.ts`에서 한다.
 - **동작:**
   - 평면(X·Y·Z, 위치, 뒤집기)과 상자(모델 경계에서 시작, 6면 조절) 두 모드가 있다.
+  - 2026-10-07 사용자 요청으로 평면의 기본은 두 점 클릭이다(SPEC-01.15 2). viewport api `drawSectionLine`·`cancelSectionLine`, Section `mode: 'line'`, 패널 [두 점·축 기준].
   - 걷기 모드와 화면 캡처에도 같은 단면이 적용된다.
   - 끄면 원래대로 돌아간다.
 - **검증:** `tests/integration/browser-section.mjs`
   - 합성 장면에서 자른 쪽 픽셀이 비는지, 끄면 원래대로 돌아오는지, 상자 슬라이더가 동작하는지 본다.
+  - 위 보기에서 두 점을 클릭해 그린 단면의 남는 쪽·뒤집기·위치, Esc·오른쪽 클릭 취소, 같은 점 두 번 클릭 무시, 점 찍기가 객체를 고르지 않음을 본다.
 - **완료:** 시험과 `npm run verify`가 통과한다.
 
 ## T-198 마감 일람표 jig
@@ -165,7 +167,7 @@ related: [SPEC-01, SPEC-07, SPEC-08, SPEC-11, ARCH-01, DESIGN, ADR-037, ADR-040,
 
 | 티켓 | 상태 | 증거 |
 |---|---|---|
-| T-197 | 구현·시험 완료(실호스트 확인 전) | `tests/integration/browser-section.mjs`, SPEC-01.15, Design 단면 |
+| T-197 | 구현·시험 완료(실호스트 확인 전) | `tests/integration/browser-section.mjs`(두 점 그리기: 위 보기 두 클릭·뒤집기·위치·Esc·오른쪽 클릭·같은 점 무시 포함), SPEC-01.15, Design 단면 |
 | T-198 | 구현·시험 완료 | SPEC-11, Design SCR-28, 공식 라이브러리 `vide/finish-codes`, 프로젝트 DB schema 12(`finish_rooms`·`finish_sheets`). `tests/core/finish.test.mjs`(검색·두께·배정 규칙·붙여넣기·표 행·CSV·자료 경계), `tests/server/finish-routes.test.mjs`(저장·거절·프로젝트별), `tests/integration/browser-finish.mjs`(탭 4개·배정·출력·인쇄·CSV) 통과. XLSX는 새 의존성이 필요해 범위 밖(SPEC-11.5 7) |
 | T-199 | 완료 | [SPIKE-2026-10-07-drawing-export](../tdd/SPIKE-2026-10-07-drawing-export.md) |
 | T-200 | 구현·시험 완료(실제 ZWCAD 2023 합성 도면 확인) | SPEC-01.11의 11, ARCH-01 「도면 xref 관계(T-200)」, H-ZWCAD-12, Design 「도면 관계」. worker `VIDEXREFGRAPH`(`hosts/zwcad/worker/XrefGraph.cs`, 표시는 `AttachedDisplay` 공유), `src/core/xref-graph.ts`·`xref-store.ts`(프로젝트 DB 파생 표, 버전 스키마 밖), `src/server/xref.ts`, 경로 연결 `DocumentLinks.pathLink`, 연결 행 `placement`와 뷰포트 배치. `tests/core/xref-graph.test.mjs`(경로 해석·누락·중복·순환·루트·배치 합성), `tests/server/xref.test.mjs`(거절·다시 읽기·바뀐 것만·반영·같은 파일 재반영 없음), `tests/integration/browser-xref.mjs`(트리·표시·반영 뒤 연결 5개·배치 4개·뷰포트에서 배치된 선 고르기) 통과. 실호스트 `tests/integration/zwcad-xref.mjs`(없으면 건너뜀) 통과: 합성 7.7초, 읽기 7.1초, 반영 7.2초 |
