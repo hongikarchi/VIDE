@@ -85,7 +85,7 @@ related: [SPEC-01, SPEC-07, SPEC-08, SPEC-11, ARCH-01, DESIGN, ADR-037, ADR-040,
 - **기준:** C-08, H-RHINO와 H-ZWCAD 지원표(내보내기 행 없음)
 - **위치:**
   - 코드: `tools/spikes/2026-10-07-drawing-export/`
-  - 기록: `docs/tdd/SPIKE-2026-10-07-drawing-export.md`
+  - 기록: [SPIKE-2026-10-07-drawing-export](../tdd/SPIKE-2026-10-07-drawing-export.md)
 - **질문:** Rhino 8의 다음 요소가 DWG로 내보낸 뒤 그대로 남는가?
   - 레이아웃과 디테일
   - 치수와 치수 스타일
@@ -166,7 +166,7 @@ related: [SPEC-01, SPEC-07, SPEC-08, SPEC-11, ARCH-01, DESIGN, ADR-037, ADR-040,
 |---|---|---|
 | T-197 | 구현·시험 완료(실호스트 확인 전) | `tests/integration/browser-section.mjs`, SPEC-01.15, Design 단면 |
 | T-198 | 구현·시험 완료 | SPEC-11, Design SCR-28, 공식 라이브러리 `vide/finish-codes`, 프로젝트 DB schema 12(`finish_rooms`·`finish_sheets`). `tests/core/finish.test.mjs`(검색·두께·배정 규칙·붙여넣기·표 행·CSV·자료 경계), `tests/server/finish-routes.test.mjs`(저장·거절·프로젝트별), `tests/integration/browser-finish.mjs`(탭 4개·배정·출력·인쇄·CSV) 통과. XLSX는 새 의존성이 필요해 범위 밖(SPEC-11.5 7) |
-| T-199 | 착수 | — |
+| T-199 | 완료 | [SPIKE-2026-10-07-drawing-export](../tdd/SPIKE-2026-10-07-drawing-export.md) |
 | T-200 | 착수 | — |
 | T-201 | 구현·로컬 시험 완료, 사이트 배포 대기 | SPEC-07.19·04.13, ARCH-01 §6 「jig 관리자 제출」, Design SCR-27. `tests/server/jig-submit.test.mjs`(요청 형식·확인·원격 거절·풀기), `tests/sharing/jig-submissions.mjs`(비관리자 403·크기 상한·digest·자기 목록·엔진 묶음→관리자 목록→풀기) 통과. D1 `0014` 원격 적용과 Worker 배포는 사용자 확인 뒤 |
 | T-202 | 착수 | — |
