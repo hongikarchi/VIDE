@@ -2,7 +2,7 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 1.01
+version: 1.02
 updated: 2026-10-08
 owner: agent:claude
 related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, PLAN-45, SPEC-12, RESEARCH-10, RESEARCH-12, SPEC-13, PLAN-46]
@@ -225,6 +225,7 @@ export interface JigInstance {
 }
 // 단계 상태(jig_runs.status): pending | running | done | failed | stale
 // 사람 단계는 추가로 waiting | confirmed | reconfirm(확정 뒤 입력 지문이 바뀜). 의미는 SPEC-07.4·07.7
+// 실행에서 막힌(blocked: 앞 사람 단계가 다시 기다리거나 앞 단계 실패) 계산 단계는 지난 결과를 stale로 남긴다(T-214)
 
 export interface AssembledRole {
   role: string;
@@ -301,7 +302,7 @@ export type Binding = `step.${string}` | `$${string}` | 'params' | `inputs.${str
 - 헤드라인·절 주장은 틀 문장 목록 `cases[{ when, template }]`이다. `when`은 닫힌 형식만 허용한다: `<경로> <연산자> <경로|숫자>`를 `&&`로 잇고, 연산자는 `== != < <= > >=`다. 틀의 `{경로}`는 결과 값으로 채운다. AI 1회 다듬기(`polish: 'ai-once'`)는 선택이다.
 - 보고서 점검은 `claim-consistent`(쓰인 틀의 `when`이 참), `numbers-in-source`, `unchecked-listed`, `combo-echo`다(§11).
 - 렌더러는 `src/server/report.ts`를 넓힌다. 스크립트 없는 CSP와 외부 요청 없는 HTML을 유지한다.
-- **내보내기 조건(선택, T-213):** `export: {when, refused}`. `when`은 헤드라인과 같은 닫힌 조건이다. 틀에 `export`가 있으면 `when`이 거짓이거나 보고서 점검(`claim-consistent`·`numbers-in-source`·`unchecked-listed`) 하나라도 실패할 때 해석된 보고서에 `exportRefused: string[]`(이유)를 싣고, §7 보고서 경로는 `html`을 빈 문자열로 준다. 보고서 탭은 [인쇄]·[HTML 저장]을 끄고 이유를 보이며, 패널의 보고서 부품도 '내보내지 않음'을 보인다. `export`가 없는 틀은 지금처럼 점검 실패를 '확인 필요'로만 보인다. 건축개요(SPEC-12.13 4)가 `step.check.mismatchCount == 0 && step.check.floorsCount > 0`으로 쓴다.
+- **내보내기 조건(선택, T-213):** `export: {when, refused}`. `when`은 헤드라인과 같은 닫힌 조건이다. 틀에 `export`가 있으면 `when`이 거짓이거나 보고서 점검(`claim-consistent`·`numbers-in-source`·`unchecked-listed`) 하나라도 실패하거나 확정되지 않은(다시 계산 필요·미리보기) 단계 결과가 있을 때 해석된 보고서에 `exportRefused: string[]`(이유)를 싣고, §7 보고서 경로는 `html`을 빈 문자열로 준다. 보고서 탭은 [인쇄]·[HTML 저장]을 끄고 이유를 보이며, 패널의 보고서 부품도 '내보내지 않음'을 보인다. `export`가 없는 틀은 지금처럼 점검 실패를 '확인 필요'로만 보인다. 건축개요(SPEC-12.13 4)가 `step.check.mismatchCount == 0 && step.check.floorsCount > 0`으로 쓴다.
 
 ### 5.3 `skill.md`와 skill 시작
 

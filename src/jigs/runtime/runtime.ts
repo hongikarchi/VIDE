@@ -1118,6 +1118,19 @@ export class JigRuntime {
         gates: step.gates,
       });
     }
+    // A computed step this run could not reach (a person's step waits again, an earlier step
+    // failed) keeps its last result only as 'stale': it is no longer the result of these inputs,
+    // so a later jig reading it says '다시 계산 필요' instead of taking it (SPEC-07.5 6, T-214).
+    // Only a full computation says so: a geometry run skips the library steps on purpose and
+    // leaves what follows them unevaluated, not invalid.
+    if (input.mode === 'confirmed')
+      this.markStale(
+        jig,
+        instanceId,
+        report.steps
+          .filter((s) => s.status === 'blocked' && s.kind !== 'host' && s.kind !== 'ai')
+          .map((s) => s.id),
+      );
     // The earlier jigs' results this run read: a later change shows '다시 계산 필요' (SPEC-07.5 6).
     for (const decl of jig.manifest.inputs) {
       if (decl.kind !== 'jig-output') continue;

@@ -238,3 +238,31 @@ test('stress sites (spike star-8, star-16) close and merge; the bake declaration
     ['env:base:extrude', 'env:base:sun', 'env:base:max'],
   );
 });
+
+test('a floor section with a long straight cut edge (one point 7e-15 m off) closes as a prism (T-214)', () => {
+  // The 위층 축소 cut of a real lot read back from Rhino left dozens of points on the cut line,
+  // one a hair below it; ear clipping stopped with only straight-run points left. Synthetic ring.
+  const top = [];
+  for (let k = 0; k <= 30; k++) top.push([60 - 4 * k, k === 15 ? -7e-15 : 0]);
+  const base = [
+    ...top,
+    [-60, -10],
+    [-40, -30],
+    [-20, -25],
+    [0, -40],
+    [20, -28],
+    [40, -35],
+    [60, -10],
+  ];
+  const ring = [...base.slice(20), ...base.slice(0, 20)];
+  const area =
+    Math.abs(
+      ring.reduce((s, p, i) => {
+        const q = ring[(i + 1) % ring.length];
+        return s + p[0] * q[1] - q[0] * p[1];
+      }, 0),
+    ) / 2;
+  const check = checkSolid(weldSolid(prismSolid(ring, 0, 3)));
+  assert.ok(check.ok, check.reasons.join(', '));
+  assert.ok(Math.abs(check.volume - area * 3) < 1e-6, `${check.volume} vs ${area * 3}`);
+});

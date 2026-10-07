@@ -4,7 +4,7 @@
 // without node: imports; the solid booleans are `vide/geometry-kit` (`solid.ts`). No legal value is
 // written here: every number a rule uses is a 규제 조건 item with its source (SPEC-12.7 5·6).
 
-export const library = { id: 'vide/massing-kit', version: '0.3.0' } as const;
+export const library = { id: 'vide/massing-kit', version: '0.3.1' } as const;
 
 export {
   CHOICE_LABELS,

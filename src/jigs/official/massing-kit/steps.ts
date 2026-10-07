@@ -81,6 +81,13 @@ export function linesOf(role: unknown, tol = 1e-6): Line[] {
   return out;
 }
 
+/** Two closed lines with the same corners (any start, either direction) within `tol`. */
+function sameRing(a: Line, b: Line, tol: number) {
+  if (!a.closed || !b.closed || a.points.length !== b.points.length) return false;
+  const near = (p: Vec2, q: Vec2) => Math.hypot(p[0] - q[0], p[1] - q[1]) <= tol;
+  return a.points.every((p) => b.points.some((q) => near(p, q)));
+}
+
 const num = (v: unknown, fallback: number) =>
   typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 const r6 = (x: number) => Math.round(x * 1e6) / 1e6;
@@ -135,8 +142,12 @@ export function siteStep(inputs: Record<string, unknown>, params: Record<string,
     }
     throw new Error(`대지 경계가 올바른 다각형이 아닙니다: ${(error as Error).message}`);
   }
-  const roads = linesOf(site.roads),
-    neighbours = linesOf(site.neighbors);
+  const roads = linesOf(site.roads);
+  // A road lot listed among the neighbouring lots as well (the site model's 주변 필지 holds every
+  // lot around, roads included) is the same lot on both layers: it counts as the road only.
+  const neighbours = linesOf(site.neighbors).filter(
+    (n) => !roads.some((r) => sameRing(n, r, Math.max(tol, 1e-6))),
+  );
   const { segments, corners } = boundarySegments(ring, edgesOf(roads), edgesOf(neighbours), tol);
   const northBasis = params.northBasis === 'grid' ? 'grid' : 'true';
   const northDeg =

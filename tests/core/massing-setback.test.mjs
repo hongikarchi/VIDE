@@ -119,6 +119,56 @@ test('boundary segments follow the roads and parcels across them; corners get �
   assert.deepEqual(lengths, [2, 2, 2, 4]);
 });
 
+test('a road lot also on the neighbour layer (the site model 주변 필지) is the road, not 겹침', () => {
+  // T-214: the site model bakes every lot around under 주변 필지, road lots included, and the road
+  // lots again under 도로. The same ring on both layers is one road lot.
+  const site = {
+    rows: [
+      row('site', [
+        [0, 0],
+        [20, 0],
+        [20, 30],
+        [0, 30],
+      ]),
+    ],
+  };
+  const roadLot = [
+    [-10, -10],
+    [50, -10],
+    [50, 0],
+    [-10, 0],
+  ];
+  const east = [
+    [20, 0],
+    [40, 0],
+    [40, 30],
+    [20, 30],
+  ];
+  const inputs = {
+    boundary: site,
+    roads: { rows: [row('road', roadLot)] },
+    // The neighbour copy starts elsewhere and runs the other way.
+    neighbors: { rows: [row('lot-road', [...roadLot].reverse()), row('lot-east', east)] },
+  };
+  const s = siteStep({ site: inputs }, { segmentTolerance: 0.05 });
+  assert.deepEqual(
+    s.segments.map((x) => `${x.id}:${x.kind}`),
+    ['s0:road', 's1:adjacent', 's2:unknown', 's3:unknown'],
+  );
+  // A neighbour that only shares an edge with the road is still a neighbour (겹침 stays).
+  const strip = [
+    [0, -10],
+    [20, -10],
+    [20, 0],
+    [0, 0],
+  ];
+  const other = siteStep(
+    { site: { ...inputs, neighbors: { rows: [row('strip', strip)] } } },
+    { segmentTolerance: 0.05 },
+  );
+  assert.equal(other.segments[0].note, '도로와 인접 대지가 겹침');
+});
+
 test('규제 조건: no legal number in code — an empty setting is 사람 입력 필요 and the rule is listed, not applied', () => {
   const items = regulationsFromParams({});
   assert.equal(items.length, PARAM_ITEMS.length);

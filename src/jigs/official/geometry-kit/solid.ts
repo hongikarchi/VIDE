@@ -9,7 +9,7 @@
 //
 // Coordinates must be local (a few hundred metres around a site origin): EPS is absolute (1e-7 m).
 
-import { GeometryError, signedArea, type Polygon, type Vec3 } from './plan.ts';
+import { GeometryError, signedArea, type Polygon, type Vec2, type Vec3 } from './plan.ts';
 
 export interface Plane {
   n: Vec3;
@@ -239,8 +239,48 @@ export const solidUnionAll = (solids: readonly Solid[]): Solid =>
 
 const ccwRing = (r: Polygon): Polygon => (signedArea(r) < 0 ? [...r].reverse() : r);
 
-/** Ear clipping of a simple counter-clockwise ring (no holes) into triangles. */
+/**
+ * Ear clipping of a simple counter-clockwise ring (no holes) into convex pieces. Vertices on a
+ * straight run (a section cut leaves dozens on one line, a read-back ring is off by 1e-5) cannot
+ * be ear tips and block the clipping, so the ring is clipped without them and each is put back on
+ * the boundary edge it lies on: the pieces keep every ring vertex (no T-junction with the walls)
+ * and stay convex (T-214, a real lot's floor section).
+ */
 export function earClip(ring: Polygon): Polygon[] {
+  const n = ring.length;
+  const straight = (i: number) => {
+    const a = ring[(i + n - 1) % n],
+      b = ring[i],
+      c = ring[(i + 1) % n];
+    const ux = b[0] - a[0],
+      uy = b[1] - a[1],
+      vx = c[0] - b[0],
+      vy = c[1] - b[1];
+    const lu = Math.hypot(ux, uy),
+      lv = Math.hypot(vx, vy);
+    if (lu === 0 || lv === 0) return true;
+    return Math.abs(ux * vy - uy * vx) <= 1e-10 * lu * lv && ux * vx + uy * vy > 0;
+  };
+  const kept = ring.map((_, i) => i).filter((i) => !straight(i));
+  if (kept.length === n || kept.length < 3) return earClipCore(ring);
+  const pieces = earClipCore(kept.map((i) => ring[i]));
+  const at = new Map(kept.map((i, k) => [i, k]));
+  const indexOf = new Map<Vec2, number>(kept.map((i) => [ring[i], i]));
+  return pieces.map((piece) => {
+    const out: Vec2[] = [];
+    piece.forEach((p, k) => {
+      const u = indexOf.get(p)!,
+        v = indexOf.get(piece[(k + 1) % piece.length])!;
+      out.push(p);
+      // A boundary edge of the kept ring: put back the straight-run vertices between u and v.
+      if ((at.get(u)! + 1) % kept.length === at.get(v))
+        for (let j = (u + 1) % n; j !== v; j = (j + 1) % n) out.push(ring[j]);
+    });
+    return out;
+  });
+}
+
+function earClipCore(ring: Polygon): Polygon[] {
   const idx = ring.map((_, i) => i);
   const out: Polygon[] = [];
   const cr = (o: number[], a: number[], b: number[]) =>

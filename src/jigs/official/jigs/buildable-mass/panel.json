@@ -163,5 +163,5 @@
       }
     ]
   },
-  "actions": [{ "id": "recompute", "label": "다시 계산", "step": "envelope", "tier": "T1" }]
+  "actions": [{ "id": "recompute", "label": "다시 계산", "step": "handoff", "tier": "T1" }]
 }

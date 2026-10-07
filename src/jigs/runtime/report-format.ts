@@ -629,6 +629,10 @@ export function resolveReport(
   const exportRefused = template.export
     ? [
         ...(evaluateWhen(template.export.when, ctx) ? [] : [template.export.refused]),
+        // A result kept from before its inputs moved is not checked for them (T-214).
+        ...(provisional.length
+          ? [`다시 계산 필요한 단계가 있어 내보내지 않습니다: ${provisional.join(', ')}`]
+          : []),
         ...gates.filter((g) => !g.ok).map((g) => `보고서 점검 실패: ${g.id}`),
       ]
     : [];

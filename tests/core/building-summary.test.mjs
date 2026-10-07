@@ -225,6 +225,14 @@ test('a number out of line: the tables to export are emptied, the cells listed, 
     fine.gates.every((g) => g.ok),
     JSON.stringify(fine.gates),
   );
+  // The same numbers kept from before the inputs moved (stale steps): not exported (T-214).
+  const stale = resolveReport(frame, {
+    ...ctx(outputs.check),
+    final: { sources: true, summary: false, check: false },
+  });
+  assert.deepEqual(stale.exportRefused, [
+    '다시 계산 필요한 단계가 있어 내보내지 않습니다: summary, check',
+  ]);
 });
 
 test('CSV (SPEC-07.11) and the exported HTML: BOM, headers with units, no script, no outside request', async () => {
