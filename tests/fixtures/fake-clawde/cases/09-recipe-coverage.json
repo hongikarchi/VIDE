@@ -1,0 +1,88 @@
+{
+  "name": "recipe-coverage",
+  "order": 15,
+  "match": ["건폐율"],
+  "expect": "valid",
+  "engine": {},
+  "note": "An answer with an evidence pack, a computed value and a recipe (SPEC-13.13, T-218). /v1/verify knows this answer by its answerId.",
+  "answer": {
+    "answerId": "fake-recipe-coverage",
+    "verdict": "applies",
+    "conclusion": "[시험 문구] 건폐율 60% 이하가 적용됩니다.",
+    "reasons": [
+      {
+        "text": "[시험 문구] 대지가 제2종일반주거지역입니다.",
+        "refs": ["law:국토계획법 시행령/제84조/①/4"]
+      },
+      {
+        "text": "[시험 문구] 건축법이 국토계획법의 비율을 따르게 합니다.",
+        "refs": ["law:건축법/제55조"]
+      }
+    ],
+    "citations": ["law:건축법/제55조", "law:국토계획법 시행령/제84조/①/4"],
+    "interpretation": [
+      {
+        "text": "[시험 문구] 이 대지에서 건축면적은 252㎡까지입니다.",
+        "refs": ["law:국토계획법 시행령/제84조/①/4"],
+        "basis": "draft"
+      }
+    ],
+    "checks": [],
+    "needs": [],
+    "usedProfile": ["site.zoning", "site.area"],
+    "evidence": [
+      {
+        "ref": "law:건축법/제55조",
+        "text": "[시험 문구] 대지에 건축하는 건축물의 건폐율은 국토계획법에 따른 비율 이하로 한다.",
+        "effectiveDate": "2026-01-01"
+      },
+      {
+        "ref": "law:국토계획법 시행령/제84조/①/4",
+        "text": "[시험 문구] 제2종일반주거지역의 건폐율은 60퍼센트 이하로 한다.",
+        "effectiveDate": "2026-01-01"
+      }
+    ],
+    "computed": [
+      {
+        "key": "coverage.maxArea",
+        "value": 252,
+        "unit": "㎡",
+        "refs": ["law:국토계획법 시행령/제84조/①/4"]
+      }
+    ],
+    "recipe": {
+      "id": "answer-prose",
+      "version": "1.1.0",
+      "allowedRefs": ["law:건축법/제55조", "law:국토계획법 시행령/제84조/①/4"],
+      "numbers": [
+        {
+          "value": 60,
+          "unit": "%",
+          "from": "law:국토계획법 시행령/제84조/①/4"
+        },
+        {
+          "value": 252,
+          "unit": "㎡",
+          "from": "computed:coverage.maxArea"
+        }
+      ],
+      "models": [
+        {
+          "provider": "claude",
+          "model": "claude-opus-5",
+          "effort": "high"
+        },
+        {
+          "provider": "claude",
+          "model": "claude-sonnet-5",
+          "effort": "high"
+        },
+        {
+          "provider": "codex",
+          "model": "gpt-5.5",
+          "effort": "high"
+        }
+      ]
+    }
+  }
+}

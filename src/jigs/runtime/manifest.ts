@@ -35,9 +35,18 @@ export const CAPABILITIES = [
 ] as const;
 /** Official-only capabilities: accepted for `vide/*` ids only. */
 export const OFFICIAL_CAPABILITIES = ['process.exec', 'host.script', 'net.fetch'] as const;
+/**
+ * External domain services (ADR-040, ARCH-01 「jig 능력」): only official built-in jigs (`vide/*`
+ * from the program itself) may declare one; the engine hands them the service's read results.
+ * Sending back to a service is never a jig capability.
+ */
+export const SERVICE_CAPABILITIES = ['service.clawde'] as const;
 /** Reserved for later decisions (B14, C2): always rejected. */
 export const RESERVED_CAPABILITIES = ['host.ops', 'publish.site'] as const;
-export type Capability = (typeof CAPABILITIES)[number] | (typeof OFFICIAL_CAPABILITIES)[number];
+export type Capability =
+  | (typeof CAPABILITIES)[number]
+  | (typeof OFFICIAL_CAPABILITIES)[number]
+  | (typeof SERVICE_CAPABILITIES)[number];
 
 export const PARAM_TYPES = [
   'length',
@@ -705,6 +714,13 @@ export function validateManifest(
     else if ((OFFICIAL_CAPABILITIES as readonly string[]).includes(name)) {
       if (!official)
         error('JIG_CAPABILITY', 'capabilities', `공식 jig만 선언할 수 있는 능력: ${name}`);
+    } else if ((SERVICE_CAPABILITIES as readonly string[]).includes(name)) {
+      if (!official || source !== 'builtin')
+        error(
+          'JIG_CAPABILITY',
+          'capabilities',
+          `공식 내장 jig만 선언할 수 있는 서비스 능력: ${name}`,
+        );
     } else if (!(CAPABILITIES as readonly string[]).includes(name))
       error('JIG_CAPABILITY', 'capabilities', `목록에 없는 능력: ${name}`);
   }

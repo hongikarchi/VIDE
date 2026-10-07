@@ -1,0 +1,59 @@
+{
+  "note": "Fixture golden set (PLAN-46 T-218): three questions with the expected verdict and the refs a passing prose must cite.",
+  "id": "golden-ko",
+  "version": "2026-10-01",
+  "recipe": {
+    "id": "answer-prose",
+    "version": "1.1.0"
+  },
+  "items": [
+    {
+      "goldenId": "g-coverage",
+      "question": "건폐율은 얼마까지인가요?",
+      "stage": "scale-review",
+      "profile": {
+        "site.zoning": {
+          "value": "제2종일반주거지역",
+          "source": "user"
+        },
+        "site.area": {
+          "value": 420,
+          "unit": "㎡",
+          "source": "user"
+        }
+      },
+      "expectVerdict": "applies",
+      "requiredRefs": ["law:국토계획법 시행령/제84조/①/4"]
+    },
+    {
+      "goldenId": "g-sunlight",
+      "question": "일조 사선 제한을 받나요?",
+      "stage": "scale-review",
+      "profile": {
+        "site.zoning": {
+          "value": "제2종일반주거지역",
+          "source": "user"
+        }
+      },
+      "expectVerdict": "applies",
+      "requiredRefs": ["law:건축법/제61조/①"]
+    },
+    {
+      "goldenId": "g-parking",
+      "question": "부설주차장은 몇 대인가요?",
+      "stage": "schematic",
+      "profile": {
+        "site.zoning": {
+          "value": "제2종일반주거지역",
+          "source": "user"
+        },
+        "plan.mainUse": {
+          "value": "업무시설",
+          "source": "user"
+        }
+      },
+      "expectVerdict": "conditional",
+      "requiredRefs": ["law:주차장법 시행령/별표1/1"]
+    }
+  ]
+}

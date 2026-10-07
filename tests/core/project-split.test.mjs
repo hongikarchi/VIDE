@@ -184,6 +184,18 @@ function fill(db, p, n) {
   run("INSERT INTO drawing_reads VALUES(?,'c:\\a.dwg','C:\\a.dwg',1,?,'h',?,'{}')", p, at, at);
   run("INSERT INTO drawing_layer_maps VALUES(?,'c:\\a.dwg','C:\\a.dwg','[]','h',1,?)", p, at);
   run(
+    "INSERT INTO legal_profile(projectId,key,value_json,source,updated_at) VALUES(?,'site.area','420','user',?)",
+    p,
+    at,
+  );
+  run(
+    "INSERT INTO legal_answers(projectId,number,question,question_key,stage,sent_json,sent_hash,answer_json,law_db_date,fetched_at) VALUES(?,1,'q','q','scale-review','{}','h','{}','2026-09-01',?)",
+    p,
+    at,
+  );
+  run("INSERT INTO legal_articles VALUES(?,'law:x/1','{}',?)", p, at);
+  run("INSERT INTO legal_contributions VALUES(?,'site.area','h','r-1',?)", p, at);
+  run(
     "INSERT INTO object_versions VALUES(?,?,'object','{}',?,3)",
     p,
     `v-${p}`,

@@ -6,8 +6,12 @@ import {
   clawdeChecklistSchema,
   clawdeContributionReceiptSchema,
   clawdeErrorSchema,
+  clawdeGoldenSchema,
   clawdeMetaSchema,
+  clawdeRecipeSchema,
   clawdeSearchSchema,
+  clawdeVerifyResultSchema,
+  CLAWDE_STAGES,
 } from '../../src/contracts/clawde.ts';
 import { ARTICLES, CASES, buildAnswer, startFakeClawde } from '../fixtures/fake-clawde/server.mjs';
 
@@ -42,7 +46,7 @@ async function call(path, { method = 'GET', body, token = fake.token, signal } =
 const ask = (question, extra = {}) =>
   call('/v1/ask', {
     method: 'POST',
-    body: { question, stage: 'feasibility', profile, locale: 'ko', ...extra },
+    body: { question, stage: 'scale-review', profile, locale: 'ko', ...extra },
   });
 
 /** What the engine check (T-218) must find in an answer; the schema itself lets these through. */
@@ -98,14 +102,34 @@ test('the schemas ignore unknown fields and reject a missing required field', ()
   assert.equal(clawdeAnswerSchema.safeParse(badRef).success, false);
 });
 
-test('meta announces the law DB date, stages and the profile key vocabulary', async () => {
+test('meta announces the law DB date, stages, permit phases, answer models, recipes and the profile key vocabulary', async () => {
   const { status, json } = await call('/v1/meta');
   assert.equal(status, 200);
   const meta = clawdeMetaSchema.parse(json);
   assert.equal(meta.lawDbDate, '2026-09-01');
-  assert.ok(meta.stages.some((s) => s.id === 'feasibility' && s.label === '규모검토'));
+  assert.deepEqual(
+    meta.stages.map((s) => s.id),
+    [...CLAWDE_STAGES],
+  );
+  assert.ok(meta.stages.some((s) => s.id === 'scale-review' && s.label === '규모검토'));
+  assert.deepEqual(
+    meta.permitPhases.map((p) => p.label),
+    ['심의', '허가', '착공', '사용승인'],
+  );
+  assert.ok(meta.answerModels.some((m) => m.provider === 'codex' && m.models.length));
+  assert.deepEqual(meta.recipes, [{ id: 'answer-prose', version: '1.1.0' }]);
   assert.ok(meta.profileKeys.some((k) => k.key === 'plan.mainUse'));
   assert.equal(fake.received[0].videVersion, 'test');
+  // An older service without the later fields still parses (they default to empty).
+  const { permitPhases, answerModels, recipes, ...older } = json;
+  assert.ok(permitPhases && answerModels && recipes);
+  const parsedOlder = clawdeMetaSchema.parse(older);
+  assert.deepEqual([parsedOlder.permitPhases, parsedOlder.recipes], [[], []]);
+  // Stage ids are the four fixed values.
+  assert.equal(
+    clawdeMetaSchema.safeParse({ ...json, stages: [{ id: 'feasibility', label: 'x' }] }).success,
+    false,
+  );
 });
 
 test('ask answers each verdict in contract form, with constraints and a figure', async () => {
@@ -175,16 +199,21 @@ test('a bad request body is 400 in the error shape', async () => {
   assert.equal(clawdeErrorSchema.parse(json).error.code, 'BAD_REQUEST');
 });
 
-test('checklist returns every stage; BF 인증 is in 기본설계, not 규모검토', async () => {
+test('checklist returns every stage with permit phases; BF 인증 is in 기본설계, not 규모검토', async () => {
   const { status, json } = await call('/v1/checklist', {
     method: 'POST',
-    body: { stage: 'feasibility', profile },
+    body: { stage: 'scale-review', profile },
   });
   assert.equal(status, 200);
   const list = clawdeChecklistSchema.parse(json);
   const bf = list.items.find((item) => item.topic === 'BF 인증');
-  assert.equal(bf.stage, 'design');
-  assert.ok(list.items.some((item) => item.stage === 'feasibility'));
+  assert.equal(bf.stage, 'design-development');
+  assert.deepEqual(bf.permitPhases, ['permit', 'occupancy']);
+  assert.ok(list.items.some((item) => item.stage === 'scale-review'));
+  assert.ok(
+    list.items.some((item) => !item.permitPhases),
+    'permit phases are optional',
+  );
   const unknownStage = await call('/v1/checklist', {
     method: 'POST',
     body: { stage: 'nope', profile },
@@ -295,4 +324,123 @@ test('the control endpoint scripts an out-of-process server and needs the token'
   const { status } = await call('/__control', { method: 'POST', body: { failStatus: 503 } });
   assert.equal(status, 200);
   assert.equal((await call('/v1/meta')).status, 503);
+});
+
+test('an answer with evidence, computed values and a recipe; old answers parse without them', async () => {
+  const answer = clawdeAnswerSchema.parse((await ask('건폐율은 얼마까지인가요?')).json);
+  assert.equal(answer.recipe.id, 'answer-prose');
+  assert.deepEqual(
+    answer.recipe.allowedRefs,
+    answer.evidence.map((e) => e.ref),
+  );
+  assert.deepEqual(answer.computed[0], {
+    key: 'coverage.maxArea',
+    value: 252,
+    unit: '㎡',
+    refs: ['law:국토계획법 시행령/제84조/①/4'],
+  });
+  for (const number of answer.recipe.numbers)
+    assert.ok(
+      number.from.startsWith('computed:') || answer.recipe.allowedRefs.includes(number.from),
+      number.from,
+    );
+  const old = clawdeAnswerSchema.parse((await ask('일조 사선 제한을 받나요?')).json);
+  assert.equal(old.recipe, undefined);
+  assert.equal(old.evidence, undefined);
+  assert.equal(
+    clawdeAnswerSchema.safeParse({ ...answer, recipe: { ...answer.recipe, models: [] } }).success,
+    false,
+    'a recipe names at least one writer',
+  );
+  assert.ok(
+    clawdeAnswerSchema.safeParse({
+      ...old,
+      citations: [],
+      reasons: [{ text: 'x', refs: ['ordin:서울특별시 건축 조례/제30조'] }],
+    }).success,
+    'ordinance refs',
+  );
+});
+
+test('recipes by id and version; an unknown one is 404', async () => {
+  const current = clawdeRecipeSchema.parse((await call('/v1/recipes/answer-prose')).json);
+  assert.equal(current.version, '1.1.0');
+  assert.match(current.promptTemplate, /\{\{evidence\}\}/);
+  assert.deepEqual(current.rules, {
+    refs: 'evidence-only',
+    numbers: 'evidence-or-computed',
+    verdictLock: true,
+  });
+  const old = clawdeRecipeSchema.parse((await call('/v1/recipes/answer-prose?version=1.0.0')).json);
+  assert.equal(old.version, '1.0.0');
+  assert.equal((await call('/v1/recipes/answer-prose?version=9.9.9')).status, 404);
+  assert.equal((await call('/v1/recipes/nothing')).status, 404);
+});
+
+test('verify passes a faithful prose and names each failure', async () => {
+  const writer = { provider: 'claude', model: 'claude-opus-5', effort: 'high' };
+  const refs = ['law:건축법/제55조', 'law:국토계획법 시행령/제84조/①/4'];
+  const good = {
+    verdict: 'applies',
+    conclusion: '건폐율은 60% 이하입니다.',
+    reasons: [{ text: '제2종일반주거지역입니다.', refs: [refs[1]] }],
+    interpretation: [{ text: '건축면적은 252㎡까지입니다.', refs: [refs[0]] }],
+  };
+  const verify = async (output, extra = {}) =>
+    clawdeVerifyResultSchema.parse(
+      (
+        await call('/v1/verify', {
+          method: 'POST',
+          body: {
+            answerId: 'fake-recipe-coverage',
+            recipe: { id: 'answer-prose', version: '1.1.0' },
+            writer,
+            output,
+            ...extra,
+          },
+        })
+      ).json,
+    );
+  assert.deepEqual(await verify(good), { pass: true, recipeCurrent: true, failures: [] });
+  const codes = async (output, extra) => (await verify(output, extra)).failures.map((f) => f.code);
+  assert.deepEqual(
+    await codes({ ...good, reasons: [{ text: '이유', refs: ['law:건축법/제61조/①'] }] }),
+    ['REF_OUTSIDE'],
+  );
+  assert.deepEqual(await codes({ ...good, conclusion: '건폐율은 70% 이하입니다.' }), [
+    'NUMBER_UNSUPPORTED',
+  ]);
+  assert.deepEqual(await codes({ ...good, verdict: 'not-applies' }), ['VERDICT_CHANGED']);
+  assert.deepEqual(await codes({ verdict: 'applies' }), ['SCHEMA']);
+  assert.deepEqual(await codes(good, { recipe: { id: 'answer-prose', version: '1.0.0' } }), [
+    'RECIPE_STALE',
+  ]);
+  const stale = await verify(good, { recipe: { id: 'answer-prose', version: '1.0.0' } });
+  assert.equal(stale.recipeCurrent, false);
+  assert.deepEqual(
+    await codes(good, { writer: { provider: 'codex', model: 'gpt-4', effort: 'low' } }),
+    ['MODEL_NOT_QUALIFIED'],
+  );
+  const bad = await call('/v1/verify', { method: 'POST', body: { answerId: 'x' } });
+  assert.equal(bad.status, 400);
+});
+
+test('the golden set has three questions with expected verdicts and required refs', async () => {
+  const golden = clawdeGoldenSchema.parse((await call('/v1/golden?recipe=answer-prose')).json);
+  assert.equal(golden.items.length, 3);
+  assert.deepEqual(golden.recipe, { id: 'answer-prose', version: '1.1.0' });
+  for (const item of golden.items) {
+    assert.ok(item.requiredRefs.length, item.goldenId);
+    // Each golden question is answered by the fake with the expected verdict and cites its refs.
+    const answer = clawdeAnswerSchema.parse(
+      (await ask(item.question, { stage: item.stage, profile: item.profile })).json,
+    );
+    assert.equal(answer.verdict, item.expectVerdict, item.goldenId);
+    const cited = new Set(answer.citations.map((c) => c.ref));
+    assert.ok(
+      item.requiredRefs.every((ref) => cited.has(ref)),
+      item.goldenId,
+    );
+  }
+  assert.equal((await call('/v1/golden?recipe=nothing')).status, 404);
 });

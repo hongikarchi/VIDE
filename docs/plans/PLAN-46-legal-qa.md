@@ -96,6 +96,7 @@ related: [SPEC-13, SPEC-07, SPEC-08, SPEC-02, SPEC-12, ARCH-01, ARCH-03, ADR-026
 - **검증:** `tests/core/clawde-connector.test.mjs` — 정상 답 저장과 번호 부여, 같은 질문 캐시 적중(서버 호출 0), 근거 없는 '적용' → '판단 불가', 계약 위반 응답은 저장 안 함, 503·지연 → 캐시에 오프라인 표시·새 질문 거절, 프로필 값 변경 → 해당 답만 '다시 확인 필요'. `tests/core/jig-manifest.test.mjs`에 `service.clawde` 선언이 프로젝트 jig에서 거절되는 경우 추가.
 - **완료:** 시험과 `npm run verify` 통과.
 - **의존:** T-219~T-224가 이 커넥터를 쓴다.
+- **상태(2026-10-08): 완료.** 커넥터 `src/services/clawde.ts`(모든 끝점, 시간 상한·재시도 없음·오류 대응, 레시피 `(id, version)` 캐시, 그림을 정리한 data URL로), 엔진 검사 `src/services/clawde-check.ts`, 답 기록·캐시 `src/services/legal-answers.ts`(번호 `L<n>`, 캐시 열쇠, '다시 확인 필요'), 묻기 흐름 `src/services/legal.ts`(프로젝트 끔·미연결이면 보내지 않음, 쌓아 두지 않음), schema 13의 네 표(프로젝트 삭제·DB 나누기 포함), `service.clawde` 능력(공식 내장 jig만, ARCH-03), 계약 보완(단계 id 네 값·인허가 시점·`answerModels`·`recipes`·`evidence`·`computed`·`recipe`, 가짜 서버 `recipes`·`verify`·`golden`과 표본 `09-recipe-coverage`·`recipes.json`·`golden.json`). 시험: `tests/core/clawde-connector.test.mjs` 9건, `tests/contract/clawde-contract.test.mjs` 20건(기존 표본은 새 필드 없이 통과), `tests/core/jig-manifest.test.mjs`에 `service.clawde` 거절, `project-split` 시험에 새 표. 엔진 API는 T-219와 함께 낸다.
 
 ## T-219 법규 프로필과 보낼 정보 확인
 

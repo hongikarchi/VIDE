@@ -9,13 +9,33 @@ import { z } from 'zod';
  * `citations` get `unverifiedRef`) are not schema rules: such answers still parse.
  */
 
-/** A cLAWde article ID, e.g. `law:건축법/제61조/①`. */
-export const clawdeRefSchema = z.string().regex(/^law:[^/]+(\/[^/]+)+$/);
+/** A cLAWde article ID, e.g. `law:건축법/제61조/①`; local ordinances use `ordin:`. */
+export const clawdeRefSchema = z.string().regex(/^(law|ordin):[^/]+(\/[^/]+)+$/);
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const nonEmpty = z.string().min(1);
 
 export const clawdeVerdictSchema = z.enum(['applies', 'not-applies', 'conditional', 'unknown']);
 export type ClawdeVerdict = z.infer<typeof clawdeVerdictSchema>;
+
+/**
+ * Design stages, the checklist's axis (2026-10-07 user decision, SPEC-13.6): 규모검토, 계획설계,
+ * 기본설계, 실시설계. Requests carry one of these.
+ */
+export const CLAWDE_STAGES = [
+  'scale-review',
+  'schematic',
+  'design-development',
+  'construction-docs',
+] as const;
+export const clawdeStageIdSchema = z.enum(CLAWDE_STAGES);
+export type ClawdeStageId = z.infer<typeof clawdeStageIdSchema>;
+/** Permit phases, a mark on checklist items (심의·허가·착공·사용승인), never the axis. */
+export const clawdePermitPhaseIdSchema = z.enum([
+  'review',
+  'permit',
+  'construction-start',
+  'occupancy',
+]);
 
 export const clawdeProfileSourceSchema = z.enum(['service', 'model', 'user', 'assumed']);
 
@@ -38,6 +58,7 @@ export const clawdeModelSummarySchema = z.object({
   surroundingHeights: z.object({ max: z.number(), median: z.number() }),
   shpAttrs: z.record(z.string(), z.union([z.string(), z.number()])),
 });
+export type ClawdeModelSummary = z.infer<typeof clawdeModelSummarySchema>;
 
 /**
  * `excerpt` and `sourceUrl` may be null: the engine marks such an article '원문 없음' and leaves it
@@ -62,6 +83,14 @@ export const clawdeArticleSummarySchema = clawdeArticleSchema.pick({
   title: true,
   excerpt: true,
 });
+
+/** A model allowed to write a recipe's prose (the lowest qualifying grade and its effort). */
+export const clawdeWriterSchema = z.object({
+  provider: z.enum(['claude', 'codex']),
+  model: nonEmpty,
+  effort: nonEmpty,
+});
+export type ClawdeWriter = z.infer<typeof clawdeWriterSchema>;
 
 export const clawdeAnswerSchema = z.object({
   answerId: nonEmpty,
@@ -106,13 +135,42 @@ export const clawdeAnswerSchema = z.object({
       }),
     )
     .optional(),
+  /** The evidence pack: the unit texts the prose may cite (SPEC-13.13). */
+  evidence: z
+    .array(z.object({ ref: clawdeRefSchema, text: nonEmpty, effectiveDate: dateSchema }))
+    .optional(),
+  /** Values from the service's safe formula engine, with their articles. */
+  computed: z
+    .array(
+      z.object({
+        key: nonEmpty,
+        value: z.number(),
+        unit: nonEmpty,
+        refs: z.array(clawdeRefSchema),
+      }),
+    )
+    .optional(),
+  /** How VIDE writes this answer's prose; without it (or evidence/computed) VIDE writes none. */
+  recipe: z
+    .object({
+      id: nonEmpty,
+      version: nonEmpty,
+      allowedRefs: z.array(clawdeRefSchema),
+      /** `from` is the ref of the text holding the number, or `computed:<key>`. */
+      numbers: z.array(
+        z.object({ value: z.number(), unit: z.string().optional(), from: nonEmpty }),
+      ),
+      models: z.array(clawdeWriterSchema).min(1),
+    })
+    .optional(),
   lawDbDate: dateSchema,
   generatedAt: z.iso.datetime({ offset: true }),
 });
 export type ClawdeAnswer = z.infer<typeof clawdeAnswerSchema>;
 
-/** Stages are ids with the service's own label (e.g. `feasibility` · 규모검토). */
-export const clawdeStageSchema = z.object({ id: nonEmpty, label: nonEmpty });
+/** Stages are fixed ids with the service's own label (e.g. `scale-review` · 규모검토). */
+export const clawdeStageSchema = z.object({ id: clawdeStageIdSchema, label: nonEmpty });
+export const clawdePermitPhaseSchema = z.object({ id: clawdePermitPhaseIdSchema, label: nonEmpty });
 
 /** The profile key vocabulary; `needs[].key` uses the same keys. */
 export const clawdeProfileKeySchema = z.object({
@@ -121,18 +179,33 @@ export const clawdeProfileKeySchema = z.object({
   unit: z.string().optional(),
 });
 
+/**
+ * Fields added after the first contract (permit phases, answer models, recipes) default to empty:
+ * an older service still parses.
+ */
 export const clawdeMetaSchema = z.object({
   service: z.literal('clawde'),
   apiVersion: nonEmpty,
   lawDbDate: dateSchema,
   stages: z.array(clawdeStageSchema).min(1),
+  permitPhases: z.array(clawdePermitPhaseSchema).default([]),
   profileKeys: z.array(clawdeProfileKeySchema),
+  answerModels: z
+    .array(
+      z.object({
+        provider: z.enum(['claude', 'codex']),
+        models: z.array(nonEmpty),
+        effort: nonEmpty,
+      }),
+    )
+    .default([]),
+  recipes: z.array(z.object({ id: nonEmpty, version: nonEmpty })).default([]),
 });
 export type ClawdeMeta = z.infer<typeof clawdeMetaSchema>;
 
 export const clawdeAskRequestSchema = z.object({
   question: nonEmpty,
-  stage: nonEmpty,
+  stage: clawdeStageIdSchema,
   profile: clawdeProfileSchema,
   model: clawdeModelSummarySchema.optional(),
   projectRef: nonEmpty.optional(),
@@ -141,7 +214,7 @@ export const clawdeAskRequestSchema = z.object({
 export type ClawdeAskRequest = z.infer<typeof clawdeAskRequestSchema>;
 
 export const clawdeChecklistRequestSchema = z.object({
-  stage: nonEmpty,
+  stage: clawdeStageIdSchema,
   profile: clawdeProfileSchema,
   model: clawdeModelSummarySchema.optional(),
 });
@@ -152,7 +225,8 @@ export const clawdeChecklistSchema = z.object({
   items: z.array(
     z.object({
       topic: nonEmpty,
-      stage: nonEmpty,
+      stage: clawdeStageIdSchema,
+      permitPhases: z.array(clawdePermitPhaseIdSchema).optional(),
       status: clawdeVerdictSchema,
       reason: nonEmpty,
       refs: z.array(clawdeRefSchema),
@@ -192,3 +266,78 @@ export type ClawdeContributionReceipt = z.infer<typeof clawdeContributionReceipt
 export const clawdeErrorSchema = z.object({
   error: z.object({ code: nonEmpty, message: z.string() }),
 });
+
+/** The prose a writer returns for a recipe (SPEC-13.13): the same shape for every recipe. */
+export const clawdeProseSchema = z.object({
+  verdict: clawdeVerdictSchema,
+  conclusion: nonEmpty,
+  reasons: z.array(z.object({ text: nonEmpty, refs: z.array(clawdeRefSchema) })),
+  interpretation: z.array(z.object({ text: nonEmpty, refs: z.array(clawdeRefSchema) })),
+});
+export type ClawdeProse = z.infer<typeof clawdeProseSchema>;
+
+/**
+ * `GET /v1/recipes/{id}?version=`. A versioned recipe never changes, so VIDE caches it by
+ * `(id, version)`. `promptTemplate` has only the `{{question}}`·`{{verdict}}`·`{{evidence}}`·
+ * `{{computed}}`·`{{checks}}` slots.
+ */
+export const clawdeRecipeSchema = z.object({
+  id: nonEmpty,
+  version: nonEmpty,
+  promptTemplate: nonEmpty,
+  outputSchema: z.record(z.string(), z.unknown()),
+  rules: z.object({
+    refs: z.literal('evidence-only'),
+    numbers: z.literal('evidence-or-computed'),
+    verdictLock: z.literal(true),
+  }),
+  models: z.array(clawdeWriterSchema).min(1),
+  maxOutputChars: z.number().int().positive(),
+});
+export type ClawdeRecipe = z.infer<typeof clawdeRecipeSchema>;
+
+export const CLAWDE_PROSE_FAILURES = [
+  'SCHEMA',
+  'REF_OUTSIDE',
+  'NUMBER_UNSUPPORTED',
+  'VERDICT_CHANGED',
+  'RECIPE_STALE',
+  'MODEL_NOT_QUALIFIED',
+] as const;
+
+/** `POST /v1/verify`: the service repeats VIDE's prose checks and checks the recipe and writer. */
+export const clawdeVerifyRequestSchema = z.object({
+  answerId: nonEmpty,
+  recipe: z.object({ id: nonEmpty, version: nonEmpty }),
+  writer: clawdeWriterSchema,
+  output: z.unknown(),
+});
+export type ClawdeVerifyRequest = z.infer<typeof clawdeVerifyRequestSchema>;
+export const clawdeVerifyResultSchema = z.object({
+  pass: z.boolean(),
+  recipeCurrent: z.boolean(),
+  failures: z.array(
+    z.object({ code: z.enum(CLAWDE_PROSE_FAILURES), path: z.string(), message: z.string() }),
+  ),
+});
+export type ClawdeVerifyResult = z.infer<typeof clawdeVerifyResultSchema>;
+
+/** `GET /v1/golden?recipe=`: the regression questions with the verdict and the refs to cite. */
+export const clawdeGoldenSchema = z.object({
+  id: nonEmpty,
+  version: nonEmpty,
+  recipe: z.object({ id: nonEmpty, version: nonEmpty }),
+  items: z
+    .array(
+      z.object({
+        goldenId: nonEmpty,
+        question: nonEmpty,
+        stage: clawdeStageIdSchema,
+        profile: clawdeProfileSchema,
+        expectVerdict: clawdeVerdictSchema,
+        requiredRefs: z.array(clawdeRefSchema),
+      }),
+    )
+    .min(1),
+});
+export type ClawdeGolden = z.infer<typeof clawdeGoldenSchema>;

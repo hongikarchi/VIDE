@@ -5,7 +5,7 @@ status: review
 version: 0.96
 updated: 2026-10-08
 owner: agent:claude
-related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, PLAN-45, SPEC-12, RESEARCH-10, RESEARCH-12]
+related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, PLAN-45, SPEC-12, RESEARCH-10, RESEARCH-12, SPEC-13, PLAN-46]
 ---
 
 # jig 런타임과 저장 스키마 v5의 물리 계약
@@ -124,6 +124,8 @@ export type Capability =
   | 'links.list' | 'sync.read' | 'facts.read' | 'jig.read' | 'library.call'
   | 'host.bake' | 'ai.once' | 'ai.tools' | 'export.file';
 // 예약(1차 거절): 'host.ops'(B14), 'publish.site'(C2). 공식 전용: 'process.exec', 'host.script', 'net.fetch'
+// 서비스(공식 내장 jig 전용, ARCH-01 「jig 능력」): 'service.clawde' — vide/* 이면서 source가 'builtin'일 때만
+// 받고 dev-source·dev-pack·ai-draft·프로젝트 jig는 거절(JIG_CAPABILITY). 역전송은 능력으로 두지 않는다.
 
 export type InputDecl =
   | { key: string; title: string; kind: 'sync-layers'; host: 'rhino' | 'zwcad';

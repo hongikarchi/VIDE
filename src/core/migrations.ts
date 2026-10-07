@@ -165,6 +165,28 @@ const finishSchedule = `CREATE TABLE IF NOT EXISTS finish_rooms(id TEXT NOT NULL
   ceilingCodes TEXT NOT NULL, PRIMARY KEY(projectId, id)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS finish_sheets(projectId TEXT PRIMARY KEY REFERENCES projects(id),
   body TEXT NOT NULL, updatedAt TEXT NOT NULL);`;
+// 법규 Q&A (SPEC-13, ARCH-01 「cLAWde 연결 계약」 저장, PLAN-46 T-218): the legal profile (one row
+// per key; `vide:`-keys hold the chosen stage and the last confirmed send hash), the answers with
+// their per-project number `L<n>` and the prose audit columns (T-236), cached articles and what was
+// sent back to the service. JSON columns hold the service's own shapes.
+const legalQa = `CREATE TABLE IF NOT EXISTS legal_profile(projectId TEXT NOT NULL REFERENCES projects(id),
+  key TEXT NOT NULL, value_json TEXT, unit TEXT,
+  source TEXT NOT NULL CHECK(source IN ('service','model','user','assumed','ai','vide')), version TEXT,
+  excluded INTEGER NOT NULL DEFAULT 0, basis TEXT, notice_json TEXT, updated_at TEXT NOT NULL,
+  PRIMARY KEY(projectId, key)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS legal_answers(projectId TEXT NOT NULL REFERENCES projects(id),
+  number INTEGER NOT NULL, question TEXT NOT NULL, question_key TEXT NOT NULL, stage TEXT NOT NULL,
+  sent_json TEXT NOT NULL, sent_hash TEXT NOT NULL, answer_json TEXT NOT NULL, law_db_date TEXT NOT NULL,
+  fetched_at TEXT NOT NULL, stale INTEGER NOT NULL DEFAULT 0, prose_json TEXT, recipe_id TEXT,
+  recipe_version TEXT, writer_provider TEXT, writer_model TEXT, writer_effort TEXT, verify_json TEXT,
+  PRIMARY KEY(projectId, number));
+CREATE INDEX IF NOT EXISTS legal_answers_key ON legal_answers(projectId, question_key, stage, sent_hash);
+CREATE TABLE IF NOT EXISTS legal_articles(projectId TEXT NOT NULL REFERENCES projects(id),
+  ref TEXT NOT NULL, article_json TEXT NOT NULL, fetched_at TEXT NOT NULL,
+  PRIMARY KEY(projectId, ref)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS legal_contributions(projectId TEXT NOT NULL REFERENCES projects(id),
+  key TEXT NOT NULL, value_hash TEXT NOT NULL, receipt_id TEXT NOT NULL, sent_at TEXT NOT NULL,
+  PRIMARY KEY(projectId, key, value_hash)) WITHOUT ROWID;`;
 // 도면 읽기와 레이어 대응 (SPEC-14.3, PLAN-47 T-227): the last read of a project drawing (its
 // fingerprint — size, modification time, sha256 of the copy read — and the worker's answer) and one
 // layer table per drawing (source layer → drawing layer entries as JSON, with the fingerprint of the
@@ -188,9 +210,9 @@ export const migrations: Migration[] = [
   { version: 10, sql: dayLog },
   { version: 11, sql: agendaFields },
   { version: 12, sql: finishSchedule },
-  // RESERVED for parallel tickets (2026-10-08): their migrations replace these two empty steps when
-  // the branches are merged. Never release a build with these placeholders.
-  { version: 13, sql: '' },
+  { version: 13, sql: legalQa },
+  // RESERVED for a parallel ticket (2026-10-08): its migration replaces this empty step when the
+  // branches are merged. Never release a build with this placeholder.
   { version: 14, sql: '' },
   { version: 15, sql: drawingLayers },
 ];

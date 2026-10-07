@@ -1,6 +1,26 @@
 import type { z } from 'zod';
 import { DomainError } from '../contracts/errors.ts';
-import { clawdeMetaSchema, type ClawdeMeta } from '../contracts/clawde.ts';
+import {
+  clawdeAnswerSchema,
+  clawdeArticleSchema,
+  clawdeChecklistSchema,
+  clawdeGoldenSchema,
+  clawdeMetaSchema,
+  clawdeRecipeSchema,
+  clawdeSearchSchema,
+  clawdeVerifyResultSchema,
+  type clawdeChecklistRequestSchema,
+  type ClawdeAnswer,
+  type ClawdeArticle,
+  type ClawdeAskRequest,
+  type ClawdeChecklist,
+  type ClawdeGolden,
+  type ClawdeMeta,
+  type ClawdeRecipe,
+  type ClawdeVerifyRequest,
+  type ClawdeVerifyResult,
+} from '../contracts/clawde.ts';
+import { sanitizeSvg } from './clawde-check.ts';
 import type { ServiceSettings } from './settings.ts';
 
 /**
@@ -102,7 +122,82 @@ export class ClawdeClient {
   /** `GET /v1/meta`; also records the law DB date for the settings view and stale answers. */
   async meta(): Promise<ClawdeMeta> {
     const meta = await this.call('/v1/meta', clawdeMetaSchema);
+    this.lastMeta = meta;
     await this.settings.report('connected', meta);
     return meta;
   }
+  /** The last `meta` this engine saw (labels of stages and profile keys), if any. */
+  lastMeta: ClawdeMeta | undefined;
+
+  ask(request: ClawdeAskRequest): Promise<ClawdeAnswer> {
+    return this.call('/v1/ask', clawdeAnswerSchema, { method: 'POST', body: request });
+  }
+  checklist(request: z.infer<typeof clawdeChecklistRequestSchema>): Promise<ClawdeChecklist> {
+    return this.call('/v1/checklist', clawdeChecklistSchema, { method: 'POST', body: request });
+  }
+  article(ref: string): Promise<ClawdeArticle> {
+    return this.call(`/v1/articles/${encodeURIComponent(ref)}`, clawdeArticleSchema);
+  }
+  search(q: string, limit = 10) {
+    const query = new URLSearchParams({ q, limit: String(limit) });
+    return this.call(`/v1/search?${query}`, clawdeSearchSchema);
+  }
+  /** A versioned recipe never changes: cached by `(id, version)` for the engine's life. */
+  async recipe(id: string, version: string): Promise<ClawdeRecipe> {
+    const key = `${id}@${version}`;
+    const cached = this.recipes.get(key);
+    if (cached) return cached;
+    const query = new URLSearchParams({ version });
+    const recipe = await this.call(
+      `/v1/recipes/${encodeURIComponent(id)}?${query}`,
+      clawdeRecipeSchema,
+    );
+    if (recipe.id !== id || recipe.version !== version)
+      throw new DomainError('SERVICE_BAD_RESPONSE');
+    this.recipes.set(key, recipe);
+    return recipe;
+  }
+  private readonly recipes = new Map<string, ClawdeRecipe>();
+  verify(request: ClawdeVerifyRequest): Promise<ClawdeVerifyResult> {
+    return this.call('/v1/verify', clawdeVerifyResultSchema, { method: 'POST', body: request });
+  }
+  golden(recipeId: string): Promise<ClawdeGolden> {
+    const query = new URLSearchParams({ recipe: recipeId });
+    return this.call(`/v1/golden?${query}`, clawdeGoldenSchema);
+  }
+
+  /**
+   * An answer's figures as data URLs (ARCH-01 「엔진 검사」): fetched from the service's own origin
+   * with the token, PNG kept as is, SVG cleaned of scripts and outside references. A figure that
+   * cannot be fetched or cleaned is dropped; the answer stays.
+   */
+  async inlineFigures(answer: ClawdeAnswer): Promise<ClawdeAnswer> {
+    if (!answer.figures?.length) return answer;
+    const figures: NonNullable<ClawdeAnswer['figures']> = [];
+    for (const figure of answer.figures.slice(0, MAX_FIGURES)) {
+      try {
+        const response = await this.raw(figure.url, { accept: figure.mime });
+        const bytes = Buffer.from(await response.arrayBuffer());
+        if (bytes.length > MAX_FIGURE_BYTES) continue;
+        if (figure.mime === 'image/png') {
+          if (!bytes.subarray(0, 8).equals(PNG_SIGNATURE)) continue;
+          figures.push({ ...figure, url: `data:image/png;base64,${bytes.toString('base64')}` });
+        } else {
+          const svg = sanitizeSvg(bytes.toString('utf8'));
+          if (!svg) continue;
+          figures.push({
+            ...figure,
+            url: `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`,
+          });
+        }
+      } catch {
+        /* Dropped: an unreachable or refused figure does not cost the answer. */
+      }
+    }
+    return { ...answer, figures };
+  }
 }
+
+const MAX_FIGURES = 6;
+const MAX_FIGURE_BYTES = 2 * 1024 * 1024;
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

@@ -12,6 +12,8 @@ import {
   clawdeAskRequestSchema,
   clawdeChecklistRequestSchema,
   clawdeContributionRequestSchema,
+  clawdeProseSchema,
+  clawdeVerifyRequestSchema,
 } from '../../../src/contracts/clawde.ts';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -21,17 +23,36 @@ export const FAKE_CLAWDE_TOKEN = 'fake-clawde-token';
 export const FAKE_LAW_DB_DATE = '2026-09-01';
 export const ARTICLES = readJson(join(here, 'articles.json')).articles;
 export const CHECKLIST = readJson(join(here, 'checklist.json')).items;
+const recipeFile = readJson(join(here, 'recipes.json'));
+export const RECIPES = recipeFile.recipes;
+export const CURRENT_RECIPE = recipeFile.current;
+export const GOLDEN = (({ note, ...golden }) => golden)(readJson(join(here, 'golden.json')));
 export const CASES = readdirSync(join(here, 'cases'))
   .filter((name) => name.endsWith('.json'))
   .map((name) => ({ file: name, ...readJson(join(here, 'cases', name)) }))
   .sort((a, b) => a.order - b.order);
 
 export const STAGES = [
-  { id: 'feasibility', label: '규모검토' },
+  { id: 'scale-review', label: '규모검토' },
   { id: 'schematic', label: '계획설계' },
-  { id: 'design', label: '기본설계' },
-  { id: 'construction', label: '실시설계' },
+  { id: 'design-development', label: '기본설계' },
+  { id: 'construction-docs', label: '실시설계' },
 ];
+export const PERMIT_PHASES = [
+  { id: 'review', label: '심의' },
+  { id: 'permit', label: '허가' },
+  { id: 'construction-start', label: '착공' },
+  { id: 'occupancy', label: '사용승인' },
+];
+/** The qualifying writers of the current recipe, grouped as `meta.answerModels`. */
+export const ANSWER_MODELS = Object.values(
+  RECIPES.find((r) => r.version === CURRENT_RECIPE).models.reduce((by, w) => {
+    const key = `${w.provider}/${w.effort}`;
+    by[key] ??= { provider: w.provider, models: [], effort: w.effort };
+    by[key].models.push(w.model);
+    return by;
+  }, {}),
+);
 export const PROFILE_KEYS = [
   { key: 'site.area', label: '대지 면적', unit: '㎡' },
   { key: 'site.zoning', label: '용도지역' },
@@ -43,8 +64,61 @@ export const PROFILE_KEYS = [
 /** Contribution bases the service never takes (SPEC-13.10: assumed, AI or service guesses). */
 const UNACCEPTED_BASES = new Set(['assumed', 'ai', 'service']);
 
+/**
+ * The service's repeat of the prose checks (ARCH-01 「답 문장」 ①~⑤ and the recipe and writer
+ * checks): an independent, simple implementation for tests, not VIDE's own checker.
+ */
+export function verifyProse(request) {
+  const failures = [];
+  const fail = (code, path, message) => failures.push({ code, path, message });
+  const recipe = RECIPES.find(
+    (r) => r.id === request.recipe.id && r.version === request.recipe.version,
+  );
+  const recipeCurrent = !!recipe && request.recipe.version === CURRENT_RECIPE;
+  if (!recipeCurrent) fail('RECIPE_STALE', 'recipe', 'not the current recipe version');
+  const caseDef = CASES.find((c) => c.answer.answerId === request.answerId);
+  const plan = caseDef?.answer.recipe;
+  if (
+    !plan?.models.some(
+      (m) =>
+        m.provider === request.writer.provider &&
+        m.model === request.writer.model &&
+        m.effort === request.writer.effort,
+    )
+  )
+    fail('MODEL_NOT_QUALIFIED', 'writer', 'writer not in the recipe models');
+  const parsed = clawdeProseSchema.safeParse(request.output);
+  if (!parsed.success) {
+    fail('SCHEMA', 'output', 'output does not match the recipe schema');
+    return { pass: false, recipeCurrent, failures };
+  }
+  const output = parsed.data;
+  if (recipe && JSON.stringify(output).length > recipe.maxOutputChars)
+    fail('SCHEMA', 'output', 'output too long');
+  if (!plan) return { pass: false, recipeCurrent, failures };
+  if (output.verdict !== caseDef.answer.verdict)
+    fail('VERDICT_CHANGED', 'verdict', 'the verdict differs from the service verdict');
+  const allowed = new Set(plan.allowedRefs);
+  const numbers = new Set(plan.numbers.map((n) => n.value));
+  const parts = [
+    ['conclusion', { text: output.conclusion, refs: [] }],
+    ...output.reasons.map((r, i) => [`reasons.${i}`, r]),
+    ...output.interpretation.map((r, i) => [`interpretation.${i}`, r]),
+  ];
+  for (const [path, part] of parts) {
+    for (const ref of part.refs)
+      if (!allowed.has(ref)) fail('REF_OUTSIDE', path, `ref outside the evidence: ${ref}`);
+    // Article numbers (제2종, 제61조) are names, not values.
+    for (const match of part.text.matchAll(/(?<![제\d.])\d+(?:\.\d+)?(?![\d.]*\s*[종조항호])/g))
+      if (!numbers.has(Number(match[0])))
+        fail('NUMBER_UNSUPPORTED', path, `number not in the evidence or computed: ${match[0]}`);
+  }
+  return { pass: failures.length === 0, recipeCurrent, failures };
+}
+
+/** Carries a script, an event handler and an outside image: the engine must strip all three. */
 const FIGURE_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 60"><path d="M10 50 L10 20 L40 5" fill="none" stroke="black"/><text x="45" y="55" font-size="6">fixture</text></svg>';
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 60" onload="alert(1)"><script>alert(2)</script><image href="https://example.com/x.png" width="5" height="5"/><path d="M10 50 L10 20 L40 5" fill="none" stroke="black"/><text x="45" y="55" font-size="6">fixture</text></svg>';
 
 /** The case `/v1/ask` answers with: every keyword in the question, `unlessProfile` absent. */
 export function pickCase(question, profile = {}) {
@@ -134,7 +208,10 @@ export async function startFakeClawde({ port = 0, token = FAKE_CLAWDE_TOKEN } = 
         apiVersion: '1.0',
         lawDbDate: control.lawDbDate,
         stages: STAGES,
+        permitPhases: PERMIT_PHASES,
         profileKeys: PROFILE_KEYS,
+        answerModels: ANSWER_MODELS,
+        recipes: [{ id: 'answer-prose', version: CURRENT_RECIPE }],
       });
     if (req.method === 'POST' && path === '/v1/ask') {
       const parsed = clawdeAskRequestSchema.safeParse(body);
@@ -175,6 +252,24 @@ export async function startFakeClawde({ port = 0, token = FAKE_CLAWDE_TOKEN } = 
       const parsed = clawdeContributionRequestSchema.safeParse(body);
       if (!parsed.success) return fail(res, 400, 'BAD_REQUEST', parsed.error.message);
       return send(res, 200, contribute(parsed.data));
+    }
+    if (req.method === 'GET' && path.startsWith('/v1/recipes/')) {
+      const id = decodeURIComponent(path.slice('/v1/recipes/'.length));
+      const version = url.searchParams.get('version') ?? CURRENT_RECIPE;
+      const recipe = RECIPES.find((r) => r.id === id && r.version === version);
+      if (!recipe) return fail(res, 404, 'NOT_FOUND', 'no such recipe');
+      return send(res, 200, recipe);
+    }
+    if (req.method === 'POST' && path === '/v1/verify') {
+      const parsed = clawdeVerifyRequestSchema.safeParse(body);
+      if (!parsed.success) return fail(res, 400, 'BAD_REQUEST', parsed.error.message);
+      return send(res, 200, verifyProse(parsed.data));
+    }
+    if (req.method === 'GET' && path === '/v1/golden') {
+      const recipe = url.searchParams.get('recipe');
+      if (recipe && recipe !== GOLDEN.recipe.id)
+        return fail(res, 404, 'NOT_FOUND', 'no golden set');
+      return send(res, 200, GOLDEN);
     }
     if (req.method === 'GET' && path === '/v1/figures/sunlight.svg')
       return send(res, 200, FIGURE_SVG, 'image/svg+xml');

@@ -1,0 +1,114 @@
+{
+  "note": "Fixture recipes (PLAN-46 T-218). 1.1.0 is current; 1.0.0 still answers by version and fails /v1/verify as RECIPE_STALE.",
+  "current": "1.1.0",
+  "recipes": [
+    {
+      "id": "answer-prose",
+      "version": "1.0.0",
+      "promptTemplate": "[시험 레시피] 아래 근거만 써서 법규 답 문장을 JSON으로 쓴다. 판정은 바꾸지 않는다.\n질문: {{question}}\n판정: {{verdict}}\n근거:\n{{evidence}}\n계산값:\n{{computed}}\n확인 필요:\n{{checks}}",
+      "outputSchema": {
+        "type": "object",
+        "required": ["verdict", "conclusion", "reasons", "interpretation"],
+        "properties": {
+          "verdict": {
+            "enum": ["applies", "not-applies", "conditional", "unknown"]
+          },
+          "conclusion": {
+            "type": "string"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["text", "refs"]
+            }
+          },
+          "interpretation": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["text", "refs"]
+            }
+          }
+        }
+      },
+      "rules": {
+        "refs": "evidence-only",
+        "numbers": "evidence-or-computed",
+        "verdictLock": true
+      },
+      "models": [
+        {
+          "provider": "claude",
+          "model": "claude-opus-5",
+          "effort": "high"
+        },
+        {
+          "provider": "claude",
+          "model": "claude-sonnet-5",
+          "effort": "high"
+        },
+        {
+          "provider": "codex",
+          "model": "gpt-5.5",
+          "effort": "high"
+        }
+      ],
+      "maxOutputChars": 1200
+    },
+    {
+      "id": "answer-prose",
+      "version": "1.1.0",
+      "promptTemplate": "[시험 레시피] 아래 근거만 써서 법규 답 문장을 JSON으로 쓴다. 판정은 바꾸지 않는다.\n질문: {{question}}\n판정: {{verdict}}\n근거:\n{{evidence}}\n계산값:\n{{computed}}\n확인 필요:\n{{checks}}",
+      "outputSchema": {
+        "type": "object",
+        "required": ["verdict", "conclusion", "reasons", "interpretation"],
+        "properties": {
+          "verdict": {
+            "enum": ["applies", "not-applies", "conditional", "unknown"]
+          },
+          "conclusion": {
+            "type": "string"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["text", "refs"]
+            }
+          },
+          "interpretation": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["text", "refs"]
+            }
+          }
+        }
+      },
+      "rules": {
+        "refs": "evidence-only",
+        "numbers": "evidence-or-computed",
+        "verdictLock": true
+      },
+      "models": [
+        {
+          "provider": "claude",
+          "model": "claude-opus-5",
+          "effort": "high"
+        },
+        {
+          "provider": "claude",
+          "model": "claude-sonnet-5",
+          "effort": "high"
+        },
+        {
+          "provider": "codex",
+          "model": "gpt-5.5",
+          "effort": "high"
+        }
+      ],
+      "maxOutputChars": 1500
+    }
+  ]
+}

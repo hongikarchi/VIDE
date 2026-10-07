@@ -168,6 +168,38 @@ test('capabilities: closed vocabulary, official-only names, reserved names, requ
   assert.deepEqual(codes(validateManifest(uses, { libraries })), []);
 });
 
+test('service.clawde: official built-in jigs only; project, dev and AI-draft jigs are refused', () => {
+  // ARCH-01 「jig 능력」, PLAN-46 T-218: the engine gives the service's read results to the official
+  // 법규 jig only. Sending back is no capability at all.
+  const withService = (id) => {
+    const manifest = base();
+    manifest.id = id;
+    manifest.capabilities.push({ name: 'service.clawde', reason: '법규 답 읽기' });
+    return manifest;
+  };
+  for (const source of ['dev-source', 'dev-pack', 'ai-draft'])
+    assert.ok(
+      codes(validateManifest(withService('vide/example-grid'), { source })).includes(
+        'JIG_CAPABILITY',
+      ),
+      `vide/* from ${source}`,
+    );
+  assert.ok(
+    codes(validateManifest(withService(base().id), { source: 'builtin' })).includes(
+      'JIG_CAPABILITY',
+    ),
+    'a project jig id, even as built in',
+  );
+  assert.deepEqual(
+    codes(validateManifest(withService('vide/example-grid'), { source: 'builtin' })),
+    [],
+  );
+  const send = base();
+  send.id = 'vide/example-grid';
+  send.capabilities.push({ name: 'service.clawde.contribute', reason: '역전송' });
+  assert.ok(codes(validateManifest(send, { source: 'builtin' })).includes('JIG_CAPABILITY'));
+});
+
 test('settings: units by type, ranges, defaults and choices', () => {
   const unit = base();
   unit.params[0].unit = 'kN';

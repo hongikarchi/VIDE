@@ -1,9 +1,10 @@
 {
-  "note": "Fixture checklist (PLAN-46 T-216). Items of every stage come back; BF 인증 sits in 기본설계, not 규모검토 (SPEC-13.6).",
+  "note": "Fixture checklist (PLAN-46 T-216·T-218). Items of every stage come back; BF 인증 sits in 기본설계 (design-development), not 규모검토 (scale-review) (SPEC-13.6). permitPhases marks the permit phases an item is checked at; '대지 안의 공지' and '피난 계단 상세' carry none (the field is optional).",
   "items": [
     {
       "topic": "일조 사선",
-      "stage": "feasibility",
+      "stage": "scale-review",
+      "permitPhases": ["review", "permit"],
       "status": "applies",
       "reason": "[시험 문구] 주거지역 대지라 정북 일조 사선이 매스 높이를 정한다.",
       "refs": ["law:건축법/제61조/①", "law:건축법 시행령/제86조/①"],
@@ -11,7 +12,8 @@
     },
     {
       "topic": "주차",
-      "stage": "feasibility",
+      "stage": "scale-review",
+      "permitPhases": ["permit"],
       "status": "conditional",
       "reason": "[시험 문구] 주용도와 연면적에 따라 주차대수가 정해진다.",
       "refs": ["law:주차장법 시행령/별표1/1"],
@@ -19,7 +21,7 @@
     },
     {
       "topic": "대지 안의 공지",
-      "stage": "feasibility",
+      "stage": "scale-review",
       "status": "not-applies",
       "reason": "[시험 문구] 시험 대지의 용도에서는 띄울 거리가 없다.",
       "refs": ["law:건축법/제58조"]
@@ -27,20 +29,22 @@
     {
       "topic": "조경",
       "stage": "schematic",
+      "permitPhases": ["permit", "occupancy"],
       "status": "applies",
       "reason": "[시험 문구] 대지 면적이 기준 이상이라 조경 면적을 둔다.",
       "refs": ["law:건축법/제42조/①"]
     },
     {
       "topic": "BF 인증",
-      "stage": "design",
+      "stage": "design-development",
+      "permitPhases": ["permit", "occupancy"],
       "status": "conditional",
       "reason": "[시험 문구] 면적에 걸리는 부분이 없어 기본설계 단계에서 본다.",
       "refs": ["law:장애인등편의법/제10조의2/①"]
     },
     {
       "topic": "피난 계단 상세",
-      "stage": "construction",
+      "stage": "construction-docs",
       "status": "unknown",
       "reason": "[시험 문구] 계단 상세가 정해진 뒤 확인한다.",
       "refs": []

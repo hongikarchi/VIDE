@@ -60,6 +60,26 @@
       "effectiveDate": "2026-01-01",
       "sourceUrl": "https://www.law.go.kr/법령/장애인노인임산부등의편의증진보장에관한법률",
       "lawDbDate": "2026-09-01"
+    },
+    {
+      "ref": "law:건축법/제55조",
+      "lawName": "건축법",
+      "article": "제55조",
+      "title": "건축물의 건폐율",
+      "excerpt": "[시험 문구] 대지에 건축하는 건축물의 건폐율은 국토계획법에 따른 비율 이하로 한다.",
+      "effectiveDate": "2026-01-01",
+      "sourceUrl": "https://www.law.go.kr/법령/건축법",
+      "lawDbDate": "2026-09-01"
+    },
+    {
+      "ref": "law:국토계획법 시행령/제84조/①/4",
+      "lawName": "국토의 계획 및 이용에 관한 법률 시행령",
+      "article": "제84조 제1항 제4호",
+      "title": "용도지역안에서의 건폐율",
+      "excerpt": "[시험 문구] 제2종일반주거지역의 건폐율은 60퍼센트 이하로 한다.",
+      "effectiveDate": "2026-01-01",
+      "sourceUrl": "https://www.law.go.kr/법령/국토의계획및이용에관한법률시행령",
+      "lawDbDate": "2026-09-01"
     }
   ]
 }
