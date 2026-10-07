@@ -114,6 +114,8 @@ interface ServerOptions {
   };
   /** Test seam for 도면 관계 (SPEC-01.11 11): the xref reader (null: no ZWCAD). */
   xrefReader?: XrefReader | null;
+  /** Test seam for 도면 읽기 (SPEC-14.3): the drawing inspector (null: no ZWCAD). */
+  drawingInspector?: DrawingInspector | null;
 }
 import { readWebAsset } from './web-assets.ts';
 import { tmpdir } from 'node:os';
@@ -161,6 +163,10 @@ import { XrefService } from './xref.ts';
 import { XrefStore } from '../core/xref-store.ts';
 import type { XrefReader } from '../core/xref-graph.ts';
 import { zwcadXrefReader } from '../../hosts/zwcad/xref-dwg.ts';
+import { drawingLayerRoutes, drawingLayerStatuses } from './drawing-layer-routes.ts';
+import { DrawingLayerService } from './drawing-layers.ts';
+import { DrawingLayerStore, type DrawingInspector } from '../core/drawing-layers.ts';
+import { zwcadDrawingInspector } from '../../hosts/zwcad/drawing-inspect.ts';
 import { KnowledgeCollector } from '../knowledge/collect/collector.ts';
 import {
   CliRunner,
@@ -281,6 +287,7 @@ const statuses: Record<string, number> = {
   ...jigSubmitStatuses,
   ...finishStatuses,
   ...xrefStatuses,
+  ...drawingLayerStatuses,
 };
 export async function startServer({
   filename,
@@ -300,6 +307,7 @@ export async function startServer({
   prefetchTools = false,
   collectOptions,
   xrefReader,
+  drawingInspector,
 }: ServerOptions) {
   const { store, event: storeEvent } = await openStore(filename, storeSplit),
     bootstrap = randomBytes(32).toString('hex'),
@@ -807,6 +815,22 @@ export async function startServer({
         ? join(tmpdir(), 'vide-xref-work')
         : join(dirname(filename), 'xref-work'),
   });
+  // 도면 읽기와 레이어 대응 (SPEC-14.3): copies of project drawings read when asked, tables per drawing.
+  const drawingLayers = new DrawingLayerService({
+    store: new DrawingLayerStore(store),
+    inspector:
+      drawingInspector === null ? undefined : (drawingInspector ?? zwcadDrawingInspector()),
+    folders: (projectId) =>
+      folders
+        .list(projectId)
+        .filter((folder) => folder.kind === 'project')
+        .map((folder) => folder.path),
+    denied: (path) => deniedPath(path, fileContext),
+    workRoot:
+      filename === ':memory:'
+        ? join(tmpdir(), 'vide-drawing-work')
+        : join(dirname(filename), 'drawing-work'),
+  });
   const modelRouter = new ModelRouter({
     dataDirectory: dirname(filename),
     log: filename !== ':memory:',
@@ -1175,6 +1199,17 @@ export async function startServer({
       if (
         await xrefRoutes(url, request.method, {
           xref,
+          project: (projectId) => store.project(projectId),
+          body: () => body(request),
+          send,
+          remote,
+        })
+      )
+        return;
+      // 도면 읽기와 레이어 대응 (SPEC-14.3): reads at this PC, layer tables per drawing.
+      if (
+        await drawingLayerRoutes(url, request.method, {
+          layers: drawingLayers,
           project: (projectId) => store.project(projectId),
           body: () => body(request),
           send,

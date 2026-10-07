@@ -2,7 +2,7 @@
 id: PLAN-47
 title: CAD 도면 역반영과 도곽 미리보기 (T-225~T-235)
 status: draft
-version: 0.5
+version: 0.6
 updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-14, SPEC-01, SPEC-02, SPEC-05, PLAN-43, PLAN-44, ARCH-01, DESIGN, SPIKE-2026-10-07-drawing-export, ADR-022, ADR-027, ADR-030, HOST-RHINO, HOST-ZWCAD, RESEARCH-04, C-08, FR-02, FR-03, FR-04, FR-12, FR-14, FR-16, FR-18]
@@ -184,8 +184,8 @@ T-232는 Sync jig만 있으면 기존 도면 경로부터 시작할 수 있고, 
 | 티켓 | 상태 | 증거 |
 |---|---|---|
 | T-225 | 완료(2026-10-08): 1 버전·Handle 유지 가능(`AcDbCellStyleMap`만 바뀜), 2 xref 자식 쓰기·상대 경로 유지 가능, 3 xdata 가능(복사본은 문자열 Handle 대조로 구분), 4 위험 속성 7개 추가, 5 도곽 API 가능하나 제공 세트는 모형 공간 속성 없는 도곽 + 창 플롯이라 결정 질문 3 기본값 조정 필요, 6 CTB 읽기 가능('개체 선가중치' 값 미확인) | [SPIKE-2026-10-07-drawing-backflow](../tdd/SPIKE-2026-10-07-drawing-backflow.md) |
-| T-226 | 완료(2026-10-07, 사용자 0단계 승인): 숨은 실행 공통 `runHiddenZwcad`(xref·자료 정리 읽기도 옮김), 출력 토큰(엔진 `OutputTokens`·worker `OutputGrant`), `VIDEDRAWINGCOPY`, 위험 속성 목록, AI 코드 정책 고정, ARCH-01 「도면 역반영(PLAN-47)」. 남음: 쓰는 도중 강제 종료 실측, T-225 4의 목록 확장 | `tests/core/drawing-output.test.mjs`·`zwcad-hidden-run.test.mjs`, 실호스트 `tests/integration/zwcad-drawing-output.mjs`·`zwcad-xref.mjs` 통과, H-ZWCAD-14 |
-| T-227 | 계획(좁힘: 도면 읽기·레이어 대응) | — |
+| T-226 | 완료(2026-10-07, 사용자 0단계 승인): 숨은 실행 공통 `runHiddenZwcad`(xref·자료 정리 읽기도 옮김), 출력 토큰(엔진 `OutputTokens`·worker `OutputGrant`), `VIDEDRAWINGCOPY`, 위험 속성 목록, AI 코드 정책 고정, ARCH-01 「도면 역반영(PLAN-47)」. 남음: 쓰는 도중 강제 종료 실측(T-225 4의 목록 확장·무진행 감시·문서 열기 금지는 T-227과 함께 끝남) | `tests/core/drawing-output.test.mjs`·`zwcad-hidden-run.test.mjs`, 실호스트 `tests/integration/zwcad-drawing-output.mjs`·`zwcad-xref.mjs` 통과, H-ZWCAD-14 |
+| T-227 | 완료(2026-10-08, 사용자 1단계 승인): worker `VIDEDRAWINGINSPECT`(사이드 DB, 버전·단위·레이어·선종류·문자/치수 스타일·블록·xref, 화살표는 치수 스타일 레코드에서), 프로젝트 DB schema 15(`drawing_reads`·`drawing_layer_maps`, 13·14는 병렬 티켓 자리), 경로 `/api/v1/projects/:id/drawing/layers*`(읽기·표 저장·복사), mm 아님·읽기 실패·파일 없음·읽은 뒤 바뀜 거절, 단위 없음은 mm 가정 표시(SPEC-14.3 3 보완). T-225 후속: `SafeRead` 위험 속성 7개 추가, `runHiddenZwcad`의 무진행 감시(새 결과·새 worker 단계 없음 → PID 종료)와 사이드 DB 명령 목록. 남음: 원천 레이어 목록을 Rhino 연결에서 채우기(T-232)·화면(T-234) | `tests/core/drawing-layers.test.mjs`·`tests/server/drawing-layers.test.mjs`·`zwcad-hidden-run.test.mjs`·`drawing-output.test.mjs`, 실호스트 `tests/integration/zwcad-drawing-inspect.mjs` 통과(합성 4장), 사용자 제공 실도면 사본 24장 읽기(모두 답함·새 충돌 0·원본 해시 불변), H-ZWCAD-15 |
 | T-228 | 폐기(2026-10-07, 사용자 검토: Rhino 레이아웃 불필요) | — |
 | T-229 | 폐기(2026-10-07, T-228 폐기로 대상 없음) | — |
 | T-230 | 계획(좁힘: 새 도면 시작 보조, 역반영 뒤) | — |

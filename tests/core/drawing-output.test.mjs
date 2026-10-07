@@ -237,7 +237,22 @@ test('worker and connection code never read the ZWCAD members that crash the hos
   const avoided = [.../Avoided =\s*\{([\s\S]*?)\};/.exec(safe)[1].matchAll(/"([^"]+)"/g)].map(
     (m) => m[1],
   );
-  assert.ok(avoided.includes('Dimension.TextStyleId'));
+  // T-225 질문 4 (SPIKE-2026-10-07-drawing-backflow 결과 4): seven more, all crash ZWCAD 2023.
+  assert.deepEqual(avoided.sort(), [
+    'Curve.Spline',
+    'Dimension.CenterMarkSize',
+    'Dimension.CenterMarkType',
+    'Dimension.Dimblk1s',
+    'Dimension.Dimblk2s',
+    'Dimension.Dimblks',
+    'Dimension.Dimldrblks',
+    'Dimension.TextStyleId',
+  ]);
+  // Members only a dimension or a curve has: never read anywhere. Arrowheads come from the
+  // dimension style record (SafeRead.DimensionArrows).
+  const never = avoided
+    .filter((name) => name !== 'Dimension.TextStyleId')
+    .map((name) => name.split('.')[1]);
   for (const dir of ['hosts/zwcad/worker/', 'hosts/zwcad/connection/']) {
     const folder = new URL('../../' + dir, import.meta.url);
     for (const name of (await readdir(folder)).filter((n) => n.endsWith('.cs'))) {
@@ -246,6 +261,9 @@ test('worker and connection code never read the ZWCAD members that crash the hos
       const code = text.replace(/\/\/.*$/gm, '').replace(/"[^"\n]*"/g, '""');
       for (const match of code.matchAll(/(\w+)\.TextStyleId\b/g))
         assert.doesNotMatch(match[1], /^dim/i, `${dir}${name}: ${match[0]}`);
+      for (const member of never)
+        assert.doesNotMatch(code, new RegExp(`\\.${member}\\b`), `${dir}${name}: ${member}`);
     }
   }
+  assert.match(safe, /DimensionArrows[\s\S]*style\.Dimblk[\s\S]*style\.Dimldrblk/);
 });

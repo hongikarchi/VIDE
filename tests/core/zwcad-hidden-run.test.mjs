@@ -3,10 +3,15 @@
 // tests/integration/zwcad-drawing-output.mjs and zwcad-xref.mjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { HiddenRunError, runHiddenZwcad } from '../../hosts/zwcad/hidden-run.ts';
+import {
+  HiddenRunError,
+  SIDE_DATABASE_COMMANDS,
+  STALL_MS,
+  runHiddenZwcad,
+} from '../../hosts/zwcad/hidden-run.ts';
 
 const clock = () => {
   let t = 0;
@@ -194,4 +199,54 @@ test('a stop that cannot confirm the identity is logged, not thrown over the res
     runHiddenZwcad(base(dir, { command: 'bad;cmd', finished: async () => true })),
     /INVALID_HOST_LAUNCH/,
   );
+});
+
+test('worker steps keep a run alive; a host that stops stepping is stopped', async (t) => {
+  // T-225 결과 4: after a native crash ZWCAD writes its report and idles; it does not exit.
+  const dir = await folder(t);
+  const { launch, calls } = fakeLaunch();
+  const step = join(dir, 'step.txt');
+  let polls = 0;
+  const report = await runHiddenZwcad(
+    base(dir, {
+      launch,
+      stallMs: 3000,
+      // A new step every 2 s for 10 s: longer than stallMs, never stalled.
+      finished: async () => {
+        polls++;
+        if (polls % 4 === 0) await appendFile(step, `read ${polls}\n`);
+        return polls > 20;
+      },
+    }),
+  );
+  assert.equal(report.ended, 'done');
+  assert.equal(report.lastStep, 'read 20');
+  assert.equal(calls.stops, 1);
+  const idle = fakeLaunch({ steps: ['grant', 'read'] });
+  const error = await runHiddenZwcad(
+    base(dir, { launch: idle.launch, finished: async () => false }),
+  ).catch((e) => e);
+  assert.equal(error.code, 'HIDDEN_HOST_STALLED');
+  assert.equal(error.details.lastStep, 'read');
+  assert.ok(error.details.ms > STALL_MS && error.details.ms < 10 * 60_000, 'the default watch');
+  assert.equal(idle.calls.stops, 1);
+});
+
+test('only side-database commands run hidden; their sources never open a document', async (t) => {
+  const dir = await folder(t);
+  await assert.rejects(
+    runHiddenZwcad(base(dir, { command: 'VIDESDKSESSION', finished: async () => true })),
+    /INVALID_HOST_LAUNCH/,
+  );
+  const worker = new URL('../../hosts/zwcad/worker/', import.meta.url);
+  const names = await readdir(worker);
+  for (const [command, file] of Object.entries(SIDE_DATABASE_COMMANDS)) {
+    assert.ok(names.includes(file), file);
+    const text = await readFile(new URL(file, worker), 'utf8');
+    assert.match(text, new RegExp(`CommandMethod\\("${command}"`), `${command} in ${file}`);
+    const code = text.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    for (const opens of [/DocumentManager/, /\.Open\(/, /MdiActiveDocument/, /\bDocument\b/])
+      assert.doesNotMatch(code, opens, `${file}: ${opens}`);
+    assert.match(code, /ReadDwgFile|new Database\(true/, `${file} works on a side database`);
+  }
 });

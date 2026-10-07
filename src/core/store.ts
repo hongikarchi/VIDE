@@ -413,6 +413,8 @@ export class Store {
         'DELETE FROM day_log WHERE projectId=?',
         'DELETE FROM finish_rooms WHERE projectId=?',
         'DELETE FROM finish_sheets WHERE projectId=?',
+        'DELETE FROM drawing_reads WHERE projectId=?',
+        'DELETE FROM drawing_layer_maps WHERE projectId=?',
         'DELETE FROM review_notes WHERE projectId=?',
         'DELETE FROM review_snapshots WHERE projectId=?',
         'DELETE FROM shared_feedback WHERE projectId=?',

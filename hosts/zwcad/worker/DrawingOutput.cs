@@ -5,7 +5,8 @@
 //    no overwrite, the source's DWG version), then reads the new file back. One JSON object in
 //    VIDE_DRAWING_RESULT, then `<result>.done`. The worker's steps go to VIDE_WORKER_STEP.
 //  - VIDEDRAWINGFIXTURE: synthetic drawings for the real-ZWCAD test only
-//    (tests/integration/zwcad-drawing-output.mjs) into the empty folder VIDE_DRAWING_FIXTURE.
+//    (tests/integration/zwcad-drawing-output.mjs, zwcad-drawing-inspect.mjs) into the empty folder
+//    VIDE_DRAWING_FIXTURE.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -89,8 +90,11 @@ public sealed class DrawingOutputCommand
     }
 
     /**
-     * v2013.dwg (AC1027) and v2018.dwg (AC1032): mm, a layer "벽", a closed polyline, a text and a
-     * block "도곽" with one attribute, inserted once. Written only into a new empty folder.
+     * v2013.dwg (AC1027) and v2018.dwg (AC1032): mm, a layer "벽" (linetype "VIDE점선"), a closed
+     * polyline, a text, a text style "VIDE문자", a dimension style "VIDE치수" (that text style, arrow
+     * block "VIDE틱") with one ZWCAD-made rotated dimension (its Dimblk*s would crash ZWCAD, T-225) and
+     * a block "도곽" with one attribute, inserted once; inch.dwg (AC1032) the same in inches (T-227).
+     * Written only into a new empty folder.
      */
     [CommandMethod("VIDEDRAWINGFIXTURE", CommandFlags.Session)]
     public static void Fixture()
@@ -101,23 +105,38 @@ public sealed class DrawingOutputCommand
         {
             Synthetic(Path.Combine(folder, "v2013.dwg"), DwgVersion.AC1027);
             Synthetic(Path.Combine(folder, "v2018.dwg"), DwgVersion.AC1032);
+            Synthetic(Path.Combine(folder, "inch.dwg"), DwgVersion.AC1032, UnitsValue.Inches);
             File.WriteAllText(Path.Combine(folder, "fixture.done"), "ok");
         }
         catch (System.Exception ex) { File.WriteAllText(Path.Combine(folder, "fixture.error"), ex.ToString()); }
     }
 
-    static void Synthetic(string path, DwgVersion version)
+    static void Synthetic(string path, DwgVersion version, UnitsValue units = UnitsValue.Millimeters)
     {
         if (File.Exists(path)) throw new InvalidOperationException("fixture exists");
         using (var db = new Database(true, true))
         {
-            db.Insunits = UnitsValue.Millimeters;
+            db.Insunits = units;
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
+                var types = (LinetypeTable)tr.GetObject(db.LinetypeTableId, OpenMode.ForWrite);
+                var dashed = new LinetypeTableRecord { Name = "VIDE점선", AsciiDescription = "__ __", PatternLength = 10, NumDashes = 2 };
+                dashed.SetDashLengthAt(0, 5); dashed.SetDashLengthAt(1, -5);
+                types.Add(dashed); tr.AddNewlyCreatedDBObject(dashed, true);
                 var layers = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForWrite);
-                var wall = new LayerTableRecord { Name = "벽" };
+                var wall = new LayerTableRecord { Name = "벽", LinetypeObjectId = dashed.ObjectId };
                 layers.Add(wall); tr.AddNewlyCreatedDBObject(wall, true);
+                var styles = (TextStyleTable)tr.GetObject(db.TextStyleTableId, OpenMode.ForWrite);
+                var font = new TextStyleTableRecord { Name = "VIDE문자", FileName = "txt.shx" };
+                styles.Add(font); tr.AddNewlyCreatedDBObject(font, true);
                 var blocks = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForWrite);
+                var tick = new BlockTableRecord { Name = "VIDE틱" };
+                blocks.Add(tick); tr.AddNewlyCreatedDBObject(tick, true);
+                var stroke = new Line(new Point3d(-0.5, -0.5, 0), new Point3d(0.5, 0.5, 0));
+                tick.AppendEntity(stroke); tr.AddNewlyCreatedDBObject(stroke, true);
+                var dims = (DimStyleTable)tr.GetObject(db.DimStyleTableId, OpenMode.ForWrite);
+                var dimStyle = new DimStyleTableRecord { Name = "VIDE치수", Dimtxsty = font.ObjectId, Dimblk = tick.ObjectId, Dimscale = 100 };
+                dims.Add(dimStyle); tr.AddNewlyCreatedDBObject(dimStyle, true);
                 var frame = new BlockTableRecord { Name = "도곽" };
                 ObjectId frameId = blocks.Add(frame); tr.AddNewlyCreatedDBObject(frame, true);
                 var border = new Polyline();
@@ -133,6 +152,8 @@ public sealed class DrawingOutputCommand
                 space.AppendEntity(room); tr.AddNewlyCreatedDBObject(room, true);
                 var text = new DBText { Position = new Point3d(1200, 1200, 0), TextString = "거실", Height = 250, LayerId = wall.ObjectId };
                 space.AppendEntity(text); tr.AddNewlyCreatedDBObject(text, true);
+                var dimension = new RotatedDimension(0, new Point3d(1000, 1000, 0), new Point3d(5000, 1000, 0), new Point3d(3000, 500, 0), "", dimStyle.ObjectId) { LayerId = wall.ObjectId };
+                space.AppendEntity(dimension); tr.AddNewlyCreatedDBObject(dimension, true);
                 var insert = new BlockReference(new Point3d(0, 0, 0), frameId) { ScaleFactors = new Scale3d(10) };
                 space.AppendEntity(insert); tr.AddNewlyCreatedDBObject(insert, true);
                 var attribute = new AttributeReference();

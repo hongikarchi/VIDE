@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 /** v5 and later cannot be opened by an older installation (UNSUPPORTED_SCHEMA); see ARCH-03 §10.1. */
-export const schemaVersion = 12;
+export const schemaVersion = 15;
 export const baselineSchema = `
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
@@ -165,6 +165,17 @@ const finishSchedule = `CREATE TABLE IF NOT EXISTS finish_rooms(id TEXT NOT NULL
   ceilingCodes TEXT NOT NULL, PRIMARY KEY(projectId, id)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS finish_sheets(projectId TEXT PRIMARY KEY REFERENCES projects(id),
   body TEXT NOT NULL, updatedAt TEXT NOT NULL);`;
+// 도면 읽기와 레이어 대응 (SPEC-14.3, PLAN-47 T-227): the last read of a project drawing (its
+// fingerprint — size, modification time, sha256 of the copy read — and the worker's answer) and one
+// layer table per drawing (source layer → drawing layer entries as JSON, with the fingerprint of the
+// read it was made against). `key` is the Windows path key (case and separators folded).
+const drawingLayers = `CREATE TABLE IF NOT EXISTS drawing_reads(projectId TEXT NOT NULL REFERENCES projects(id),
+  key TEXT NOT NULL, path TEXT NOT NULL, size INTEGER NOT NULL, mtime TEXT NOT NULL,
+  sha256 TEXT NOT NULL, readAt TEXT NOT NULL, data TEXT NOT NULL,
+  PRIMARY KEY(projectId, key)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS drawing_layer_maps(projectId TEXT NOT NULL REFERENCES projects(id),
+  key TEXT NOT NULL, path TEXT NOT NULL, entries TEXT NOT NULL, sha256 TEXT NOT NULL,
+  revision INTEGER NOT NULL, updatedAt TEXT NOT NULL, PRIMARY KEY(projectId, key)) WITHOUT ROWID;`;
 export const migrations: Migration[] = [
   { version: 2, sql: baselineSchema },
   { version: 3, sql: hiddenRequests },
@@ -177,6 +188,11 @@ export const migrations: Migration[] = [
   { version: 10, sql: dayLog },
   { version: 11, sql: agendaFields },
   { version: 12, sql: finishSchedule },
+  // RESERVED for parallel tickets (2026-10-08): their migrations replace these two empty steps when
+  // the branches are merged. Never release a build with these placeholders.
+  { version: 13, sql: '' },
+  { version: 14, sql: '' },
+  { version: 15, sql: drawingLayers },
 ];
 
 /** Caller holds the exclusive controller lock. Never migrates user model files. */

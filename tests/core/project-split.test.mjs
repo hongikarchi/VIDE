@@ -181,6 +181,8 @@ function fill(db, p, n) {
     p,
   );
   run('INSERT INTO finish_sheets VALUES(?,?,?)', p, '{}', at);
+  run("INSERT INTO drawing_reads VALUES(?,'c:\\a.dwg','C:\\a.dwg',1,?,'h',?,'{}')", p, at, at);
+  run("INSERT INTO drawing_layer_maps VALUES(?,'c:\\a.dwg','C:\\a.dwg','[]','h',1,?)", p, at);
   run(
     "INSERT INTO object_versions VALUES(?,?,'object','{}',?,3)",
     p,

@@ -21,7 +21,8 @@ const STALL_MS = 5 * 60_000;
 
 type Row = Record<string, unknown> & { id: number };
 
-async function runWorker(
+/** One hidden run of a manifest command: rows by `id` from the JSON lines in `output` so far. */
+export async function runWorker(
   options: { executable: string; plugin: string },
   command: string,
   environment: Record<string, string>,
@@ -29,6 +30,7 @@ async function runWorker(
   folder: string,
   progress: (done: number) => void,
   signal?: AbortSignal,
+  stallMs = STALL_MS,
 ) {
   const rows = new Map<number, Row>();
   const collect = async () => {
@@ -66,7 +68,7 @@ async function runWorker(
       return count;
     },
     timeoutMs: Infinity,
-    stallMs: STALL_MS,
+    stallMs,
     onStall: 'end',
     signal,
   }).catch((error: unknown) => {

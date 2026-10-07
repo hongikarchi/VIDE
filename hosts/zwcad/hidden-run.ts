@@ -3,12 +3,17 @@
 // through here so the time limit, the stop, the end check and crash dumps are handled once:
 //  - the host is started by `launchHiddenZwcad` (the H-ZWCAD-13 crash-prompt watch included);
 //  - the run ends when the worker's done marker appears, the caller's signal aborts, the whole
-//    time limit passes, no new result shows for `stallMs`, or the host exits by itself;
+//    time limit passes, the host exits by itself, or nothing moves for `stallMs` (no new result
+//    and no new worker step): ZWCAD 2023 does not exit after a native crash but writes its crash
+//    report and idles (SPIKE-2026-10-07-drawing-backflow 결과 4), so this watch is what ends it;
+//  - only side-database commands run here (`SIDE_DATABASE_COMMANDS`): the worker reads and writes
+//    drawings with `Database.ReadDwgFile`/`SaveAs` and never opens a document, so no modal
+//    dialog (missing xref, recovery) can hold the hidden host;
 //  - only the process started here is stopped (`owner.stop` re-checks PID, start time and path),
 //    never the user's ZWCAD; the run's folder and the drawings are left to the caller;
 //  - a failed run carries its exit code/signal, the worker's last step (`VIDE_WORKER_STEP` file)
 //    and the ZWCAD crash dumps that appeared during the run. Dumps are listed, never moved.
-import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { launchHiddenZwcad } from './crash-prompt.ts';
 import { diagnostic } from '../../src/core/breadcrumbs.ts';
@@ -45,6 +50,23 @@ export class HiddenRunError extends Error {
 
 type Launch = typeof launchHiddenZwcad;
 
+/**
+ * Worker commands a hidden run may start, with the worker source that holds each. All of them work
+ * on side databases only; tests/core/zwcad-hidden-run.test.mjs checks those sources never open a
+ * document. A new command is added here together with that check.
+ */
+export const SIDE_DATABASE_COMMANDS: Readonly<Record<string, string>> = Object.freeze({
+  VIDEXREFGRAPH: 'XrefGraph.cs',
+  VIDEXREFFIXTURE: 'XrefGraph.cs',
+  VIDEDRAWINGCOPY: 'DrawingOutput.cs',
+  VIDEDRAWINGFIXTURE: 'DrawingOutput.cs',
+  VIDEDRAWINGINSPECT: 'DrawingInspect.cs',
+  VIDEKNOWLEDGEDWG: 'KnowledgeDwg.cs',
+});
+
+/** Default no-progress limit: a crashed ZWCAD shows no new step or result after this. */
+export const STALL_MS = 120_000;
+
 export interface HiddenRunOptions {
   /** Short name for the diagnostic log (`xref-graph`, `drawing-copy`, …). */
   label: string;
@@ -60,6 +82,8 @@ export interface HiddenRunOptions {
   /** Results so far; a change restarts the stall clock and ends the crash-prompt watch. */
   progress?: () => Promise<number>;
   timeoutMs?: number;
+  /** No new result and no new worker step for this long: the host is stalled (default
+   *  `STALL_MS`, at most `timeoutMs`). */
   stallMs?: number;
   onStall?: 'fail' | 'end';
   signal?: AbortSignal;
@@ -112,7 +136,7 @@ export async function runHiddenZwcad({
   finished,
   progress,
   timeoutMs = 10 * 60_000,
-  stallMs = timeoutMs,
+  stallMs = Math.min(timeoutMs, STALL_MS),
   onStall = 'fail',
   signal,
   intervalMs = 500,
@@ -122,7 +146,8 @@ export async function runHiddenZwcad({
   sleep = (ms) => new Promise<void>((accept) => setTimeout(accept, ms)),
   log = (fields) => diagnostic('zwcad-hidden-run', fields),
 }: HiddenRunOptions): Promise<HiddenRunReport> {
-  if (!/^[A-Z][A-Z0-9]*$/.test(command)) throw new Error('INVALID_HOST_LAUNCH');
+  if (!/^[A-Z][A-Z0-9]*$/.test(command) || !Object.hasOwn(SIDE_DATABASE_COMMANDS, command))
+    throw new Error('INVALID_HOST_LAUNCH');
   if (signal?.aborted) throw new HiddenRunError('STOPPED', { ms: 0, lastStep: null, newDumps: [] });
   const stepFile = join(folder, 'step.txt');
   const script = join(folder, 'start.scr');
@@ -142,6 +167,7 @@ export async function runHiddenZwcad({
   let exit: { code: number | null; signal: string | null } | undefined;
   try {
     let seen = -1,
+      steps = -1,
       last = started;
     while (!outcome) {
       if (signal?.aborted) outcome = 'STOPPED';
@@ -152,12 +178,21 @@ export async function runHiddenZwcad({
       else if (now() - started > timeoutMs) outcome = 'HIDDEN_HOST_TIMEOUT';
       else {
         const count = progress ? await progress() : 0;
+        // The step file only grows (one line per worker step): its size is the step progress.
+        const stepped = await stat(stepFile).then(
+          (info) => info.size,
+          () => 0,
+        );
         if (count !== seen) {
           if (seen >= 0 || count > 0) owner.settled();
           seen = count;
           last = now();
-        } else if (now() - last > stallMs)
-          outcome = onStall === 'end' ? 'stalled' : 'HIDDEN_HOST_STALLED';
+        }
+        if (stepped !== steps) {
+          steps = stepped;
+          last = now();
+        }
+        if (now() - last > stallMs) outcome = onStall === 'end' ? 'stalled' : 'HIDDEN_HOST_STALLED';
         if (!outcome) await sleep(intervalMs);
       }
     }
