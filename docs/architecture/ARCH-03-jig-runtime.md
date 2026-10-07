@@ -2,7 +2,7 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 1.00
+version: 1.01
 updated: 2026-10-08
 owner: agent:claude
 related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, PLAN-45, SPEC-12, RESEARCH-10, RESEARCH-12, SPEC-13, PLAN-46]
@@ -101,7 +101,7 @@ export interface JigManifest {
   inputs: InputDecl[];
   params: ParamDecl[];
   steps: StepDecl[];
-  outputs?: { key: string; from: string; schema: string }[];   // 다른 jig가 받을 수 있는 출력
+  outputs?: { key: string; from: string; schema: string }[];   // 다른 jig가 받을 수 있는 출력. from = 'step.<id>'(없는 단계는 JIG_REF_MISSING), schema = 패키지의 JSON Schema(§8.5)
   panel?: string;                    // 'panel.json' (library는 생략 가능)
   reports?: { id: string; file: string; title: string }[];
   bake?: BakeDecl[];
@@ -140,7 +140,8 @@ export type InputDecl =
   | { key: string; title: string; kind: 'table-file'; accept: string[] }
   | { key: string; title: string; kind: 'jig-output'; from: { jig: string; output: string } }   // jig.read 필요
   | { key: string; title: string; kind: 'site-data'; required: boolean };   // 공식 jig만, net.fetch 필요(§8.2)
-// jig-output의 값: 실행할 때 `RuntimeOptions.jigOutput(projectId, from)`이 준다(없으면 null). 엔진은
+// jig-output의 값: 실행할 때 `RuntimeOptions.jigOutput(projectId, from)`이 주는 값, 그것이 없으면 같은
+// 프로젝트의 앞 작업본이 선언한 출력(§8.5, 건축개요가 받는 매스·대지 요약), 둘 다 없으면 null이다. 엔진은
 // `provideJigOutput(workspace, from, 제공자)`로 `<jig>#<output>`마다 제공자를 등록한다. 첫 제공자는
 // 법규 jig의 `vide/legal#constraints`(`vide.legal.constraints@1`, ARCH-01 「법규와 모델」, PLAN-46 T-220)이며
 // `vide/buildable-mass`의 입력 `legal`이 받는다. 값은 내용으로 지문을 만들어, 법규 답이 바뀌면 읽는 단계가 다시 돈다.
@@ -278,7 +279,7 @@ export type Binding = `step.${string}` | `$${string}` | 'params' | `inputs.${str
 
   | 자리 | 부품 |
   |---|---|
-  | `left` | `step-rail`, `param-group`, `slider`, `choice`, `stepper`, `toggle`, `fact-badge`, `role-card`, `verdict-legend`, `bake-card`, `conflict-banner`, `site-picker` |
+  | `left` | `step-rail`, `param-group`, `slider`, `choice`, `stepper`, `toggle`, `fact-badge`, `role-card`, `verdict-legend`, `bake-card`, `conflict-banner`, `site-picker`, `jig-source` |
   | `center.views` | `viewport-overlay`, `plan-map`, `report` |
   | `center.board` | `slider-board` |
   | `center.kpis` | `kpi-strip` |
@@ -286,6 +287,7 @@ export type Binding = `step.${string}` | `$${string}` | 'params' | `inputs.${str
   | `result-tabs`의 탭 | `issue-table`, `table`, `schedule`, `bake-card`, `compare-bars`, `ledger` |
 
 - 4차 물결에 더한 부품의 속성: `bake-card`는 `{title?, from?, bake?}`이며 `bake`는 내놓을 만들기 id(jig 자체 또는 VIDE 기본 `lines`·`members`) 최대 10개, 생략하면 전부다. 누르면 §7 `POST …/bake`로 간다. `compare-bars`는 `{title?, from, label, value, shade?, unit?, decimals?, limit?, limitLabel?}`이고 `shade`는 행 필드로 `base`·`alt`·`strong`·`actual`·`na` 중 하나를 준다. `report`는 `{report}`로 보고서 틀 이름(§5.2)을 가리키고 §7 `…/reports/:name`의 해석된 보고서를 부품으로 그린다. `ledger`는 `{title?, from, group?, columns?}`이며 `from`은 보통 `ledger.<name>`이다.
+- `jig-source`(T-213)는 `{input, title?}`이며 `input`은 `jig-output` 입력(`inputs.<key>`)이다. 그 입력이 읽는 앞 작업본(이름 · jig 버전 · 계산 시각), 읽을 수 없는 이유, '다시 계산 필요'와 [다시 계산], 앞 작업본 고르기(「최근 계산된 작업본(자동)」 또는 이 프로젝트의 그 jig 작업본)를 §7의 `jig-outputs` 경로로 한다. 고르면 그 입력을 읽는 단계가 다시 계산 필요가 되고 화면이 다시 계산한다.
 - `site-picker`(T-207)는 `{input, title?}`이며 `input`은 `site-data` 입력(`inputs.<key>`)이다. 프로젝트의 전송 고지 확인·끄기(`…/site-data/notice`), 주소 찾기, 후보 질문 카드(SCR-15의 카드 모양과 후보 위치 SVG), 대상 필지 고르기·더하기, [대상 필지 확정](그 사람 단계의 확인 경로), [가져오기]·바뀐 항목의 받기·유지, SHP 넣기를 §7의 `site-data` 경로로 한다.
 - 근거 칩: 설정값을 그리는 부품(`slider`·`choice`·`stepper`·`toggle`·`param-group`·`slider-board`)과 `fact-badge`는 값마다 칩 하나를 붙인다. 칩은 값의 출처(`by`: `default` 기본값·`user` 사용자·`decision` 사용자 결정·`fact` 프로젝트 자료·`ai` AI 제안·`rhino` 모델·`sketch` 스케치)와 그 상태(기본값이면 선언된 근거의 `status`: 가정·선택·물어볼 것, 자료면 진술의 검토 상태: 미확정·근거 무효·대체됨, 확정이면 상태 글자 없음)를 보인다(SPEC-07.6). 진술에 기댄 칩은 `data-fact-statement`를 달아 누르면 진술 창을 연다(`src/ui/kit/settings.tsx` `FactBadge`).
 - 연결은 단계 출력 경로(`step.<id>.<field>…`), 설정값(`$<key>`), `params`, `inputs.<key>…`, `ledger.<name>`뿐이다. 식·코드는 넣지 않는다.
@@ -299,6 +301,7 @@ export type Binding = `step.${string}` | `$${string}` | 'params' | `inputs.${str
 - 헤드라인·절 주장은 틀 문장 목록 `cases[{ when, template }]`이다. `when`은 닫힌 형식만 허용한다: `<경로> <연산자> <경로|숫자>`를 `&&`로 잇고, 연산자는 `== != < <= > >=`다. 틀의 `{경로}`는 결과 값으로 채운다. AI 1회 다듬기(`polish: 'ai-once'`)는 선택이다.
 - 보고서 점검은 `claim-consistent`(쓰인 틀의 `when`이 참), `numbers-in-source`, `unchecked-listed`, `combo-echo`다(§11).
 - 렌더러는 `src/server/report.ts`를 넓힌다. 스크립트 없는 CSP와 외부 요청 없는 HTML을 유지한다.
+- **내보내기 조건(선택, T-213):** `export: {when, refused}`. `when`은 헤드라인과 같은 닫힌 조건이다. 틀에 `export`가 있으면 `when`이 거짓이거나 보고서 점검(`claim-consistent`·`numbers-in-source`·`unchecked-listed`) 하나라도 실패할 때 해석된 보고서에 `exportRefused: string[]`(이유)를 싣고, §7 보고서 경로는 `html`을 빈 문자열로 준다. 보고서 탭은 [인쇄]·[HTML 저장]을 끄고 이유를 보이며, 패널의 보고서 부품도 '내보내지 않음'을 보인다. `export`가 없는 틀은 지금처럼 점검 실패를 '확인 필요'로만 보인다. 건축개요(SPEC-12.13 4)가 `step.check.mismatchCount == 0 && step.check.floorsCount > 0`으로 쓴다.
 
 ### 5.3 `skill.md`와 skill 시작
 
@@ -441,6 +444,8 @@ jig·보고서 경로는 `src/server/jig-routes.ts`, 초안 경로(`jig-drafts`)
 | `POST …/:iid/site-data/:key/shp` | `{files: [{name, data(base64)}]}` 또는 `{clear: true}` | SHP 넣기(§8.1). 앞서 넣은 파일과 함께 EPSG:5186으로 다시 넣고, 이 작업본의 사본으로만 둔다. 응답은 레이어·거절·쓰지 않음 목록 |
 | `GET /api/v1/projects/:id/jig-reports` | — | 보고서 탭 목록: 보고서 틀이 있는 작업본마다 `{instance, reports[]}` |
 | `GET …/:iid/reports` | — | 그 작업본 jig의 보고서 틀 목록(설명서 `reports`, 없으면 패키지의 `reports/*.json`) |
+| `GET …/:iid/jig-outputs/:key` | — | `jig-output` 입력의 상태(§8.5): `{input, chosen, current, ready, reason, candidates[{instanceId, title, version, at, ready, reason?}], used, stale}`. `current`는 고른 작업본 또는 가장 최근에 계산된 작업본(`{instanceId, title, jig, version, step, status, at, hash, reason?}`), `stale`은 마지막 계산 때 읽은 결과(`used.hash`)와 지금이 다름 |
+| `PUT …/:iid/jig-outputs/:key` | `{instanceId: string \| null}` | 앞 작업본 고르기(`null` = 최근 계산된 작업본). 같은 프로젝트의 `from.jig` 작업본만(자기 자신·다른 jig는 422 `INVALID_INPUT`). 그 입력을 읽는 단계가 `stale` |
 | `GET …/:iid/reports/:name` | — | 해석된 보고서(§5.2). 보관된 단계 결과·설정값 원장·남은 조건·해석 보기를 읽고, `previewOnly` 결과는 확정으로 쓰지 않는다. 화면이 부품으로 그린다(CSP가 인라인 스타일을 막으므로 HTML을 내려보내지 않음). 일람표 CSV는 표 부품의 `csv`로 화면이 만든다 |
 | `GET·POST /api/v1/projects/:id/jig-drafts` | POST `{name, from?}` 또는 `{from: {jig, version?}}` | 초안 목록·만들기(`from`은 시작 본). 201. `from`이 jig이면 [수정하기](T-101): 등록부에서 그 버전(없으면 이 프로젝트의 고정 버전)을 찾아 `project/` 도구 jig만 사본으로 만든다 — 패키지 파일을 초안 경로 규칙으로 하나씩 복사(`dist/` 묶음과 `derived` 선언은 빼고), id 유지, 버전은 그 id의 설치본·열린 초안·원본 중 가장 높은 것의 패치 +1. 출처 `{jigId, version, name, at}`는 `.results/<did>.json`의 `origin`에 두고 초안 보기에 실린다. 사본은 계산 상자에서 돌므로, 단계 소스(타입을 걷어 낸 본문)의 import가 패키지 파일·공식 라이브러리 밖(저장소 상대 경로·`node:`·꾸러미 이름)으로 가면 `JIG_NOT_FORKABLE`(422)로 거절한다(`drafts.ts` `forkable`, 판단은 상자의 모듈 규칙 `compute-box.ts` `boxImportTarget`과 같음). 등록부 목록(`GET /api/v1/jigs/packages`)의 도구 항목은 같은 판단을 `forkable`로 싣는다. 없는 jig 404, 그 밖 `INVALID_INPUT` |
 | `GET·DELETE …/jig-drafts/:did` | — | 초안 하나. `DELETE`는 버리기: 상태 `discarded`, 초안 폴더와 그 초안에 붙은 만들기 대화의 공급자 기록을 지우고 열린 대화를 닫는다. 엔진이 DELETE를 받는 경로는 이것과 jig 고정 해제(위), 프로젝트 삭제(ARCH-01)뿐이다 |
@@ -507,15 +512,26 @@ jig 입력은 표시용 Sync가 아니라 jig 입력 읽기로 받는다.
 - **바뀜:** 경로가 바꾼 부분을 읽는 단계만 `stale`이 되고 사람 단계는 지문 비교로 다시 확인한다.
 - **만들기:** 사이트 jig의 만들기 선언은 `requires: ['target-confirmed']`로 확정 전 만들기를 막는다(§11).
 
-### 8.4 층·대안·용도·주차 (`vide/massing-kit` 0.2.0, PLAN-45 T-211·T-212)
+### 8.4 층·대안·용도·주차 (`vide/massing-kit` 0.2.0~, PLAN-45 T-211·T-212)
 
 건축 가능 영역·매스 jig(SPEC-12.10~12.12)의 외피 뒤 단계다. 계산은 모두 엔진(TS)이고 `geometry-kit/solid.ts`의 불리언으로 평면 영역(`PlanRegion {outer, holes}`)을 다룬다. 법정 값은 코드에 없다.
 
 - **파일:** `floors.ts`(층 높이 목록 `floorLevels`, 층 윤곽 = 최대 외피 ∩ 층 판의 윗면(`floorRegions`), 윤곽 프리즘이 외피 안인지 `floorFits`, 지하 윤곽 = 대지 − 모든 변의 캡슐(지하 이격), 영역 합·차·교와 면적, 위층 축소 `trimRegions`: 정북에 수직인 선의 위치를 면적으로 이분 탐색하고 영역은 불리언으로 자름), `alternatives.ts`(닫힌 대안 목록 `max`·`base`·`incentive`·`open-space`·`human-k`, 상한 8, `trimToCap`, 표 줄 `alternativeRow`), `open-space.ts`(필요 면적, 그린·모서리 후보, 고를 후보), `use-mix.ts`(용도 표, 허용 용도 대조, AI 초안 받기 `acceptUseDraft`), `parking.ts`(법정 대수, 진입 가능 구간, 방식 대안), `landscape.ts`(법정·계획 조경 면적), `mass-steps.ts`(단계 함수).
 - **수정 사항(SPEC-07.8)의 종류:** 라이브러리 단계는 셋째 인자로 작업본의 수정 사항을 받는다. `{kind: 'regulation', identity: {id, target?}}` `set` `{value, applies, basis?}`(목록·대상별 규제 조건; 같은 항목의 설정값보다 앞섬), `{kind: 'floor-exclusion', identity: {floor}}` `set` `{area, basis}`, `{kind: 'mass-floor', identity: {alternative: 'human-k', floor}}` `set` `{outline, holes?}` 또는 `remove`, `{kind: 'use-floor', identity: {floor, alternative?}}` `set` `{use}` 또는 `{uses: [{use, ratio}]}`. `by: 'ai'`인 수정 사항은 어느 단계도 쓰지 않고 `problems`에 이유를 남긴다.
 - **새 규제 조건 항목:** `incentiveFar`·`incentiveHeight`·`openSpaceIncentiveFar`, `parkingRounding`(`half-up`·`ceil`·`floor`)·`parkingRoundScope`(`sum`·`each`)·`parkingAreaBasis`(`gross`·`far`)·`parkingEntryCornerDistance`, `parkingRule`(단위 ㎡/대, 대상 = 용도). 항목 값 형식에 문자열 목록(`string[]`)을 더했다.
-- **단계와 출력:** `floors`(기준 변형, 지상 `floors[]`·지하 `basement[]` `{floor, index, z0, z1, regions, area}`, `basementRegions`, 표 `rows`), `openSpace`(`requirement`·`candidates`(영역 포함)·표 `rows`·`picked`·곡선 `lines`), `alternatives`(`alternatives[]` 층 영역까지, 표 `rows`, 막대 `bars`, `skipped`, `problems`), 사람 단계 `confirmChoice`(slot `confirm-inputs`, 읽기 = 대안 출력 + `param.chosenAlternative`, 막는 단계 `chosen`), `chosen`(`{id, title, row, alternative}`, 건축개요의 입력), AI 단계 `useDraft`(`draft-only`, AI 뒤 점검 `numbers-in-source`·`no-plan-dependent-conclusion`; 런타임이 AI 단계를 아직 돌리지 않아 늘 `AI_UNAVAILABLE`, 꺼진 상태로 시작) → 사람 단계 `acceptUseDraft` → `useDraftApplied`(출력 `apply.overrides`, §6.3 적용 요청, id `use-floor:<층>`·`by: 'user'`·note 'AI 초안을 사람이 받음'), `useMix`(대안별 층 용도·용도별 합계·판정, 만들기 항목 `items`), `parking`(대안별 법정·계획 대수, 고른 대안의 용도별 줄·방식 대안·지상 여유·진입 구간·조경·공개공지, 곡선 `lines`, 추정 지하층 `masses`).
+- **단계와 출력:** `floors`(기준 변형, 지상 `floors[]`·지하 `basement[]` `{floor, index, z0, z1, regions, area}`, `basementRegions`, 표 `rows`), `openSpace`(`requirement`·`candidates`(영역 포함)·표 `rows`·`picked`·곡선 `lines`), `alternatives`(`alternatives[]` 층 영역까지, 표 `rows`, 막대 `bars`, `skipped`, `problems`), 사람 단계 `confirmChoice`(slot `confirm-inputs`, 읽기 = 대안 출력 + `param.chosenAlternative`, 막는 단계 `chosen`), `chosen`(`{id, title, row, alternative}`, 넘겨줄 결과 `handoff`의 입력 — §8.5), AI 단계 `useDraft`(`draft-only`, AI 뒤 점검 `numbers-in-source`·`no-plan-dependent-conclusion`; 런타임이 AI 단계를 아직 돌리지 않아 늘 `AI_UNAVAILABLE`, 꺼진 상태로 시작) → 사람 단계 `acceptUseDraft` → `useDraftApplied`(출력 `apply.overrides`, §6.3 적용 요청, id `use-floor:<층>`·`by: 'user'`·note 'AI 초안을 사람이 받음'), `useMix`(대안별 층 용도·용도별 합계·판정, 만들기 항목 `items`), `parking`(대안별 법정·계획 대수, 고른 대안의 용도별 줄·방식 대안·지상 여유·진입 구간·조경·공개공지, 곡선 `lines`, 추정 지하층 `masses`).
 - **만들기 선언:** `alternativeMasses`(`vide.bake.extrude-polygon@1`, 항목 `{key: alt:<대안>:<층>:<영역>, rings, bottom, height, option, floor, areaText, use, unconfirmed}`, 속성 `vide-option`·`vide-floor`·`vide-area-m2`·`vide-use`·`vide-unconfirmed`), `groundZones`(`vide.bake.curves@1`, 속성 `vide-ground`·`vide-area-m2`), `parkingMasses`(`vide.bake.extrude-polygon@1`, `park:under:B<k>:<영역>`). 호스트 단계 `makeMass`가 셋을 만든다(외피의 `make`와 따로).
+
+### 8.5 앞 jig의 결과 `jig-output`과 건축개요 (PLAN-45 T-213)
+
+작업 jig끼리는 코드를 부르지 않고 설명서가 선언한 출력만 입력으로 받는다(SPEC-07.2, SPEC-12.2).
+
+- **선언:** 내주는 jig는 `outputs[{key, from: 'step.<id>', schema}]`, 받는 jig는 입력 `{kind: 'jig-output', from: {jig, output}}`과 능력 `jig.read`다. 공식 선언: `vide/buildable-mass` 0.3.0 `chosen` ← 단계 `handoff`(`schemas/outputs/chosen.json`), `vide/site-model` 0.2.0 `summary` ← 단계 `summary`(`schemas/outputs/summary.json`).
+- **고르기·보관:** 작업본 본문 `jigOutputs[<key>] = {instanceId, at}`(사람이 고른 앞 작업본, 없으면 자동)과 `jigOutputsUsed[<key>] = {instanceId, hash, at}`(마지막으로 보관한 계산이 읽은 결과). 자동은 이 프로젝트의 `from.jig` 작업본 가운데 그 출력 단계가 `done`인 것 중 계산 시각이 가장 늦은 것이고, 없으면 가장 최근 작업본을 이유와 함께 보인다. 엔진에 그 `<jig>#<output>` 제공자가 있고 값을 주면(법규 jig의 `legal.constraints`, §3) 그 값을 그대로 쓰고 앞 작업본을 찾지 않으며, 제공자 값도 그 jig의 작업본도 없으면 null이다.
+- **읽을 수 있음:** 앞 작업본의 jig 버전이 그 출력을 선언하고, 출력 단계의 실행 행이 `done`이고, 보관 파일이 있고, 출력이 선언한 스키마(§6.2의 부분집합 검사)를 통과할 때다. 이유: 단계 `stale` → '앞 작업본이 다시 계산 필요 상태입니다', `failed`·미계산·버전에 출력 없음·파일 없음·형식 다름. 앞 작업본의 출력은 바꾸지 않는다.
+- **단계에 주는 값:** `input.<key>` = `{source: {instanceId, title, jig, version, updatedAt, step, status, at, hash}, value, snapshot: {hash}}`, 읽을 수 없으면 `{source | null, value: null, reason, snapshot}`. 지문 `hash` = `<앞 작업본>:<단계>:<그 실행의 입력 지문>`이라 앞 결과가 바뀌면 이 입력을 읽는 단계부터 다시 계산된다. 미리보기 계산은 `jigOutputsUsed`를 바꾸지 않는다.
+- **`handoff`(`vide/massing-kit` 0.3.0 `handoffStep`, 단계 `chosen`·`parking` 뒤):** `{kind: 'vide/buildable-mass#chosen', alternative {id, title, flags, farTarget, farTargetSource, notes, openSpace}, row(대안 표 줄), floors[]·basement[] {floor, index, z0, z1, height, area, exclusion, exclusionBasis, farArea, change, outside, uses[{use, ratio, area}], useOrigin, useVerdict}, site {area_m2, northBasis, northDeg}, plan, regulations {items, legal, needsInput}, uses(용도별 합계), parking {legal, raw, status, planned, rows, types | null}, landscape, publicOpenSpace {required, state, planned}, unconfirmed[{title, status}], chosenBy: '사용자가 확정함'}`. 층 영역(기하)은 넘기지 않는다. 새 계산은 없고 앞 단계 값만 옮긴다.
+- **`vide/building-summary` 0.1.0(`src/jigs/official/jigs/building-summary/`):** 입력 `mass`(← `vide/buildable-mass#chosen`)·`site`(← `vide/site-model#summary`, 없어도 됨). 코드 단계 `sources`(앞 결과 표, 고른 대안이 없으면 이유와 함께 실패) → `summary`(개요 줄 `{key, item, sub, value, unit, text, py, origin, status, basis, source}`, 층별 줄 `{key, floor, use, area, exclusion, farArea, py, note, kind: 'floor' | 'total'}`, `floorSum`, 미확정 조건·사람 입력 필요 목록) → `check`(일관성 점검: 숫자 칸의 `value`가 두 입력의 숫자에 있음, `text`·`py`가 값에서 쓴 것과 같음, 층별 합 = 지상·지하·합계 줄 = 개요 연면적·용적률 산정 연면적, 층 수 = 규모. 결과 `{ok, mismatchCount, mismatches[], overview, floors, floorsCount, checked}`이며 맞지 않으면 `overview`·`floors`가 비어 CSV 표와 보고서 표가 없다). 설정값은 `constructionType`·`structure`·`parkingMethod`(닫힌 선택), 건물명·비고는 수정 사항 `{kind: 'summary-text', identity: {field: 'buildingName' | 'remarks'}}` `set` `{text}`(200자, `by: 'ai'`는 받지 않음). 출처 글자는 `계산`·`공부`·`사람 입력`·`법규 결과`·`사람 입력 필요`·`미적용`이고, 규제 조건 항목은 `source`가 `param.`·`override.`이면 사람 입력, 그 밖이면 법규 결과다. 평 = ㎡ × 121/400. 보고서 틀 `reports/summary.json`은 `export` 조건을 쓴다(§5.2). 패널은 `jig-source` 둘, 보고서 보기, 표 탭(건축개요·층별 면적표 CSV, 일관성 점검, 미확정 조건, 앞 결과)이다.
 
 ## 9. Rhino에 만들기
 

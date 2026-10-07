@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "고른 대안 — 건축개요 jig가 받는 결과",
+  "type": "object",
+  "required": [
+    "kind",
+    "alternative",
+    "row",
+    "floors",
+    "basement",
+    "site",
+    "plan",
+    "regulations",
+    "uses",
+    "parking",
+    "landscape",
+    "publicOpenSpace",
+    "unconfirmed",
+    "chosenBy"
+  ],
+  "properties": {
+    "kind": { "const": "vide/buildable-mass#chosen" },
+    "alternative": {
+      "type": "object",
+      "required": ["id", "title", "flags"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "flags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "row": {
+      "type": "object",
+      "required": ["buildingArea", "gfaAbove", "gfaBelow", "gfaTotal", "farArea", "far", "height"],
+      "properties": {
+        "buildingArea": { "type": "number" },
+        "gfaAbove": { "type": "number" },
+        "gfaBelow": { "type": "number" },
+        "gfaTotal": { "type": "number" },
+        "farArea": { "type": "number" },
+        "far": { "type": "number" },
+        "height": { "type": "number" }
+      }
+    },
+    "floors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["floor", "area", "exclusion", "farArea", "uses"],
+        "properties": {
+          "floor": { "type": "string" },
+          "area": { "type": "number" },
+          "exclusion": { "type": "number" },
+          "farArea": { "type": "number" },
+          "uses": { "type": "array" }
+        }
+      }
+    },
+    "basement": { "type": "array" },
+    "site": {
+      "type": "object",
+      "required": ["area_m2"],
+      "properties": { "area_m2": { "type": "number" } }
+    },
+    "regulations": {
+      "type": "object",
+      "required": ["items"],
+      "properties": { "items": { "type": "array" } }
+    },
+    "unconfirmed": { "type": "array" },
+    "chosenBy": { "const": "사용자가 확정함" }
+  }
+}

@@ -1036,3 +1036,26 @@
   display: grid;
   gap: var(--s1);
 }
+
+/* A report shown as a panel view scrolls inside its view and leaves the drawer below in reach. */
+.kit-view > .kit-report {
+  max-height: 46vh;
+  overflow: auto;
+}
+
+/* --- jig source (SPEC-07.5 6, T-213) --------------------------------------------------------- */
+.jig-source {
+  display: grid;
+  gap: var(--s2);
+}
+.jig-source-current {
+  margin: 0;
+}
+.jig-source-pick {
+  display: grid;
+  gap: var(--s1);
+}
+.jig-source-pick select {
+  min-height: 30px;
+  min-width: 0;
+}

@@ -33,6 +33,7 @@ export const PART_NAMES = [
   'report',
   'ledger',
   'site-picker',
+  'jig-source',
 ] as const;
 export type PartName = (typeof PART_NAMES)[number];
 
@@ -226,6 +227,14 @@ export const PART_PROPS = {
       title: title.optional(),
     })
     .strict(),
+  // 앞 jig의 결과 (SPEC-07.2·07.5 6, PLAN-45 T-213): a `jig-output` input's earlier instance —
+  // which one, its state and '다시 계산 필요' — and the choice among the project's instances.
+  'jig-source': z
+    .object({
+      input: z.string().regex(new RegExp(`^inputs\\.${WORD}$`)),
+      title: title.optional(),
+    })
+    .strict(),
 } satisfies Record<PartName, z.ZodType>;
 
 /** Parts not built yet: listed, but a panel that uses them is refused (none since T-057). */
@@ -246,6 +255,7 @@ export const PLACES = {
     'bake-card',
     'conflict-banner',
     'site-picker',
+    'jig-source',
   ],
   views: ['viewport-overlay', 'plan-map', 'report'],
   board: ['slider-board'],

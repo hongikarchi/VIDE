@@ -96,6 +96,13 @@
       "row": {
         "farArea": 2400
       }
+    },
+    "handoff": {
+      "kind": "vide/buildable-mass#chosen",
+      "alternative": { "id": "base", "title": "기준 용적률" },
+      "row": { "gfaAbove": 2400, "gfaBelow": 0, "farArea": 2400, "floorsAbove": 6, "height": 21 },
+      "site": { "area_m2": 600 },
+      "chosenBy": "사용자가 확정함"
     }
   },
   "statuses": {

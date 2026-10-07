@@ -48,6 +48,22 @@ export interface InstanceBody {
   bakeStale?: boolean;
   /** `site-data` inputs by key (ARCH-03 §8.3): references to the kept read-copies. */
   siteData?: Record<string, SiteDataState>;
+  /**
+   * `jig-output` inputs by key (ARCH-03 §8.5): the earlier instance the person chose. Absent = the
+   * project's latest instance of that jig whose output is computed.
+   */
+  jigOutputs?: Record<string, JigOutputBinding>;
+  /** The source each `jig-output` input had at the last kept run ('다시 계산 필요' when it moved). */
+  jigOutputsUsed?: Record<string, JigOutputUse>;
+}
+export interface JigOutputBinding {
+  instanceId: string;
+  at: string;
+}
+export interface JigOutputUse {
+  instanceId: string;
+  hash: string;
+  at: string;
 }
 
 /** A kept copy under `<data>/jigs/` (gzip JSON) and the hash of its content. */
@@ -131,5 +147,7 @@ export function bodyOf(value: unknown): InstanceBody {
     ...(body.conversationId ? { conversationId: body.conversationId } : {}),
     ...(body.bakeStale ? { bakeStale: true } : {}),
     ...(body.siteData ? { siteData: body.siteData } : {}),
+    ...(body.jigOutputs ? { jigOutputs: body.jigOutputs } : {}),
+    ...(body.jigOutputsUsed ? { jigOutputsUsed: body.jigOutputsUsed } : {}),
   };
 }

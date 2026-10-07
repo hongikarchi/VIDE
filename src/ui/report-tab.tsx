@@ -150,8 +150,10 @@ function ReportTab({ projectId }: { projectId: string }) {
     document.body.dataset.reportPaper = paper;
     window.print();
   };
+  // A report whose frame says it may not be exported now (SPEC-12.13 4) has no page to save.
+  const refused = shown?.model.exportRefused ?? [];
   const save = () => {
-    if (!shown) return;
+    if (!shown || refused.length || !shown.html) return;
     const url = URL.createObjectURL(new Blob([shown.html], { type: 'text/html;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
@@ -230,18 +232,23 @@ function ReportTab({ projectId }: { projectId: string }) {
           <button type="button" onClick={() => void render()} disabled={!chosen || loading}>
             다시 만들기
           </button>
-          <button type="button" onClick={print} disabled={!shown}>
+          <button type="button" onClick={print} disabled={!shown || refused.length > 0}>
             인쇄
           </button>
           <button
             type="button"
             onClick={save}
-            disabled={!shown}
+            disabled={!shown || refused.length > 0}
             title="스크립트 없는 HTML 한 파일로 저장합니다"
           >
             HTML 저장
           </button>
         </div>
+        {refused.length ? (
+          <p className="report-error" role="alert" data-export-refused="">
+            내보내지 않음 · {refused.join(' · ')}
+          </p>
+        ) : null}
         {error ? (
           <p className="report-error" role="alert">
             {error}

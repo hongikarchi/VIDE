@@ -1,0 +1,718 @@
+{
+  "mass": {
+    "source": {
+      "status": "done",
+      "at": "2026-10-08T03:00:00.000Z",
+      "hash": "mass-1:handoff:0",
+      "updatedAt": "2026-10-08T03:00:00.000Z",
+      "instanceId": "mass-1",
+      "title": "매스 검토 1",
+      "jig": "vide/buildable-mass",
+      "version": "0.3.0",
+      "step": "handoff"
+    },
+    "value": {
+      "kind": "vide/buildable-mass#chosen",
+      "alternative": {
+        "id": "base",
+        "title": "기준 용적률",
+        "flags": [],
+        "farTarget": 4,
+        "farTargetSource": "기준 용적률",
+        "notes": ["위층 축소(정북 쪽부터) — 산정 면적 3198.05 → 2400 ㎡ (목표 2400 ㎡)"],
+        "openSpace": null
+      },
+      "row": {
+        "id": "base",
+        "title": "기준 용적률",
+        "flags": "",
+        "buildingArea": 522.5,
+        "coverage": 0.870833,
+        "coverageCap": 0.6,
+        "coverageVerdict": "초과",
+        "coverageMargin": -162.5,
+        "gfaAbove": 2450,
+        "gfaBelow": 600,
+        "gfaTotal": 3050,
+        "exclusion": 50,
+        "farArea": 2400,
+        "far": 4,
+        "farTarget": 4,
+        "farTargetSource": "기준 용적률",
+        "farCeiling": 4,
+        "farCeilingSource": "기준 용적률",
+        "farVerdict": "적합",
+        "farMargin": 0,
+        "floorsAbove": 6,
+        "floorsBelow": 1,
+        "height": 21,
+        "unconfirmed": 0
+      },
+      "floors": [
+        {
+          "floor": "1F",
+          "index": 1,
+          "z0": 0,
+          "z1": 4.5,
+          "height": 4.5,
+          "area": 522.5,
+          "exclusion": 50,
+          "exclusionBasis": "필로티(합성 시험)",
+          "farArea": 472.5,
+          "change": "",
+          "outside": false,
+          "uses": [
+            {
+              "use": "업무시설",
+              "ratio": 1,
+              "area": 522.5
+            }
+          ],
+          "useOrigin": "주용도(기본)",
+          "useVerdict": "미검토"
+        },
+        {
+          "floor": "2F",
+          "index": 2,
+          "z0": 4.5,
+          "z1": 7.8,
+          "height": 3.3,
+          "area": 522.5,
+          "exclusion": 0,
+          "exclusionBasis": "",
+          "farArea": 522.5,
+          "change": "",
+          "outside": false,
+          "uses": [
+            {
+              "use": "업무시설",
+              "ratio": 1,
+              "area": 522.5
+            }
+          ],
+          "useOrigin": "주용도(기본)",
+          "useVerdict": "미검토"
+        },
+        {
+          "floor": "3F",
+          "index": 3,
+          "z0": 7.8,
+          "z1": 11.1,
+          "height": 3.3,
+          "area": 445.55,
+          "exclusion": 0,
+          "exclusionBasis": "",
+          "farArea": 445.55,
+          "change": "",
+          "outside": false,
+          "uses": [
+            {
+              "use": "업무시설",
+              "ratio": 1,
+              "area": 445.55
+            }
+          ],
+          "useOrigin": "주용도(기본)",
+          "useVerdict": "미검토"
+        },
+        {
+          "floor": "4F",
+          "index": 4,
+          "z0": 11.1,
+          "z1": 14.4,
+          "height": 3.3,
+          "area": 414.2,
+          "exclusion": 0,
+          "exclusionBasis": "",
+          "farArea": 414.2,
+          "change": "",
+          "outside": false,
+          "uses": [
+            {
+              "use": "업무시설",
+              "ratio": 1,
+              "area": 414.2
+            }
+          ],
+          "useOrigin": "주용도(기본)",
+          "useVerdict": "미검토"
+        },
+        {
+          "floor": "5F",
+          "index": 5,
+          "z0": 14.4,
+          "z1": 17.7,
+          "height": 3.3,
+          "area": 382.85,
+          "exclusion": 0,
+          "exclusionBasis": "",
+          "farArea": 382.85,
+          "change": "",
+          "outside": false,
+          "uses": [
+            {
+              "use": "업무시설",
+              "ratio": 1,
+              "area": 382.85
+            }
+          ],
+          "useOrigin": "주용도(기본)",
+          "useVerdict": "미검토"
+        },
+        {
+          "floor": "6F",
+          "index": 6,
+          "z0": 17.7,
+          "z1": 21,
+          "height": 3.3,
+          "area": 162.4,
+          "exclusion": 0,
+          "exclusionBasis": "",
+          "farArea": 162.4,
+          "change": "축소",
+          "outside": false,
+          "uses": [
+            {
+              "use": "업무시설",
+              "ratio": 1,
+              "area": 162.4
+            }
+          ],
+          "useOrigin": "주용도(기본)",
+          "useVerdict": "미검토"
+        }
+      ],
+      "basement": [
+        {
+          "floor": "B1",
+          "index": -1,
+          "z0": -3.5,
+          "z1": 0,
+          "height": 3.5,
+          "area": 600,
+          "exclusion": 0,
+          "exclusionBasis": "",
+          "farArea": 0,
+          "change": "",
+          "outside": false,
+          "uses": [
+            {
+              "use": "업무시설",
+              "ratio": 1,
+              "area": 600
+            }
+          ],
+          "useOrigin": "주용도(기본)",
+          "useVerdict": "미검토"
+        }
+      ],
+      "site": {
+        "area_m2": 600,
+        "northBasis": "true",
+        "northDeg": 0
+      },
+      "plan": {
+        "mainUse": "업무시설",
+        "floorHeightGround": 4.5,
+        "floorHeightTypical": 3.3,
+        "basementFloors": 1,
+        "basementFloorHeight": 3.5
+      },
+      "regulations": {
+        "items": [
+          {
+            "id": "coverage",
+            "group": "밀도",
+            "title": "건폐율 상한",
+            "value": 0.6,
+            "unit": "비율",
+            "applies": "적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.coverage"
+          },
+          {
+            "id": "heightMax",
+            "group": "높이",
+            "title": "최고 높이",
+            "value": 30,
+            "unit": "m",
+            "applies": "적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.heightMax"
+          },
+          {
+            "id": "streetHeight",
+            "group": "높이",
+            "title": "가로구역 최고 높이",
+            "value": null,
+            "unit": "m",
+            "applies": "미적용",
+            "status": "사람 입력 필요",
+            "origin": "없음",
+            "basis": null,
+            "source": "param.streetHeight"
+          },
+          {
+            "id": "altitudeHeight",
+            "group": "높이",
+            "title": "고도지구 높이",
+            "value": null,
+            "unit": "m",
+            "applies": "미적용",
+            "status": "사람 입력 필요",
+            "origin": "없음",
+            "basis": null,
+            "source": "param.altitudeHeight"
+          },
+          {
+            "id": "floorsMax",
+            "group": "높이",
+            "title": "지상 층수 상한",
+            "value": null,
+            "unit": "층",
+            "applies": "미적용",
+            "status": "사람 입력 필요",
+            "origin": "없음",
+            "basis": null,
+            "source": "param.floorsMax"
+          },
+          {
+            "id": "roadSetback",
+            "group": "건축선",
+            "title": "도로 후퇴 거리",
+            "value": 1,
+            "unit": "m",
+            "applies": "적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.roadSetback"
+          },
+          {
+            "id": "chamferLength",
+            "group": "건축선",
+            "title": "가각 전제 길이",
+            "value": null,
+            "unit": "m",
+            "applies": "미적용",
+            "status": "사람 입력 필요",
+            "origin": "없음",
+            "basis": null,
+            "source": "param.chamferLength"
+          },
+          {
+            "id": "openSpaceRoad",
+            "group": "이격",
+            "title": "대지 안의 공지(건축선에서)",
+            "value": 0,
+            "unit": "m",
+            "applies": "미적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.openSpaceRoad"
+          },
+          {
+            "id": "openSpaceAdjacent",
+            "group": "이격",
+            "title": "대지 안의 공지(인접 대지 경계선에서)",
+            "value": 0,
+            "unit": "m",
+            "applies": "미적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.openSpaceAdjacent"
+          },
+          {
+            "id": "civilSetback",
+            "group": "이격",
+            "title": "민법상 이격 거리",
+            "value": 0.5,
+            "unit": "m",
+            "applies": "적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.civilSetback"
+          },
+          {
+            "id": "otherSetback",
+            "group": "이격",
+            "title": "기타 이격(그린 선에서 거리)",
+            "value": 0,
+            "unit": "m",
+            "applies": "미적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.otherSetback"
+          },
+          {
+            "id": "sun",
+            "group": "일조",
+            "title": "정북 일조 적용 여부",
+            "value": "적용",
+            "unit": "",
+            "applies": "적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.sunState"
+          },
+          {
+            "id": "sunBaseHeight",
+            "group": "일조",
+            "title": "기준 높이",
+            "value": 10,
+            "unit": "m",
+            "applies": "적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.sunBaseHeight"
+          },
+          {
+            "id": "sunNearDistance",
+            "group": "일조",
+            "title": "기준 높이 이하 거리",
+            "value": 1.5,
+            "unit": "m",
+            "applies": "적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.sunNearDistance"
+          },
+          {
+            "id": "sunRatio",
+            "group": "일조",
+            "title": "초과 부분의 높이 대비 비율(거리 = 비율 × 높이)",
+            "value": 0.5,
+            "unit": "",
+            "applies": "적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.sunRatio"
+          },
+          {
+            "id": "sunDatumRoad",
+            "group": "일조",
+            "title": "기준선 위치(정북이 도로일 때)",
+            "value": "across-road",
+            "unit": "",
+            "applies": "적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.sunDatumRoad"
+          },
+          {
+            "id": "sunDistance",
+            "group": "일조",
+            "title": "일조 거리의 정의",
+            "value": "euclidean",
+            "unit": "",
+            "applies": "적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.sunDistance"
+          },
+          {
+            "id": "farBase",
+            "group": "밀도",
+            "title": "기준 용적률",
+            "value": 4,
+            "unit": "비율",
+            "applies": "적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.farBase"
+          },
+          {
+            "id": "farAllowed",
+            "group": "밀도",
+            "title": "허용 용적률",
+            "value": null,
+            "unit": "비율",
+            "applies": null,
+            "status": "사람 입력 필요",
+            "origin": "없음",
+            "basis": null,
+            "source": ""
+          },
+          {
+            "id": "farMax",
+            "group": "밀도",
+            "title": "상한 용적률",
+            "value": null,
+            "unit": "비율",
+            "applies": null,
+            "status": "사람 입력 필요",
+            "origin": "없음",
+            "basis": null,
+            "source": ""
+          },
+          {
+            "id": "incentiveFar",
+            "group": "인센티브",
+            "title": "인센티브 완화량(용적률에 더함)",
+            "value": 0.5,
+            "unit": "비율",
+            "applies": "적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.incentiveFar"
+          },
+          {
+            "id": "incentiveHeight",
+            "group": "인센티브",
+            "title": "인센티브 완화량(높이)",
+            "value": null,
+            "unit": "m",
+            "applies": "적용",
+            "status": "사람 입력 필요",
+            "origin": "없음",
+            "basis": null,
+            "source": "param.incentiveHeight"
+          },
+          {
+            "id": "openSpaceIncentiveFar",
+            "group": "인센티브",
+            "title": "공개공지 설치에 따른 완화량(용적률에 더함)",
+            "value": null,
+            "unit": "비율",
+            "applies": null,
+            "status": "사람 입력 필요",
+            "origin": "없음",
+            "basis": null,
+            "source": ""
+          },
+          {
+            "id": "publicOpenSpace",
+            "group": "주차·공지",
+            "title": "공개공지 대상 여부와 면적 비율",
+            "value": null,
+            "unit": "비율",
+            "applies": "미적용",
+            "status": "사람 입력 필요",
+            "origin": "없음",
+            "basis": null,
+            "source": "param.publicOpenSpace"
+          },
+          {
+            "id": "landscapeRatio",
+            "group": "주차·공지",
+            "title": "조경 면적 비율",
+            "value": 0.15,
+            "unit": "비율",
+            "applies": "적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.landscapeRatio"
+          },
+          {
+            "id": "parkingRounding",
+            "group": "주차·공지",
+            "title": "주차 대수 끝수 처리",
+            "value": "half-up",
+            "unit": "",
+            "applies": "적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.parkingRounding"
+          },
+          {
+            "id": "parkingRoundScope",
+            "group": "주차·공지",
+            "title": "끝수 처리 단위",
+            "value": "sum",
+            "unit": "",
+            "applies": "적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.parkingRoundScope"
+          },
+          {
+            "id": "parkingAreaBasis",
+            "group": "주차·공지",
+            "title": "주차 산정에 쓰는 면적",
+            "value": "gross",
+            "unit": "",
+            "applies": "적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": null,
+            "source": "param.parkingAreaBasis"
+          },
+          {
+            "id": "parkingEntryCornerDistance",
+            "group": "주차·공지",
+            "title": "주차 출입 제외 거리(두 도로가 만나는 모퉁이에서)",
+            "value": null,
+            "unit": "m",
+            "applies": null,
+            "status": "사람 입력 필요",
+            "origin": "없음",
+            "basis": null,
+            "source": ""
+          },
+          {
+            "id": "parkingRule",
+            "group": "주차·공지",
+            "title": "용도별 주차 산정 기준(면적 n ㎡당 1대)",
+            "value": 150,
+            "unit": "㎡/대",
+            "applies": "적용",
+            "status": "확정",
+            "origin": "사용자가 확정함",
+            "basis": {
+              "note": "합성 시험 값"
+            },
+            "source": "override.o1",
+            "target": "업무시설"
+          }
+        ],
+        "legal": {
+          "available": false,
+          "reason": "법규 결과 없음",
+          "unmapped": [],
+          "left": []
+        },
+        "needsInput": [
+          {
+            "id": "streetHeight",
+            "title": "가로구역 최고 높이"
+          },
+          {
+            "id": "altitudeHeight",
+            "title": "고도지구 높이"
+          },
+          {
+            "id": "floorsMax",
+            "title": "지상 층수 상한"
+          },
+          {
+            "id": "chamferLength",
+            "title": "가각 전제 길이"
+          },
+          {
+            "id": "farAllowed",
+            "title": "허용 용적률"
+          },
+          {
+            "id": "farMax",
+            "title": "상한 용적률"
+          },
+          {
+            "id": "incentiveHeight",
+            "title": "인센티브 완화량(높이)"
+          },
+          {
+            "id": "openSpaceIncentiveFar",
+            "title": "공개공지 설치에 따른 완화량(용적률에 더함)"
+          },
+          {
+            "id": "publicOpenSpace",
+            "title": "공개공지 대상 여부와 면적 비율"
+          },
+          {
+            "id": "parkingEntryCornerDistance",
+            "title": "주차 출입 제외 거리(두 도로가 만나는 모퉁이에서)"
+          }
+        ]
+      },
+      "uses": [
+        {
+          "use": "업무시설",
+          "above": 2450,
+          "below": 600,
+          "total": 3050,
+          "farArea": 2400
+        }
+      ],
+      "parking": {
+        "legal": 20,
+        "raw": 20.333333,
+        "status": "계산",
+        "planned": null,
+        "rows": [
+          {
+            "use": "업무시설",
+            "area": 3050,
+            "rule": 150,
+            "ruleText": "150 ㎡당 1대",
+            "raw": 20.333333,
+            "count": null,
+            "status": "계산"
+          }
+        ],
+        "types": [
+          {
+            "type": "ground",
+            "title": "지상 자주식",
+            "count": 20,
+            "areaPerCar": null,
+            "required": null,
+            "available": 77.5,
+            "floors": null,
+            "verdict": "사람 입력 필요",
+            "note": "대당 필요 면적 사람 입력 필요"
+          },
+          {
+            "type": "underground",
+            "title": "지하 자주식",
+            "count": 20,
+            "areaPerCar": null,
+            "required": null,
+            "available": 600,
+            "floors": null,
+            "verdict": "사람 입력 필요",
+            "note": "대당 필요 면적 사람 입력 필요"
+          },
+          {
+            "type": "mechanical",
+            "title": "기계식",
+            "count": 20,
+            "areaPerCar": null,
+            "required": null,
+            "available": 77.5,
+            "floors": null,
+            "verdict": "사람 입력 필요",
+            "note": "대당 필요 면적 사람 입력 필요"
+          }
+        ]
+      },
+      "landscape": {
+        "ratio": 0.15,
+        "legal": 90,
+        "legalStatus": "계산",
+        "planned": 0,
+        "verdict": "계획 영역 없음"
+      },
+      "publicOpenSpace": {
+        "required": null,
+        "state": "공개공지 대상 아님(미적용)",
+        "planned": null
+      },
+      "unconfirmed": [],
+      "chosenBy": "사용자가 확정함",
+      "note": "탐색용 규모검토 — 인허가 도서·면적 산정·법규 검토를 대체하지 않음"
+    },
+    "snapshot": {
+      "hash": "mass-1:handoff:0"
+    }
+  },
+  "site": null
+}

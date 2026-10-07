@@ -149,6 +149,17 @@ export const reportTemplateSchema = z
     assumptions: z.union([path, z.array(z.string().min(1).max(200)).max(30)]).optional(),
     unchecked: z.union([path, z.array(z.string().min(1).max(200)).max(30)]),
     polish: z.enum(['none', 'ai-once']).optional(),
+    /**
+     * Export only when this closed condition holds and every report gate passes (SPEC-12.13 4:
+     * a 건축개요 whose numbers do not match its sources is not exported); `refused` says why.
+     */
+    export: z
+      .object({
+        when: z.string().regex(CONDITION, '조건은 <경로> <연산자> <경로|숫자>를 &&로 잇습니다'),
+        refused: z.string().min(1).max(240),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type ReportTemplate = z.infer<typeof reportTemplateSchema>;
@@ -229,6 +240,8 @@ export interface ReportModel {
   gates: ReportGate[];
   /** Steps whose results are previews; the page says so. */
   provisional: string[];
+  /** Why the report may not be exported (a frame with `export` whose condition or gates fail). */
+  exportRefused?: string[];
 }
 
 export interface ReportIssue {
@@ -604,6 +617,21 @@ export function resolveReport(
   const provisional = Object.entries(ctx.final ?? {})
     .filter(([, final]) => final === false)
     .map(([step]) => step);
+  const gates: ReportGate[] = [
+    { id: 'claim-consistent', ok: inconsistent.length === 0, failed: inconsistent },
+    { id: 'numbers-in-source', ok: unsourced.length === 0, failed: unsourced },
+    {
+      id: 'unchecked-listed',
+      ok: unchecked !== undefined,
+      failed: unchecked === undefined ? ['검토하지 않은 항목 목록을 읽지 못했습니다'] : [],
+    },
+  ];
+  const exportRefused = template.export
+    ? [
+        ...(evaluateWhen(template.export.when, ctx) ? [] : [template.export.refused]),
+        ...gates.filter((g) => !g.ok).map((g) => `보고서 점검 실패: ${g.id}`),
+      ]
+    : [];
   return {
     title: template.title,
     ...(template.eyebrow ? { eyebrow: template.eyebrow } : {}),
@@ -614,15 +642,8 @@ export function resolveReport(
     sections,
     assumptions,
     unchecked: unchecked ?? [],
-    gates: [
-      { id: 'claim-consistent', ok: inconsistent.length === 0, failed: inconsistent },
-      { id: 'numbers-in-source', ok: unsourced.length === 0, failed: unsourced },
-      {
-        id: 'unchecked-listed',
-        ok: unchecked !== undefined,
-        failed: unchecked === undefined ? ['검토하지 않은 항목 목록을 읽지 못했습니다'] : [],
-      },
-    ],
+    gates,
     provisional,
+    ...(exportRefused.length ? { exportRefused } : {}),
   };
 }

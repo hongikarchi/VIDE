@@ -18,6 +18,7 @@ import { ComputeBoxRunner } from './compute-box.ts';
 import type { GateContext, GateResult } from './gates.ts';
 import { buildGraph, type StepGraph } from './graph.ts';
 import { hashValue } from './hash.ts';
+import { checkSchema } from './schema.ts';
 import {
   bodyOf,
   emptyBody,
@@ -73,6 +74,21 @@ export interface MadeObjects {
   nativeIds: string[];
 }
 
+/** Where a `jig-output` input's value comes from (ARCH-03 §8.5). */
+export interface JigOutputInfo {
+  instanceId: string;
+  title: string;
+  jig: string;
+  version: string;
+  updatedAt: string;
+  /** The source step and its run: status, when it was kept, and its fingerprint when readable. */
+  step: string;
+  status: StepStatus;
+  at: string | null;
+  hash: string | null;
+  /** Why it cannot be read now. */
+  reason?: string;
+}
 export interface StepView {
   id: string;
   title: string;
@@ -720,7 +736,7 @@ export class JigRuntime {
 
   /**
    * Input values for execution: assembled roles (snapshots read back), zones, site data and other
-   * jigs' outputs (the value as the provider gives it; fingerprinted by its content).
+   * jigs' outputs (a registered producer's value, else an earlier instance's — ARCH-03 §8.5).
    */
   private async executionInputs(projectId: string, jig: LoadedJig, body: InstanceBody) {
     const inputs: Record<string, unknown> = {};
@@ -741,9 +757,33 @@ export class JigRuntime {
       else if (input.kind === 'site-data')
         inputs[input.key] = this.siteDataInput(body.siteData?.[input.key] ?? {});
       else if (input.kind === 'jig-output')
-        inputs[input.key] = (await this.jigOutput?.(projectId, input.from)) ?? null;
+        inputs[input.key] = await this.jigOutputValue(projectId, input, body);
     }
     return inputs;
+  }
+  /**
+   * A `jig-output` input's value: what a registered producer gives (the legal jig's
+   * `legal.constraints`, fingerprinted by its content); else the earlier instance of that jig in
+   * the project with its source (§8.5); null when there is neither.
+   */
+  private async jigOutputValue(
+    projectId: string,
+    input: { key: string; from: { jig: string; output: string } },
+    body: InstanceBody,
+  ) {
+    const provided = await this.jigOutput?.(projectId, input.from);
+    if (provided !== undefined && provided !== null) return provided;
+    const source = await this.resolveJigOutput(projectId, input, body.jigOutputs?.[input.key]);
+    if (!source.info && !this.store.instances(projectId).some((r) => r.jigId === input.from.jig))
+      return null;
+    return source.ready
+      ? { source: source.info, value: source.value, snapshot: { hash: source.info!.hash } }
+      : {
+          source: source.info,
+          value: null,
+          reason: source.reason,
+          snapshot: { hash: hashValue([source.info?.hash ?? null, source.reason]) },
+        };
   }
 
   // --- site data (ARCH-03 §8.3, SPEC-12.3·12.4) ------------------------------------------------
@@ -835,6 +875,164 @@ export class JigRuntime {
     return next.state;
   }
 
+  // --- earlier jigs' outputs (SPEC-07.2·07.5 6, ARCH-03 §8.5) ------------------------------------
+  /** One earlier instance's declared output: where it is, whether it can be read, and why not. */
+  private async jigOutputOf(
+    row: JigInstanceRow,
+    outputKey: string,
+  ): Promise<{ info: JigOutputInfo; value?: unknown }> {
+    const base = {
+      instanceId: row.id,
+      title: row.title,
+      jig: row.jigId,
+      version: row.version,
+      updatedAt: row.updatedAt,
+    };
+    const none = (reason: string): { info: JigOutputInfo } => ({
+      info: { ...base, step: '', status: 'pending', at: null, hash: null, reason },
+    });
+    let jig: LoadedJig;
+    try {
+      jig = await this.jigOf(row);
+    } catch {
+      return none('앞 jig를 불러오지 못했습니다');
+    }
+    const decl = jig.manifest.outputs?.find((o) => o.key === outputKey);
+    const stepId = decl ? /^step\.(.+)$/.exec(decl.from)?.[1] : undefined;
+    if (!decl || !stepId)
+      return none(
+        `이 버전(${row.version})에는 넘겨줄 결과 '${outputKey}'가 없습니다 — 앞 작업본을 새 버전으로 올리세요`,
+      );
+    const run = this.hasRun(row.id, stepId) ? this.store.run(row.id, stepId) : null;
+    const status = run?.status ?? 'pending';
+    const info: JigOutputInfo = {
+      ...base,
+      step: stepId,
+      status,
+      at: run?.at ?? null,
+      hash: run && status === 'done' ? `${row.id}:${stepId}:${run.inputHash}` : null,
+    };
+    const why =
+      status === 'stale'
+        ? '앞 작업본이 다시 계산 필요 상태입니다 — 앞 jig에서 다시 계산하세요'
+        : status === 'failed'
+          ? '앞 작업본의 그 단계가 실패했습니다'
+          : status !== 'done'
+            ? '앞 작업본에서 아직 계산하지 않았습니다'
+            : undefined;
+    if (why) return { info: { ...info, hash: null, reason: why } };
+    const value = run?.outputRef ? this.readGz(run.outputRef) : undefined;
+    if (value === undefined)
+      return {
+        info: { ...info, hash: null, reason: '앞 작업본의 결과 파일이 없습니다 — 다시 계산하세요' },
+      };
+    let schema: unknown;
+    try {
+      schema = JSON.parse(readFileSync(join(jig.dir, ...decl.schema.split('/')), 'utf8'));
+    } catch {
+      schema = undefined;
+    }
+    const problems = schema ? checkSchema(schema, value) : [];
+    if (problems.length)
+      return {
+        info: {
+          ...info,
+          hash: null,
+          reason: `앞 결과의 형식이 맞지 않습니다: ${problems[0].path} ${problems[0].message}`,
+        },
+      };
+    return { info, value };
+  }
+  /**
+   * The source of a `jig-output` input: the instance the person chose, else the project's latest
+   * instance of that jig whose output is computed (else the latest one, to say why not).
+   */
+  private async resolveJigOutput(
+    projectId: string,
+    input: { key: string; from: { jig: string; output: string } },
+    binding: { instanceId: string } | undefined,
+  ): Promise<{ ready: boolean; info: JigOutputInfo | null; value?: unknown; reason: string }> {
+    const rows = this.store.instances(projectId).filter((row) => row.jigId === input.from.jig);
+    const result = (out: { info: JigOutputInfo; value?: unknown }) => ({
+      ready: !out.info.reason,
+      info: out.info,
+      value: out.value,
+      reason: out.info.reason ?? '',
+    });
+    if (binding) {
+      const row = rows.find((r) => r.id === binding.instanceId);
+      if (!row)
+        return { ready: false, info: null, reason: '고른 앞 작업본이 없습니다 — 다시 고르세요' };
+      return result(await this.jigOutputOf(row, input.from.output));
+    }
+    if (!rows.length) return { ready: false, info: null, reason: '앞 jig의 작업본이 없습니다' };
+    const all = await Promise.all(rows.map((row) => this.jigOutputOf(row, input.from.output)));
+    const ready = all
+      .filter((o) => !o.info.reason)
+      .sort((a, b) => String(b.info.at).localeCompare(String(a.info.at)));
+    return result(
+      ready[0] ?? [...all].sort((a, b) => b.info.updatedAt.localeCompare(a.info.updatedAt))[0],
+    );
+  }
+  /** A `jig-output` input: its source now, the chosen one, the candidates and '다시 계산 필요'. */
+  async jigOutputState(projectId: string, instanceId: string, key: string) {
+    const instance = this.store.instance(projectId, instanceId);
+    const jig = await this.jigOf(instance);
+    const input = jig.manifest.inputs.find((i) => i.key === key);
+    if (!input || input.kind !== 'jig-output') throw new DomainError('NOT_FOUND');
+    const body = bodyOf(instance.body);
+    const current = await this.resolveJigOutput(projectId, input, body.jigOutputs?.[key]);
+    const rows = this.store
+      .instances(projectId)
+      .filter((row) => row.jigId === input.from.jig && row.id !== instanceId);
+    const candidates = await Promise.all(
+      rows.map(async (row) => {
+        const out = await this.jigOutputOf(row, input.from.output);
+        return {
+          instanceId: row.id,
+          title: row.title,
+          version: row.version,
+          at: out.info.at,
+          ready: !out.info.reason,
+          ...(out.info.reason ? { reason: out.info.reason } : {}),
+        };
+      }),
+    );
+    const used = body.jigOutputsUsed?.[key] ?? null;
+    return {
+      input: { key: input.key, title: input.title, from: input.from },
+      chosen: body.jigOutputs?.[key] ?? null,
+      current: current.info,
+      ready: current.ready,
+      reason: current.ready ? null : current.reason,
+      candidates,
+      used,
+      // The earlier result moved since this instance last computed (SPEC-07.5 6).
+      stale: !!used && used.hash !== current.info?.hash,
+    };
+  }
+  /** Choose the earlier instance a `jig-output` input reads (`null` = the latest computed one). */
+  async bindJigOutput(projectId: string, instanceId: string, key: string, sourceId: string | null) {
+    const instance = this.store.instance(projectId, instanceId);
+    const jig = await this.jigOf(instance);
+    const input = jig.manifest.inputs.find((i) => i.key === key);
+    if (!input || input.kind !== 'jig-output') throw new DomainError('NOT_FOUND');
+    if (sourceId !== null) {
+      const row = this.store.instances(projectId).find((r) => r.id === sourceId);
+      if (!row || row.id === instanceId || row.jigId !== input.from.jig)
+        throw new DomainError('INVALID_INPUT');
+    }
+    const body = bodyOf(instance.body);
+    const next = { ...(body.jigOutputs ?? {}) };
+    if (sourceId === null) delete next[key];
+    else next[key] = { instanceId: sourceId, at: new Date().toISOString() };
+    body.jigOutputs = next;
+    this.markStale(jig, instanceId, this.graphOf(jig).affectedByInputs([key]));
+    this.bump(instanceId);
+    this.save(instance, body, instance.status === 'new' ? 'new' : 'stale');
+    return this.jigOutputState(projectId, instanceId, key);
+  }
+
   // --- runs ----------------------------------------------------------------------------------
   private cacheFor(instanceId: string): StepCache {
     const refOf = (stepId: string, hash: string) => `runs/${instanceId}/${stepId}-${hash}.json.gz`;
@@ -919,6 +1117,20 @@ export class JigRuntime {
         status,
         gates: step.gates,
       });
+    }
+    // The earlier jigs' results this run read: a later change shows '다시 계산 필요' (SPEC-07.5 6).
+    for (const decl of jig.manifest.inputs) {
+      if (decl.kind !== 'jig-output') continue;
+      const used = (await this.resolveJigOutput(projectId, decl, body.jigOutputs?.[decl.key])).info;
+      if (used?.hash)
+        body.jigOutputsUsed = {
+          ...(body.jigOutputsUsed ?? {}),
+          [decl.key]: {
+            instanceId: used.instanceId,
+            hash: used.hash,
+            at: new Date().toISOString(),
+          },
+        };
     }
     const status: JigInstanceRow['status'] = report.steps.some((s) => s.status === 'gate-failed')
       ? 'gate-failed'

@@ -1,0 +1,20 @@
+{
+  "tolerance": { "length": 0.000001, "ratio": 1e-9 },
+  "steps": {
+    "sources": {
+      "mass": { "title": "매스 검토 1", "alternative": "기준 용적률" },
+      "site": { "title": "대지" },
+      "siteReason": null
+    },
+    "summary": {
+      "alternative": "기준 용적률",
+      "gfaTotal": 3050,
+      "far": 4,
+      "coverage": 0.870833,
+      "floorSum": { "above": 2450, "below": 600, "total": 3050, "farArea": 2400, "exclusion": 50 },
+      "unconfirmedCount": 0,
+      "needsInputCount": 4
+    },
+    "check": { "ok": true, "mismatchCount": 0, "floorsCount": 10 }
+  }
+}

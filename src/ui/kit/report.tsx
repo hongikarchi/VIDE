@@ -260,6 +260,11 @@ export function ReportPage({
             확인 필요 · {failed.map((gate) => GATE_TEXT[gate.id] ?? gate.id).join(' · ')}
           </p>
         ) : null}
+        {model.exportRefused?.length ? (
+          <p className="kit-notice" role="alert" data-export-refused="">
+            내보내지 않음 · {model.exportRefused.join(' · ')}
+          </p>
+        ) : null}
         {model.provisional.length ? (
           <p className="kit-muted">확정 전 미리보기 결과가 섞여 있습니다.</p>
         ) : null}

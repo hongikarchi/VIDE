@@ -522,6 +522,24 @@ export async function jigRoutes(
       );
       return true;
     }
+    // 앞 jig의 결과 (`jig-output` 입력, SPEC-07.2·07.5 6, ARCH-03 §8.5): which earlier instance it
+    // reads, the candidates, and '다시 계산 필요' when that result moved since the last run.
+    const jigOutput = /^jig-outputs\/([^/]+)$/.exec(rest);
+    if (jigOutput && method === 'GET') {
+      send(200, await rt.jigOutputState(projectId, instanceId, decodeURIComponent(jigOutput[1])));
+      return true;
+    }
+    if (jigOutput && method === 'PUT') {
+      const { instanceId: sourceId } = z
+        .object({ instanceId: id.nullable() })
+        .strict()
+        .parse(await body(request));
+      send(
+        200,
+        await rt.bindJigOutput(projectId, instanceId, decodeURIComponent(jigOutput[1]), sourceId),
+      );
+      return true;
+    }
     if (rest === 'run' && method === 'POST') {
       const input = runInput.parse(await body(request));
       send(
@@ -1083,7 +1101,8 @@ async function instanceReport(
     version: `${view.jig.name} ${view.jig.version}`,
     at,
   };
-  const html = renderJigReport(model, origin);
+  // A frame that says when it may be exported (SPEC-12.13 4) gives no page while it may not.
+  const html = model.exportRefused?.length ? '' : renderJigReport(model, origin);
   return {
     report: { ...frame, title: frame.title === frame.id ? model.title : frame.title },
     instance: { id: view.id, title: view.title, jig: view.jig },

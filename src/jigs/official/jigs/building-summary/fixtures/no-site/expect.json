@@ -1,0 +1,12 @@
+{
+  "tolerance": { "length": 0.000001, "ratio": 1e-9 },
+  "steps": {
+    "sources": { "site": null, "siteReason": "사이트 모델링 작업본이 없습니다" },
+    "summary": {
+      "gfaTotal": 3050,
+      "floorSum": { "total": 3050 },
+      "needsInputCount": 11
+    },
+    "check": { "ok": true, "mismatchCount": 0 }
+  }
+}

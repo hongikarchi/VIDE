@@ -1,0 +1,149 @@
+{
+  "template": "study",
+  "title": "건축개요",
+  "eyebrow": "건축개요 · 탐색용 규모검토 — 인허가 도서·면적 산정·법규 검토를 대체하지 않음",
+  "headline": {
+    "cases": [
+      {
+        "when": "step.check.mismatchCount > 0",
+        "template": "개요의 숫자 {step.check.mismatchCount}곳이 고른 대안·규제 조건과 맞지 않아 내보내지 않습니다.",
+        "tone": "ng"
+      },
+      {
+        "when": "step.summary.unconfirmedCount > 0",
+        "template": "{step.summary.alternative} 연면적 {step.summary.gfaTotal:2} m² — 미확정 조건 {step.summary.unconfirmedCount}개가 있습니다.",
+        "tone": "warn"
+      },
+      {
+        "when": "step.summary.gfaTotal > 0",
+        "template": "{step.summary.alternative} 연면적 {step.summary.gfaTotal:2} m²의 건축개요입니다.",
+        "tone": "ok"
+      },
+      {
+        "template": "고른 대안을 아직 받지 못했습니다. 건축 가능 영역·매스에서 대안을 고르고 확정하세요.",
+        "tone": "na"
+      }
+    ]
+  },
+  "kpis": [
+    { "label": "연면적", "from": "step.summary.gfaTotal", "unit": "m²", "decimals": 2 },
+    { "label": "용적률(계획)", "from": "step.summary.far", "decimals": 3 },
+    { "label": "건폐율(계획)", "from": "step.summary.coverage", "decimals": 3 },
+    { "label": "미확정 조건", "from": "step.summary.unconfirmedCount", "unit": "개" },
+    { "label": "사람 입력 필요", "from": "step.summary.needsInputCount", "unit": "칸" }
+  ],
+  "sections": [
+    {
+      "id": "overview",
+      "from": ["step.check.overview", "step.summary.needsInputCount"],
+      "title": {
+        "cases": [
+          {
+            "when": "step.summary.needsInputCount > 0",
+            "template": "건축개요 — 사람 입력 필요 {step.summary.needsInputCount}칸"
+          },
+          { "template": "건축개요와 값의 출처" }
+        ]
+      },
+      "blocks": [
+        {
+          "kind": "table",
+          "from": "step.check.overview",
+          "columns": [
+            { "field": "item", "label": "항목" },
+            { "field": "sub", "label": "세부" },
+            { "field": "text", "label": "값" },
+            { "field": "py", "label": "평", "decimals": 2 },
+            { "field": "origin", "label": "출처" },
+            { "field": "status", "label": "확정 상태" },
+            { "field": "basis", "label": "근거·비고" }
+          ],
+          "max": 100
+        }
+      ]
+    },
+    {
+      "id": "floors",
+      "from": ["step.check.floors", "step.summary.floorSum", "step.summary.gfaTotal"],
+      "title": {
+        "cases": [
+          {
+            "when": "step.check.mismatchCount == 0 && step.summary.gfaTotal > 0",
+            "template": "층별 면적표 — 합계 {step.summary.floorSum.total:2} m²가 연면적과 같습니다"
+          },
+          { "template": "층별 면적표" }
+        ]
+      },
+      "blocks": [
+        {
+          "kind": "table",
+          "from": "step.check.floors",
+          "columns": [
+            { "field": "floor", "label": "층" },
+            { "field": "use", "label": "용도" },
+            { "field": "area", "label": "바닥면적", "unit": "m²", "decimals": 2 },
+            { "field": "exclusion", "label": "산정 제외", "unit": "m²", "decimals": 2 },
+            { "field": "farArea", "label": "용적률 산정 포함", "unit": "m²", "decimals": 2 },
+            { "field": "py", "label": "평", "decimals": 2 },
+            { "field": "note", "label": "비고" }
+          ],
+          "max": 200
+        }
+      ]
+    },
+    {
+      "id": "check",
+      "from": ["step.check.mismatches", "step.check.mismatchCount"],
+      "title": {
+        "cases": [
+          {
+            "when": "step.check.mismatchCount > 0",
+            "template": "맞지 않는 칸 {step.check.mismatchCount}곳"
+          },
+          {
+            "when": "step.check.mismatchCount == 0",
+            "template": "일관성 점검 — 모든 숫자가 출처에 있고 층별 합계가 연면적과 같습니다"
+          },
+          { "template": "일관성 점검 전" }
+        ]
+      },
+      "blocks": [
+        {
+          "kind": "table",
+          "from": "step.check.mismatches",
+          "columns": [
+            { "field": "cell", "label": "칸" },
+            { "field": "shown", "label": "보인 값" },
+            { "field": "expected", "label": "맞아야 할 값" },
+            { "field": "reason", "label": "이유" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sources",
+      "from": ["step.sources.rows"],
+      "title": { "cases": [{ "template": "받은 앞 결과" }] },
+      "blocks": [
+        {
+          "kind": "table",
+          "from": "step.sources.rows",
+          "columns": [
+            { "field": "input", "label": "입력" },
+            { "field": "instance", "label": "작업본" },
+            { "field": "jig", "label": "jig" },
+            { "field": "item", "label": "대안·대지" },
+            { "field": "at", "label": "계산 시각" },
+            { "field": "state", "label": "상태" }
+          ]
+        }
+      ]
+    }
+  ],
+  "assumptions": "step.summary.assumptions",
+  "unchecked": "step.summary.unchecked",
+  "export": {
+    "when": "step.check.mismatchCount == 0 && step.check.floorsCount > 0",
+    "refused": "개요의 숫자가 고른 대안·규제 조건과 맞지 않거나 아직 점검하지 않아 내보내지 않습니다"
+  }
+}

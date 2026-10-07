@@ -629,6 +629,14 @@ export function validateManifest(
       if (!stepIds.has(id)) error('JIG_REF_MISSING', `${path}.affects`, `없는 단계: ${id}`);
   }
 
+  // Outputs other jigs may take (`jig-output` inputs): one step's kept result each.
+  for (const [i, output] of (manifest.outputs ?? []).entries()) {
+    const m = /^step\.([A-Za-z_][A-Za-z0-9_-]*)$/.exec(output.from);
+    if (!m) error('JIG_REF_MISSING', `outputs.${i}.from`, `출력은 step.<단계>만: ${output.from}`);
+    else if (!stepIds.has(m[1]))
+      error('JIG_REF_MISSING', `outputs.${i}.from`, `없는 단계: ${output.from}`);
+  }
+
   // Steps: reads, needs, gates, kind-specific rules.
   const gateTimings = {
     code: ['before-run', 'after-run'],

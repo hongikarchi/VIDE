@@ -82,13 +82,27 @@ export const JIGS: JigEntry[] = [
     basis: 'SPEC-13 · PLAN-46 T-221·T-222',
   },
   {
-    id: 'law-2',
+    // RESEARCH-04 J-04 (법규 검토 2: 일조사선·건축선으로 가능 매스) is the official tool jig
+    // `vide/buildable-mass` (PLAN-45 T-209~T-212); the JIG list shows its card.
+    id: 'vide/buildable-mass',
     code: 'J-04',
-    name: '법규 검토 2',
-    summary: '지구단위계획·조례·세부 조항 검토와 근거 인용.',
-    inputs: ['주소', '계획안'],
-    status: 'planned',
-    basis: 'S-01·S-04',
+    name: '건축 가능 영역·매스',
+    summary:
+      '대지와 규제 조건으로 2D 건축 가능 영역과 3D 가능 외피를 계산하고, 층을 나눠 대안을 비교해 하나를 고르며 용도·주차·조경을 봅니다.',
+    inputs: ['대지 경계·도로·인접 대지(Rhino)', '규제 조건(법규 결과·사람 입력)'],
+    status: 'available',
+    basis: 'S-01·S-03·S-04·S-19 · SPEC-12.7~12.12',
+  },
+  {
+    // The official tool jig `vide/building-summary` (PLAN-45 T-213).
+    id: 'vide/building-summary',
+    code: 'J-11',
+    name: '건축개요',
+    summary:
+      '고른 대안과 대지 요약으로 건축개요와 층별 면적표를 만들고 값마다 출처를 붙여, 숫자가 맞을 때만 보고서(HTML)와 표(CSV)로 냅니다.',
+    inputs: ['고른 대안(매스 검토)', '대지 요약(선택)'],
+    status: 'available',
+    basis: 'S-03·S-04 · SPEC-12.13',
   },
   {
     id: 'schedule',

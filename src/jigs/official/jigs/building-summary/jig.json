@@ -1,0 +1,132 @@
+{
+  "contractVersion": 3,
+  "id": "vide/building-summary",
+  "version": "0.1.0",
+  "kind": "tool",
+  "name": "건축개요",
+  "summary": "매스 검토에서 확정한 고른 대안과 대지 요약으로 건축개요와 층별 면적표를 만들고, 값마다 출처(계산·공부·사람 입력·법규 결과)를 붙여 숫자가 맞을 때만 보고서(HTML)와 표(CSV)로 냅니다. 탐색용 규모검토로 인허가 도서·면적 산정·법규 검토를 대체하지 않습니다.",
+  "icon": "table",
+  "inputs": [
+    {
+      "key": "mass",
+      "title": "고른 대안(건축 가능 영역·매스)",
+      "kind": "jig-output",
+      "from": { "jig": "vide/buildable-mass", "output": "chosen" }
+    },
+    {
+      "key": "site",
+      "title": "대지 요약(사이트 모델링)",
+      "kind": "jig-output",
+      "from": { "jig": "vide/site-model", "output": "summary" }
+    }
+  ],
+  "params": [
+    {
+      "key": "constructionType",
+      "title": "공사종별",
+      "group": "사람이 적는 항목",
+      "type": "choice",
+      "default": "unset",
+      "choices": [
+        { "value": "unset", "label": "사람 입력 필요" },
+        { "value": "new", "label": "신축" },
+        { "value": "extension", "label": "증축" },
+        { "value": "rebuild", "label": "개축" },
+        { "value": "reconstruction", "label": "재축" },
+        { "value": "relocation", "label": "이전" },
+        { "value": "repair", "label": "대수선" },
+        { "value": "change", "label": "용도변경" }
+      ],
+      "affects": ["summary"]
+    },
+    {
+      "key": "structure",
+      "title": "구조",
+      "group": "사람이 적는 항목",
+      "type": "choice",
+      "default": "unset",
+      "choices": [
+        { "value": "unset", "label": "사람 입력 필요" },
+        { "value": "rc", "label": "철근콘크리트조" },
+        { "value": "steel", "label": "철골조" },
+        { "value": "src", "label": "철골철근콘크리트조" },
+        { "value": "mixed", "label": "철골·철근콘크리트 혼합구조" },
+        { "value": "wood", "label": "목조" },
+        { "value": "masonry", "label": "조적조" },
+        { "value": "other", "label": "기타" }
+      ],
+      "affects": ["summary"]
+    },
+    {
+      "key": "parkingMethod",
+      "title": "주차 방식",
+      "group": "사람이 적는 항목",
+      "type": "choice",
+      "default": "unset",
+      "choices": [
+        { "value": "unset", "label": "사람 입력 필요" },
+        { "value": "ground", "label": "지상 자주식" },
+        { "value": "underground", "label": "지하 자주식" },
+        { "value": "mechanical", "label": "기계식" }
+      ],
+      "affects": ["summary"]
+    }
+  ],
+  "steps": [
+    {
+      "id": "sources",
+      "title": "앞 결과 받기",
+      "kind": "code",
+      "entry": "steps/sources.ts#sources",
+      "reads": ["input.mass", "input.site"],
+      "writes": "sources",
+      "speed": "live",
+      "gates": [{ "use": "no-nan" }]
+    },
+    {
+      "id": "summary",
+      "title": "건축개요·층별 면적표",
+      "kind": "code",
+      "entry": "steps/summary.ts#summary",
+      "needs": ["sources"],
+      "reads": [
+        "input.mass",
+        "input.site",
+        "step.sources",
+        "param.constructionType",
+        "param.structure",
+        "param.parkingMethod"
+      ],
+      "writes": "summary",
+      "speed": "live",
+      "gates": [{ "use": "no-nan" }]
+    },
+    {
+      "id": "check",
+      "title": "일관성 점검",
+      "kind": "code",
+      "entry": "steps/check.ts#check",
+      "needs": ["summary"],
+      "reads": ["input.mass", "input.site", "step.summary"],
+      "writes": "check",
+      "speed": "live",
+      "gates": [{ "use": "no-nan" }]
+    }
+  ],
+  "panel": "panel.json",
+  "reports": [{ "id": "summary", "file": "reports/summary.json", "title": "건축개요" }],
+  "capabilities": [
+    {
+      "name": "jig.read",
+      "reason": "건축 가능 영역·매스의 고른 대안과 사이트 모델링의 대지 요약을 받습니다"
+    },
+    {
+      "name": "export.file",
+      "reason": "건축개요 보고서(HTML)와 개요·층별 면적표(CSV)를 냅니다"
+    }
+  ],
+  "selftest": { "fixtures": "fixtures", "requiresHost": false },
+  "skill": "skill.md",
+  "open": { "reuse": "last" },
+  "autorun": { "until": "first-hard" }
+}

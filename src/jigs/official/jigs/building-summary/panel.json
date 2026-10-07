@@ -1,0 +1,94 @@
+{
+  "layout": "jig-run",
+  "left": [
+    { "part": "step-rail" },
+    { "part": "jig-source", "input": "inputs.mass" },
+    { "part": "jig-source", "input": "inputs.site" },
+    { "part": "param-group" }
+  ],
+  "center": {
+    "views": [{ "part": "report", "report": "summary" }],
+    "kpis": {
+      "part": "kpi-strip",
+      "items": [
+        { "label": "연면적", "from": "step.summary.gfaTotal", "unit": "m²", "decimals": 2 },
+        { "label": "미확정 조건", "from": "step.summary.unconfirmedCount", "unit": "개" },
+        { "label": "사람 입력 필요", "from": "step.summary.needsInputCount", "unit": "칸" },
+        { "label": "다른 칸", "from": "step.check.mismatchCount", "unit": "개" }
+      ]
+    }
+  },
+  "drawer": {
+    "part": "result-tabs",
+    "tabs": [
+      {
+        "title": "건축개요",
+        "part": "table",
+        "from": "step.check.overview",
+        "columns": [
+          { "field": "item", "label": "항목" },
+          { "field": "sub", "label": "세부" },
+          { "field": "text", "label": "값" },
+          { "field": "py", "label": "평", "decimals": 2 },
+          { "field": "origin", "label": "출처" },
+          { "field": "status", "label": "확정 상태" },
+          { "field": "basis", "label": "근거·비고" },
+          { "field": "source", "label": "자료" }
+        ],
+        "csv": "건축개요"
+      },
+      {
+        "title": "층별 면적표",
+        "part": "table",
+        "from": "step.check.floors",
+        "columns": [
+          { "field": "floor", "label": "층" },
+          { "field": "use", "label": "용도" },
+          { "field": "area", "label": "바닥면적", "unit": "m²", "decimals": 2 },
+          { "field": "exclusion", "label": "산정 제외 면적", "unit": "m²", "decimals": 2 },
+          { "field": "farArea", "label": "용적률 산정 포함 면적", "unit": "m²", "decimals": 2 },
+          { "field": "py", "label": "평", "decimals": 2 },
+          { "field": "note", "label": "비고" }
+        ],
+        "csv": "층별-면적표"
+      },
+      {
+        "title": "일관성 점검",
+        "part": "table",
+        "from": "step.check.mismatches",
+        "columns": [
+          { "field": "cell", "label": "칸" },
+          { "field": "shown", "label": "보인 값" },
+          { "field": "expected", "label": "맞아야 할 값" },
+          { "field": "reason", "label": "이유" }
+        ],
+        "csv": "일관성-점검"
+      },
+      {
+        "title": "미확정 조건",
+        "part": "table",
+        "from": "step.summary.unconfirmed",
+        "columns": [
+          { "field": "title", "label": "조건" },
+          { "field": "status", "label": "상태" }
+        ],
+        "csv": "미확정-조건"
+      },
+      {
+        "title": "앞 결과",
+        "part": "table",
+        "from": "step.sources.rows",
+        "columns": [
+          { "field": "input", "label": "입력" },
+          { "field": "instance", "label": "작업본" },
+          { "field": "jig", "label": "jig" },
+          { "field": "item", "label": "대안·대지" },
+          { "field": "at", "label": "계산 시각" },
+          { "field": "state", "label": "상태" }
+        ],
+        "csv": "앞-결과"
+      }
+    ]
+  },
+  "actions": [{ "id": "recompute", "label": "다시 계산", "step": "check", "tier": "T1" }]
+}

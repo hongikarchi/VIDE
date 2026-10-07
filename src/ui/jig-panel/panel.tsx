@@ -38,6 +38,7 @@ import {
 } from './bindings.ts';
 import { BakePart } from './bake-parts.tsx';
 import { SitePicker } from './site-parts.tsx';
+import { JigSource } from './source-parts.tsx';
 import { useInstance, type InstanceView, type StepReport } from './instance.ts';
 import { InstanceReportPart, renderReportPart } from './report-parts.tsx';
 import { scopeOf, validatePanel, type PanelAction } from './spec.ts';
@@ -625,6 +626,17 @@ export function JigPanel({
       case 'site-picker':
         return (
           <SitePicker
+            key={key}
+            projectId={host.projectId}
+            instanceId={instanceId}
+            inputKey={part.input.slice('inputs.'.length)}
+            title={part.title}
+            jig={jig}
+          />
+        );
+      case 'jig-source':
+        return (
+          <JigSource
             key={key}
             projectId={host.projectId}
             instanceId={instanceId}

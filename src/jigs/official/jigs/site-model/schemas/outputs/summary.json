@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "대지 요약 — 건축개요 jig가 받는 결과",
+  "type": "object",
+  "required": [
+    "pnus",
+    "addresses",
+    "officialArea_m2",
+    "computedArea_m2",
+    "zones",
+    "roads",
+    "fetchedAt",
+    "rows"
+  ],
+  "properties": {
+    "pnus": { "type": "array", "items": { "type": "string" } },
+    "addresses": { "type": "array", "items": { "type": "string" } },
+    "officialArea_m2": { "type": ["number", "null"] },
+    "computedArea_m2": { "type": "number" },
+    "areaGap_pct": { "type": ["number", "null"] },
+    "zones": { "type": "string" },
+    "roads": { "type": "string" },
+    "fetchedAt": { "type": ["string", "null"] },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "item", "value", "basis"],
+        "properties": {
+          "key": { "type": "string" },
+          "item": { "type": "string" },
+          "value": { "type": "string" },
+          "basis": { "type": "string" }
+        }
+      }
+    }
+  }
+}

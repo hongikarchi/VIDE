@@ -2,7 +2,7 @@
 id: PLAN-45
 title: 규모검토 jig 세 개 — 사이트 모델링·건축 가능 영역과 매스·건축개요 (T-203~T-214)
 status: draft
-version: 0.13
+version: 0.14
 updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-12, SPEC-07, SPEC-02, SPEC-08, SPEC-13, ARCH-01, ARCH-03, DESIGN, ADR-026, ADR-030, ADR-040, RESEARCH-04, RESEARCH-16, FR-09, FR-12, FR-14, FR-18, FR-21, FR-24, FR-25, C-05, OQ-08, OQ-09, OQ-16]
@@ -183,9 +183,14 @@ related: [SPEC-12, SPEC-07, SPEC-02, SPEC-08, SPEC-13, ARCH-01, ARCH-03, DESIGN,
 - **기준:** SPEC-12.13·12.14, SPEC-07.11.
 - **선행:** T-211(T-212가 있으면 주차·조경 칸을 채움).
 - **변경:** 공식 작업 jig `src/jigs/official/jigs/building-summary/`(입력: buildable-mass의 고른 대안과 대지 요약, 사람 입력 칸), 보고서 틀 `reports/summary.json`, CSV 두 개(개요·층별 면적표). 일관성 점검(`numbers-in-source`, 층별 합계 = 연면적). `src/jigs/catalog.ts`에 건축개요 항목 추가(코드는 그때 catalog의 다음 빈 번호).
+  - 런타임: `jig-output` 입력(ARCH-03 §8.5) — 이 프로젝트의 최근 계산된 앞 작업본을 기본으로 읽고 사람이 고를 수 있음(`…/jig-outputs/:key`), 받은 결과의 지문으로 다시 계산, 마지막 계산 뒤 앞 결과가 바뀌면 '다시 계산 필요'. 설명서 `outputs[].from`은 `step.<id>`만. 보고서 틀의 내보내기 조건 `export`(조건이 거짓이거나 보고서 점검 실패면 HTML·인쇄를 내지 않음). 패널 부품 `jig-source`.
+  - 앞 jig: buildable-mass 0.3.0에 단계 `handoff`(`vide/massing-kit` 0.3.0 `handoffStep`, 고른 대안의 층·면적·용도·규제 조건·주차·조경·공개공지·미확정 조건을 기하 없이 넘김)와 출력 `chosen`, site-model 0.2.0에 출력 `summary`.
+  - 사무소 서식: S-03 건축개요 표의 항목 구성(항목 · 세부 · 값 · 평 · 비고, 연면적 지상·지하·합계, 층별 면적 표)을 일반화해 다시 짰다(S-03의 대지 값은 쓰지 않음). XLSX·HWPX는 OQ-08 기본값대로 1차에 만들지 않는다.
+  - 카탈로그: RESEARCH-04 J-04(법규 검토 2: 일조사선·건축선으로 가능 매스)의 자리를 `vide/buildable-mass`로 바꾸고(T-209~T-212), 건축개요는 다음 빈 번호 J-11.
 - **검증:** `tests/core/building-summary.test.mjs`
   - 합성 고른 대안에서 개요 항목·출처 표시·미확정 조건 목록, 숫자 하나를 어긋나게 만들면 내보내기 거절, CSV 형식(SPEC-07.11).
   - 내보낸 HTML이 외부 요청·스크립트 없이 열림.
+  - 합성 사슬(site-model `single` → buildable-mass `rect` + 지하 1층·조경 비율·주차 기준·1F 제외 면적 → 건축개요)의 손계산 대조, 런타임의 `jig-output` 고르기·'다시 계산 필요', 브라우저 `tests/integration/browser-building-summary.mjs`.
 - **완료:** 시험 통과.
 
 ## T-214 통합 검수
@@ -198,7 +203,7 @@ related: [SPEC-12, SPEC-07, SPEC-02, SPEC-08, SPEC-13, ARCH-01, ARCH-03, DESIGN,
   3. 실패 경로: 키 없음, 모호한 필지, 좌표계 판별 실패, 폐합 실패, 앞 작업본 변경 → 뒤 jig '다시 계산 필요'.
   4. 브라우저 시험 `tests/integration/browser-site-massing.mjs`(합성 자료, 패널·대안 표·개요 내보내기).
 - **기록:** `docs/tdd/VERIFY-<날짜>-site-massing-jigs.md`(AC·SPEC 항목별 통과·실패·미시험).
-- **완료:** VERIFY에 실패가 없고 미시험 항목은 이유가 있다. 그 뒤 `catalog.ts`의 세 항목을 `available`로 바꾸고 마스터 PLAN §6.5를 갱신한다.
+- **완료:** VERIFY에 실패가 없고 미시험 항목은 이유가 있다. 그 뒤 마스터 PLAN §6.5를 갱신한다(`catalog.ts`의 세 항목 J-01·J-04·J-11은 2026-10-08 진행 지시로 이미 `available`).
 
 ## 실행 순서
 
@@ -229,7 +234,8 @@ T-204 SPIKE 기하 ─ T-208 만들기 틀 ┘                            │
 | T-207 | 완료(2026-10-08) — 공식 작업 jig `vide/site-model`(`src/jigs/official/jigs/site-model/`) 단계 9개(필지 후보 · 대상 필지 확정(사람) · 수집 · 좌표 통일 · 도로와 접도 · 지형 · 건물 매스 · 대지 요약 · Rhino에 만들기), 공식 작업 jig 적재(`officialJigRoot`, `builtin`·`official`, T-209의 `vide/buildable-mass`도 JIG 목록·skill 목록에 오름), 입력 종류 `site-data`와 작업본 사본·경로 5개(찾기·대상 필지·가져오기·새 사본 받기·SHP), 사람 단계 `confirm-target`과 만들기 점검 `target-confirmed`, 화면 부품 `site-picker`(전송 고지 카드·끄기, 후보 질문 카드와 위치 그림, 합필, 다시 가져오기의 바뀐 항목), 말로 열기의 주소 읽기, 만들기 8종(대상·대지 경계·주변 필지·도로·건물·지형·등고선·대지 정보), J-01 → `available`. 자체 시험 5건(단일·합필·떨어진 필지·후보 여럿·SHP와 지형), 서울시청 키 실호출: 9단계 모두 계산(필지 191·건물 매스 53, 추정 29·만들지 않음 10, 공부 12709.4 / 계산 12738.9 m² 0.23%). 실제 Rhino 8.35: 12개 만들기 실패 0, 건물 부피 오차 1.9e-8, 측량 좌표 그대로 위치 오차 0 m, 확정 전 `GATE_BLOCKED`, 되돌리기 | `src/jigs/official/jigs/site-model/`, `src/server/site-model-routes.ts`, `src/ui/jig-panel/site-parts.tsx`, `tests/core/site-model-jig.test.mjs`(7건), `tests/integration/browser-site-model.mjs`, `tests/integration/rhino-site-model.mjs`, `tests/integration/site-model-live.mjs`, SPEC-12.3·12.5·12.6, ARCH-03 §2.3·§3·§5.1·§7·§8.3·§11, Design §14 |
 | T-211 | 완료(2026-10-08) — `massing-kit` 0.2.0 `floors.ts`(층 윤곽 = 최대 외피의 층 윗면 단면, 지하 = 대지 − 지하 이격 캡슐, 위층 축소는 정북 쪽에서 면적으로 이분 탐색한 선으로 불리언 자름), `alternatives.ts`(최대 · 기준 용적률 · 인센티브(상한 용적률까지, 판단 필요 = '조건 미확정', 높이 완화는 안내만) · 공개공지 반영 · 사람 수정 `human-k`(윤곽·구멍·층 빼기, '외피 밖' 표시), 8개 상한과 만들지 못한 대안의 이유, 덜어 내기 두 방식, 제외 면적(근거), 건폐율·용적률 '초과' 판정과 여유), `open-space.ts`(필요 면적 = 비율 × 대지면적, 그린 영역·모서리 평행사변형 후보 표, 관련 완화량은 값 그대로). buildable-mass 0.2.0: 단계 층 나누기·공개공지·대안·사람 단계 [고른 대안 확정]·고른 대안, 대안 비교 막대·대안 표·공개공지 탭, 만들기 `alternativeMasses`(`vide.bake.extrude-polygon@1`). 규제 조건 표 입력(수정 사항 `regulation`, AI 표시 거절). 직사각형 대지 손계산: 8개 층 면적, 기준 4.0 → 2400(6층, 6F 112.4), 인센티브 4.5 → 2700, 층수 줄이기 2287.6, 제외 50 → 산정 2400·연면적 2450, 공개공지 60 ㎡ → 2520. Rhino에서 고친 매스 받기(SPEC-07.13)는 아직 없음(수정 사항으로만) | `src/jigs/official/massing-kit/`(`floors.ts`·`alternatives.ts`·`open-space.ts`·`mass-steps.ts`), `src/jigs/official/jigs/buildable-mass/`, `tests/core/massing-alternatives.test.mjs`(7건), `npm run jig:test`(rect: 층·대안·고른 대안 손계산), SPEC-12.10, ARCH-03 §8.4 |
 | T-212 | 완료(2026-10-08) — `use-mix.ts`(층·대안별 용도 표, 비율 나눔, 허용 용도·층별 용도 제한 대조: 없음 '초과', 판단 필요·미입력 '미검토'), AI 초안 단계 `useDraft`(꺼진 상태로 시작, 런타임은 `AI_UNAVAILABLE`) → 사람 단계 [AI 초안 받기] → `useDraftApplied`가 사람의 수정 사항으로 기록(AI 표시 수정 사항은 표가 거절), `parking.ts`(법정 대수: '면적 n ㎡당 1대' 기준·산정 면적·끝수 처리와 단위가 모두 규제 조건 항목, 비면 '사람 입력 필요', 판단 필요 용도 '미검토'; 진입 가능 구간: 도로 구간 − 그린 제외 선 − 모퉁이 제외 거리; 방식 대안 지상·지하·기계식, 지하 층수 추정과 추정 지하층 매스), `landscape.ts`(법정 = 비율 × 대지면적, 계획 = 그린 영역). 만들기 `groundZones`·`parkingMasses`, 호스트 단계 `makeMass`. 손계산: 최대안 근생 522.5/200 + 업무 2725.55/150 = 20.78 → 0.5 이상 올림 21·버림 20·용도마다 21, 산정 면적 'far' 20, 조경 90/120, 진입 구간 L형 60 → 50 → 46 m, 지상 여유 43 ㎡, 지하 630/600 → 2개 층. 숨은 Rhino 8 워커(이 시험이 띄우고 그 PID만 종료, 메인 체크아웃 빌드 플러그인): 직사각형·L형 대안 9개의 층 매스 64개 + 추정 지하층 5개가 모두 `IsSolid`·`IsValid`·`Outward`, 부피 상대 차 최대 3.4e-7, 바닥·윗면 높이 1e-5 m 안, 곡선 7개 | `src/jigs/official/massing-kit/`(`use-mix.ts`·`parking.ts`·`landscape.ts`), `tests/core/massing-use-parking.test.mjs`(7건), `tests/integration/rhino-massing-alternatives.mjs`, SPEC-12.11·12.12, ARCH-03 §8.4 |
-| T-213·T-214 | 계획(2026-10-08 사용자 1단계 착수 승인) | — |
+| T-213 | 완료(2026-10-08) — 공식 작업 jig `vide/building-summary` 0.1.0(J-11): 단계 앞 결과 받기 · 건축개요·층별 면적표 · 일관성 점검, 입력 `jig-output` 둘(buildable-mass `chosen` ← 새 단계 `handoff`(`massing-kit` 0.3.0), site-model `summary`), 사람 입력 공사종별·구조·주차 방식(설정값)·건물명·비고(수정 사항 `summary-text`), 칸마다 출처(계산·공부·사람 입력·법규 결과)·확정 상태·근거, 빈 칸 '사람 입력 필요', 평 참고 열, 미확정 조건 n개와 목록을 보고서 첫머리에. 일관성: 숫자 칸 값이 출처에 있음·글자/평이 값에서 씀·층별 합 = 지상·지하·합계 = 개요 연면적·산정 연면적·층 수 = 규모, 어긋나면 CSV 표가 비고 보고서 `export` 조건으로 HTML·인쇄 거절. 런타임 `jig-output`(최근 계산 작업본 자동·고르기·지문·'다시 계산 필요', 경로 `…/jig-outputs/:key`), 부품 `jig-source`, 보고서 `export`, 패널 보고서 보기 스크롤. 카탈로그 J-04 → `vide/buildable-mass`, J-11 → 건축개요(둘 다 `available`). 손계산: 기준 용적률안 + 1F 제외 50 → 지상 2,450(= 522.5 + 522.5 + 445.55 + 414.2 + 382.85 + 162.4), 산정 2,400, 지하 B1 600, 합계 3,050, 건폐율 87.08 %(522.5/600), 주차 3,050/150 = 20.33 → 20대, 조경 0.15 × 600 = 90 ㎡. XLSX·HWPX는 OQ-08대로 미구현, 건물명·비고는 화면 입력 칸이 없어 수정 사항 경로로만 | `src/jigs/official/jigs/building-summary/`, `src/jigs/official/massing-kit/handoff.ts`, `src/jigs/runtime/runtime.ts`·`report-format.ts`·`manifest.ts`·`instance.ts`, `src/server/jig-routes.ts`, `src/ui/jig-panel/source-parts.tsx`, `src/ui/report-tab.tsx`, `tests/core/building-summary.test.mjs`(9건), `tests/fixtures/summary-chain.mjs`, `tests/integration/browser-building-summary.mjs`, SPEC-12.13·12.14, ARCH-03 §3·§5.1·§5.2·§7·§8.5, Design §14 |
+| T-214 | 계획(2026-10-08 사용자 1단계 착수 승인) | — |
 
 ## 결정이 필요한 질문
 
