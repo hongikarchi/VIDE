@@ -31,14 +31,55 @@ const fakeRemote = () => {
   return { remote, calls };
 };
 
-test('shareable requests are the hostless ones; text is chunked without loss', () => {
+test('shareable requests read and changed no host document; text is chunked without loss', () => {
   assert.equal(shareableRequest({ hostUse: 'none' }, { text: 'a' }), true);
-  assert.equal(shareableRequest({ host: 'rhino' }, {}), false, 'no hostUse: a modeling request');
+  assert.equal(shareableRequest({ host: 'rhino' }, {}), false, 'no hostUse and no end state yet');
   assert.equal(shareableRequest({ hostUse: 'read' }, {}), false);
   assert.equal(shareableRequest({ hostUse: 'none', linkId: 'l' }, {}), false);
   assert.equal(shareableRequest({ hostUse: 'none', jig: { kind: 'x' } }, {}), false);
   assert.equal(shareableRequest({ hostUse: 'none' }, { executions: [{}] }), false);
-  assert.equal(shareableRequest({ hostUse: 'none' }, { sourceDocument: { name: 'a' } }), false);
+  // T-190: decided by what the request did. A host target attached at the start that the turn
+  // neither read nor changed does not keep it on the PC (a note summary while Rhino was open).
+  const attached = { sourceDocument: { name: 'a.3dm' }, baseRequestId: 'sync-1' };
+  assert.equal(
+    shareableRequest(
+      { host: 'rhino', pins: [], sketches: [] },
+      { ...attached, progress: { queries: 0, attempts: 0, completed: 0 }, hostExecuted: false },
+      'succeeded',
+    ),
+    true,
+    'attached document, no host query: shared',
+  );
+  assert.equal(shareableRequest({ hostUse: 'none' }, attached), true);
+  assert.equal(
+    shareableRequest(
+      { host: 'rhino' },
+      { ...attached, progress: { queries: 1, attempts: 0 } },
+      'succeeded',
+    ),
+    false,
+    'a host query keeps it here',
+  );
+  assert.equal(
+    shareableRequest({ host: 'rhino' }, { progress: { queries: 0, attempts: 1 } }, 'failed'),
+    false,
+    'an execute attempt keeps it here',
+  );
+  assert.equal(shareableRequest({ host: 'rhino' }, { appliedDirectly: true }, 'succeeded'), false);
+  assert.equal(shareableRequest({ host: 'rhino' }, { documents: [{}] }, 'failed'), false);
+  assert.equal(
+    shareableRequest({ host: 'rhino' }, {}, 'running'),
+    false,
+    'a running modeling request may still read the host',
+  );
+  assert.equal(
+    shareableRequest({ hostUse: 'none', pins: [{ id: 'p' }] }, {}),
+    false,
+    'pins keep it here',
+  );
+  assert.equal(shareableRequest({ host: 'rhino', sketches: [{}] }, {}, 'succeeded'), false);
+  assert.equal(shareableRequest({ host: 'rhino', applyToSource: true }, {}, 'succeeded'), false);
+  assert.equal(shareableRequest({ host: 'rhino', linkedTargets: [] }, {}, 'succeeded'), false);
   const long = '가'.repeat(250_001) + '😀' + 'b'.repeat(10);
   const parts = chunkText(long, 100_000);
   assert.equal(parts.join(''), long);
@@ -109,6 +150,26 @@ test('the PC uploads hostless conversations incrementally, resumes, removes, and
     add('r-3', { body: '긴 질문', hostUse: 'none' }, { text: longAnswer });
     add('r-4', { body: '이 파일 설명', hostUse: 'none', linkId: 'link-1' }, { text: 'no' });
     add('r-5', { body: '지울 요청', hostUse: 'none' }, { text: '곧 숨김' });
+    // T-190: a note summary that started with Rhino as its target but never read it is shared;
+    // one that queried the model, or carried a pin, stays here.
+    const direct = (queries) => ({
+      text: '노트 요약입니다.',
+      sourceDocument: { name: 'tower.3dm', instance: 'i', documentId: 1 },
+      baseRequestId: 'sync-1',
+      hostExecuted: false,
+      appliedDirectly: false,
+      progress: { queries, attempts: 0, completed: 0 },
+      activity: [{ at: now, kind: 'host', text: '열린 Rhino 문서에 연결 · 자동' }],
+      executions: [],
+    });
+    add('r-6', { body: '노트 요약해줘', host: 'rhino', baseRequestId: null }, direct(0));
+    add('r-7', { body: '기둥 몇 개야', host: 'rhino', baseRequestId: null }, direct(2));
+    add(
+      'r-8',
+      { body: '여기 메모', host: 'rhino', pins: [{ id: 'p', basis: 'sync-1', role: 'target' }] },
+      direct(0),
+    );
+    add('r-9', { body: '아직 도는 요청', host: 'rhino' }, direct(0), 'running');
 
     const { remote, calls } = fakeRemote();
     const mirror = new ConversationMirror({
@@ -157,7 +218,12 @@ test('the PC uploads hostless conversations incrementally, resumes, removes, and
     });
     assert.equal(await restarted.upload(project.id, true), undefined);
     const sent = calls.flatMap((call) => call.data.requests.map((request) => request.id));
-    assert.deepEqual(sent.sort(), ['r-3', 'r-5']);
+    assert.deepEqual(sent.sort(), ['r-3', 'r-5', 'r-6'], 'r-7 queried, r-8 pinned, r-9 running');
+    const summary = JSON.parse(
+      calls.flatMap((call) => call.data.requests).find((request) => request.id === 'r-6').doc,
+    );
+    assert.equal(summary.answer, '노트 요약입니다.');
+    assert.deepEqual(summary.executions, []);
     const long = calls
       .flatMap((call) => call.data.requests)
       .find((request) => request.id === 'r-3');
@@ -180,7 +246,7 @@ test('the PC uploads hostless conversations incrementally, resumes, removes, and
       [['r-1', 'failed']],
     );
     assert.deepEqual(calls[0].data.removed, ['r-5'], 'a hidden request leaves the site');
-    assert.equal((await restarted.status(project.id)).shared, 2);
+    assert.equal((await restarted.status(project.id)).shared, 3);
 
     // The switch off: removal waits while the site is unreachable, then goes on the next beat.
     calls.length = 0;

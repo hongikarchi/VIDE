@@ -40,7 +40,8 @@ import {
 import { skillRouteJigs } from '../skill-catalog.ts';
 import { api, errors } from '../gateway.ts';
 import { type SkillStart, startSkill, continueSkill, revertSkill } from '../skill-start.ts';
-import { setWorkspace } from '../workspaces.ts';
+import { activeWorkspace, setWorkspace } from '../workspaces.ts';
+import { hostlessFromScreen } from '../screen-hostless.ts';
 import {
   referenceIntent,
   pathCandidates,
@@ -707,8 +708,10 @@ export async function submitRequest(
   const conversationId =
     chosen ?? (!predecessorId && workState.conversationChips ? 'default' : undefined);
   // A jig conversation's turns work on its jig (the jig tools), unless the words name the file.
+  // Sent from 노트·일지, 대시보드 or 자료 about the records, a request skips the host (T-190).
   const hostless =
     extra.hostUse === 'none' ||
+    (!predecessor && hostlessFromScreen(activeWorkspace(), draftState.state)) ||
     (!predecessor &&
       !draftState.state.linkedTargets &&
       !worksOnFile(draftState.state.body) &&

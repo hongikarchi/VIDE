@@ -19,8 +19,9 @@ import { DomainError, type Store } from '../core/store.ts';
  * Conversation records through the account site (ADR-037 4, SPEC-04.12, PLAN-36).
  *
  * Upload: this PC is the origin of the requests it ran. Per project (while its "할 일·대화 기록을
- * 사이트에 올리기" switch is on, offline-view.ts) the hostless requests (`shareableRequest`: the
- * user's 2026-10-06 adjustment keeps modeling conversations on the PC) go to the site as text:
+ * 사이트에 올리기" switch is on, offline-view.ts) the requests that neither read nor changed a host
+ * document (`shareableRequest`: the user's 2026-10-06 adjustment keeps modeling conversations on
+ * the PC; T-190 judges by what the request did) go to the site as text:
  * request text, full answer, activity lines, executed code, file names. Incremental: a request is
  * sent again only when its state or stored size changed since the last upload, in batches of about
  * 1 MB and 8 requests (one call stays near D1's 50 queries per Worker call on the free plan); what was sent is recorded after each batch (conversation-mirror.json), so a restart or a
@@ -206,6 +207,7 @@ export class ConversationMirror {
       .prepare(
         `SELECT w.id, w.state, length(w.input) AS li, coalesce(length(w.result),0) AS lr,
           json_extract(w.input,'$.conversationId') AS conversationId,
+          json_extract(w.input,'$.hostUse') AS hostUse,
           json_extract(w.input,'$.source') AS source,
           json_extract(w.input,'$.provider') AS provider,
           json_type(w.input,'$.jig') AS jig,
@@ -215,22 +217,29 @@ export class ConversationMirror {
           json_type(w.input,'$.linkedTargets') AS linkedTargets,
           json_extract(w.input,'$.applyToSource') AS applyToSource,
           json_extract(w.input,'$.parentRequestId') AS parentRequestId,
+          coalesce(json_array_length(w.input,'$.pins'),0) AS pins,
+          coalesce(json_array_length(w.input,'$.sketches'),0) AS sketches,
           coalesce(json_array_length(w.result,'$.executions'),0) AS executions,
-          json_type(w.result,'$.sourceDocument') AS resultDocument,
-          json_extract(w.result,'$.baseRequestId') AS resultBase,
-          json_extract(w.result,'$.hostExecuted') AS hostExecuted
+          coalesce(json_array_length(w.result,'$.documents'),0) AS documents,
+          json_extract(w.result,'$.hostExecuted') AS hostExecuted,
+          json_extract(w.result,'$.appliedDirectly') AS appliedDirectly,
+          json_extract(w.result,'$.multiFile') AS multiFile,
+          json_type(w.result,'$.rollback') AS rollback,
+          json_extract(w.result,'$.progress.queries') AS queries,
+          json_extract(w.result,'$.progress.attempts') AS attempts
          FROM workspace_requests w
-         WHERE w.projectId=? AND json_extract(w.input,'$.hostUse')='none'
+         WHERE w.projectId=?
            AND w.id NOT IN (SELECT requestId FROM hidden_requests WHERE projectId=?)
          ORDER BY w.rowid`,
       )
       .all(projectId, projectId) as Record<string, unknown>[];
     const present = (value: unknown) => (value === null || value === undefined ? undefined : value);
+    const count = (value: unknown) => Array.from({ length: Number(value) || 0 });
     return rows
       .filter((row) =>
         shareableRequest(
           {
-            hostUse: 'none',
+            hostUse: present(row.hostUse),
             source: present(row.source),
             provider: present(row.provider),
             jig: present(row.jig),
@@ -240,13 +249,22 @@ export class ConversationMirror {
             linkedTargets: present(row.linkedTargets),
             applyToSource: row.applyToSource === 1,
             parentRequestId: present(row.parentRequestId),
+            pins: count(row.pins),
+            sketches: count(row.sketches),
           },
           {
-            executions: Array.from({ length: Number(row.executions) || 0 }),
-            sourceDocument: present(row.resultDocument),
-            baseRequestId: present(row.resultBase),
+            executions: count(row.executions),
+            documents: count(row.documents),
             hostExecuted: row.hostExecuted === 1,
+            appliedDirectly: row.appliedDirectly === 1,
+            multiFile: row.multiFile === 1,
+            rollback: present(row.rollback),
+            progress: {
+              queries: Number(row.queries) || 0,
+              attempts: Number(row.attempts) || 0,
+            },
           },
+          String(row.state),
         ),
       )
       .map((row) => ({

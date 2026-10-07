@@ -436,6 +436,9 @@ User request: ${input.body || '첨부한 설계 문맥을 검토해 주세요.'}
         });
       if (executions.length && error && typeof error === 'object')
         Object.assign(error, { partial: kept });
+      // A turn that only read keeps its read count (the conversation mirror keeps it here, T-190).
+      else if (queries && error && typeof error === 'object')
+        Object.assign(error, { partial: { progress: progress() } });
       throw error;
     } finally {
       scope.revoke();

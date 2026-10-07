@@ -823,8 +823,12 @@ export async function runDirectTurn(turn: DirectTurn) {
   const targetRef = `${driver.host}-open:${driver.target.instance}`;
   const activity = activityLog();
   const executions: ExecutionRecord[] = [];
+  // `queries` counts every read of a document (query pages, view captures, measures, Grasshopper
+  // uses): a request with none read no model data (the conversation mirror shares it, T-190).
+  // `pages` numbers the query pages in the activity lines.
   let attempts = 0,
     queries = 0,
+    pages = 0,
     applied = 0,
     uncertain = false;
   let guarded: ExecutionRecord | undefined;
@@ -972,19 +976,21 @@ export async function runDirectTurn(turn: DirectTurn) {
       const page = await doc.driver.query(args as QueryPageOptions, token);
       breadcrumb('ai-query-done', { request: input.id, bytes: JSON.stringify(page)?.length });
       queries++;
-      activity.add('query', named(doc, `문서 조회 ${queries}회차`));
+      pages++;
+      activity.add('query', named(doc, `문서 조회 ${pages}회차`));
       update(state('query'));
       const unresolved = told(doc);
       return unresolved && page && typeof page === 'object' ? { ...page, unresolved } : page;
     },
   };
   const eyes = (doc: TurnDoc, source: VisionSource) =>
-    visionHandlers(source, (tool) =>
+    visionHandlers(source, (tool) => {
+      queries++;
       activity.add(
         'query',
         named(doc, tool === 'capture_view' ? '모델 화면 보기' : '모델 치수 재기'),
-      ),
-    );
+      );
+    });
   // Only a connection with view methods has the eyes; another file's open on first use.
   if (driver.vision) {
     primary.vision = eyes(primary, await driver.vision());
@@ -1291,6 +1297,7 @@ export async function runDirectTurn(turn: DirectTurn) {
         ...(turn.filePermission ? { filePermission: turn.filePermission } : {}),
         bake: (linkId, spec) => executeIn(linkId, 'gh-bake', JSON.stringify(spec)),
         onUse: (doc, kind, text, detail) => {
+          queries++;
           activity.add(kind, named(doc as TurnDoc, text), detail);
           update(state(kind === 'query' ? 'query' : 'host'));
         },
@@ -1466,6 +1473,10 @@ export async function runDirectTurn(turn: DirectTurn) {
       });
     if (executions.length && error && typeof error === 'object')
       Object.assign(error, { partial: { ...state('done'), phase: undefined } });
+    // A turn that only read keeps its read count, so the failed request still shows it used the
+    // host (the conversation mirror keeps it on this PC, T-190).
+    else if (queries && error && typeof error === 'object')
+      Object.assign(error, { partial: { progress: progress() } });
     throw error;
   } finally {
     scope.revoke();

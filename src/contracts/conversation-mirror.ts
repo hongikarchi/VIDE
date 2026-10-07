@@ -7,9 +7,9 @@ import { z } from 'zod';
  * the activity lines, the executed code and the linked file names. Never the model geometry,
  * attachments' contents or pin coordinates.
  *
- * Only requests without a host document are shared (user adjustment 2026-10-06, "모델링 대화는
- * 서버에 안 올림"): see `shareableRequest`. Modeling requests keep the PC-off history summary
- * (ADR-035) only.
+ * Only requests that neither read nor changed a host document are shared (user adjustment
+ * 2026-10-06, "모델링 대화는 서버에 안 올림"; T-190): see `shareableRequest`. Modeling requests
+ * keep the PC-off history summary (ADR-035) only.
  */
 
 /** A D1 row stays far below its 2 MB limit: a document is stored in chunks of this many chars. */
@@ -109,17 +109,59 @@ interface ShareInput {
   jig?: unknown;
   provider?: unknown;
   parentRequestId?: unknown;
+  pins?: unknown;
+  sketches?: unknown;
+}
+interface ShareResult {
+  executions?: unknown;
+  hostExecuted?: unknown;
+  appliedDirectly?: unknown;
+  progress?: unknown;
+  documents?: unknown;
+  rollback?: unknown;
+  multiFile?: unknown;
+}
+/** The states of a request that has ended (what it did on the host is then known). */
+const ENDED = new Set(['succeeded', 'failed', 'cancelled', 'interrupted']);
+const listed = (value: unknown) => Array.isArray(value) && value.length > 0;
+/**
+ * Whether a request's result shows that it read or changed a host document: it ran code there
+ * (executions, a direct apply, a candidate, a rollback, another file locked) or it read one
+ * (`progress.queries`: a direct turn counts every query, view capture, measure and Grasshopper use).
+ */
+export function usedHost(result: unknown): boolean {
+  if (!result || typeof result !== 'object') return false;
+  const value = result as ShareResult;
+  const progress = (value.progress ?? {}) as { queries?: unknown; attempts?: unknown };
+  return (
+    listed(value.executions) ||
+    listed(value.documents) ||
+    value.hostExecuted === true ||
+    value.appliedDirectly === true ||
+    value.multiFile === true ||
+    (value.rollback !== undefined && value.rollback !== null) ||
+    (typeof progress.queries === 'number' && progress.queries > 0) ||
+    (typeof progress.attempts === 'number' && progress.attempts > 0)
+  );
 }
 /**
- * Whether a request's text goes to the site: only a request without a host document (user
- * adjustment 2026-10-06). It declares `hostUse: 'none'` (a hostless turn: a general question,
- * 할 일 from text and files, 자료, notes, a jig-make turn), names no linked file, Sync basis,
- * source document or target, runs no jig or extension, and its result ran no code in a document.
- * Everything else is a modeling request and stays on the PC.
+ * Whether a request's text goes to the site (ADR-037 4 with the user's 2026-10-06 adjustment
+ * "모델링 대화는 서버에 안 올림", SPEC-04.12 2). Decided by what the request did, not by where it
+ * started (T-190): a request that neither read nor changed a host document is shared even when a
+ * host document was its target at the start (a note summary sent while Rhino was connected).
+ *
+ * Never shared: a request that names a linked file, Sync basis, source document or target, carries
+ * pins or sketches, applies to the source, runs a jig or an extension, or is an intervention; and a
+ * request whose result shows a host read or change (`usedHost`). A request not declared hostless
+ * (`hostUse: 'none'`) is judged only once it has ended (`state`), so a running one that reads the
+ * host later is never sent.
  */
-export function shareableRequest(input: ShareInput | null | undefined, result: unknown): boolean {
+export function shareableRequest(
+  input: ShareInput | null | undefined,
+  result: unknown,
+  state?: string,
+): boolean {
   if (!input || typeof input !== 'object') return false;
-  if (input.hostUse !== 'none') return false;
   if (input.source === 'document' || input.source === 'file') return false;
   if (input.provider === 'extension' || input.jig !== undefined) return false;
   if (input.parentRequestId !== undefined && input.parentRequestId !== null) return false;
@@ -128,18 +170,13 @@ export function shareableRequest(input: ShareInput | null | undefined, result: u
     (input.linkId !== undefined && input.linkId !== null) ||
     (input.baseRequestId !== undefined && input.baseRequestId !== null) ||
     input.linkedTargets !== undefined ||
-    input.applyToSource === true
+    input.applyToSource === true ||
+    listed(input.pins) ||
+    listed(input.sketches)
   )
     return false;
-  const value = (result ?? {}) as {
-    executions?: unknown;
-    sourceDocument?: unknown;
-    baseRequestId?: unknown;
-    hostExecuted?: unknown;
-  };
-  if (Array.isArray(value.executions) && value.executions.length) return false;
-  if (value.sourceDocument || value.baseRequestId || value.hostExecuted === true) return false;
-  return true;
+  if (input.hostUse !== 'none' && !(state !== undefined && ENDED.has(state))) return false;
+  return !usedHost(result);
 }
 
 const STATE_LABEL: Record<string, string> = {
