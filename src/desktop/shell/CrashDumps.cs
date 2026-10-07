@@ -8,17 +8,28 @@ namespace Vide.Desktop
     /// <summary>
     /// Crash dumps of the engine for diagnosis (PLAN-27 §0): engine deaths with 0xC0000409 leave no
     /// Windows error report, so when the user placed Sysinternals ProcDump in &lt;data&gt;\tools it is
-    /// attached to every engine process. It writes a dump on an unhandled exception (a fail-fast
-    /// included) and on termination (a kill from outside). Dumps are full (-ma: threads, modules and
-    /// memory, T-125 — the -mp dumps of 2026-10-02 had empty thread and module lists), so only the
-    /// newest three are kept. Dumps of exits VIDE asked for are removed on the next start. Each
-    /// written dump's path goes to the shell log. Without the tool nothing happens.
+    /// attached to every engine process. It writes a dump on an unhandled exception only (-e). Dumps
+    /// are full (-ma: threads, modules and memory, T-125 — the -mp dumps of 2026-10-02 had empty
+    /// thread and module lists), so only the newest three are kept. Each written dump's path goes to
+    /// the shell log. Without the tool nothing happens.
+    ///
+    /// No termination monitor (-t, T-191): it dumped every normal quit (230–785 MB, exit code 0) and
+    /// those pushed the real crash dumps out of the three kept. -e alone still catches the libuv
+    /// fail-fast: a __fastfail / stack-buffer-overrun reaches an attached debugger as a second-chance
+    /// 0xC0000409, and procdump.log of 2026-10-02..06 shows every one of those crashes as
+    /// "Unhandled: C0000409" from the exception monitor (the dumps kept are those), never from -t.
+    /// A kill from outside leaves no dump; its exit code is in engine-exits.jsonl.
     /// </summary>
     internal static class CrashDumps
     {
         private const int Keep = 3;
         private static string Folder => Path.Combine(Paths.Data, "crashdumps");
+        /// <summary>Left by versions before T-191, which dumped every exit too.</summary>
         private static string AskedFile => Path.Combine(Folder, "asked-stop.txt");
+
+        /// <summary>ProcDump's arguments: full dump on an unhandled exception, no termination dump.</summary>
+        internal static string Arguments(int pid, string folder) =>
+            "-accepteula -e -ma " + pid + " \"" + folder + "\"";
 
         public static void Attach(int pid)
         {
@@ -28,7 +39,7 @@ namespace Vide.Desktop
                 if (!File.Exists(tool)) return;
                 Directory.CreateDirectory(Folder);
                 Prune();
-                var start = new ProcessStartInfo(tool, "-accepteula -e -t -ma " + pid + " \"" + Folder + "\"")
+                var start = new ProcessStartInfo(tool, Arguments(pid, Folder))
                 {
                     UseShellExecute = false,
                     CreateNoWindow = true,
@@ -54,31 +65,10 @@ namespace Vide.Desktop
             }
         }
 
-        /// <summary>VIDE is stopping the engine itself: the termination dump that follows is not a crash.</summary>
-        public static void MarkAskedStop()
-        {
-            try
-            {
-                if (Directory.Exists(Folder)) File.WriteAllText(AskedFile, DateTime.UtcNow.ToString("o"));
-            }
-            catch
-            {
-                // Diagnostics never stop the program.
-            }
-        }
-
         private static void Prune()
         {
             var dumps = new DirectoryInfo(Folder).GetFiles("*.dmp").OrderByDescending(f => f.LastWriteTimeUtc).ToList();
-            if (File.Exists(AskedFile) && DateTime.TryParse(File.ReadAllText(AskedFile).Trim(), null,
-                System.Globalization.DateTimeStyles.RoundtripKind, out DateTime asked))
-            {
-                foreach (var dump in dumps.Where(f => f.LastWriteTimeUtc >= asked.AddSeconds(-2) && f.LastWriteTimeUtc <= asked.AddSeconds(60)).ToList())
-                {
-                    try { dump.Delete(); dumps.Remove(dump); } catch { /* In use: next time. */ }
-                }
-                File.Delete(AskedFile);
-            }
+            try { if (File.Exists(AskedFile)) File.Delete(AskedFile); } catch { /* Next time. */ }
             foreach (var old in dumps.Skip(Keep))
             {
                 try { old.Delete(); } catch { /* In use: next time. */ }

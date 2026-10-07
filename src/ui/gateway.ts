@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { workspaceRequestSchema } from '../contracts/workspace-result.ts';
 import { GEOMETRY_TYPE, decodeGeometry } from '../contracts/geometry-transfer.ts';
+import { isProjectGone, noteProjectError, PROJECT_GONE_TEXT } from './project-gone.ts';
 export const projectSchema = z.object({ id: z.string(), name: z.string() }).passthrough();
 /** `quiet`: codes the caller handles itself (no app-wide error notice is raised for them). */
 /**
@@ -15,6 +16,8 @@ export async function api(
   data?: unknown,
   { quiet = [], timeoutMs }: { quiet?: readonly string[]; timeoutMs?: number } = {},
 ): Promise<unknown> {
+  // A project that is gone is not asked about again (T-191): its pollers stop at once.
+  if (isProjectGone(path)) throw apiError('PROJECT_GONE', undefined, true);
   let response;
   // One request in full carries its display geometry as binary (PLAN-18); errors stay JSON.
   const geometry = method === 'GET' && /^\/projects\/[^/]+\/requests\/[^/?]+$/.test(path);
@@ -55,7 +58,12 @@ export async function api(
       if (controller.signal.aborted) throw timedOut(method);
       throw apiError('INVALID_RESPONSE');
     }
-    return finish(response, result, quiet);
+    try {
+      return finish(response, result, quiet);
+    } catch (error) {
+      noteProjectError(path, String((error as { code?: unknown }).code ?? ''));
+      throw error;
+    }
   } finally {
     clearTimeout(timer);
   }
@@ -363,6 +371,7 @@ Object.assign(errors, {
 // Codes the engine and hosts send that used to show raw: what happened and what to do.
 Object.assign(errors, {
   NOT_FOUND: '대상을 찾을 수 없습니다. 목록을 새로고침한 뒤 다시 고르세요.',
+  PROJECT_GONE: PROJECT_GONE_TEXT,
   FORBIDDEN: '이 화면에서는 할 수 없는 작업입니다. 작업 PC의 VIDE에서 하세요.',
   METHOD_NOT_ALLOWED: '이 판의 VIDE가 지원하지 않는 요청입니다. 앱을 다시 열거나 업데이트하세요.',
   INTERNAL_ERROR: 'VIDE 내부 오류가 났습니다. 다시 시도하고, 반복되면 피드백으로 알려 주세요.',

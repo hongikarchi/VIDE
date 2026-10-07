@@ -144,7 +144,6 @@ namespace Vide.Desktop
         public void Stop()
         {
             stopping = true;
-            CrashDumps.MarkAskedStop();
             var current = process;
             if (current == null) return;
             try

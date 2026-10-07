@@ -12,7 +12,7 @@ import { statusState, tabHidden, type SettingsTab } from '../store/status.ts';
 import { sessionState } from '../store/session.ts';
 import { ConnectionLines } from './status-lines.tsx';
 import { problemNotices } from './status-bar.tsx';
-import { TelemetrySection } from './telemetry.tsx';
+import { dumpLabel, TelemetrySection, useNewestDump } from './telemetry.tsx';
 
 const tabs: [SettingsTab, string][] = [
   ['account', '계정 · 원격 접속'],
@@ -176,6 +176,11 @@ const DiagnosticsSection = memo(function DiagnosticsSection() {
     { busy: true } | { file: string; bytes?: number } | { error: string } | null
   >(null);
   const [copied, setCopied] = useState(false);
+  // The newest crash dump goes in by default here (the file stays on this PC, T-191). Read when the
+  // tab is shown, like the telemetry section (the dialog is drawn before the session opens).
+  const tab = useStore(statusState, (s) => s.tab);
+  const dump = useNewestDump(tab === 'status' && sessionState.ready);
+  const [withDump, setWithDump] = useState(true);
   const busy = state !== null && 'busy' in state;
   return (
     <section className="settings-diagnostics">
@@ -184,6 +189,18 @@ const DiagnosticsSection = memo(function DiagnosticsSection() {
         문제를 알릴 때 보낼 파일을 만듭니다. 기록·종료 기록·버전·설정 요약을 묶고, 요청 글·파일
         내용·로그인 정보는 넣지 않습니다.
       </small>
+      {dump ? (
+        <label className="telemetry-dumps">
+          <input
+            id="diagnostic-bundle-dump"
+            type="checkbox"
+            checked={withDump}
+            disabled={busy}
+            onChange={(event) => setWithDump(event.target.checked)}
+          />
+          {dumpLabel(dump)}
+        </label>
+      ) : null}
       <div className="settings-actions">
         <button
           id="diagnostic-bundle"
@@ -194,7 +211,12 @@ const DiagnosticsSection = memo(function DiagnosticsSection() {
             setCopied(false);
             try {
               const value = bundleSchema.parse(
-                await api('/diagnostics/bundle', 'POST', {}, { quiet: ['FORBIDDEN'] }),
+                await api(
+                  '/diagnostics/bundle',
+                  'POST',
+                  { dumps: !!dump && withDump },
+                  { quiet: ['FORBIDDEN'], timeoutMs: 180_000 },
+                ),
               );
               setState({ file: value.file, bytes: value.bytes });
             } catch (error) {

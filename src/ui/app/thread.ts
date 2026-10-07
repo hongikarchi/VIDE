@@ -621,7 +621,13 @@ const pollFailures = new Map<string, number>();
 /** About 10 minutes of failed reads (1.2 s doubling to 10 s): then the work history tells. */
 const POLL_FAILURE_LIMIT = 64;
 /** Answers that will not change on a retry: the request or its project is gone, or refused. */
-const POLL_PERMANENT = new Set(['NOT_FOUND', 'PROJECT_NOT_FOUND', 'INVALID_INPUT', 'FORBIDDEN']);
+const POLL_PERMANENT = new Set([
+  'NOT_FOUND',
+  'PROJECT_NOT_FOUND',
+  'PROJECT_GONE',
+  'INVALID_INPUT',
+  'FORBIDDEN',
+]);
 export async function poll(
   id: string,
   projectId = currentProject().id,

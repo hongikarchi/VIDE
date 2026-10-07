@@ -42,8 +42,8 @@ import { AUTO_MODELS, ModelRouter, isAutoModel } from '../ai/model-router.ts';
 import { PinCarryError, carryPins } from './pin-carry.ts';
 import { startHealthLog } from './health.ts';
 import { Diagnostics, RepeatGate, routeOf } from './diagnostics.ts';
-import { writeDiagnosticBundle } from './diagnostic-bundle.ts';
-import { Telemetry, type TelemetryOptions } from './telemetry.ts';
+import { listDumps, writeDiagnosticBundle } from './diagnostic-bundle.ts';
+import { dumpSendable, Telemetry, type TelemetryOptions } from './telemetry.ts';
 import {
   BIG_JSON,
   breadcrumb,
@@ -1443,6 +1443,22 @@ export async function startServer({
       }
       // [진단 묶음 내보내기] (T-126): logs, exit records, versions and a settings summary in one
       // zip under <data>/diagnostics. Never keys, logins, the DB or request text. This PC only.
+      // The newest crash dump's size for [크래시 덤프 포함 (약 N MB)] (T-191); `sendable` when it
+      // fits the site's bundle limit. This PC only.
+      if (url.pathname === '/api/v1/diagnostics/bundle' && request.method === 'GET') {
+        if (remote || filename === ':memory:') throw new DomainError('FORBIDDEN');
+        const newest = (await listDumps(dirname(filename)))[0];
+        send(200, {
+          dump: newest
+            ? {
+                bytes: newest.bytes,
+                modified: newest.modified,
+                sendable: dumpSendable(newest.bytes),
+              }
+            : null,
+        });
+        return;
+      }
       if (url.pathname === '/api/v1/diagnostics/bundle' && request.method === 'POST') {
         if (remote || filename === ':memory:') throw new DomainError('FORBIDDEN');
         const options = z

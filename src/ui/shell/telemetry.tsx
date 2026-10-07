@@ -45,6 +45,38 @@ const crashAnswerSchema = z
   })
   .passthrough();
 
+const dumpSchema = z.object({
+  dump: z
+    .object({ bytes: z.number(), modified: z.string(), sendable: z.boolean() })
+    .passthrough()
+    .nullable(),
+});
+export type NewestDump = NonNullable<z.infer<typeof dumpSchema>['dump']>;
+
+/** [크래시 덤프 포함 (약 N MB)] (T-191): only the newest dump ever goes in a bundle. */
+export const dumpLabel = (dump: NewestDump) =>
+  `크래시 덤프 포함 (약 ${Math.max(1, Math.round(dump.bytes / 1024 / 1024))} MB)`;
+
+/** The newest crash dump on this PC (GET /diagnostics/bundle), or null when there is none. */
+export function useNewestDump(enabled = true) {
+  const [dump, setDump] = useState<NewestDump | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let live = true;
+    void api('/diagnostics/bundle', 'GET', undefined, { quiet: ['FORBIDDEN'] })
+      .then((value) => {
+        if (live) setDump(dumpSchema.parse(value).dump);
+      })
+      .catch(() => {
+        /* No dump option: the bundle is made without one. */
+      });
+    return () => {
+      live = false;
+    };
+  }, [enabled]);
+  return dump;
+}
+
 const when = (at?: string) =>
   at
     ? new Date(at).toLocaleString('ko-KR', {
@@ -127,6 +159,7 @@ export const TelemetryCards = memo(function TelemetryCards() {
   const [busy, setBusy] = useState(false);
   const [dumps, setDumps] = useState(false);
   const [crashResult, setCrashResult] = useState<z.infer<typeof crashAnswerSchema> | null>(null);
+  const newestDump = useNewestDump(!!view?.crash);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (panelMode) return;
@@ -201,7 +234,7 @@ export const TelemetryCards = memo(function TelemetryCards() {
           await api(
             '/telemetry/crash',
             'POST',
-            { send, dumps: send && dumps },
+            { send, dumps: send && dumps && !!newestDump?.sendable },
             {
               timeoutMs: 180_000,
             },
@@ -267,14 +300,20 @@ export const TelemetryCards = memo(function TelemetryCards() {
               </ul>
               <p>{BUNDLE_EXCLUDED}</p>
             </details>
-            <label className="telemetry-dumps">
-              <input
-                type="checkbox"
-                checked={dumps}
-                onChange={(event) => setDumps(event.target.checked)}
-              />
-              {DUMP_NOTE}
-            </label>
+            {newestDump?.sendable ? (
+              <label className="telemetry-dumps">
+                <input
+                  type="checkbox"
+                  checked={dumps}
+                  onChange={(event) => setDumps(event.target.checked)}
+                />
+                {`${dumpLabel(newestDump)} — ${DUMP_NOTE}`}
+              </label>
+            ) : newestDump ? (
+              <p className="telemetry-dumps">
+                {`크래시 덤프(약 ${Math.round(newestDump.bytes / 1024 / 1024)} MB)는 보낼 수 있는 크기를 넘어 이 PC에만 둡니다. 설정 › 상태 · 오류의 [진단 묶음 내보내기]로 묶을 수 있습니다.`}
+              </p>
+            ) : null}
             <div className="telemetry-actions">
               <button type="button" disabled={busy} onClick={() => void answer(false)}>
                 보내지 않음

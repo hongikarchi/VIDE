@@ -51,6 +51,9 @@ try {
     JSON.parse(await readFile(join(directory, 'telemetry.json'), 'utf8')).consent,
     'granted',
   );
+  // A crash dump ProcDump left (T-191): the settings bundle offers the newest one, ticked.
+  await mkdir(join(directory, 'crashdumps'), { recursive: true });
+  await writeFile(join(directory, 'crashdumps', 'node.exe_1.dmp'), Buffer.alloc(2 * 1024 * 1024));
   // Settings › 상태 · 오류: the switch is next to [진단 묶음 내보내기].
   await page.locator('#workspace-settings').click();
   const settings = page.getByRole('dialog', { name: '상태 및 설정', exact: true });
@@ -58,6 +61,13 @@ try {
   const toggle = settings.locator('#telemetry-consent');
   await page.waitForFunction(() => document.querySelector('#telemetry-consent')?.checked === true);
   assert.equal(await settings.locator('#diagnostic-bundle').isVisible(), true);
+  const withDump = settings.locator('#diagnostic-bundle-dump');
+  await withDump.waitFor();
+  assert.equal(await withDump.isChecked(), true, 'the local bundle takes the dump by default');
+  assert.match(
+    await settings.locator('.settings-diagnostics').textContent(),
+    /크래시 덤프 포함 \(약 2 MB\)/,
+  );
   assert.match(await settings.locator('.settings-telemetry').textContent(), /보내는 중/);
   await settings.locator('#telemetry-preview').click();
   const preview = await settings.locator('.telemetry-preview').textContent();
@@ -97,6 +107,7 @@ try {
   assert.match(await crash.textContent(), /0xC0000409/);
   assert.match(await crash.textContent(), /최근 3일의 진단 기록/);
   assert.equal(await crash.getByRole('checkbox').isChecked(), false, 'dumps only when ticked');
+  assert.match(await crash.textContent(), /크래시 덤프 포함 \(약 2 MB\)/);
   await page.screenshot({ path: join(evidence, 'crash-1440.png') });
   await crash.getByRole('button', { name: '보내기', exact: true }).click();
   await crash.getByText(/지금은 사이트가 진단 묶음을 받지 않습니다/).waitFor();

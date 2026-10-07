@@ -10,14 +10,21 @@ import {
 import { setTheme } from '../theme.ts';
 import { renderLinkCard, renderPanelHeader } from '../host-panel.tsx';
 import { element as $, readableError } from '../elements.ts';
-import { api, connect, errors, sharedProjectList } from '../gateway.ts';
+import { api, connect, errors, projectSchema, sharedProjectList } from '../gateway.ts';
+import { PROJECT_GONE_TEXT, watchProjectGone } from '../project-gone.ts';
 import { mountRemoteProject } from '../remote-project.tsx';
 import { mountFirstRun } from '../first-run.tsx';
 import { attachHostSelection, objects, models } from '../model.ts';
 import { displayIdOf } from '../layers.ts';
 import { mountUsageBars } from '../usage-bars.ts';
 import { modelsSchema, requestMessage } from '../workspace-data.ts';
-import { migrateProjectDraft, lastConversation, draftKey, restoreDraft } from '../draft-storage.ts';
+import {
+  migrateProjectDraft,
+  lastConversation,
+  draftKey,
+  removeProjectDrafts,
+  restoreDraft,
+} from '../draft-storage.ts';
 import { initializeWorkspaces } from '../workspaces.ts';
 import { remoteSession } from '../remote-panel.ts';
 import { connectionRecovery, probeEngine } from '../connection-recovery.ts';
@@ -506,6 +513,20 @@ export async function boot() {
   });
   onReconnect(() => recovery.retry());
   window.addEventListener('focus', () => recovery.retry());
+  // The open project removed elsewhere (site clean-up, another window, T-191): back to the list.
+  watchProjectGone({
+    current: () => sessionState.project?.id,
+    listProjects: async () => z.array(projectSchema).parse(await api('/projects')),
+    leave: (id) => {
+      removeProjectDrafts(id);
+      message(PROJECT_GONE_TEXT);
+      setTimeout(() => {
+        const query = new URLSearchParams(location.search);
+        query.delete('project');
+        location.search = query.toString();
+      }, 1500);
+    },
+  });
   window.addEventListener('vide:connection-lost', (event) => {
     sessionState.ready = false;
     const code = (event as CustomEvent<string>).detail;

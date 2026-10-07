@@ -31,9 +31,9 @@ export const BUNDLE_CONTENTS = [
   '설정 요약(경로는 지운 것)과 데이터 폴더의 파일 이름·크기',
 ];
 export const BUNDLE_EXCLUDED =
-  '요청 글·파일 내용·모델·로그인 정보·작업 DB는 넣지 않습니다. 충돌 덤프는 아래에서 고를 때만 넣습니다.';
+  '요청 글·파일 내용·모델·로그인 정보·작업 DB는 넣지 않습니다. 크래시 덤프는 아래에서 고를 때만 최신 하나를 넣습니다.';
 export const DUMP_NOTE =
-  '충돌 덤프 포함 — 수백 MB이고 작업 엔진의 메모리 내용(열려 있던 요청 글·모델 일부)이 들어 있을 수 있습니다.';
+  '작업 엔진의 메모리 내용(열려 있던 요청 글·모델 일부)이 들어 있을 수 있습니다.';
 
 /**
  * Project conversation records (ADR-037 4, SPEC-04.12): not part of the reports above, but the

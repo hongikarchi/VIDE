@@ -39,6 +39,28 @@ const FORBIDDEN =
   /(^|[\\/])(launch\.json|local-session\.key|remote-host\.json|typesafe\.env|[^\\/]*\.sqlite[^\\/]*|cli-profiles)([\\/]|$)/i;
 const KEEP_BUNDLES = 3;
 
+export interface DumpInfo {
+  name: string;
+  bytes: number;
+  modified: string;
+}
+
+/** The crash dumps in <data>/crashdumps, newest first (ProcDump keeps three, T-191). */
+export async function listDumps(directory: string): Promise<DumpInfo[]> {
+  const folder = join(directory, 'crashdumps');
+  const dumps = await Promise.all(
+    (await readdir(folder).catch(() => []))
+      .filter((name) => name.toLowerCase().endsWith('.dmp'))
+      .map(async (name) => {
+        const info = await stat(join(folder, name)).catch(() => undefined);
+        return info && { name, bytes: info.size, modified: info.mtime.toISOString() };
+      }),
+  );
+  return dumps
+    .filter((dump): dump is DumpInfo => !!dump)
+    .sort((a, b) => b.modified.localeCompare(a.modified));
+}
+
 interface Entry {
   name: string;
   data?: Buffer;
@@ -78,21 +100,13 @@ export async function writeDiagnosticBundle(options: BundleOptions) {
         : { name, bytes: info.size, modified: info.mtime.toISOString() },
     );
   }
-  const dumpFolder = join(options.directory, 'crashdumps');
-  const dumps = (
-    await Promise.all(
-      (await readdir(dumpFolder).catch(() => []))
-        .filter((name) => name.toLowerCase().endsWith('.dmp'))
-        .map(async (name) => {
-          const info = await stat(join(dumpFolder, name)).catch(() => undefined);
-          return info && { name, bytes: info.size, modified: info.mtime.toISOString() };
-        }),
-    )
-  )
-    .filter((dump) => !!dump)
-    .sort((a, b) => b.modified.localeCompare(a.modified));
+  // Only the newest dump, and only when asked (T-191): one full dump is hundreds of MB.
+  const dumps = await listDumps(options.directory);
   if (options.dumps && dumps[0])
-    entries.push({ name: `crashdumps/${dumps[0].name}`, file: join(dumpFolder, dumps[0].name) });
+    entries.push({
+      name: `crashdumps/${dumps[0].name}`,
+      file: join(options.directory, 'crashdumps', dumps[0].name),
+    });
   const plugins = await listTree(join(options.directory, 'plugins'), 2);
   const about = {
     createdAt: now.toISOString(),

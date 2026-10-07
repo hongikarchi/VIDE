@@ -20,7 +20,7 @@ import { readFile } from 'node:fs/promises';
 import { arch, cpus, hostname, platform, release, totalmem, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { writeDiagnosticBundle } from './diagnostic-bundle.ts';
+import { listDumps, writeDiagnosticBundle } from './diagnostic-bundle.ts';
 import { BENIGN_EXITS, summarizeLogs, type Summary } from './telemetry-summary.ts';
 
 export type Consent = 'granted' | 'denied';
@@ -71,6 +71,13 @@ const DROPPED_STATUS = new Set([400, 413, 415, 422]);
 /** A diagnostic bundle sent after a crash: without a dump, and with one. */
 export const BUNDLE_MAX_BYTES = 8 * 1024 * 1024;
 export const BUNDLE_WITH_DUMP_MAX_BYTES = 95 * 1024 * 1024;
+/**
+ * A dump goes to the site only when it fits the site's limit with the logs beside it (T-191; the
+ * site's own limit is in src/sharing/telemetry.ts). Full dumps are usually larger: they stay on
+ * this PC, in a bundle made with [진단 묶음 내보내기].
+ */
+export const dumpSendable = (bytes: number) =>
+  bytes + BUNDLE_MAX_BYTES <= BUNDLE_WITH_DUMP_MAX_BYTES;
 
 export interface TelemetryView {
   consent: Consent | null;
@@ -386,6 +393,11 @@ export class Telemetry {
     } catch {
       /* Best effort. */
     }
+    // A dump over the site's limit is left out (the logs still go) instead of failing the send.
+    const newest = dumps ? (await listDumps(this.options.directory))[0] : undefined;
+    const dumpSkipped = !!newest && !dumpSendable(newest.bytes);
+    if (dumpSkipped || !newest) dumps = false;
+    const skipped = dumpSkipped ? { dumpSkipped: true as const } : {};
     const bundle = await writeDiagnosticBundle({
       directory: this.options.directory,
       days: 3,
@@ -398,6 +410,7 @@ export class Telemetry {
         reason: 'BUNDLE_TOO_LARGE',
         file: bundle.file,
         bytes: bundle.bytes,
+        ...skipped,
       };
     let status: number;
     let code: string | undefined;
@@ -425,15 +438,17 @@ export class Telemetry {
         reason: 'NETWORK_UNAVAILABLE',
         file: bundle.file,
         bytes: bundle.bytes,
+        ...skipped,
       };
     }
     if (status >= 200 && status < 300)
-      return { sent: true as const, file: bundle.file, bytes: bundle.bytes };
+      return { sent: true as const, file: bundle.file, bytes: bundle.bytes, ...skipped };
     return {
       sent: false as const,
       reason: code ?? `HTTP_${status}`,
       file: bundle.file,
       bytes: bundle.bytes,
+      ...skipped,
     };
   }
 }
