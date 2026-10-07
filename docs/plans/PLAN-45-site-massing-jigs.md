@@ -2,7 +2,7 @@
 id: PLAN-45
 title: 규모검토 jig 세 개 — 사이트 모델링·건축 가능 영역과 매스·건축개요 (T-203~T-214)
 status: draft
-version: 0.3
+version: 0.4
 updated: 2026-10-07
 owner: agent:claude
 related: [SPEC-12, SPEC-07, SPEC-02, SPEC-08, SPEC-13, ARCH-01, ARCH-03, DESIGN, ADR-026, ADR-030, ADR-040, RESEARCH-04, RESEARCH-16, FR-09, FR-12, FR-14, FR-18, FR-21, FR-24, FR-25, C-05, OQ-08, OQ-09, OQ-16]
@@ -43,7 +43,7 @@ related: [SPEC-12, SPEC-07, SPEC-02, SPEC-08, SPEC-13, ARCH-01, ARCH-03, DESIGN,
 ## T-203 SPIKE · 공공 자료 접근
 
 - **기준:** SPEC-12.3·12.4, ADR-040, OQ-09. RESEARCH-04 §4 공공 데이터 수집 행.
-- **위치:** 코드 `tools/spikes/2026-10-xx-public-site-data/`, 기록 `docs/tdd/SPIKE-2026-10-xx-public-site-data.md`(실행하는 날짜로 이름).
+- **위치:** 코드 `tools/spikes/2026-10-07-public-site-data/`, 기록 [SPIKE-2026-10-07-public-site-data](../tdd/SPIKE-2026-10-07-public-site-data.md).
 - **질문:**
   1. 주소 → PNU: 주소 검색 API와 VWorld 검색 중 어느 것이 산 지번·도로명 주소·여러 후보를 안정적으로 주는가.
   2. 필지 경계·지목: VWorld 연속지적 레이어를 PNU 필터·범위 필터로 받을 때의 좌표계·개수 상한·페이지 나눔.
@@ -217,7 +217,7 @@ T-204 SPIKE 기하 ─ T-208 만들기 틀 ┘                            │
 
 | 티켓 | 상태 | 증거 |
 |---|---|---|
-| T-203 | 계획 | — |
+| T-203 | 진행 — 출처 조사·재사용 지도·키 없는 호출·어댑터 후보 완료, 키 실호출 대기(키를 PC 키 파일에 넣는 동작이 권한 검사에서 막힘) | [SPIKE-2026-10-07-public-site-data](../tdd/SPIKE-2026-10-07-public-site-data.md), `tools/spikes/2026-10-07-public-site-data/` |
 | T-204 | 계획 | — |
 | T-205~T-214 | 계획(PRD 채택 완료, 사용자 계획 검토 대기) | — |
 
