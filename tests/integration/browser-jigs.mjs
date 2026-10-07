@@ -410,38 +410,67 @@ try {
   assert.equal(review.files[0].name, 'sync-jig.json');
   assert.deepEqual(table.relation.translationMm, [-125000, -48000]);
   assert.equal(table.rows[0].deviationMm, 0.8);
-  // The drawing follows the model: the 0.8 mm beam moves, the missing beam is added.
+  // The drawing follows the model through the engine's backflow apply (T-233, SPEC-05.8 3): the
+  // chosen rows go to `…/drawing/backflow/sync` (mocked here), not to the conversation; the answer
+  // shows the rows applied and [CAD 반영 되돌리기] undoes that one apply.
+  const backflow = [];
+  const applyId = 'a'.repeat(24);
+  await page.route('**/api/v1/projects/*/drawing/backflow/sync', (route) => {
+    backflow.push(JSON.parse(route.request().postData()));
+    return route.fulfill({
+      json: {
+        state: 'applied',
+        id: applyId,
+        refused: [],
+        files: [
+          {
+            path: 'C:\\합성\\plan.dwg',
+            mode: 'open',
+            written: null,
+            rows: ['R1', 'R2'],
+            check: { ok: true, differences: 0 },
+            dimensions: [],
+            undoId: 'u1',
+          },
+        ],
+      },
+    });
+  });
+  const undone = [];
+  await page.route(`**/api/v1/projects/*/drawing/backflow/apply/${applyId}/undo`, (route) => {
+    undone.push(route.request().url());
+    return route.fulfill({ json: { files: [{ path: 'plan.dwg', undone: true, reason: null }] } });
+  });
+  const conversationPosts = posted.length;
   await dialog.getByLabel('R1 선택').check();
   await dialog.getByLabel('R2 선택').check();
   await dialog.getByRole('button', { name: /CAD를 Rhino에 맞춤/ }).click();
-  await dialog.locator('.jig-sync [role=status]', { hasText: '반영 요청' }).waitFor();
-  const cad = posted.at(-1);
-  assert.equal(cad.host, 'zwcad');
-  assert.equal(cad.baseRequestId, 'cad-sync');
-  assert.equal(cad.permission, 'candidate');
-  const edits = JSON.parse(cad.files[0].text);
-  assert.deepEqual(edits[0], {
-    row: 'R1',
-    action: 'move-ends',
-    handle: '22',
-    from: [
-      [0, 6000, 0],
-      [6000, 6000, 0],
+  await dialog
+    .locator('.jig-sync [role=status]', { hasText: '열린 도면에 2행을 반영했습니다' })
+    .waitFor();
+  assert.equal(posted.length, conversationPosts, 'no AI request for the CAD side');
+  const [cad] = backflow;
+  assert.equal(cad.rhino, 'rhino-sync');
+  assert.equal(cad.cad, 'cad-sync');
+  assert.deepEqual(Object.keys(cad.relation).sort(), ['dz', 'rotation', 'translation']);
+  assert.deepEqual(
+    cad.rows.map((row) => [row.id, row.state, row.cad ?? null, row.layer ?? null]),
+    [
+      ['R1', 'offset', '22', null],
+      ['R2', 'rhino-only', null, 'S-BEAM'],
     ],
-    to: [
-      [0, 6000, 0],
-      [6000, 6000.8, 0],
-    ],
-  });
-  assert.deepEqual(edits[1], {
-    row: 'R2',
-    action: 'add-line',
-    layer: 'S-BEAM',
-    points: [
-      [0, 9000, 0],
-      [6000, 9000, 0],
-    ],
-  });
+  );
+  assert.ok(cad.rows.every((row) => typeof row.rhino === 'string'));
+  assert.match(
+    await dialog.locator('.jig-sync [role=status]').textContent(),
+    /형식 보존 확인 이상 없음/,
+  );
+  await dialog.getByRole('button', { name: 'CAD 반영 되돌리기', exact: true }).click();
+  await dialog.locator('.jig-sync [role=status]', { hasText: '반영을 되돌렸습니다.' }).waitFor();
+  assert.equal(undone.length, 1);
+  await dialog
+    .getByRole('button', { name: 'CAD 반영 되돌리기', exact: true })
+    .waitFor({ state: 'detached' });
   // The model follows the drawing: the beam's end returns to the drawing, in model coordinates.
   await dialog.getByLabel('R2 선택').uncheck();
   await dialog.getByRole('button', { name: /Rhino를 CAD에 맞춤/ }).click();
