@@ -2,8 +2,8 @@
 id: INDEX-SPECS
 title: VIDE 기능 명세 · 사용자 작업과 기능 목록
 status: review
-version: 0.15
-updated: 2026-10-06
+version: 0.16
+updated: 2026-10-07
 owner: user
 related: []
 ---
@@ -30,6 +30,7 @@ VIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 �
 | 목적별 대화 여러 개를 동시에 진행 | [SPEC-02](SPEC-02-execution-candidates.md) · SPEC-02.19 | 대화가 앞 턴을 이어가고, 목적이 다른 대화가 서로 막지 않으며, 같은 문서 쓰기는 차례를 기다리는가 |
 | 프로젝트 자료를 찾고 확정해 설정값의 근거로 쓰기 | [SPEC-08](SPEC-08-project-facts.md) · SPEC-08.1 | 2·3글자 검색, 사람만 확정·오염 표시, 제외된 진술이 도구·근거에서 빠지고 AI가 도구가 준 진술만 인용하는가 |
 | 구성원과 노트·협의 사항·매일 일지를 함께 쓰기 | [SPEC-10](SPEC-10-shared-notes.md) · SPEC-10.1 | 같은 노트를 동시에 고쳐도 모두 합쳐지고, 협의 사항의 체크 항목이 할 일로 가며, AI가 PC 사본을 읽는가 |
+| 마감 코드를 고르고 실마다 배정해 실 마감표·마감 일람표 내기 | [SPEC-11](SPEC-11-finish-schedule.md) · SPEC-11.1 | 부위가 다른 코드가 실에 들어가지 않고, 조절한 두께가 표·CSV에 그대로 나오며, 실제 프로젝트 자료가 라이브러리에 없는가 |
 
 ## 구체적인 첫 지원안과 확인된 사실
 
@@ -54,17 +55,17 @@ VIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 �
 | FR-11 | [SPEC-00](SPEC-00-common.md) · [SPEC-02](SPEC-02-execution-candidates.md) | — |
 | FR-12 | [SPEC-00](SPEC-00-common.md) · [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
 | FR-13 | [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
-| FR-14 | [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
+| FR-14 | [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) · [SPEC-11](SPEC-11-finish-schedule.md)(SPEC-11.5) | — |
 | FR-15 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
 | FR-16 | [SPEC-00](SPEC-00-common.md) · [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) · [SPEC-10](SPEC-10-shared-notes.md)(SPEC-10.6) | — |
 | FR-17 | [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
 | FR-18 | [SPEC-00](SPEC-00-common.md) · [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-08](SPEC-08-project-facts.md)(SPEC-08.5·7) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
 | FR-19 | [SPEC-00](SPEC-00-common.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-10](SPEC-10-shared-notes.md) | — |
 | FR-20 | 후속 확장 | PRD §14의 이번 범위 밖 |
-| FR-21 | 후속 확장 | PRD §14의 이번 범위 밖(구조 분석은 FR-23) |
+| FR-21 | 후속 확장 | PRD §14의 이번 범위 밖(구조 분석은 FR-23). 마감 일람표 jig [SPEC-11](SPEC-11-finish-schedule.md)은 2026-10-07 사용자가 고른 한정 범위이며 FR-21의 범위 판단은 PRD가 소유한다 |
 | FR-22 | [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
 | FR-23 | [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) | 구조 분석 jig와 프로젝트 구조 jig(입력 조립·진단·배치·간섭·단면·일람표·Rhino에 만들기) |
-| FR-24 | [SPEC-07](SPEC-07-jig-platform.md) · [SPEC-05](SPEC-05-extensions-install.md)(SPEC-05.8) · [SPEC-08](SPEC-08-project-facts.md)(SPEC-08.6) · [SPEC-02](SPEC-02-execution-candidates.md)(SPEC-02.13·17·19) · [SPEC-06](SPEC-06-structure-analysis.md) | jig 플랫폼: 작업본·형식·실행·Rhino에 만들기·만들기 대화 |
+| FR-24 | [SPEC-07](SPEC-07-jig-platform.md) · [SPEC-05](SPEC-05-extensions-install.md)(SPEC-05.8) · [SPEC-08](SPEC-08-project-facts.md)(SPEC-08.6) · [SPEC-02](SPEC-02-execution-candidates.md)(SPEC-02.13·17·19) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-11](SPEC-11-finish-schedule.md) | jig 플랫폼: 작업본·형식·실행·Rhino에 만들기·만들기 대화 |
 | FR-25 | [SPEC-02](SPEC-02-execution-candidates.md)(SPEC-02.9·17·19·20) · [SPEC-07](SPEC-07-jig-platform.md)(SPEC-07.18) · [SPEC-08](SPEC-08-project-facts.md)(SPEC-08.7) | 대화 세션·동시 진행·말로 하는 경로 판정 |
 | <ins>FR-26</ins> | <ins>[SPEC-10](SPEC-10-shared-notes.md)</ins> | <ins>공유 노트·협의 사항·일지 — PRD 첨삭 제안(R-77) 수락 전</ins> |
 
