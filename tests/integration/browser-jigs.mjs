@@ -246,7 +246,7 @@ try {
   // The list shows the official catalogue: the working jigs and the planned ones.
   const official = dialog.locator('.jig-card[data-source="official"]');
   await official.first().waitFor();
-  assert.equal(await official.count(), 11);
+  assert.equal(await official.count(), 12);
   assert.equal(
     await dialog.locator('.jig-card[data-source="official"][data-status="planned"]').count(),
     8,

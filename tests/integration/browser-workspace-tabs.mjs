@@ -149,7 +149,7 @@ try {
   const sources = dialog.getByRole('navigation', { name: '출처' });
   await sources.getByRole('button', { name: /^공식/ }).click();
   assert.equal(await dialog.locator('.jig-card[data-source="project"]').count(), 0);
-  assert.equal(await official.count(), 11);
+  assert.equal(await official.count(), 12);
   await sources.getByRole('button', { name: /^이 프로젝트의 jig/ }).click();
   assert.equal(await official.count(), 0);
   await sources.getByRole('button', { name: /^전체/ }).click();
