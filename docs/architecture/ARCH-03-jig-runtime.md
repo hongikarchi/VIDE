@@ -2,8 +2,8 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 0.94
-updated: 2026-10-02
+version: 0.95
+updated: 2026-10-08
 owner: agent:claude
 related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, RESEARCH-10, RESEARCH-12]
 ---
@@ -25,7 +25,7 @@ related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-
 | 단계 실행 | `src/jigs/runtime/graph.ts`, `runner.ts`, `child-runner.ts`, `compute-box.ts` | 단계 DAG·캐시, 실행기 규약, 출처별 실행기(§6) |
 | 점검 | `src/jigs/runtime/gates.ts` | 점검 구현 전부. jig는 이름으로 고른다(§11) |
 | 묶기·점검 명령 | `src/jigs/runtime/pack.ts`, `npm run jig:pack`·`jig:validate`·`jig:test` | 제작 대화 도구 `jig_validate`·`jig_test`와 같은 코드 |
-| 공식 라이브러리 | `src/jigs/official/geometry-kit/`, `structure-analysis/`, `project-facts/` | 빌드에 포함. 구조 해석은 기존 `src/jigs/structure/core.ts`의 코어 연결과 ARCH-02 계약을 재사용 |
+| 공식 라이브러리 | `src/jigs/official/geometry-kit/`, `structure-analysis/`, `project-facts/`, `site-data/` | 빌드에 포함. 구조 해석은 기존 `src/jigs/structure/core.ts`의 코어 연결과 ARCH-02 계약을 재사용. `site-data/shp/`는 SHP 넣기와 좌표계(§8.1) |
 | Rhino에 만들기 | `src/jigs/bake/bake.ts`, `data-block.ts`, `plan.ts`, `templates/*.cs` | 공식 틀·데이터 블록·만들기 기록·바로 적용과 되돌리기(§9) |
 | 서버 경로 | `src/server/jig-routes.ts` | jig 경로 전부(§7). `server.ts`는 위임 한 줄 |
 | 화면 | `src/ui/jig-panel/`, `src/ui/kit/`(등록부 `registry.ts`) | 선언형 패널 렌더러와 공식 부품. 부품 목록·표현의 정본은 Design |
@@ -458,6 +458,21 @@ jig 입력은 표시용 Sync가 아니라 jig 입력 읽기로 받는다.
 - 지문은 늘 표시 경로(`DisplayScene`)의 `geometryHash`(테셀레이션 결과의 SHA-256)다. 작업 실행본 경로(`WorkerScene`)의 `geometry.ToJSON` 해시와 섞지 않는다.
 
 표시용 Sync의 범위 수(꺼진 레이어·블록 내부 제외 수)와 레이어 표 확장은 ARCH-01 §Rhino 표시 페이지 취득의 계약이다.
+
+### 8.1 SHP 넣기와 좌표계 (`vide/site-data` · `shp/`)
+
+사이트 모델링(SPEC-12.4·12.5)이 사람이 넣은 수치지형도·연속지적도 SHP를 읽는 물리 계약이다. 코드는 `src/jigs/official/site-data/shp/`(순수 TS, node: 가져오기 없음)이고 PLAN-45 T-206이 만들었다. 출처는 S-02 Site Maker의 importer와 S-04 검토엔진 `geo.js`를 TS로 다시 쓴 것이다.
+
+- **입력:** `{name, bytes}` 목록. `.zip`은 한 단계 풀고(stored·deflate, `DecompressionStream`), 확장자를 뺀 경로가 같은 파일을 한 레이어로 묶는다. `.shp`·`.dbf`·`.prj` 가운데 하나라도 없으면 `MISSING_PAIR`와 빠진 확장자로 그 레이어만 거절한다. `.shx`는 읽지 않는다. 형상 수와 속성 수가 다르면 `SHP_DBF_MISMATCH`.
+- **형상:** 점·다중점·선·면과 각 Z·M 형(1·3·5·8·11·13·15·18·21·23·25·28)을 읽고 M은 버린다. 다중패치(31) 등은 `SHP_UNSUPPORTED_TYPE`.
+- **좌표계 판별:** `.prj`(ESRI·OGC WKT1, WKT2)를 구문 분석해 투영(횡단 메르카토르만)·타원체·중앙 자오선·축척계수·원점 위도·가산값으로 판별한다. 이름은 보지 않는다. 알려진 값과 같으면 EPSG를 붙인다: 5179(UTM-K), 5185~5188(서부·중부·동부·동해 원점, FN 600000), 5180~5184(같은 원점의 FN 500000·제주 550000), 32651·32652(UTM 51N·52N), 4326·4737(경위도). 매개변수가 다 있는 GRS80·WGS84 TM은 EPSG 없이 쓴다. GRS80과 WGS84는 같은 것으로 본다(데이텀 변환 없음).
+- **거절:** Bessel 타원체(이름·장반경 6377397.155·Tokyo/Korean Datum 1985 데이텀) `CRS_BESSEL`, 그 밖의 타원체·그리니치 아닌 본초 자오선 `CRS_UNSUPPORTED_DATUM`, TM 아닌 투영 `CRS_UNSUPPORTED_PROJECTION`, m 아닌 단위 `CRS_UNSUPPORTED_UNIT`, `.prj` 없음·빈 파일 `CRS_MISSING`, 읽을 수 없음 `CRS_UNREADABLE`. 거절은 그 레이어만이며 나머지는 계속 넣는다.
+- **투영식:** Krüger 급수 6차(Karney 2011). 정·역변환과 격자 수렴각 γ를 같은 급수로 낸다. γ는 진북에서 도북까지 시계 방향 각(중앙 자오선 동쪽이 양수)이고 진방위 = 도방위 + γ다.
+- **인코딩:** `.cpg`가 밝힌 것(UTF-8·EUC-KR/CP949 계열·Latin-1 이름들), 없으면 DBF 언어 드라이버 바이트 0x79(949)를 EUC-KR로 읽는다. 둘 다 없으면 엄격한 UTF-8로만 읽고 경고를 단다. UTF-8이 아니면 `ENCODING_UNDECLARED`로 거절하고, 모르는 선언은 `ENCODING_UNSUPPORTED`다.
+- **한 좌표계·한 기준점:** 대상 좌표계는 호출자가 고르거나(평면 좌표계만) 첫 연속지적도 레이어 → 첫 평면 레이어 → 경위도뿐이면 경도에 맞는 5185~5188 순으로 정한다. 기준점은 호출자가 주거나, 거절되지 않은 모든 레이어(쓰지 않는 레이어 포함)의 범위 네 모서리를 옮긴 범위의 중심을 m 단위로 내린 값이다. 레이어 순서·선택과 무관하다.
+- **출력:** `{frame, layers[], ignored[], rejected[]}`. `frame = {crs, origin(f64 3), convergenceDeg, trueNorth(로컬 단위 벡터), originLatLon}`. 좌표는 기준점에서의 f64 로컬 m이고, Rhino로 넘길 때만 `packOffsets`로 f32 차이가 된다(§9.2, SPIKE-2026-10-07-envelope). 레이어는 역할(`building`·`road-boundary`·`contour`·`spot-height`·`parcel`)·원 좌표계·옮김 여부·원 격자와의 회전각·인코딩·필드 한글 이름·개수(`records`·`deleted`·`nullShapes`·`features`·`reversedRings`·`skippedParts`)·로컬 범위·경고를 갖는다. 면은 포함 깊이로 바깥 고리·구멍을 나누고 바깥 반시계·구멍 시계로 맞추며 닫는 점을 뺀다. 형상마다 원 레코드 번호·원 속성·코드값 한글 뜻을 남기고, 건물은 층수·종류·용도·이름·무벽건물(BDK005) 표시를, 등고선은 `CONT`, 표고점은 `NUME`(없으면 `ALTI`, 그다음 Z)을 높이로 둔다.
+- **코드 사전:** `site-data/assets/ngii-codes.json`(연속수치지형도 데이터 설명서 Ver 5.1.1에서 뽑은 레이어 107·속성 66·코드값 503·통합코드 423), 출처·해시는 `site-data/assets/NOTICE.json`. 쓰는 레이어는 파일 이름의 지형지물 코드로 정한다: B0010000 건물, A0010000 도로경계, F0010000 등고선, F0020000 표고점. 연속지적도는 `PNU`와 `JIBUN`(또는 `BCHK`) 필드로 알아본다. 나머지는 `ignored`로만 보인다.
+- **보관:** 이 모듈은 아무것도 저장하지 않는다. 넣은 파일과 결과는 호출하는 jig(T-207)가 작업본 사본으로만 둔다. 라이브러리 등록(`LIBRARY_MODULES`의 `vide/site-data`)은 공공 자료 어댑터와 함께 T-205·T-207에서 한다.
 
 ## 9. Rhino에 만들기
 

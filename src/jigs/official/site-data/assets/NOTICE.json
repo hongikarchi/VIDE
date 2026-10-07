@@ -1,0 +1,11 @@
+{
+  "assets": [
+    {
+      "file": "ngii-codes.json",
+      "content": "연속수치지형도 레이어 107 · 속성항목 66 · 코드값 503 · 통합코드 423의 한글 이름",
+      "source": "국토지리정보원, 연속수치지형도 데이터 설명서 Ver 5.1.1 (공개 문서)",
+      "extractedBy": "S-02 Site Maker data/ngii_spec.json (RESEARCH-04 §1), PLAN-45 T-206에서 그대로 들임",
+      "sha256": "c96a95a0ae514e7d36f6167c081c9355d59b5c8a111d8401ecba418e9e92a384"
+    }
+  ]
+}

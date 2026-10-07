@@ -2,8 +2,8 @@
 id: PLAN-45
 title: 규모검토 jig 세 개 — 사이트 모델링·건축 가능 영역과 매스·건축개요 (T-203~T-214)
 status: draft
-version: 0.6
-updated: 2026-10-07
+version: 0.7
+updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-12, SPEC-07, SPEC-02, SPEC-08, SPEC-13, ARCH-01, ARCH-03, DESIGN, ADR-026, ADR-030, ADR-040, RESEARCH-04, RESEARCH-16, FR-09, FR-12, FR-14, FR-18, FR-21, FR-24, FR-25, C-05, OQ-08, OQ-09, OQ-16]
 ---
@@ -219,7 +219,8 @@ T-204 SPIKE 기하 ─ T-208 만들기 틀 ┘                            │
 |---|---|---|
 | T-203 | 완료(2026-10-08) — 키 실호출 43단계 응답(공개 지점 2곳). 어댑터 6개 동작 확인, 건물 높이용 `LT_C_BLDGINFO` 추가 | [SPIKE-2026-10-07-public-site-data](../tdd/SPIKE-2026-10-07-public-site-data.md), `tools/spikes/2026-10-07-public-site-data/` |
 | T-204 | 완료(SPIKE) — 엔진(TS) 계산 + Rhino는 평면 면 목록 만들기만(`vide.bake.brep-faces@1`), Rhino 불리언 틀 불필요. Rhino 결합은 1e-5 m, `MergeCoplanarFaces` 쓰지 않음. 점검은 닫힘 + `SolidOrientation` Outward·부피 양수·엔진 부피 대조 | [SPIKE-2026-10-07-envelope](../tdd/SPIKE-2026-10-07-envelope.md), `tools/spikes/2026-10-07-envelope/` |
-| T-205~T-214 | 계획(PRD 채택 완료, 사용자 계획 검토 대기) | — |
+| T-206 | 완료(2026-10-08) — SHP·DBF·PRJ·CPG·ZIP 읽기(새 의존성 없음), `.prj` 매개변수 판별(5179·5180~5188·32651·32652·4326·4737, 매개변수가 다 있는 GRS80 TM), Bessel·다른 타원체·TM 아닌 투영·m 아닌 단위 거절, Krüger 6차 TM과 격자 수렴각, 한 좌표계·한 정수 m 기준점의 로컬 f64 좌표 + `packOffsets` f32 전달, 포함 깊이로 고리 정리(바깥 반시계·구멍 시계), `.cpg`/DBF 0x79 인코딩(선언 없으면 엄격 UTF-8), 국토지리정보원 코드 사전(건물·도로경계·등고선·표고점, 연속지적도 필지). 공개 기준점(OS GB Annex C ±1 mm, EPSG GN7-2 ±1 cm) 대조, 5179→5186 합성 대지 어긋남 < 1 cm. 라이브러리 등록은 T-205·T-207 | `src/jigs/official/site-data/shp/`, `site-data/assets/`(사전·NOTICE), `tests/core/site-shp.test.mjs`(12건), SPEC-12.4·12.5, ARCH-03 §8.1 |
+| T-205·T-207~T-214 | 계획(2026-10-08 사용자 1단계 착수 승인) | — |
 
 ## 결정이 필요한 질문
 
