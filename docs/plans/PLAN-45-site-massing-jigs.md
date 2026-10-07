@@ -2,7 +2,7 @@
 id: PLAN-45
 title: 규모검토 jig 세 개 — 사이트 모델링·건축 가능 영역과 매스·건축개요 (T-203~T-214)
 status: draft
-version: 0.4
+version: 0.5
 updated: 2026-10-07
 owner: agent:claude
 related: [SPEC-12, SPEC-07, SPEC-02, SPEC-08, SPEC-13, ARCH-01, ARCH-03, DESIGN, ADR-026, ADR-030, ADR-040, RESEARCH-04, RESEARCH-16, FR-09, FR-12, FR-14, FR-18, FR-21, FR-24, FR-25, C-05, OQ-08, OQ-09, OQ-16]
@@ -57,7 +57,7 @@ related: [SPEC-12, SPEC-07, SPEC-02, SPEC-08, SPEC-13, ARCH-01, ARCH-03, DESIGN,
 ## T-204 SPIKE · 가능 영역·일조 사선 외피의 기하
 
 - **기준:** SPEC-12.8·12.9, RESEARCH-04 J-04(뒤집힌 솔리드가 폐합 검사를 통과한 사례, 캡슐 보정, 지적 기반 일조 기준선).
-- **위치:** 코드 `tools/spikes/2026-10-xx-envelope-geometry/`, 기록 `docs/tdd/SPIKE-2026-10-xx-envelope-geometry.md`.
+- **위치:** 코드 `tools/spikes/2026-10-07-envelope/`, 기록 [SPIKE-2026-10-07-envelope](../tdd/SPIKE-2026-10-07-envelope.md).
 - **질문:**
   1. 2D 후퇴·교집합: `vide/geometry-kit`의 다각형 연산으로 오목한 대지·가각·구간별 거리 후퇴가 되는가, 새 의존성이 필요한가.
   2. 일조 사선 외피를 엔진(TS)에서 평면 면 목록으로 만들고 닫힌 다면체로 검사할 수 있는가. 기준선이 여러 구간일 때 합치기와 꺾인 경계의 처리.
@@ -218,7 +218,7 @@ T-204 SPIKE 기하 ─ T-208 만들기 틀 ┘                            │
 | 티켓 | 상태 | 증거 |
 |---|---|---|
 | T-203 | 진행 — 출처 조사·재사용 지도·키 없는 호출·어댑터 후보 완료, 키 실호출 대기(키를 PC 키 파일에 넣는 동작이 권한 검사에서 막힘) | [SPIKE-2026-10-07-public-site-data](../tdd/SPIKE-2026-10-07-public-site-data.md), `tools/spikes/2026-10-07-public-site-data/` |
-| T-204 | 계획 | — |
+| T-204 | 완료(SPIKE) — 엔진(TS) 계산 + Rhino는 평면 면 목록 만들기만(`vide.bake.brep-faces@1`), Rhino 불리언 틀 불필요. Rhino 결합은 1e-5 m, `MergeCoplanarFaces` 쓰지 않음. 점검은 닫힘 + `SolidOrientation` Outward·부피 양수·엔진 부피 대조 | [SPIKE-2026-10-07-envelope](../tdd/SPIKE-2026-10-07-envelope.md), `tools/spikes/2026-10-07-envelope/` |
 | T-205~T-214 | 계획(PRD 채택 완료, 사용자 계획 검토 대기) | — |
 
 ## 결정이 필요한 질문
