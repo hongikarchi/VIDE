@@ -33,6 +33,7 @@ await copyPackageSources(root, join(directory, 'app'), tracked.split('\0').filte
   'src/ui',
   'src/contracts',
   'src/jigs',
+  'src/knowledge',
   'hosts',
   'extensions',
 ]);
@@ -151,6 +152,8 @@ const lock = JSON.parse(await readFile(join(root, 'package-lock.json'), 'utf8'))
 await copyFile(join(root, 'package-lock.json'), join(directory, 'app', 'package-lock.json'));
 for (const [packagePath, metadata] of Object.entries(lock.packages)) {
   if (!packagePath || metadata.dev) continue;
+  // Optional packages for other platforms (pdfjs-dist's canvas builds) are not installed here.
+  if (metadata.optional && !existsSync(join(root, packagePath))) continue;
   if (
     !packagePath.startsWith('node_modules/') ||
     packagePath.split('/').includes('..') ||
@@ -181,6 +184,11 @@ await copyFile(
 await copyFile(
   join(root, 'node_modules', 'three', 'LICENSE'),
   join(directory, 'licenses', 'three.txt'),
+);
+// PDF text for 자료 정리 (SPEC-08.9): pdfjs-dist, Apache-2.0.
+await copyFile(
+  join(root, 'node_modules', 'pdfjs-dist', 'LICENSE'),
+  join(directory, 'licenses', 'pdfjs-dist.txt'),
 );
 // PC program shell (own window, tray, autostart, updates); see src/desktop/shell.
 await exec(

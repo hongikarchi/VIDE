@@ -2,10 +2,10 @@
 id: PLAN-42
 title: 대시보드 배치 조정·기본 모델 Jev·프로젝트 폴더 자료 정리와 일정 제안 (T-192~T-196)
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-10-07
 owner: agent:claude
-related: [SPEC-01, SPEC-08, SPEC-02, ARCH-01, DESIGN, PLAN-08, PLAN-39, SPIKE-2026-09-29-knowledge-crawl, FR-01, FR-09, FR-16, C-02]
+related: [SPEC-01, SPEC-08, SPEC-02, ARCH-01, DESIGN, PLAN-08, PLAN-39, SPIKE-2026-09-29-knowledge-crawl, RESEARCH-06, FR-01, FR-09, FR-16, C-02]
 ---
 
 # 대시보드 배치 조정·기본 모델 Jev·자료 정리와 일정 제안
@@ -31,9 +31,9 @@ related: [SPEC-01, SPEC-08, SPEC-02, ARCH-01, DESIGN, PLAN-08, PLAN-39, SPIKE-20
    - 배정: 걸러내기는 Haiku, 진술 추출은 Sonnet(병렬), 이슈 정리와 일정·할 일 제안은 Opus 5.5 medium.
    - 이유: 진행률·중단·다시 실행을 엔진이 쥐고, 이미 정리한 파일은 다시 보내지 않는다. 비대화 CLI(`claude -p`)에서 하위 에이전트 도구가 늘 있다는 보장도 없다.
 2. **Claude가 없을 때.** Claude CLI에 로그인되어 있지 않으면 모든 AI 단계를 Codex의 Sol 계열 최신 모델로 돌린다. 모델은 Codex 모델 목록에서 이름이 `-sol`로 끝나는 첫 모델이다(2026-10-07 기준 `gpt-6.1-sol`). 노력 단계는 걸러내기 low, 나머지 medium이다.
-3. **파이썬 없이.** 설치본은 파이썬을 가정하지 않는다. 문서 추출은 Node 안에서 한다: 글·md·csv, 메일(eml), docx·xlsx·pptx(zip 안 XML), PDF 글자층. hwp·스캔 PDF·DWG 문자는 '읽지 못함'으로 세고 넘어간다. DWG 문자 읽기(ZWCAD)는 다음 단계다.
+3. **파이썬 없이, 한글·PDF·도면까지(같은 날 범위 변경).** 설치본은 파이썬을 가정하지 않는다. 문서 추출은 Node 안에서 한다([RESEARCH-06](../research/RESEARCH-06-project-knowledge.md) §7.7 대안 C): 글·md·csv, 메일(eml), docx·xlsx·pptx·hwpx(zip 안 XML, xlsx는 열 자리와 첫 행 유지), HWP 5.x(복합 파일의 본문 레코드), PDF 글자층(`pdfjs-dist`, 쪽마다 `p.N`). kordoc은 선택 의존성(onnxruntime 등)이 설치본에 무거워 쓰지 않는다. 글자가 없는 PDF는 '글자 없음(스캔)', 배포용·암호 HWP와 암호 문서는 '배포용'·'암호', 옛 형식(doc·xls·ppt)은 '옛 형식'으로 세고 넘어간다(OCR 없음). DWG 문자는 바뀐 도면의 사본을 VIDE 데이터 폴더에 두고 엔진이 띄운 숨은 ZWCAD 하나가 읽은 뒤 그 프로세스만 끈다(실험의 `dwg.mjs` 방식, 사용자의 ZWCAD는 건드리지 않음). ZWCAD 2023이 없으면 '읽지 못함(ZWCAD 없음)'이다. 파일마다 시간 제한과 결과 상태(완료·건너뜀(크기)·암호·글자 없음·오류)를 자료 행에 남기고, 한 파일의 실패가 정리를 멈추지 않는다.
 4. **원본은 읽기만.** 프로젝트 폴더의 파일은 쓰거나 옮기지 않는다. DB는 VIDE 데이터 폴더의 프로젝트 자료 DB 자리(실험과 같은 `knowledgePath`)에 둔다. 실험 DB와 같은 표를 쓰므로 이미 만든 DB는 이어서 갱신된다.
-5. **자동 갱신.** 첫 정리는 사람이 [자료 정리하기]로 시작한다. 그 뒤에는 엔진이 켜질 때와 그 뒤 1시간마다 폴더 목록과 크기·수정 시각을 보고, 바뀐 파일만 다시 정리한다. 엔진 하나에서 한 프로젝트당 한 번에 하나만 돈다.
+5. **사람이 누를 때만(같은 날 범위 변경, "모델링하는 동안 컴퓨터가 느려질 수 있음").** 자동 갱신은 없다. 첫 정리는 [자료 정리하기], 그 뒤에는 같은 자리의 [자료 업데이트]를 누를 때만 폴더 목록과 크기·수정 시각을 보고 바뀐 파일만 다시 정리한다. 엔진 하나에서 한 프로젝트당 한 번에 하나만 돈다.
 6. **일정·할 일 제안.** 새로 정리한 진술 중 날짜가 있는 결정·요청·조건(회의록·일정표·메일)에서 Opus가 할 일·일정 후보를 만든다.
    - 후보는 대시보드에 '자료에서 찾은 할 일·일정 n건'으로 뜬다.
    - 사람이 고른 것만 넣는다(`source: 'ai'`). 버린 후보는 다시 제안하지 않는다.
@@ -68,21 +68,25 @@ related: [SPEC-01, SPEC-08, SPEC-02, ARCH-01, DESIGN, PLAN-08, PLAN-39, SPIKE-20
 
 | 변경 | 위치 |
 |---|---|
-| 단계: 목록·해시(크기·수정 시각이 같으면 건너뜀) → 추출(Node) → 같은 문장 합치기 → 걸러내기(Haiku) → 진술 추출(Sonnet, 병렬) → 이슈 정리(Opus medium) → 일정 제안(T-196). 바뀌거나 새로 생긴 파일의 발췌만 AI로 보내고, 지워진 파일의 진술은 숨긴다 | 새 `src/knowledge/collect/` |
-| AI 호출: Claude CLI(`claude -p`, 도구·MCP 없음, 모델·노력 지정) 병렬 실행, 없으면 Codex Sol. 호출 수·토큰·시간을 DB `run` 표에 | 같은 곳, 기존 `src/ai/claude-cli.ts`·`src/ai/agent-connection.ts`의 실행 방식 재사용 |
-| 정리 상태(대기·진행 단계·처리 수·마지막 완료·오류) API와 시작·중단, 엔진 시작 때와 1시간마다 바뀐 파일 확인 | `src/server/` 새 경로, `src/server/server.ts` |
+| 단계: 목록·해시(크기·수정 시각이 같으면 건너뜀) → 문서 추출(Node, 작업 스레드에서 파일마다 시간 제한) → 도면 추출(숨은 ZWCAD) → 같은 문장 합치기 → 걸러내기(Haiku) → 진술 추출(Sonnet, 병렬) → 이슈 정리(Opus medium) → 일정 제안(T-196). 바뀌거나 새로 생긴 파일의 발췌만 AI로 보내고, 지워진 파일의 진술은 숨긴다 | 새 `src/knowledge/collect/`, 도면 `hosts/zwcad/knowledge-dwg.ts`·`hosts/zwcad/worker/KnowledgeDwg.cs` |
+| AI 호출: Claude CLI(`claude -p`, 도구·MCP 없음, 모델·노력 지정) 병렬 실행, 없으면 Codex Sol. 호출 수·토큰·시간을 DB `run` 표에 | 같은 곳, 기존 `src/ai/claude-cli.ts`·`src/ai/codex-cli.ts`의 실행 인자 재사용 |
+| 정리 상태(대기·진행 단계·처리 수·마지막 완료·오류) API와 시작·중단. 자동 실행 없음(기본값 5) | `src/server/collect-routes.ts`, `src/server/server.ts` |
 | 자료 탭이 새 DB를 바로 읽는다(표는 실험과 같음) | `src/jigs/knowledge.ts`는 바꾸지 않는 것이 목표 |
 
 **검증:** 합성 폴더(글·md·eml·docx·xlsx·pdf 몇 개, 시험 안에서 만듦)로 첫 정리 → 진술·이슈가 생김. 파일 하나를 고치고 다시 → 그 파일만 다시 추출·AI 호출. 파일을 지우면 그 진술이 검색에서 빠짐. AI 호출은 가짜 실행기로 바꿔 끼워 시험한다. 실제 CLI로는 `.vide/` 아래 사본 폴더에서 한 번 돌려 시간·호출 수를 기록한다.
+
+**결과(2026-10-07):** 구현함. 자료 DB 표는 실험과 같고 `source.status`(파일별 결과)·`statement.status`/`held_prob`·`agenda_proposal`만 더했다. 지운 파일의 진술은 `support_prob = -1`로 숨겨 자료 탭·AI 도구·사이트 사본이 고치지 않고 뺀다(`src/jigs/knowledge.ts` 변경 없음). 수집 대상은 `project` 폴더만이다(읽기 허용 폴더는 AI 읽기 권한일 뿐 프로젝트 자료가 아님). 폴더가 여럿이면 공통 상위 폴더를 `meta.root`로 두고, 드라이브가 다른 폴더는 빼고 알린다. 사이트에서 받은 사본 DB(`meta.vide_copy`)에서는 정리하지 않는다(`KNOWLEDGE_IS_COPY`). `pdfjs-dist@5.7.284`를 `package.json`·잠금 파일에 더했다(이 작업 트리에서는 설치하지 못해 실제 설치는 다음 `npm install`; 없으면 PDF는 '읽지 못함(PDF 모듈 없음)'). HWP 5 복합 파일 읽기는 의존성 없이 직접 작성했다. 시험: `tests/core/knowledge-collect.test.mjs` 8개(PDF 시험은 pdfjs가 없으면 건너뜀, 따로 설치한 pdfjs로 통과 확인), `tests/server/knowledge-collect.test.mjs` 1개. 실제 CLI 시험(`.vide/` 합성 폴더 2개 파일, 모든 단계 Haiku): AI 호출 7번, 걸러내기 11.0초·진술 69.0초(1번, 출력 약 1.2만 토큰)·이슈 30.6초(4번)·제안 10.6초(1번), 합계 약 121초, 진술 3·이슈 1·제안 1. 실제 ZWCAD 2023 시험: 숨은 ZWCAD로 합성 도면을 만들고 읽기 명령으로 문자 2개를 읽음(시작 포함 8.9초), 뒤에 남은 ZWCAD 프로세스 없음.
 
 ## T-195 자료 정리 화면
 
 | 변경 | 위치 |
 |---|---|
-| 프로젝트 폴더 구역에 [자료 정리하기]·진행 표시(단계·n/m)·마지막 정리 시각·[중단]. 폴더가 없으면 단추를 숨긴다. 원격 세션은 보기만 | `src/ui/project-folders.tsx`, `src/ui/dashboard.css` |
+| 프로젝트 폴더 구역에 [자료 정리하기](한 번 정리한 뒤에는 [자료 업데이트])·진행 표시(단계·n/m)·마지막 정리 시각·[중단]. 폴더가 없으면 단추를 숨긴다. 원격 세션은 보기만 | `src/ui/project-folders.tsx`, 새 `src/ui/knowledge-collect.tsx`·`knowledge-collect.css` |
 | 다 끝나면 자료 탭 수와 이슈가 새로 읽힌다 | `src/ui/facts-tab.tsx` 등 |
 
 **검증:** 브라우저 시험(가짜 실행기 엔진): 폴더 추가 → [자료 정리하기] → 진행 → 완료 시각, 자료 탭에 진술이 보임.
+
+**결과(2026-10-07):** 구현함. 정리가 끝나면 `vide:knowledge-collected` 알림으로 자료 탭과 제안 카드가 다시 읽는다. 끝난 뒤 '문서 n/m · 진술 · 이슈 · 읽지 못함: 이유별 수'를 보인다. 시험: `tests/integration/browser-knowledge-collect.mjs`(`test:browser`에 더함) 통과.
 
 ## T-196 자료에서 찾은 할 일·일정 제안
 
@@ -92,6 +96,8 @@ related: [SPEC-01, SPEC-08, SPEC-02, ARCH-01, DESIGN, PLAN-08, PLAN-39, SPIKE-20
 | 대시보드 할 일 구역 위 '자료에서 찾은 할 일·일정 n건': 펼쳐 항목마다 고르기·고치기, [고른 것 추가]·[버리기]. 근거 진술은 진술 창으로 연다 | `src/ui/dashboard-agenda-extract.tsx`의 확인 화면 재사용 |
 
 **검증:** 단위: 후보 중복 제거·버린 후보 재제안 없음·지난 날짜 제외. 브라우저: 후보 두 건 중 하나만 추가 → 할 일·달력에 그 하나만, 다시 정리해도 버린 것은 안 뜸.
+
+**결과(2026-10-07):** 구현함. 제안 표는 자료 DB의 `agenda_proposal`이다(정리 결과와 함께 생기고 지워지며, 엔진 DB 마이그레이션이 필요 없음). 같은 날짜에 한쪽 내용이 다른 쪽을 품으면 같은 항목으로 보고, 근거 진술이 없는 후보와 지난 날짜는 버린다. 카드는 할 일 구역의 [글·파일에서 할 일 만들기] 아래에 있고, 항목마다 고르기·[고치기](내용·종류·날짜·시각)·근거(진술 창)가 있다. 경로: `GET …/agenda-proposals`, `POST …/agenda-proposals/add {items}`(보통의 할 일 더하기, `source: 'ai'`), `POST …/agenda-proposals/dismiss {ids}`. 단위·HTTP·브라우저 시험 통과.
 
 ## 문서
 

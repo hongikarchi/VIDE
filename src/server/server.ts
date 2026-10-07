@@ -102,6 +102,15 @@ interface ServerOptions {
       'prompt' | 'site' | 'fetcher' | 'now' | 'startDelayMs' | 'everyMs' | 'batchMs'
     >
   >;
+  /**
+   * Test seams for 자료 정리 (SPEC-08.9): the AI runner, the model plan and the drawing reader
+   * (null: no ZWCAD).
+   */
+  collectOptions?: {
+    runner?: CollectRunner;
+    plan?: () => Promise<ModelPlan | null>;
+    dwgReader?: DwgReader | null;
+  };
 }
 import { readWebAsset } from './web-assets.ts';
 import { Extensions } from '../core/extensions.ts';
@@ -141,7 +150,17 @@ import { dirname, join } from 'node:path';
 import { importModel, recoverDwgImport } from './import-model.ts';
 import { AttachmentStore } from './attachments.ts';
 import { attachmentPathRoutes } from './attachment-paths.ts';
-import { checkFolder, folderRoutes } from './project-files.ts';
+import { checkFolder, deniedPath, folderRoutes } from './project-files.ts';
+import { collectRoutes, collectStatuses } from './collect-routes.ts';
+import { KnowledgeCollector } from '../knowledge/collect/collector.ts';
+import {
+  CliRunner,
+  modelPlan,
+  type CollectRunner,
+  type ModelPlan,
+} from '../knowledge/collect/ai.ts';
+import type { DwgReader } from '../knowledge/collect/dwg.ts';
+import { zwcadKnowledgeReader } from '../../hosts/zwcad/knowledge-dwg.ts';
 import { ProjectFolders } from '../core/project-folders.ts';
 import { Agenda } from '../core/agenda.ts';
 import { agendaRoutes, agendaStatuses } from './agenda-routes.ts';
@@ -247,6 +266,7 @@ const statuses: Record<string, number> = {
   ...makeStatuses,
   ...agendaStatuses,
   ...notesStatuses,
+  ...collectStatuses,
 };
 export async function startServer({
   filename,
@@ -264,6 +284,7 @@ export async function startServer({
   telemetryOptions,
   signInRequired = false,
   prefetchTools = false,
+  collectOptions,
 }: ServerOptions) {
   const { store, event: storeEvent } = await openStore(filename, storeSplit),
     bootstrap = randomBytes(32).toString('hex'),
@@ -726,6 +747,32 @@ export async function startServer({
       };
     return signedIn.value;
   };
+  // 자료 정리 (SPEC-08.9): the project folders into the knowledge DB, only when asked.
+  const collector = new KnowledgeCollector({
+    dataDirectory: dirname(filename),
+    folders: (projectId) =>
+      folders
+        .list(projectId)
+        .filter((folder) => folder.kind === 'project')
+        .map((folder) => folder.path),
+    denied: (path) => deniedPath(path, fileContext),
+    runner: collectOptions?.runner ?? new CliRunner((provider) => execution.executable(provider)),
+    plan:
+      collectOptions?.plan ??
+      (async () =>
+        modelPlan(
+          await signedInServices(),
+          (await execution.models())
+            .filter((model) => model.provider === 'codex-cli')
+            .map((model) => model.id),
+        )),
+    agenda: (projectId) => agenda.list(projectId),
+    projectName: (projectId) => store.project(projectId).name,
+    dwgReader:
+      collectOptions?.dwgReader === null
+        ? undefined
+        : (collectOptions?.dwgReader ?? zwcadKnowledgeReader()),
+  });
   const modelRouter = new ModelRouter({
     dataDirectory: dirname(filename),
     log: filename !== ':memory:',
@@ -1075,6 +1122,18 @@ export async function startServer({
           project: (projectId) => store.project(projectId),
           body: () => body(request),
           send,
+        })
+      )
+        return;
+      // 자료 정리 and the 할 일·일정 it proposes (SPEC-08.9, SPEC-01.14 11).
+      if (
+        await collectRoutes(url, request.method, {
+          collector,
+          agenda,
+          project: (projectId) => store.project(projectId),
+          body: () => body(request),
+          send,
+          remote,
         })
       )
         return;
@@ -3120,6 +3179,8 @@ export async function startServer({
       await remoteAccess.close();
       await offlineView.close();
       agentTools.close();
+      // A running 자료 정리 stops (its AI processes and hidden ZWCAD end with it).
+      await collector.close();
       // No image job starts from here on and running ones end their codex process (T-090).
       const boardsClosed = referenceBoards?.close();
       await execution.close();

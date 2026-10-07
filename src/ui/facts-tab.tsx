@@ -116,13 +116,20 @@ function FactsTab({ projectId }: { projectId: string }) {
         .detail;
       if (detail?.projectId === projectId) reviewed(detail.id, detail.review);
     };
+    // 자료 정리 finished on the dashboard (SPEC-08.9): counts and issues are read again.
+    const collected = (event: Event) => {
+      if ((event as CustomEvent<{ projectId: string }>).detail?.projectId === projectId)
+        void load(true);
+    };
     addEventListener(SHOW_STATEMENT, show);
     addEventListener(REVIEWED, changed);
+    addEventListener('vide:knowledge-collected', collected);
     return () => {
       removeEventListener(SHOW_STATEMENT, show);
       removeEventListener(REVIEWED, changed);
+      removeEventListener('vide:knowledge-collected', collected);
     };
-  }, [projectId, reviewed]);
+  }, [projectId, reviewed, load]);
 
   // `/` focuses the search while the tab shows and no field has the focus.
   useEffect(() => {

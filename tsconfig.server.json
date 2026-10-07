@@ -18,6 +18,7 @@
     "src/core/**/*",
     "src/ai/**/*",
     "src/contracts/**/*",
+    "src/knowledge/**/*",
     "hosts/**/*.ts",
     "extensions/**/*.ts",
     "src/jigs/runtime/child-entry.ts"

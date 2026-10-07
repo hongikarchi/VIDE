@@ -1,0 +1,90 @@
+/* 대시보드 › 프로젝트 폴더 › 자료 정리 (SPEC-08.9) and 할 일 › 자료에서 찾은 할 일·일정
+   (SPEC-01.14 11), Design SCR-20. A chosen proposal gets the soft selected background (no side
+   bars). */
+.dash-collect {
+  margin-top: 10px;
+  font-size: 12px;
+}
+.dash-collect-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dash-collect-row > span {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-2);
+}
+.dash-collect-row button {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+.dash-collect-progress {
+  font-variant-numeric: tabular-nums;
+}
+.dash-collect-counts {
+  margin: 4px 0 0;
+  color: var(--text-3);
+}
+.dash-proposals {
+  margin-top: 8px;
+  font-size: 12px;
+}
+.dash-proposals-head {
+  font-size: 12px;
+  font-weight: 600;
+}
+.dash-proposal-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  border-top: var(--hairline) solid var(--border-subtle);
+}
+.dash-proposal-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 4px;
+  border-bottom: var(--hairline) solid var(--border-subtle);
+}
+.dash-proposal-list li[data-chosen] {
+  background: var(--bg-selected);
+}
+.dash-proposal-body,
+.dash-proposal-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.dash-proposal-edit input:not([type]) {
+  flex: 1;
+  min-width: 120px;
+}
+.dash-proposal-when {
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.dash-proposal-kind {
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-recessed);
+  color: var(--text-2);
+  font-size: 11px;
+}
+.dash-proposal-text {
+  flex: 1;
+  min-width: 0;
+}
+.dash-proposal-meta {
+  color: var(--text-3);
+  font-size: 11px;
+}
+.dash-proposal-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}

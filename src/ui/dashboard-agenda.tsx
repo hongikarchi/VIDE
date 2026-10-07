@@ -42,6 +42,7 @@ import {
 } from './agenda-text.ts';
 import { AGENDA_DRAG, AgendaCalendar, type CalendarAnchor } from './dashboard-calendar.tsx';
 import { AgendaFromText } from './dashboard-agenda-extract.tsx';
+import { AgendaProposals } from './dashboard-proposals.tsx';
 import { SideSplitter, useSideWidth } from './dashboard-split.tsx';
 import {
   AgendaForm,
@@ -582,6 +583,7 @@ export function AgendaBoard({
               onAdd={() => addFrom(taskDraft)}
             />
             <AgendaFromText projectId={projectId} />
+            <AgendaProposals projectId={projectId} />
             {reason ? (
               <p className="dash-folder-reason" role="alert">
                 {reason}

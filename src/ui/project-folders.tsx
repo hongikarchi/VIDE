@@ -3,9 +3,11 @@
 // VIDE program window [폴더 추가] opens the Windows folder picker (WebView2 message `folder:pick`);
 // in a browser, or a program window whose shell does not offer the picker, a path field opens.
 // The engine checks every path (exists, a folder, not a drive root, VIDE data or a key folder).
+// With a project folder, 자료 정리 (knowledge-collect.tsx, SPEC-08.9) sits under the list.
 import { useEffect, useRef, useState } from 'react';
 import { api } from './gateway.ts';
 import { remoteSession } from './remote-panel.ts';
+import { KnowledgeCollect } from './knowledge-collect.tsx';
 
 interface Folder {
   path: string;
@@ -202,9 +204,12 @@ export function ProjectFolders({
       ) : !own.length ? (
         <p className="dash-empty">프로젝트 폴더를 정하면 AI가 그 안의 파일을 직접 읽습니다.</p>
       ) : (
-        <ul className="dash-folders" aria-label="프로젝트 폴더 목록">
-          {own.map(row)}
-        </ul>
+        <>
+          <ul className="dash-folders" aria-label="프로젝트 폴더 목록">
+            {own.map(row)}
+          </ul>
+          <KnowledgeCollect projectId={projectId} />
+        </>
       )}
       {allowed.length ? (
         <>

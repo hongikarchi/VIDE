@@ -36,3 +36,12 @@ The Apache License 2.0 text: https://www.apache.org/licenses/LICENSE-2.0
 
 Grasshopper.dll, GH_IO.dll and RhinoCommon.dll are build-time references to the
 user's licensed Rhino 8 installation and are not redistributed.
+
+Runtime dependency used unchanged (not ported):
+
+PDF.js (pdfjs-dist)
+-------------------
+- Source: https://github.com/mozilla/pdf.js (npm pdfjs-dist 5.7.284)
+- License: Apache License 2.0
+- Used in: src/knowledge/collect/pdf.ts (PDF text layer for 자료 정리). The
+  installer copies its LICENSE to licenses/pdfjs-dist.txt.
