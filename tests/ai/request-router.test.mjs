@@ -205,8 +205,9 @@ test('words decided without Jev need no call and no key; no-AI routes choose no 
   );
   const login = await decideRoute(query('codex 로그인해줘'), { key: () => '' });
   assert.deepEqual([login.target, login.app, login.provider], ['app', 'login', 'codex-cli']);
-  const sync = await decideRoute(query('다른 파일 sync해줘'), options);
-  assert.deepEqual([sync.target, sync.app], ['app', 'sync_link']);
+  // Sync words decide no app action (T-188): this question goes to the AI.
+  const sync = await decideRoute(query('Sync 완료된 도면에서 원 개수 알려줘'), options);
+  assert.deepEqual([sync.target, sync.app, sync.ai], ['document', undefined, true]);
   const param = await decideRoute(query('경간 11로'), options);
   assert.deepEqual([param.target, param.param, param.ai], ['param', 'spanMax', false]);
   const make = await decideRoute(query('이거 jig로 만들어 줘'), options);

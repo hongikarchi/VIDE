@@ -170,7 +170,7 @@ test('a setting changes from the words without the AI; out of range and fixed va
   assert.equal(routeRequest('작은보 간격 900으로 그려줘', [], [], context).target, 'document');
 });
 
-test('words decided without Jev: login, Sync, jig words, making a jig, the file', async () => {
+test('words decided without Jev: login, jig words, making a jig, the file', async () => {
   const { routeCard } = await import('../../src/ui/request-route.ts');
   const login = routeRequest('codex 로그인해줘', [], [], context);
   assert.deepEqual(login.app, { action: 'login', tier: 'T2', provider: 'codex-cli' });
@@ -180,8 +180,18 @@ test('words decided without Jev: login, Sync, jig words, making a jig, the file'
   assert.deepEqual([card.tier, card.run, card.toAi], ['R', undefined, true]);
   assert.match(card.text, /AccountSwitch/);
   assert.equal(routeRequest('클로드 로그아웃', []).app.action, 'logout');
-  const sync = routeRequest('다른 파일 sync해줘', [], [], context);
-  assert.deepEqual([sync.target, sync.app.action, sync.app.tier], ['app', 'sync_link', 'T1']);
+  // Sync words decide nothing (T-188): a question naming Sync and 도면 goes to the AI.
+  const { decisiveRoute } = await import('../../src/ui/request-route.ts');
+  assert.equal(
+    decisiveRoute('Link와 Sync가 완료된 상태에서 도면의 원 개수 알려줘', context),
+    undefined,
+  );
+  assert.equal(decisiveRoute('다른 파일 sync해줘', context), undefined);
+  const synced = routeRequest('Sync 끝난 도면에서 원 개수 알려줘', [], [], context);
+  assert.ok(['ask', 'document'].includes(synced.target), synced.target);
+  assert.equal(routeCard(synced), undefined);
+  // Jev's app answer still makes the Sync card (the screen's buttons and Jev keep it).
+  const sync = { target: 'app', by: 'jev', app: { action: 'sync_link', tier: 'T1' } };
   assert.equal(routeCard(sync).run, 'Sync 받기');
   const jig = routeRequest('구조 검토하고 싶어', [], [], context);
   assert.deepEqual([jig.target, jig.jig.id], ['jig', 'structure']);

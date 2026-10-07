@@ -443,8 +443,6 @@ const SERVICES: [RegExp, Service][] = [
   [/(codex|코덱스|chat\s*gpt|챗\s*gpt|챗지피티|gpt|openai)/i, 'codex-cli'],
   [/(claude|클로드)/i, 'claude-cli'],
 ];
-const SYNC = /(sync|싱크|동기화|다시\s*읽)/i;
-const SYNC_OBJECT = /(파일|도면|모델|cad|캐드|rhino|라이노|zwcad|dwg|3dm)/i;
 const MAKE = /(도구로\s*만들|jig\s*로\s*만들|지그로\s*만들|자동화\s*해)/i;
 /** Questions are not setting changes ("보 간격 900 회신 왔어?"). */
 const QUESTION = /(\?|왜|어디|뭐야|무엇|알려|찾아)/;
@@ -590,13 +588,8 @@ export function decisiveRoute(body: string, context: RouteContext = {}): Route |
       };
     }
   }
-  if (SYNC.test(body) && SYNC_OBJECT.test(body))
-    return {
-      target: 'app',
-      by: 'rules',
-      app: { action: 'sync_link', tier: APP_TIER.sync_link },
-      reason: '앱 동작 · Sync 받기',
-    };
+  // No Sync words here (T-188, ADR-031): "Sync 완료된 상태에서 원 개수 알려줘" is a question. Jev
+  // may still judge a request to be the Sync app action; otherwise the AI decides.
   const found = jigFor(body, context.jigs);
   const several = paramsFor(body, context.params);
   const param = several ? undefined : paramFor(body, context.params);
