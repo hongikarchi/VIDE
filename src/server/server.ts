@@ -195,7 +195,8 @@ import { Agenda } from '../core/agenda.ts';
 import { agendaRoutes, agendaStatuses } from './agenda-routes.ts';
 import { FinishStore } from '../core/finish-store.ts';
 import { finishRoutes, finishStatuses } from './finish-routes.ts';
-import { accountTokens, serviceSettingsRoutes } from './service-routes.ts';
+import { accountTokens, legalRoutes, serviceSettingsRoutes } from './service-routes.ts';
+import { LegalService, legalStatuses } from '../services/legal.ts';
 import { SecretStore, type SecretProtector } from '../services/secrets.ts';
 import {
   ServiceSettings,
@@ -312,6 +313,7 @@ const statuses: Record<string, number> = {
   ...xrefStatuses,
   ...drawingLayerStatuses,
   ...serviceSettingsStatuses,
+  ...legalStatuses,
 };
 export async function startServer({
   filename,
@@ -467,6 +469,7 @@ export async function startServer({
     timeoutMs: serviceOptions?.timeoutMs,
     version: appVersion(),
   });
+  const legal = new LegalService({ store, client: clawde, settings: serviceSettings });
   // Shared notes (SPEC-10): this PC as a member of the site; a Markdown copy for the AI.
   const sharedNotes =
     filename === ':memory:'
@@ -1317,6 +1320,11 @@ export async function startServer({
           send,
           remote,
         })
+      )
+        return;
+      // 법규 Q&A (SPEC-13): the project's legal profile, asking with the send confirmation, answers.
+      if (
+        await legalRoutes(url, request.method, { legal, body: () => body(request), send, remote })
       )
         return;
       // 노트·일지 (SPEC-10): the site's shared notes through this PC's account link.
