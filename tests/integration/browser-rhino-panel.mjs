@@ -180,7 +180,7 @@ try {
   selected = [wall];
   selectionVersion++;
   await page.locator('#body').focus();
-  await page.locator('.pin-ghost').filter({ hasText: '고정 · 1개' }).click();
+  await page.locator('.pin-ghost').filter({ hasText: '선택 1개 첨부' }).click();
   await page.waitForFunction(() => document.querySelector('#body').value.includes('[고정1 · 1개]'));
   const draftPins = () =>
     page.evaluate(
