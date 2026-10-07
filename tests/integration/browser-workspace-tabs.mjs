@@ -150,7 +150,7 @@ try {
   await sources.getByRole('button', { name: /^공식/ }).click();
   assert.equal(await dialog.locator('.jig-card[data-source="project"]').count(), 0);
   // The catalogue: its entries J-01 · J-04 · J-11 show as the official tool jigs' cards.
-  assert.equal(await official.count(), 13);
+  assert.equal(await official.count(), 14);
   await sources.getByRole('button', { name: /^이 프로젝트의 jig/ }).click();
   assert.equal(await official.count(), 0);
   await sources.getByRole('button', { name: /^전체/ }).click();
