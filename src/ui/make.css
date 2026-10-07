@@ -436,6 +436,24 @@ body[data-workspace='make'] .make-side {
   margin: 4px 0 0;
   font-size: 14px;
 }
+/* [관리자에게 제출] and 내 제출 (SPEC-07.19, SCR-16·18). */
+.jig-card-actions .kit-confirm {
+  flex-basis: 100%;
+}
+.jig-submit-note {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font: inherit;
+}
+.jig-submissions li > span {
+  display: grid;
+  gap: 1px;
+}
+.jig-submission-reason {
+  color: var(--muted);
+  font-size: 11px;
+}
 .make-go {
   margin-top: 8px;
   width: 100%;

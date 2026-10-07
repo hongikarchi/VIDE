@@ -31,6 +31,8 @@ const errors: Record<string, string> = {
   INVALID_PASSWORD: '비밀번호는 8자 이상이어야 합니다.',
   SIGNUP_CLOSED: '지금은 가입을 받지 않습니다.',
   SIGNUP_CODE_REQUIRED: '가입 코드가 필요합니다.',
+  ADMIN_REQUIRED: '관리자만 볼 수 있습니다.',
+  REASON_REQUIRED: '반려할 때는 사유를 적어 주세요.',
 };
 export class ApiError extends Error {
   constructor(

@@ -900,6 +900,31 @@ button.ghost {
   border-bottom: 1px solid var(--line);
   vertical-align: top;
 }
+/* jig 제출함 (SCR-27). */
+.jig-box-status {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+}
+.jig-box-status[data-status='rejected'] {
+  color: #b3261e;
+}
+.jig-box-detail p {
+  margin: 0 0 8px;
+}
+.jig-box-detail code {
+  font-size: 12px;
+  word-break: break-all;
+}
+.jig-box-note {
+  white-space: pre-wrap;
+}
+.jig-box-detail .danger {
+  color: #b3261e;
+  font-weight: 600;
+}
 .reports-payload {
   max-height: 420px;
   overflow: auto;

@@ -88,6 +88,7 @@ import {
   type BriefParam,
   type BriefStep,
 } from './make-brief.ts';
+import { MySubmissions, SubmitJig } from './jig-submit.tsx';
 import './make.css';
 
 type Value = number | string | boolean;
@@ -532,6 +533,8 @@ function MakeTab({ projectId }: { projectId: string }) {
             />
             <h3 className="make-drafts-title">내 초안</h3>
             <DraftList projectId={projectId} drafts={drafts} onOpen={choose} />
+            <h3 className="make-drafts-title">내 제출</h3>
+            <MySubmissions />
             {notice ? <p role="alert">{notice}</p> : null}
           </>
         )}
@@ -638,6 +641,12 @@ function MakeTab({ projectId }: { projectId: string }) {
               >
                 버리기
               </button>
+              <SubmitJig
+                target={{ projectId, draftId: detail.draft.id }}
+                name={name}
+                version={m.version}
+                disabled={!!busy}
+              />
               <button
                 type="button"
                 className="primary"

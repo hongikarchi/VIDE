@@ -168,5 +168,5 @@ related: [SPEC-01, SPEC-07, SPEC-08, SPEC-11, ARCH-01, DESIGN, ADR-037, ADR-040,
 | T-198 | 착수 | — |
 | T-199 | 착수 | — |
 | T-200 | 착수 | — |
-| T-201 | 착수 | — |
+| T-201 | 구현·로컬 시험 완료, 사이트 배포 대기 | SPEC-07.19·04.13, ARCH-01 §6 「jig 관리자 제출」, Design SCR-27. `tests/server/jig-submit.test.mjs`(요청 형식·확인·원격 거절·풀기), `tests/sharing/jig-submissions.mjs`(비관리자 403·크기 상한·digest·자기 목록·엔진 묶음→관리자 목록→풀기) 통과. D1 `0014` 원격 적용과 Worker 배포는 사용자 확인 뒤 |
 | T-202 | 착수 | — |

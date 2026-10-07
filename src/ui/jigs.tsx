@@ -11,6 +11,7 @@ import { DraftCard, ImportJig, MakeCard, openDraft } from './make-tab.tsx';
 import type { Point3 } from './model.ts';
 import { openSkill } from './skill-start.ts';
 import { StructureJig } from './structure-jig.tsx';
+import { SubmitJig } from './jig-submit.tsx';
 import type { OverlayItem } from './viewport.ts';
 import {
   activeWorkspace,
@@ -977,6 +978,13 @@ function Gallery({ context }: { context: JigContext }) {
               >
                 {forking === entry.id ? '사본 만드는 중…' : '수정하기'}
               </button>
+            ) : null}
+            {entry.stage === 'project' && !entry.corrupt ? (
+              <SubmitJig
+                target={{ jigId: entry.id, version: entry.version }}
+                name={entry.name}
+                version={entry.version}
+              />
             ) : null}
             {entry.stage === 'project' ? (
               <button type="button" onClick={() => setRemoving(key)}>

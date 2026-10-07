@@ -6,3 +6,5 @@
 - `s06-frame/` — S-06 골조 jig(PLAN-23).
 
 명령: `npm run jig:validate -- <폴더>` · `npm run jig:test -- <폴더> [--runner engine|child]` · `npm run jig:pack -- <폴더> --data-dir <데이터 폴더>`.
+
+사용자가 계정 사이트로 제출한 jig(SPEC-07.19)는 사이트의 jig 제출함에서 묶음을 내려받아 `npm run jig:unpack -- <묶음.vjig> --digest <sha256> [--force]`로 여기에 푼다. 푼 뒤 git에서 바뀐 내용을 보고 `jig:test`를 통과시킨 다음 공식 배포에 넣는다.

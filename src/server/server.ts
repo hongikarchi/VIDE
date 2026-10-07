@@ -26,6 +26,7 @@ import {
   closeAnalysisWorker,
 } from '../jigs/official/structure-analysis/index.ts';
 import { makeRoutes, makeStatuses } from './make-routes.ts';
+import { jigSubmitRoutes, jigSubmitStatuses } from './jig-submit.ts';
 import { syncReadRoutes } from './sync-reads.ts';
 import { factRoutes, factStatuses } from './facts-routes.ts';
 import { ConversationService, conversationRoutes, conversationStatuses } from './conversations.ts';
@@ -267,6 +268,7 @@ const statuses: Record<string, number> = {
   ...agendaStatuses,
   ...notesStatuses,
   ...collectStatuses,
+  ...jigSubmitStatuses,
 };
 export async function startServer({
   filename,
@@ -2049,6 +2051,17 @@ export async function startServer({
           remote,
           dataDirectory: dirname(filename),
           conversations,
+        })
+      )
+        return;
+      if (
+        await jigSubmitRoutes(url, request, {
+          workspace,
+          body,
+          send,
+          remote,
+          dataDirectory: dirname(filename),
+          site: remoteAccess,
         })
       )
         return;

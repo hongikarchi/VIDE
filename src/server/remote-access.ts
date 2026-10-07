@@ -574,6 +574,46 @@ export class RemoteAccess {
     }
   }
   /**
+   * Send a jig pack to the site's admin box (ADR-041, SPEC-07.19): raw bytes, the note in a
+   * header. Answers the stored submission, or the error code (`ACCOUNT_NOT_LINKED` when this PC is
+   * not signed in, `SITE_UNREACHABLE` when the site did not answer, else the site's own code).
+   */
+  async uploadJigSubmission(
+    meta: { jigId: string; version: string; name: string; note: string },
+    bytes: Uint8Array,
+  ): Promise<{ submission: unknown } | { error: string }> {
+    await this.load();
+    const device = this.device;
+    if (!device) return { error: 'ACCOUNT_NOT_LINKED' };
+    const query = new URLSearchParams({ jig: meta.jigId, version: meta.version, name: meta.name });
+    let response: Response;
+    try {
+      response = await this.fetcher(
+        `${device.workerOrigin}/api/hosts/device/jig-submissions?${query}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/gzip',
+            'Content-Length': String(bytes.byteLength),
+            Authorization: `Bearer ${device.hostId}.${device.secret}`,
+            ...(meta.note ? { 'X-Vide-Note': encodeURIComponent(meta.note) } : {}),
+          },
+          body: bytes,
+          signal: AbortSignal.timeout(120_000),
+        },
+      );
+    } catch {
+      return { error: 'SITE_UNREACHABLE' };
+    }
+    const reply = (await response.json().catch(() => ({}))) as {
+      error?: unknown;
+      submission?: unknown;
+    };
+    if (response.ok && reply.submission) return { submission: reply.submission };
+    if (response.status === 401) return { error: 'ACCOUNT_UNLINKED' };
+    return { error: typeof reply.error === 'string' ? reply.error : 'JIG_SUBMIT_FAILED' };
+  }
+  /**
    * Replace the project's 할 일 copy or work history summary on the account site (PLAN-33).
    * Returns an error code, or undefined when stored.
    */

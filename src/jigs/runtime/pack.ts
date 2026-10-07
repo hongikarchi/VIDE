@@ -417,6 +417,8 @@ export interface PackOptions {
   /** Skip the self-test (validation still runs). */
   skipTests?: boolean;
   selftest?: SelftestOptions;
+  /** How to load the folder (default `dev-source`); an AI draft or an installed copy keeps its own. */
+  source?: JigSource;
 }
 export interface PackResult {
   file?: string;
@@ -427,7 +429,7 @@ export interface PackResult {
 }
 /** Validate, self-test, (bundle,) digest and sign a package folder. */
 export async function packJig(dir: string, options: PackOptions): Promise<PackResult> {
-  const jig = await loadJig(dir, { source: 'dev-source' });
+  const jig = await loadJig(dir, { source: options.source ?? 'dev-source' });
   let selftest: SelftestReport | undefined;
   if (!options.skipTests) {
     selftest = await selftestJig(jig, options.selftest);

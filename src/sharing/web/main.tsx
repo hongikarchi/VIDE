@@ -8,6 +8,7 @@ import { useHosts } from './hosts';
 import { Review } from './review';
 import { OfflineProject } from './offline';
 import { Reports } from './reports';
+import { AdminJigs } from './admin-jigs';
 import { Privacy } from './privacy';
 import { ProjectConversations } from './conversations';
 // The block editor loads only when notes are opened.
@@ -30,6 +31,10 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
     [offlineNotice, setOfflineNotice] = useState(''),
     [reports, setReports] = useState(
       () => new URL(location.href).searchParams.get('admin') === 'reports',
+    ),
+    // The admins' jig submission box (ADR-041, SCR-27).
+    [jigBox, setJigBox] = useState(
+      () => new URL(location.href).searchParams.get('admin') === 'jigs',
     ),
     [admin, setAdmin] = useState(false),
     [notesId, setNotesId] = useState(() => new URL(location.href).searchParams.get('notes') || ''),
@@ -81,6 +86,7 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
       setReviewing(params.get('review') || '');
       setOfflineId(params.get('offline') || '');
       setReports(params.get('admin') === 'reports');
+      setJigBox(params.get('admin') === 'jigs');
       setNotesId(params.get('notes') || '');
       setConversationsId(params.get('conversations') || '');
     };
@@ -132,6 +138,7 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
             setReviewing('');
             setOfflineId('');
             setReports(false);
+            setJigBox(false);
             setNotesId('');
             setConversationsId('');
             history.pushState(null, '', '/');
@@ -142,6 +149,7 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
         {review ? <span className="crumb">/ {review.name} · 공유 검토</span> : null}
         {offline ? <span className="crumb">/ {offline.name} · PC 없이 보기</span> : null}
         {reports ? <span className="crumb">/ 오류·성능 보고</span> : null}
+        {jigBox ? <span className="crumb">/ jig 제출함</span> : null}
         {notesProject ? <span className="crumb">/ {notesProject.name} · 노트·일지</span> : null}
         {conversationsProject ? (
           <span className="crumb">/ {conversationsProject.name} · 대화 기록</span>
@@ -153,11 +161,26 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
             onClick={() => {
               setReviewing('');
               setOfflineId('');
+              setJigBox(false);
               setReports(true);
               history.pushState(null, '', '/?admin=reports');
             }}
           >
             오류·성능 보고
+          </button>
+        ) : null}
+        {admin && !jigBox ? (
+          <button
+            className="ghost"
+            onClick={() => {
+              setReviewing('');
+              setOfflineId('');
+              setReports(false);
+              setJigBox(true);
+              history.pushState(null, '', '/?admin=jigs');
+            }}
+          >
+            jig 제출함
           </button>
         ) : null}
         <span className="user">{displayName(session)}</span>
@@ -178,7 +201,9 @@ function Signed({ session, signOut }: { session: Session; signOut: () => void })
           {status}
         </p>
       ) : null}
-      {reports && admin ? (
+      {jigBox && admin ? (
+        <AdminJigs />
+      ) : reports && admin ? (
         <Reports />
       ) : review ? (
         <div className="review-page">

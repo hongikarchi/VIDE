@@ -7,6 +7,7 @@ import { pendingAgendaEdits, summaryDeviceRoute } from './summary';
 import { notesRoute } from './notes';
 import { memberProjects, memberView, sharedLayerRoute } from './shared-layer';
 import { conversationsDeviceRoute } from './conversations';
+import { jigSubmissionDeviceRoute } from './jig-submissions';
 
 // Work PCs: a desktop VIDE (with Rhino/CAD attached) signs in once with the account's ID and
 // password and receives a host key. It then reports by heartbeat that it is on, its local address
@@ -271,6 +272,9 @@ export async function hostDeviceRoute(
   // Conversation records this PC ran (ADR-037 4, PLAN-36): upload, remove, read the others'.
   if (path[0] === 'projects' && path[1] && path[2] === 'conversations' && path.length === 3)
     return conversationsDeviceRoute(request, env, row, path[1]);
+  // A jig sent to the admins, and this account's own submissions (ADR-041, SPEC-04.13).
+  if (path[0] === 'jig-submissions' && path.length === 1)
+    return jigSubmissionDeviceRoute(request, env, row);
   const offlineReply =
     (await offlineDeviceRoute(request, env, row, path)) ??
     (await summaryDeviceRoute(request, env, row, path));

@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.92
+version: 0.93
 updated: 2026-10-07
 owner: agent:codex
 related: [ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35, PLAN-36, ADR-039, PLAN-38, PLAN-39, PLAN-42, ADR-040, ADR-041, PLAN-43]
@@ -966,6 +966,44 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 - **화면:** `src/ui/shell/telemetry.tsx`(`TelemetryCards`: 세션이 열린 뒤 `GET /telemetry`로 첫 실행 카드 또는 충돌 카드, 호스트 패널 제외; `TelemetrySection`: 설정 ‘상태 · 오류’ 탭이 보일 때 읽음). 문구 원본은 `src/contracts/telemetry-notice.ts`(사이트 `/privacy`와 공유).
 - **사이트(`src/sharing/telemetry.ts`, D1 `0010-telemetry.sql`):** `telemetry_reports(id, install_id, version, kind, received_at, day, size, payload)`(색인 day·kind / version·received_at / install_id·received_at / received_at), `telemetry_limits(key, window_start, count)`(하루 고정 창: `report|bundle:install:<id>:<day>`, `…:ip:<SHA-256 앞 32자>:<day>`), `telemetry_bundles(id, install_id, version, received_at, size, object_key, dumps)`. `POST /api/telemetry/reports`는 공개(계정·Origin 검사 없음)이며 `TELEMETRY_REPORTS_ENABLED='false'`면 503, 본문 48 KB(413), 설치 번호 UUID·버전·`kind: summary`·객체 `payload`(400), 경로·`/Users/`·`/home/`·이메일이 남은 본문 422, 설치당 하루 `TELEMETRY_INSTALL_DAILY`(24)·주소당 `TELEMETRY_IP_DAILY`(300) 초과 429, 저장 201 `{id}`. 약 2%의 쓰기에서 이틀 지난 카운터와 `TELEMETRY_KEEP_DAYS`(180)일 지난 보고를 지운다. `POST /api/telemetry/bundles`는 `TELEMETRY_BUNDLES_ENABLED='true'`일 때만(기본 503 `BUNDLES_DISABLED`): zip·`Content-Length` 필수, `TELEMETRY_BUNDLE_MAX_MB`(8)/`TELEMETRY_BUNDLE_DUMP_MAX_MB`(95), 설치당 하루 3건, R2 `ASSETS`의 `telemetry/bundles/<day>/<install>/<id>.zip`.
 - **관리자:** `GET /api/admin/telemetry/{summary|reports|reports.csv|bundles|bundles/:id}`는 `Authorization: Bearer <TELEMETRY_ADMIN_TOKEN>`(32자 이상, 다이제스트 비교) 또는 로그인 계정의 아이디·이메일이 `ADMIN_USERS`(쉼표 구분)에 있을 때만(401 `LOGIN_REQUIRED`, 403 `ADMIN_REQUIRED`). 거르기 `day|from|to|version|kind|install`, `reports`는 `limit`(≤500)·`before`(받은 시각) 쪽 넘기기, CSV(UTF-8 BOM, 최대 5,000행)는 `id, received_at, day, install_id, version, kind, size, os, errors, top_error, exits, truncated, payload`이고 `= + - @`로 시작하는 칸은 `'`를 붙인다. `GET /api/me`에 `admin`. 화면은 `/?admin=reports`(`web/reports.tsx`), 공개 안내 `/privacy`(`web/privacy.tsx`). 개발 도구 `node tools/diagnostics/reports.mjs`(환경 `VIDE_TELEMETRY_ADMIN_TOKEN`, `--site`·`--day`·`--days`·`--version`·`--install`·`--json`·`--csv`·`--out`)가 버전별 설치 수·실패 종류(설치 수 순)·종료 코드·주요 시간을 보인다.
+
+### jig 관리자 제출(ADR-041, SPEC-07.19·04.13, PLAN-43 T-201)
+
+PC가 jig 묶음을 계정 사이트의 관리자 제출함으로 보내고, 관리자가 내려받아 저장소에 푸는 경로다. 묶음 형식은 ARCH-03 §12의 `.vjig`(gzip JSON `{format: 'vide.jig.pack/1', id, version, files{경로: base64}, digest, sig}`)를 그대로 쓴다.
+
+- **D1** `0014-jig-submissions.sql`: `jig_submissions(id, user_id, host_id, host_name, jig_id, version, name, note, size, sha256, pack_digest, object_key, status, reason, reviewed_by, created_at, updated_at)`.
+  - `status`는 `received|reviewing|applied|rejected`(화면의 받음·검토 중·반영됨·반려)다.
+  - `sha256`은 사이트가 받은 파일 바이트로 계산한 값이고, `pack_digest`는 묶음 안의 `digest`(ARCH-03 §12의 내용 지문)다.
+  - 색인은 `(user_id, created_at)`, `(status, created_at)`이다.
+- **R2** `ASSETS`의 `jig-submissions/<제출 id>.vjig`
+- **PC 경로**(host key):
+  - `POST /api/hosts/device/jig-submissions?jig=<id>&version=<v>&name=<이름>`
+    - 본문은 묶음 원시 바이트이고 `Content-Length`가 필요하다(411 `LENGTH_REQUIRED`).
+    - 메모는 `X-Vide-Note`에 `encodeURIComponent`로 싣는다(2,000자).
+    - 상한은 `JIG_SUBMISSION_MAX_MB`(기본 8)이며 넘으면 413 `JIG_SUBMISSION_TOO_LARGE`다.
+    - 사이트는 본문을 끝까지 읽어 SHA-256을 계산하고, gzip을 풀어(64 MB 상한) 형식·`id`·`version`이 질의와 같은지 본다. 다르면 422 `JIG_PACK_INVALID`다.
+    - 계정의 `received` 제출이 20개면 429 `JIG_SUBMISSIONS_FULL`, `UPLOADS_ENABLED='false'`면 503 `UPLOADS_DISABLED`다.
+    - 성공은 201 `{submission}`이다.
+  - `GET /api/hosts/device/jig-submissions` → `{submissions}`. 그 PC 계정의 제출만, 최근 100개다.
+  - 제출 행은 `{id, jigId, version, name, note, size, sha256, status, reason, createdAt, updatedAt, pc}`이다.
+- **관리자 경로:** 텔레메트리와 같이 `TELEMETRY_ADMIN_TOKEN` Bearer 또는 `ADMIN_USERS` 계정 세션만 통과한다(401 `LOGIN_REQUIRED`, 403 `ADMIN_REQUIRED`). 세션으로 하는 POST·DELETE는 `Origin`이 사이트 주소여야 한다(403 `ORIGIN_REJECTED`).
+  - `GET /api/admin/jigs[?status=]` → `{submissions}`. 제출 행에 `submitter`(아이디)를 더하고 최근 200개다.
+  - `GET /api/admin/jigs/:id/pack` → `application/gzip`, 파일 이름 `<id의 이름 부분>@<버전>-<sha256 앞 8자>.vjig`
+  - `POST /api/admin/jigs/:id/status {status, reason?}` → `{submission}`. `rejected`는 사유(1~500자)가 필요하다(400 `REASON_REQUIRED`).
+  - `DELETE /api/admin/jigs/:id` → R2 파일과 행을 지운다.
+- **엔진(`src/server/jig-submit.ts`):**
+  - `POST /api/v1/jig-submissions {projectId, draftId} | {jigId, version}, note?, confirm: true`
+    - 원격 세션은 `FORBIDDEN`, `confirm`이 없으면 `CONFIRMATION_REQUIRED`다.
+    - 초안은 `validateDraftDir`, 설치 jig는 `JigStore.package`의 경로와 출처로 형식 점검을 한다. 실패하면 422 `JIG_INVALID {issues}`다.
+    - `packJig(dir, {source, bundle: false, skipTests: true})`로 이 PC의 키로 서명한 묶음을 만든다. 8 MB를 넘으면 413 `JIG_SUBMISSION_TOO_LARGE`다.
+    - `RemoteAccess.uploadJigSubmission`이 올린다. 로그인하지 않았으면 409 `ACCOUNT_NOT_LINKED`(사이트가 host key를 모르면 409 `ACCOUNT_UNLINKED`), 사이트에 닿지 않으면 503 `SITE_UNREACHABLE`이다. 사이트의 오류 코드는 그대로 전한다. 다시 보내지 않는다.
+  - `GET /api/v1/jig-submissions` → `{linked, online, submissions, error?}`(사이트 `GET`을 그대로 전한다. 로그인하지 않았으면 `linked: false`)
+- **화면:** `src/ui/jig-submit.tsx`(확인 카드와 메모, 내 제출 목록)를 만들기 화면(`make-tab.tsx`)과 JIG 목록의 설치 jig 카드(`jigs.tsx`)가 쓴다. 사이트 관리자 화면은 `/?admin=jigs`(`web/admin-jigs.tsx`)다.
+- **관리자 도구:** `npm run jig:unpack -- <파일.vjig> --digest <sha256> [--out extensions/jigs] [--force]`(`tools/jig/unpack.mjs` → `src/jigs/runtime/unpack.ts`).
+  - 파일 SHA-256이 `--digest`와 같아야 하고, 묶음의 내용 지문을 다시 계산해 `digest`와 같아야 한다. HMAC 서명은 보지 않는다.
+  - 절대 경로, `..`, 역슬래시, 드라이브 경로, 금지 파일(ARCH-03 §5.4)이 있으면 거절한다.
+  - `<out>/<id의 이름 부분>/`이 있으면 `--force` 없이는 거절하고, `--force`면 폴더를 바꾼다. 임시 폴더에 쓴 뒤 옮긴다.
+  - 푼 뒤 `validateJig`로 형식 점검 결과를 보인다.
 
 ### 외부 도메인 서비스(ADR-040, 계약만)
 

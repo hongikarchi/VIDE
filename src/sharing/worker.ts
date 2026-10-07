@@ -17,6 +17,7 @@ import {
 import { noteSocket, notesRoute } from './notes';
 import { sharedLayerRoute } from './shared-layer';
 import { conversationsRoute } from './conversations';
+import { adminJigRoute } from './jig-submissions';
 
 export { NoteRoom } from './note-room';
 
@@ -72,6 +73,28 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
         request,
         env,
         url.pathname.slice('/api/admin/telemetry/'.length).split('/'),
+      );
+    }
+    // The jig submission box (ADR-041): the same admins; writes from a browser need this Origin.
+    if (url.pathname === '/api/admin/jigs' || url.pathname.startsWith('/api/admin/jigs/')) {
+      let admin = 'token';
+      if (!(await hasAdminToken(env, request))) {
+        const session = await auth.api.getSession({ headers: request.headers });
+        if (!session?.user) throw new HttpError(401, 'LOGIN_REQUIRED');
+        admin = displayName(session.user.email, session.user.name);
+        if (!isAdminName(env, admin, session.user.email))
+          throw new HttpError(403, 'ADMIN_REQUIRED');
+        if (
+          !['GET', 'HEAD'].includes(request.method) &&
+          request.headers.get('Origin') !== env.AUTH_ORIGIN
+        )
+          throw new HttpError(403, 'ORIGIN_REJECTED');
+      }
+      return await adminJigRoute(
+        request,
+        env,
+        url.pathname.slice('/api/admin/jigs'.length).split('/').filter(Boolean),
+        admin,
       );
     }
     if (url.pathname.startsWith('/api/account/'))

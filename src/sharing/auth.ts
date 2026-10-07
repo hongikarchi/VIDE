@@ -37,6 +37,8 @@ export interface Env {
   TELEMETRY_BUNDLE_MAX_MB?: string;
   TELEMETRY_BUNDLE_DUMP_MAX_MB?: string;
   TELEMETRY_KEEP_DAYS?: string;
+  /** Largest jig pack a PC may submit to the admins (MB, default 8; ADR-041). */
+  JIG_SUBMISSION_MAX_MB?: string;
 }
 
 export const manualApproval = (env: Env) => env.AUTH_MODE === 'manual-approval';
