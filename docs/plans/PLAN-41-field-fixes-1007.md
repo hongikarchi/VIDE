@@ -16,6 +16,11 @@ related: [ADR-031, ADR-036, ADR-037, SPEC-02, SPEC-04, SPEC-10, PLAN-12, PLAN-36
 
 - **사이트 D1 읽기 한도 초과.** 24시간 526만 행(무료 500만 행)을 읽었고, 그중 99%가 Better Auth가 요청마다 하는 표 구조 검사였다. `src/sharing/auth.ts`에 `advanced.database.validateSchema: false`를 넣었다. 표 구조는 D1 마이그레이션이 소유한다. Worker 버전 `8f3d645f`로 배포했다(`5f57dd5`).
 - **T-187.** `hosts/zwcad/worker/SdkCompiler.cs`의 허용 목록을 Rhino `CodePolicy`식 탈출 규칙(파일·네트워크·프로세스·리플렉션·동적 로딩·ApplicationServices·`HostApplicationServices`, `Database` 저장·읽기·Xref 붙이기·Undo·Dispose, `Transaction` Commit·Abort·Dispose·`using (tr)`)으로 바꿨다. ZWCAD 2023 어셈블리로 실제 코드 19건을 컴파일해 `== null`·Colors·Geometry는 통과, 탈출 범주는 거절됨을 확인했다. 빌드 오류·경고 0. 실ZWCAD 시험(`tests/integration/zwcad-worker.mjs`)은 갱신만 했고 실행은 배포 검수 때 한다.
+- **T-188.** `decisiveRoute()`의 Sync 단어 규칙을 지웠다. Sync 단어가 들어간 조회는 AI로 간다. 'Sync 받기' 카드는 Jev가 `sync_link`를 고를 때만 뜬다(AI에는 Sync 실행 도구가 없고, 열린 파일을 직접 조회한다). SPEC-02.17 갱신.
+- **T-189.** `markdown-it@15.0.2`(HTML 끔)로 AI 답을 그린다. 작업 화면·활동·대화 미러·원격 프로젝트·사이트 PC 꺼짐 요약이 `src/ui/kit/markdown.tsx` 하나를 쓴다. 링크는 http/https/mailto만, 이미지는 불러오지 않는다.
+- **T-190.** 노트·일지·대시보드·자료 화면의 새 요청은 핀·스케치·연결 대상·파일 단어가 없으면 `hostUse: 'none'`으로 간다(`src/ui/screen-hostless.ts`). 사이트에 올릴지는 실제로 호스트를 조회·실행했는지(`usedHost`)로 정한다. SPEC-04.12, PLAN-36, ARCH-01 갱신.
+- **T-191.** ProcDump는 `-e`만 쓴다(0xC0000409도 2차 예외로 잡힘을 10-02~10-06 `procdump.log`로 확인). 진단 묶음은 최신 크래시 덤프 하나를 체크 상자로 묻는다(로컬 기본 켬, 사이트 보내기는 한도 안에서만·기본 끔). 열린 프로젝트가 사라지면 토스트 뒤 목록으로 가고 그 프로젝트 호출을 멈춘다.
+- **검증(2026-10-07).** 통합 브랜치에서 `npm run verify`(기본 1,121·추가 71, 공유 서비스 시험, 문서 166) 통과. 브라우저 시험 direct-mode·project-gone·telemetry·conversations·pin-tokens·live-sync 통과.
 
 ## 티켓
 
