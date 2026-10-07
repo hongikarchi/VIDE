@@ -12,6 +12,7 @@ import { startServer } from '../../src/server/server.ts';
 const catalog = [
   { id: 'opus', name: 'Claude Opus', provider: 'claude-cli', efforts: ['default', 'high'] },
   { id: 'sonnet', name: 'Claude Sonnet', provider: 'claude-cli', efforts: ['default'] },
+  { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', provider: 'claude-cli', efforts: ['default'] },
   { id: 'auto', name: '자동 (Jev)', provider: 'claude-cli', efforts: ['default'] },
 ];
 const directory = await mkdtemp(join(tmpdir(), 'vide-default-model-'));
@@ -58,6 +59,29 @@ try {
   // Back on the first tab, its own pick is still there.
   await tabs.first().click();
   await page.waitForFunction(() => document.querySelector('#model').value === 'sonnet');
+
+  // Drafts saved with the old default (Claude Opus 5.5) move to Jev once; a later pick stays.
+  // The seed runs before the page's scripts, after the page before it saved its draft on leaving.
+  const setSaved = (page, again) =>
+    page.context().addInitScript((again) => {
+      const mark = 'seeded:' + again;
+      if (sessionStorage.getItem(mark)) return;
+      sessionStorage.setItem(mark, '1');
+      for (const key of Object.keys(localStorage))
+        if (key.startsWith('vide:draft:')) {
+          const draft = JSON.parse(localStorage.getItem(key));
+          localStorage.setItem(key, JSON.stringify({ ...draft, model: 'claude-opus-5-5' }));
+        }
+      if (!again) localStorage.removeItem('vide:default-model-auto');
+    }, again);
+  await setSaved(page, false);
+  await page.reload();
+  await page.waitForFunction(() => !document.querySelector('#body').disabled);
+  await page.waitForFunction(() => document.querySelector('#model').value === 'auto');
+  await setSaved(page, true);
+  await page.reload();
+  await page.waitForFunction(() => !document.querySelector('#body').disabled);
+  await page.waitForFunction(() => document.querySelector('#model').value === 'claude-opus-5-5');
 
   // A catalog without "자동 (Jev)": the first model.
   const without = await open(catalog.filter((entry) => entry.id !== 'auto'));

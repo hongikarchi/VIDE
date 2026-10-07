@@ -20,6 +20,7 @@ import { mountUsageBars } from '../usage-bars.ts';
 import { modelsSchema, requestMessage } from '../workspace-data.ts';
 import {
   migrateProjectDraft,
+  moveDraftsToJev,
   lastConversation,
   draftKey,
   removeProjectDrafts,
@@ -379,6 +380,7 @@ export async function initializeWorkspace() {
     // Drafts are per conversation; the last viewed tab comes back (SPEC-02.19 1). Host panels
     // have no chips and keep the default conversation's draft.
     migrateProjectDraft(sessionState.project.id);
+    moveDraftsToJev();
     draftState.draftConversation = panelMode ? null : lastConversation(sessionState.project.id);
     try {
       const raw = localStorage.getItem(

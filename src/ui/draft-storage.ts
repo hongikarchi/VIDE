@@ -92,6 +92,32 @@ export function migrateProjectDraft(projectId: string) {
     /* Storage may be unavailable. */
   }
 }
+/**
+ * The default model became "자동 (Jev)" (2026-10-07, T-193). Saved drafts still held the old
+ * default, Claude Opus 5.5, mostly because it was the placeholder; they move to Jev once. A
+ * conversation whose model is fixed still sets its own model when chosen.
+ */
+export function moveDraftsToJev() {
+  try {
+    const done = 'vide:default-model-auto';
+    if (localStorage.getItem(done)) return;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith('vide:draft:')) continue;
+      try {
+        const draft = JSON.parse(localStorage.getItem(key) || 'null') as Record<string, unknown>;
+        if (draft?.model !== 'claude-opus-5-5') continue;
+        Object.assign(draft, { model: 'auto', effort: 'default' });
+        localStorage.setItem(key, JSON.stringify(draft));
+      } catch {
+        /* An unreadable draft is reported when it is opened. */
+      }
+    }
+    localStorage.setItem(done, '1');
+  } catch {
+    /* Storage may be unavailable. */
+  }
+}
 /** A sent draft that is no longer on screen: its input goes, its mode and effort stay. */
 export function clearStoredDraft(key: string) {
   try {
