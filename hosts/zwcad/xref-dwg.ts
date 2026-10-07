@@ -1,12 +1,13 @@
 // xref relations and display of project drawings (SPEC-01.11 11, PLAN-43 T-200): one hidden ZWCAD
 // started and owned by the engine runs the worker's VIDEXREFGRAPH command (XrefGraph.cs) on the
 // copies listed in a manifest and writes one JSON line per drawing; then only that process is
-// stopped. The user's own ZWCAD is never attached to or ended; originals are never opened.
+// stopped (`runHiddenZwcad`, PLAN-47 T-226). The user's own ZWCAD is never attached to or ended;
+// originals are never opened.
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { launchHiddenZwcad } from './crash-prompt.ts';
+import { HiddenRunError, runHiddenZwcad } from './hidden-run.ts';
 import { inspectorOptions } from './inspector.ts';
 import type {
   XrefDisplayRead,
@@ -25,27 +26,17 @@ async function runWorker(
   command: string,
   environment: Record<string, string>,
   output: string,
-  script: string,
+  folder: string,
   progress: (done: number) => void,
   signal?: AbortSignal,
 ) {
   const rows = new Map<number, Row>();
-  await writeFile(
-    script,
-    `(command "_NETLOAD" ${JSON.stringify(options.plugin.replaceAll('\\', '/'))})\n${command}\n`,
-  );
-  const owner = await launchHiddenZwcad({
-    executable: options.executable,
-    args: ['/b', script],
-    visible: false,
-    environment: { ...process.env, ...environment },
-  });
   const collect = async () => {
     let text = '';
     try {
       text = await readFile(output, 'utf8');
     } catch {
-      return;
+      return rows.size;
     }
     for (const line of text.split('\n')) {
       if (!line.trim()) continue;
@@ -56,27 +47,34 @@ async function runWorker(
         /* A line still being written. */
       }
     }
+    return rows.size;
   };
-  try {
-    let last = Date.now(),
-      seen = 0;
-    while (!existsSync(output + '.done')) {
-      if (signal?.aborted) throw new Error('STOPPED');
-      await new Promise((accept) => setTimeout(accept, 500));
-      await collect();
-      if (rows.size !== seen) {
-        seen = rows.size;
-        owner.settled();
-        last = Date.now();
-        progress(seen);
-      } else if (Date.now() - last > STALL_MS) break;
-    }
-    await collect();
-    progress(rows.size);
-    return rows;
-  } finally {
-    await owner.stop().catch(() => {});
-  }
+  let reported = 0;
+  // The common hidden run (PLAN-47 T-226): limit, stop of this process only, exit code, dumps. A
+  // host that ended by itself leaves the drawings read so far (as a stall did before).
+  await runHiddenZwcad({
+    label: command.toLowerCase(),
+    executable: options.executable,
+    plugin: options.plugin,
+    command,
+    folder,
+    environment,
+    finished: async () => existsSync(output + '.done'),
+    progress: async () => {
+      const count = await collect();
+      if (count !== reported) progress((reported = count));
+      return count;
+    },
+    timeoutMs: Infinity,
+    stallMs: STALL_MS,
+    onStall: 'end',
+    signal,
+  }).catch((error: unknown) => {
+    if (!(error instanceof HiddenRunError && error.code === 'HIDDEN_HOST_EXITED')) throw error;
+  });
+  await collect();
+  progress(rows.size);
+  return rows;
 }
 
 const common = (row: Row) => ({
@@ -122,7 +120,7 @@ export function zwcadXrefReader(options = inspectorOptions()): XrefReader {
           VIDE_XREF_MODE: 'graph',
         },
         output,
-        join(work, 'xref-graph.scr'),
+        work,
         progress,
         signal,
       );
@@ -148,7 +146,7 @@ export function zwcadXrefReader(options = inspectorOptions()): XrefReader {
           VIDE_XREF_MODE: 'display',
         },
         output,
-        join(work, 'xref-display.scr'),
+        work,
         progress,
         signal,
       );
@@ -182,7 +180,7 @@ export async function writeXrefFixture(folder: string, options = inspectorOption
     'VIDEXREFFIXTURE',
     { VIDE_XREF_FIXTURE: folder },
     join(folder, 'fixture'),
-    join(folder, 'fixture.scr'),
+    folder,
     () => {},
   ).catch((cause) => {
     failure = cause as Error;

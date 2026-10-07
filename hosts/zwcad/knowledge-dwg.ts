@@ -1,11 +1,12 @@
 // Drawing text for the project knowledge collector (SPEC-08.9 2, PLAN-42 T-194): one hidden ZWCAD
 // started and owned by the engine reads the copies listed in a manifest with the worker's
 // VIDEKNOWLEDGEDWG command (KnowledgeDwg.cs) and writes one JSON line per drawing; then only that
-// process is stopped. The user's own ZWCAD is never attached to or ended.
+// process is stopped (`runHiddenZwcad`, PLAN-47 T-226). The user's own ZWCAD is never attached to
+// or ended.
 import { access, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { launchHiddenZwcad } from './crash-prompt.ts';
+import { HiddenRunError, runHiddenZwcad } from './hidden-run.ts';
 import { inspectorOptions } from './inspector.ts';
 import type { DwgReader, DwgResult } from '../../src/knowledge/collect/dwg.ts';
 
@@ -26,29 +27,14 @@ export function zwcadKnowledgeReader(options = inspectorOptions()): DwgReader {
       const results = new Map<number, DwgResult>();
       if (!files.length) return results;
       const manifest = join(work, 'manifest.tsv'),
-        output = join(work, 'out.jsonl'),
-        script = join(work, 'start.scr');
+        output = join(work, 'out.jsonl');
       await writeFile(manifest, files.map((f) => `${f.id}\t${f.path}`).join('\n'), 'utf8');
-      await writeFile(
-        script,
-        `(command "_NETLOAD" ${JSON.stringify(options.plugin.replaceAll('\\', '/'))})\nVIDEKNOWLEDGEDWG\n`,
-      );
-      const owner = await launchHiddenZwcad({
-        executable: options.executable,
-        args: ['/b', script],
-        visible: false,
-        environment: {
-          ...process.env,
-          VIDE_KNOWLEDGE_MANIFEST: manifest,
-          VIDE_KNOWLEDGE_OUT: output,
-        },
-      });
       const collect = async () => {
         let text = '';
         try {
           text = await readFile(output, 'utf8');
         } catch {
-          return;
+          return results.size;
         }
         for (const line of text.split('\n')) {
           if (!line.trim()) continue;
@@ -59,27 +45,34 @@ export function zwcadKnowledgeReader(options = inspectorOptions()): DwgReader {
             /* A line still being written. */
           }
         }
+        return results.size;
       };
-      try {
-        let last = Date.now(),
-          seen = 0;
-        while (!existsSync(output + '.done')) {
-          if (signal?.aborted) throw new Error('STOPPED');
-          await new Promise((accept) => setTimeout(accept, 1000));
-          await collect();
-          if (results.size !== seen) {
-            seen = results.size;
-            owner.settled();
-            last = Date.now();
-            progress(seen);
-          } else if (Date.now() - last > STALL_MS) break;
-        }
-        await collect();
-        progress(results.size);
-        return results;
-      } finally {
-        await owner.stop().catch(() => {});
-      }
+      let reported = 0;
+      // A host that ended by itself leaves the drawings read so far (as a stall did before).
+      await runHiddenZwcad({
+        label: 'knowledge-dwg',
+        executable: options.executable,
+        plugin: options.plugin,
+        command: 'VIDEKNOWLEDGEDWG',
+        folder: work,
+        environment: { VIDE_KNOWLEDGE_MANIFEST: manifest, VIDE_KNOWLEDGE_OUT: output },
+        finished: async () => existsSync(output + '.done'),
+        progress: async () => {
+          const count = await collect();
+          if (count !== reported) progress((reported = count));
+          return count;
+        },
+        timeoutMs: Infinity,
+        stallMs: STALL_MS,
+        onStall: 'end',
+        intervalMs: 1000,
+        signal,
+      }).catch((error: unknown) => {
+        if (!(error instanceof HiddenRunError && error.code === 'HIDDEN_HOST_EXITED')) throw error;
+      });
+      await collect();
+      progress(results.size);
+      return results;
     },
   };
 }

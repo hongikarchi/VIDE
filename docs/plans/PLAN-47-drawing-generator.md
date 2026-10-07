@@ -2,7 +2,7 @@
 id: PLAN-47
 title: CAD 도면 역반영과 도곽 미리보기 (T-225~T-235)
 status: draft
-version: 0.3
+version: 0.4
 updated: 2026-10-07
 owner: agent:claude
 related: [SPEC-14, SPEC-01, SPEC-02, SPEC-05, PLAN-43, PLAN-44, ARCH-01, DESIGN, SPIKE-2026-10-07-drawing-export, ADR-022, ADR-027, ADR-030, HOST-RHINO, HOST-ZWCAD, RESEARCH-04, C-08, FR-02, FR-03, FR-04, FR-12, FR-14, FR-16, FR-18]
@@ -184,7 +184,7 @@ T-232는 Sync jig만 있으면 기존 도면 경로부터 시작할 수 있고, 
 | 티켓 | 상태 | 증거 |
 |---|---|---|
 | T-225 | 계획(2026-10-07 범위 바꿈: 도곽·CTB 질문 추가, 정리 연산 질문 삭제) | — |
-| T-226 | 계획 | — |
+| T-226 | 완료(2026-10-07, 사용자 0단계 승인): 숨은 실행 공통 `runHiddenZwcad`(xref·자료 정리 읽기도 옮김), 출력 토큰(엔진 `OutputTokens`·worker `OutputGrant`), `VIDEDRAWINGCOPY`, 위험 속성 목록, AI 코드 정책 고정, ARCH-01 「도면 역반영(PLAN-47)」. 남음: 쓰는 도중 강제 종료 실측, T-225 4의 목록 확장 | `tests/core/drawing-output.test.mjs`·`zwcad-hidden-run.test.mjs`, 실호스트 `tests/integration/zwcad-drawing-output.mjs`·`zwcad-xref.mjs` 통과, H-ZWCAD-14 |
 | T-227 | 계획(좁힘: 도면 읽기·레이어 대응) | — |
 | T-228 | 폐기(2026-10-07, 사용자 검토: Rhino 레이아웃 불필요) | — |
 | T-229 | 폐기(2026-10-07, T-228 폐기로 대상 없음) | — |

@@ -78,8 +78,11 @@ export async function launchOwnedHost({
     stdio: 'ignore',
   });
   let exited = false;
-  child.once('exit', () => {
+  // Exit code and signal for diagnostics (PLAN-47 T-226): how an owned host ended.
+  let status: { code: number | null; signal: string | null } | undefined;
+  child.once('exit', (code: number | null, signal: string | null) => {
     exited = true;
+    status = { code, signal };
   });
   // Keep an error listener after spawn too; no automatic relaunch or process adoption.
   child.on('error', () => {
@@ -126,6 +129,10 @@ export async function launchOwnedHost({
   let revoked = false;
   return Object.freeze({
     identity: expected,
+    /** Undefined while the host runs; its exit code/signal once it ended (by itself or by stop). */
+    exitStatus() {
+      return status;
+    },
     revoke() {
       revoked = true;
     },
