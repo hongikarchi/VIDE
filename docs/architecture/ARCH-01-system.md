@@ -2,10 +2,10 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.94
+version: 0.95
 updated: 2026-10-07
 owner: agent:codex
-related: [ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35, PLAN-36, ADR-039, PLAN-38, PLAN-39, PLAN-42, ADR-040, ADR-041, PLAN-43]
+related: [ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35, PLAN-36, ADR-039, PLAN-38, PLAN-39, PLAN-42, ADR-040, ADR-041, PLAN-43, SPEC-13, PLAN-46]
 ---
 
 # VIDE 기술 구조와 구현 계약
@@ -1021,6 +1021,33 @@ cLAWde·ArchiDB·Site Modeling·Structure Analysis는 각자의 저장소와 배
   - 엔진은 프로젝트 자료 DB에 출처와 함께 캐시한다. 공유 방식(직접 읽기·API·사본 동기화)은 OQ-16에서 정한다.
 - **역전송.** VIDE가 쌓은 진술·결정을 서비스로 보내는 요청은 사용자가 확인한 묶음만 보낸다(OQ-17). 무엇을 보냈는지는 작업 기록에 남긴다.
 - **형상과 메타데이터.** 대지·법규 결과의 형상은 기존 jig 만들기 경로(호스트 만들기, Link ID ADR-030)로 넣는다. 속성에는 서비스 출처 ID를 둔다.
+
+#### cLAWde 연결 계약(SPEC-13, PLAN-46, 2026-10-07 계획)
+
+동작은 [SPEC-13](../specs/SPEC-13-legal-qa.md)이 정한다. 아래는 VIDE가 cLAWde에 기대는 최소 계약이며, 서비스 내부(온톨로지·수집)는 cLAWde 저장소가 소유한다. 판은 경로의 `/v1`로 나누고, 필드 추가는 하위 호환이다. 모르는 필드는 무시하고 필수 필드가 없으면 그 응답을 버린다(`SERVICE_BAD_RESPONSE`).
+
+- **설정·비밀.** `<data>/service-settings.json {services: {clawde: {baseUrl, enabled, projectsOff[]}}}`, `GET/PUT /api/v1/settings/services`(원격 세션 쓰기 불가). 토큰은 `<data>/secrets/services.bin`에 Windows DPAPI(현재 사용자)로 암호화해 두고 API 응답·로그·작업 기록에 싣지 않는다.
+- **토큰 받기.** 계정 사이트 `POST /api/v1/services/clawde/token`(VIDE 계정 세션) → `{accessToken, expiresAt}`(짧은 수명, 만료 전 같은 호출로 갱신). 개발·시험은 설정에 정적 토큰을 직접 넣는다. 서비스 호출은 `Authorization: Bearer <token>`, `X-VIDE-Version`.
+- **서비스 끝점(cLAWde가 제공).**
+
+| 끝점 | 요청 | 응답 |
+|---|---|---|
+| `GET /v1/meta` | — | `{service:'clawde', apiVersion, lawDbDate, stages[]}` |
+| `POST /v1/ask` | `{question, stage, profile, model?, projectRef?, locale:'ko'}` | `Answer` |
+| `POST /v1/checklist` | `{stage, profile, model?}` | `{lawDbDate, items[{topic, stage, status, reason, refs[], answerHint?}]}` |
+| `GET /v1/articles/{ref}` | — | `Article` |
+| `GET /v1/search?q=&limit=` | — | `{hits[Article 요약]}` |
+| `POST /v1/contributions` | `{projectRef, idempotencyKey, items[{key, value, unit?, basis, confirmedAt}]}` | `{receiptId, accepted[key], rejected[{key, reason}]}` |
+
+  - `profile`: `{[key]: {value, unit?, source:'service'|'model'|'user'|'assumed', version?}}`. 키는 cLAWde가 `meta`로 알리는 어휘(예: `site.area`, `site.zoning`, `plan.mainUse`, `plan.gfa`, `plan.floorsAbove`)를 쓴다. AI 추정 값은 싣지 않는다(SPEC-13.4).
+  - `model`: `{northAngleDeg, siteArea, adjacent[{bearingDeg, kind, roadWidth?}], surroundingHeights{max, median}, shpAttrs{}}`. 수치·코드만 싣고 형상은 싣지 않는다.
+  - `Answer`: `{answerId, verdict:'applies'|'not-applies'|'conditional'|'unknown', conclusion, reasons[{text, refs[]}], citations[Article 발췌], interpretation[{text, refs[], basis:'verified'|'draft'}], checks[{text, dependsOn?}], needs[{key, question, options[], recommended?, why}], usedProfile[key], constraints?[{key, value, unit, refs[]}], figures?[{mime:'image/png'|'image/svg+xml', url, caption}], lawDbDate, generatedAt}`.
+  - `Article`: `{ref, lawName, article, title, excerpt, effectiveDate, sourceUrl, lawDbDate}`. `ref`는 cLAWde 조항 ID(예: `law:건축법/제61조/①`)이고 `sourceUrl`은 법령 원문(법제처) 링크다.
+- **엔진 검사.** `verdict`가 `unknown`이 아닌데 `citations`가 비면 `unknown`으로 낮춘다. `reasons[].refs`·`constraints[].refs`가 `citations`에 없으면 그 항목에 `unverifiedRef`를 붙이고 `constraints`는 jig 출력에서 뺀다. `figures`는 `<img>`로만 그리고 SVG는 스크립트·외부 참조를 지운 뒤 data URL로 둔다.
+- **엔진 API.** `GET/PUT /api/v1/projects/:id/legal/profile`, `POST …/legal/ask {question, stage?, confirmSendHash?}` → `{answer, number}` 또는 `{needsConfirm: {items[], hash}}`, `GET …/legal/checklist?stage=`, `GET …/legal/answers[?number=]`, `POST …/legal/contribute {keys[]}`. 원격 세션은 `contribute`와 설정 쓰기가 403이다.
+- **저장.** 프로젝트 DB 표 `legal_profile(key, value_json, source, version, updated_at)`, `legal_answers(number, question, stage, sent_json, sent_hash, answer_json, law_db_date, fetched_at, stale)`, `legal_articles(ref, article_json, fetched_at)`, `legal_contributions(key, value_hash, receipt_id, sent_at)`. 캐시 열쇠는 `(question 정규화, stage, sent_hash)`다.
+- **jig 능력.** `service.clawde`(ARCH-03 `Capability`에 추가). 공식 jig만 선언할 수 있고, 엔진이 읽기 결과(답·체크리스트·`constraints`)만 입력으로 넘긴다. 역전송은 어떤 jig에도 능력으로 주지 않는다.
+- **대화 도구.** `legal_ask`·`legal_checklist`·`legal_article`·`legal_answers`는 VIDE MCP 도구이며, 서비스가 연결되고 프로젝트에서 켜져 있을 때만 턴의 도구 목록에 넣는다. 오류 코드는 `SERVICE_UNAVAILABLE`·`SERVICE_AUTH`·`SERVICE_BAD_RESPONSE`·`SEND_NOT_CONFIRMED`.
 
 ## 7. 개발 기반과 변경 경계
 
