@@ -51,6 +51,8 @@ related: [SPEC-01, SPEC-08, SPEC-02, ARCH-01, DESIGN, PLAN-08, PLAN-39, SPIKE-20
 
 **검증:** `tests/integration/browser-dashboard-agenda.mjs` 갱신: 달력이 왼쪽, 할 일이 오른쪽, 할 일 아래에 연결 파일·프로젝트 폴더 구역, 손잡이로 폭이 바뀌고 다시 열어도 유지, AI 열 손잡이가 대시보드에서 보임, 시각 목록 값이 15분 단위, 'AI' 표기 없음. 회귀: `browser-project-folders.mjs`, `browser-workspace-tabs.mjs`, `browser-workspace-controls.mjs`.
 
+**결과(2026-10-07):** 구현·시험 완료. 오른쪽 열은 `AgendaBoard`의 `aside`로 할 일 아래에 연결 파일·프로젝트 폴더 구역을 받고, 손잡이는 `src/ui/dashboard-split.tsx`(기본 420px, 300px~달력 520px을 남기는 폭, `vide:dashboard-side-width`에 기억)다. 접힌 줄(`details.dash-more`)은 없앴다. AI 열 손잡이는 여섯 탭 화면 CSS에서 `.panel-resize-right`를 숨기지 않게 했다. 시각은 '—'와 15분 단위 96개의 선택 칸이며 15분 단위가 아닌 기존 값은 목록에 덧붙여 보존한다. `browser-dashboard-agenda.mjs`(배치·끌기·←/→·다시 열기 유지·Home·AI 열 손잡이·시각 목록·'AI' 없음)와 회귀 `browser-project-folders.mjs`·`browser-workspace-tabs.mjs`·`browser-workspace-controls.mjs`·`browser-react-panels.mjs` 통과.
+
 ## T-193 기본 모델 Jev
 
 | 변경 | 위치 |
@@ -59,6 +61,8 @@ related: [SPEC-01, SPEC-08, SPEC-02, ARCH-01, DESIGN, PLAN-08, PLAN-39, SPIKE-20
 | 초안이 없는 새 대화 탭은 앞 탭의 모델이 아니라 '자동 (Jev)'으로 시작 | `src/ui/app/composer.ts` (`switchDraft`) |
 
 **검증:** 브라우저 시험 하나(새 프로젝트 첫 화면의 모델 메뉴 값이 `auto`, 새 대화 탭도 `auto`, 사용자가 고른 모델은 새로고침 뒤 유지).
+
+**결과(2026-10-07):** 구현·시험 완료. 카탈로그 전의 자리 모델을 '자동 (Jev)'로 바꾸고 `defaultModel()`(목록에 `auto`가 없으면 첫 모델)을 새 초안과 초안 없는 탭(`switchDraft`)에 쓴다. 이미 저장된 초안의 모델(이전 기본값 Claude Opus 5.5 포함)은 사용자 선택으로 보고 그대로 둔다. `tests/integration/browser-default-model.mjs`(첫 화면 `auto`, 고른 모델 새로고침 뒤 유지, 새 대화 탭 `auto`, 앞 탭 선택 유지, `auto` 없는 목록은 첫 모델) 통과, `test:browser`에 더함. 회귀 `browser-conversations.mjs`·`browser-account-catalog.mjs` 통과.
 
 ## T-194 자료 정리 엔진 — 첫 정리와 바뀐 파일 반영
 

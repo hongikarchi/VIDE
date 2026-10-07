@@ -1,5 +1,8 @@
 // 대시보드 › 할 일 · 일정 (SPEC-01.14, Design SCR-20, PLAN-26 T-098·T-110, PLAN-30 T-135~T-137,
-// PLAN-39 T-180~T-183): layout '안 A' — a fixed '할 일' column (오늘 with n/m, Enter adds with the
+// PLAN-39 T-180~T-183, PLAN-42 T-192): the large month on the left, a '할 일' column on the right
+// whose width a handle changes (kept after a reload), with 연결 파일 and 프로젝트 폴더 under it; the
+// AI column's width handle shows on the dashboard; times in 15-minute steps; no 'AI' mark. The
+// '할 일' column (오늘 with n/m, Enter adds with the
 // date, time and range read from the words, the box finishes into '완료 n', a click edits in place,
 // ↑ and drag reorder, '예정 n' folded) beside the large month (a day's [+] opens the 일정 form:
 // 협의 with a time range, 위치 and 참석자; an item over several days is a bar, dragged it keeps its
@@ -101,35 +104,71 @@ try {
   const section = board.getByRole('region', { name: '할 일', exact: true });
   const schedule = board.getByRole('region', { name: '일정', exact: true });
   await section.getByText('할 일이 없습니다.').waitFor();
-  // Two areas, 할 일 first and 일정 beside it on a wide screen; no [목록 | 달력] switch.
+  // PLAN-42 T-192: the month on the left, 할 일 on the right on a wide screen; no [목록 | 달력].
   assert.equal(
     await board.locator('section.dash-section').first().getAttribute('aria-label'),
-    '할 일',
+    '일정',
   );
   await schedule.locator('.dash-cal-month').waitFor();
   assert.equal(await board.getByRole('button', { name: '목록', exact: true }).count(), 0);
   assert.equal(await board.getByRole('button', { name: '달력', exact: true }).count(), 0);
   const side = async () => {
-    const [a, b] = [await section.boundingBox(), await schedule.boundingBox()];
+    const [a, b] = [await schedule.boundingBox(), await section.boundingBox()];
     return b.x >= a.x + a.width - 1 && Math.abs(b.y - a.y) < 2;
   };
-  assert.ok(await side(), 'the two areas stand side by side');
-  // '안 A': the 할 일 column has a fixed width, the month takes the rest; no jig, no recent work.
+  assert.ok(await side(), 'the month and the 할 일 stand side by side');
+  // The right column starts 420px wide, the month takes the rest; no jig, no recent work.
   const [todoBox, monthBox] = [await section.boundingBox(), await schedule.boundingBox()];
-  assert.ok(Math.abs(todoBox.width - 320) < 2, `할 일 column ${todoBox.width}px`);
-  assert.ok(monthBox.width > 2 * todoBox.width, 'the month takes the rest');
+  assert.ok(Math.abs(todoBox.width - 420) < 2, `할 일 column ${todoBox.width}px`);
+  assert.ok(monthBox.width > todoBox.width, 'the month takes the rest');
   assert.equal(await board.getByRole('region', { name: '이 프로젝트의 jig' }).count(), 0);
   assert.equal(await board.getByRole('region', { name: '최근 작업' }).count(), 0);
-  // Linked files and folders are one folded line under them.
-  const more = board.locator('details.dash-more');
-  assert.match(await more.locator('summary').innerText(), /^연결 파일 \d+ · 프로젝트 폴더 \d+$/);
-  assert.equal(await board.getByRole('region', { name: '연결 파일' }).isVisible(), false);
+  // Under the 할 일, in the same column: 연결 파일 then 프로젝트 폴더, each its own titled section.
+  assert.equal(await board.locator('details.dash-more').count(), 0);
+  const links = board.getByRole('region', { name: '연결 파일' });
+  const folders = board.getByRole('region', { name: '프로젝트 폴더' });
+  await links.getByRole('heading', { name: '연결 파일' }).waitFor();
+  await folders.getByRole('heading', { name: '프로젝트 폴더' }).waitFor();
+  {
+    const [t, l, f] = [
+      await section.boundingBox(),
+      await links.boundingBox(),
+      await folders.boundingBox(),
+    ];
+    assert.ok(Math.abs(l.x - t.x) < 2 && Math.abs(f.x - t.x) < 2, 'one right column');
+    assert.ok(l.y >= t.y + t.height - 1 && f.y >= l.y + l.height - 1, '할 일 → 연결 파일 → 폴더');
+  }
+  if (shot) await page.screenshot({ path: join(shot, 'dashboard-layout.png') });
+  // The handle between them changes the column's width; the width stays after a reload.
+  const split = board.getByRole('separator', { name: '할 일 열 너비' });
+  {
+    const handle = await split.boundingBox();
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + 40);
+    await page.mouse.down();
+    await page.mouse.move(handle.x + handle.width / 2 - 80, handle.y + 40, { steps: 4 });
+    await page.mouse.up();
+    const wider = (await section.boundingBox()).width;
+    assert.ok(Math.abs(wider - 500) < 3, `dragged to ${wider}px`);
+    await split.focus();
+    await page.keyboard.press('ArrowRight');
+    assert.ok(Math.abs((await section.boundingBox()).width - 484) < 3, 'ArrowRight narrows');
+    await page.reload();
+    await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
+    await openDashboard();
+    await section.getByText('할 일이 없습니다.').waitFor();
+    assert.ok(Math.abs((await section.boundingBox()).width - 484) < 3, 'kept after a reload');
+    await split.focus();
+    await page.keyboard.press('Home');
+    assert.ok(Math.abs((await section.boundingBox()).width - 420) < 3, 'Home: the default');
+  }
   // The AI column opens folded on the dashboard; the model screen keeps it open.
   const right = page.locator('#right');
   assert.equal(await right.isVisible(), false);
   // The work screens' edge toggle sits over the hidden 3D view; the dashboard has its own.
   const aiToggle = board.getByRole('button', { name: '작업 패널 접기/펼치기' });
   assert.equal(await aiToggle.getAttribute('aria-expanded'), 'false');
+  const aiHandle = page.getByRole('separator', { name: '대화 패널 너비' });
+  assert.equal(await aiHandle.isVisible(), false, 'folded: no AI column handle');
   const openModel = () => page.locator('.rail [data-workspace-target="model"]').click();
   await openModel();
   await right.waitFor();
@@ -276,6 +315,18 @@ try {
   // request goes to the 기본 대화 as a hostless Auto turn.
   await aiToggle.click();
   await right.waitFor();
+  // Opened, the AI column's width handle shows on the dashboard too and changes its width.
+  await aiHandle.waitFor();
+  {
+    const before = (await right.boundingBox()).width;
+    await aiHandle.focus();
+    await page.keyboard.press('ArrowLeft');
+    await page.waitForFunction(
+      (width) => document.querySelector('#right').getBoundingClientRect().width > width + 10,
+      before,
+    );
+    await page.keyboard.press('Home');
+  }
   const helper = page.getByRole('region', { name: '할 일 도우미' });
   await helper.waitFor();
   await helper.getByRole('button', { name: '오늘 브리핑' }).click();
@@ -311,6 +362,10 @@ try {
   const notice = page.locator('#message');
   await notice.getByText("AI가 할 일을 더했습니다: '구조 회의 — 3층'").waitFor();
   await today.getByText('구조 회의 — 3층').waitFor();
+  // An item the AI wrote has no 'AI' mark in its row (the record keeps `source`).
+  const aiRow = today.locator('li', { hasText: '구조 회의 — 3층' });
+  assert.equal(await aiRow.locator('.dash-agenda-by').count(), 0);
+  assert.doesNotMatch(await aiRow.innerText(), /\bAI\b/);
   await page.waitForTimeout(9500);
   assert.ok(await notice.isVisible());
   // [되돌리기] takes back both writes of the turn: the item is gone.
@@ -403,8 +458,17 @@ try {
   await page.keyboard.type('설비 협의');
   await addForm.getByRole('combobox', { name: '종류' }).selectOption('meeting');
   await addForm.getByRole('checkbox', { name: '하루 종일' }).uncheck();
-  await addForm.getByLabel('시각', { exact: true }).fill('10:00');
-  await addForm.getByLabel('끝 시각').fill('11:00');
+  // Times are chosen in 15-minute steps (PLAN-42 T-192).
+  const startTime = addForm.getByRole('combobox', { name: '시각', exact: true });
+  const times = await startTime
+    .locator('option')
+    .evaluateAll((options) => options.map((option) => option.value));
+  assert.equal(times.length, 97);
+  assert.deepEqual(times.slice(0, 4), ['', '00:00', '00:15', '00:30']);
+  assert.ok(times.slice(1).every((time) => /^\d\d:(00|15|30|45)$/.test(time)));
+  assert.equal(times.at(-1), '23:45');
+  await startTime.selectOption('10:00');
+  await addForm.getByRole('combobox', { name: '끝 시각' }).selectOption('11:00');
   await addForm.getByRole('textbox', { name: '위치' }).fill('현장 사무실');
   await addForm.getByRole('textbox', { name: '참석자' }).fill('김 대리, 설비 업체');
   if (shot) await page.screenshot({ path: join(shot, 'dashboard-event-form.png') });
@@ -566,9 +630,10 @@ try {
   // Narrow: the two areas stack.
   await page.setViewportSize({ width: 700, height: 900 });
   await page.waitForFunction(() => {
-    const [a, b] = [...document.querySelectorAll('.dash-agenda-pair > section')].map((el) =>
-      el.getBoundingClientRect(),
-    );
+    const [a, b] = [
+      document.querySelector('.dash-schedule'),
+      document.querySelector('.dash-side'),
+    ].map((el) => el.getBoundingClientRect());
     return b && b.top >= a.bottom - 1;
   });
   assert.ok(!(await side()));

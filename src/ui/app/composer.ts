@@ -6,6 +6,8 @@ import { attachmentPreview, addViewCopy, uploadAttachments } from '../attachment
 import { element as $, readableError } from '../elements.ts';
 import {
   models,
+  AUTO_MODEL,
+  defaultModel,
   chooseModel,
   draftHasInput,
   objects,
@@ -159,7 +161,8 @@ export function followConversationModel(fixed: { provider: string; model: string
  * request list, attachments, pins, sketches, mode, effort) stays with the tab it was written in
  * and the chosen tab's own draft comes back. The draft object is changed in place, so polls and a
  * send in flight (they compare `state`) go on. A tab without a draft starts empty with the mode
- * and effort of the tab before it; the model follows the conversation (`onFixed`).
+ * and effort of the tab before it and the model "자동 (Jev)"; the model follows the conversation
+ * (`onFixed`).
  */
 export function switchDraft(next: string | null) {
   if (!sessionState.project || next === draftState.draftConversation) return;
@@ -215,6 +218,12 @@ export function switchDraft(next: string | null) {
       selectionState.selectedResult = draftState.state.baseRequestId;
       selectionState.appliedSelection = undefined;
     }
+  } else {
+    // A tab without a draft starts at "자동 (Jev)", not the tab before's model (PLAN-42 T-193);
+    // a fixed conversation still sets its own (onFixed).
+    const start = defaultModel();
+    if (start && start !== draftState.state.model) chooseModel(draftState.state, start);
+    draftState.modelFollowsConversation = true;
   }
   setBody(draftState.state.body);
   render();
@@ -250,7 +259,10 @@ export function fillModels() {
   };
   draftState.view.extraModels = [];
   if (!models.some((m) => m.id === draftState.state.model)) {
-    const first = models.find((m) => m.provider === draftState.state.model);
+    // "자동 (Jev)" missing from this catalog: the first model instead (PLAN-42 T-193).
+    const first =
+      models.find((m) => m.provider === draftState.state.model) ??
+      (draftState.state.model === AUTO_MODEL ? models[0] : undefined);
     if (first) chooseModel(draftState.state, first.id);
   }
   draftState.view.model = draftState.state.model;

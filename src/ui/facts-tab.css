@@ -4,7 +4,9 @@
 .facts-workspace {
   display: none;
 }
-body[data-workspace='data'] .workspace > :not(.workspace-tabs):not(.facts-workspace) {
+body[data-workspace='data']
+  .workspace
+  > :not(.workspace-tabs):not(.facts-workspace):not(.panel-resize-right) {
   display: none !important;
 }
 body[data-workspace='data'] .facts-workspace {

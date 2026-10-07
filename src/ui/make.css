@@ -4,7 +4,9 @@
 .make-side {
   display: none;
 }
-body[data-workspace='make'] .workspace > :not(.workspace-tabs):not(.make-workspace) {
+body[data-workspace='make']
+  .workspace
+  > :not(.workspace-tabs):not(.make-workspace):not(.panel-resize-right) {
   display: none !important;
 }
 body[data-workspace='make'] .make-workspace {

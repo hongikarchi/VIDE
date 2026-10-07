@@ -3,7 +3,9 @@
 .output-workspace {
   display: none;
 }
-body[data-workspace='output'] .workspace > :not(.workspace-tabs):not(.output-workspace) {
+body[data-workspace='output']
+  .workspace
+  > :not(.workspace-tabs):not(.output-workspace):not(.panel-resize-right) {
   display: none !important;
 }
 body[data-workspace='output'] .output-workspace {

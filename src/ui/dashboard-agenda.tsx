@@ -1,6 +1,7 @@
 // 대시보드 › 할 일 · 일정 (SPEC-01.14, Design SCR-20, PLAN-30, PLAN-39): the project's 할 일 as two
-// areas over the same items. '할 일' (a fixed column on the left, 2026-10-06 user choice '안 A: 할
-// 일 | 큰 달력') shows what is open for today — past-due, today's (an item over several days while
+// areas over the same items. '할 일' (the right column over 연결 파일 and 프로젝트 폴더, its width
+// dragged at the handle; 2026-10-07 '캘린더가 왼쪽으로 오고, 할일이 오른쪽으로', PLAN-42 T-192)
+// shows what is open for today — past-due, today's (an item over several days while
 // today falls in it) and undated items — in the user's order, under a 오늘 head with the day's
 // progress n/m; later dates fold under '예정 n', finished ones under '완료 n'. A 협의 has no done
 // check and leaves the list once its day is over. When today's items are all done it offers
@@ -13,7 +14,15 @@
 // finishes, a click on the text edits in place with the same fields as the form, [빼기] removes,
 // drag or ↑↓ reorders. iPad sessions may edit too. The board reads its own data (`…/agenda`) and
 // again when shown, on focus and after an AI write.
-import { useCallback, useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+  type ReactNode,
+} from 'react';
 import { api } from './gateway.ts';
 import type { AgendaItem, DayLogEntry } from '../contracts/agenda.ts';
 import {
@@ -33,6 +42,7 @@ import {
 } from './agenda-text.ts';
 import { AGENDA_DRAG, AgendaCalendar, type CalendarAnchor } from './dashboard-calendar.tsx';
 import { AgendaFromText } from './dashboard-agenda-extract.tsx';
+import { SideSplitter, useSideWidth } from './dashboard-split.tsx';
 import {
   AgendaForm,
   FIELD_KEYS,
@@ -128,7 +138,18 @@ function AddBox({
   );
 }
 
-export function AgendaBoard({ projectId, shown }: { projectId: string; shown: number }) {
+export function AgendaBoard({
+  projectId,
+  shown,
+  aside,
+}: {
+  projectId: string;
+  shown: number;
+  /** The sections under the 할 일 in the right column (연결 파일, 프로젝트 폴더; dashboard.tsx). */
+  aside?: ReactNode;
+}) {
+  const pair = useRef<HTMLDivElement>(null);
+  const side = useSideWidth(pair);
   const [items, setItems] = useState<AgendaItem[] | undefined>();
   const [dayEnd, setDayEnd] = useState<DayLogEntry | undefined>();
   const [failed, setFailed] = useState(false);
@@ -380,7 +401,6 @@ export function AgendaBoard({ projectId, shown }: { projectId: string; shown: nu
                   ? shortDate(entry.date)
                   : dateLabel(entry.date, today)
                 : null}
-            {entry.source === 'ai' ? <span className="dash-agenda-by">AI</span> : null}
           </span>
         )}
         {editing ? null : (
@@ -507,100 +527,11 @@ export function AgendaBoard({ projectId, shown }: { projectId: string; shown: nu
     );
   return (
     <div className="dash-agenda-board">
-      <div className="dash-agenda-pair">
-        <section className="dash-section dash-agenda" aria-label="할 일">
-          <div className="dash-section-head">
-            <h3>할 일</h3>
-          </div>
-          <div className="dash-today-head">
-            <h4>오늘</h4>
-            <span className="dash-agenda-day">{todayLabel(now)}</span>
-            {progress.total ? (
-              <span className="dash-today-progress" aria-label="오늘 진행">
-                <span className="dash-today-count">
-                  {progress.done}/{progress.total}
-                </span>
-                <span className="dash-today-bar" aria-hidden="true">
-                  <span style={{ width: `${(progress.done / progress.total) * 100}%` }} />
-                </span>
-              </span>
-            ) : null}
-          </div>
-          {finish}
-          <AddBox
-            draft={taskDraft}
-            today={today}
-            onDraft={setTaskDraft}
-            onAdd={() => addFrom(taskDraft)}
-          />
-          <AgendaFromText projectId={projectId} />
-          {reason ? (
-            <p className="dash-folder-reason" role="alert">
-              {reason}
-            </p>
-          ) : null}
-          {body(
-            <>
-              {current.length ? (
-                <ul className="dash-agenda-list" aria-label="오늘 할 일">
-                  {current.map((entry, index) => row(entry, index))}
-                </ul>
-              ) : finish ? null : (
-                <p className="dash-empty">
-                  {open.length
-                    ? '오늘 할 일은 다 했습니다.'
-                    : '할 일이 없습니다. 위 칸에 적고 Enter.'}
-                </p>
-              )}
-              {later.length ? (
-                <div className="dash-agenda-fold">
-                  <button
-                    type="button"
-                    className="link-button"
-                    aria-expanded={showLater}
-                    onClick={() => setShowLater(!showLater)}
-                  >
-                    예정 {later.length}
-                  </button>
-                  {showLater ? (
-                    <ul className="dash-agenda-list" aria-label="예정">
-                      {later.map((entry) => row(entry))}
-                    </ul>
-                  ) : null}
-                </div>
-              ) : null}
-              {done.length ? (
-                <div className="dash-agenda-done">
-                  <div className="dash-section-head">
-                    <button
-                      type="button"
-                      className="link-button"
-                      aria-expanded={showDone}
-                      onClick={() => setShowDone(!showDone)}
-                    >
-                      완료 {done.length}
-                    </button>
-                    {showDone ? (
-                      <button
-                        type="button"
-                        className="link-button"
-                        disabled={busy}
-                        onClick={() => void write(`${base}/remove-done`, 'POST', {})}
-                      >
-                        완료 비우기
-                      </button>
-                    ) : null}
-                  </div>
-                  {showDone ? (
-                    <ul className="dash-agenda-list" aria-label="완료한 할 일">
-                      {done.map((entry) => row(entry))}
-                    </ul>
-                  ) : null}
-                </div>
-              ) : null}
-            </>,
-          )}
-        </section>
+      <div
+        className="dash-agenda-pair"
+        ref={pair}
+        style={{ '--dash-side': `${side.width}px` } as CSSProperties}
+      >
         <section className="dash-section dash-schedule" aria-label="일정">
           <div className="dash-section-head">
             <h3>일정</h3>
@@ -623,6 +554,103 @@ export function AgendaBoard({ projectId, shown }: { projectId: string; shown: nu
             />,
           )}
         </section>
+        <SideSplitter width={side.width} set={side.set} max={side.max} />
+        <div className="dash-side">
+          <section className="dash-section dash-agenda" aria-label="할 일">
+            <div className="dash-section-head">
+              <h3>할 일</h3>
+            </div>
+            <div className="dash-today-head">
+              <h4>오늘</h4>
+              <span className="dash-agenda-day">{todayLabel(now)}</span>
+              {progress.total ? (
+                <span className="dash-today-progress" aria-label="오늘 진행">
+                  <span className="dash-today-count">
+                    {progress.done}/{progress.total}
+                  </span>
+                  <span className="dash-today-bar" aria-hidden="true">
+                    <span style={{ width: `${(progress.done / progress.total) * 100}%` }} />
+                  </span>
+                </span>
+              ) : null}
+            </div>
+            {finish}
+            <AddBox
+              draft={taskDraft}
+              today={today}
+              onDraft={setTaskDraft}
+              onAdd={() => addFrom(taskDraft)}
+            />
+            <AgendaFromText projectId={projectId} />
+            {reason ? (
+              <p className="dash-folder-reason" role="alert">
+                {reason}
+              </p>
+            ) : null}
+            {body(
+              <>
+                {current.length ? (
+                  <ul className="dash-agenda-list" aria-label="오늘 할 일">
+                    {current.map((entry, index) => row(entry, index))}
+                  </ul>
+                ) : finish ? null : (
+                  <p className="dash-empty">
+                    {open.length
+                      ? '오늘 할 일은 다 했습니다.'
+                      : '할 일이 없습니다. 위 칸에 적고 Enter.'}
+                  </p>
+                )}
+                {later.length ? (
+                  <div className="dash-agenda-fold">
+                    <button
+                      type="button"
+                      className="link-button"
+                      aria-expanded={showLater}
+                      onClick={() => setShowLater(!showLater)}
+                    >
+                      예정 {later.length}
+                    </button>
+                    {showLater ? (
+                      <ul className="dash-agenda-list" aria-label="예정">
+                        {later.map((entry) => row(entry))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ) : null}
+                {done.length ? (
+                  <div className="dash-agenda-done">
+                    <div className="dash-section-head">
+                      <button
+                        type="button"
+                        className="link-button"
+                        aria-expanded={showDone}
+                        onClick={() => setShowDone(!showDone)}
+                      >
+                        완료 {done.length}
+                      </button>
+                      {showDone ? (
+                        <button
+                          type="button"
+                          className="link-button"
+                          disabled={busy}
+                          onClick={() => void write(`${base}/remove-done`, 'POST', {})}
+                        >
+                          완료 비우기
+                        </button>
+                      ) : null}
+                    </div>
+                    {showDone ? (
+                      <ul className="dash-agenda-list" aria-label="완료한 할 일">
+                        {done.map((entry) => row(entry))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ) : null}
+              </>,
+            )}
+          </section>
+          {aside}
+        </div>
       </div>
     </div>
   );

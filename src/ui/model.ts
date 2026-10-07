@@ -135,15 +135,17 @@ export function objectById(id: string | null | undefined): DraftObject | undefin
     };
   return id == null ? undefined : index.map.get(id);
 }
-/** Replaced by the engine's catalog on connect; this entry only fills the menu before that. */
+/**
+ * Replaced by the engine's catalog on connect; this entry only fills the menu before that. It is
+ * "자동 (Jev)", the default model of a new draft (2026-10-07, PLAN-42 T-193).
+ */
+export const AUTO_MODEL = 'auto';
 export const models: ModelOption[] = [
-  {
-    id: 'claude-opus-5-5',
-    name: 'Claude Opus 5.5',
-    provider: 'claude-cli',
-    efforts: ['default', 'low', 'medium', 'high', 'xhigh', 'max'],
-  },
+  { id: AUTO_MODEL, name: '자동 (Jev)', provider: 'claude-cli', efforts: ['default'] },
 ];
+/** The model a new draft starts with: "자동 (Jev)", or the first model when the catalog lacks it. */
+export const defaultModel = () =>
+  models.some((m) => m.id === AUTO_MODEL) ? AUTO_MODEL : models[0]?.id;
 export const initial = (): DraftState => ({
   selected: null,
   host: 'rhino',
@@ -152,7 +154,7 @@ export const initial = (): DraftState => ({
   pins: [],
   sketches: [],
   files: [],
-  model: models[0].id,
+  model: defaultModel() ?? AUTO_MODEL,
   effort: 'default',
   permission: 'review',
   messages: [],

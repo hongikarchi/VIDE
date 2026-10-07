@@ -89,6 +89,48 @@ export function changedFields(fields: AgendaFields, from: AgendaFields) {
   return changed;
 }
 
+/** The day's times in 15-minute steps (2026-10-07 '시간 입력할 때 15분 단위로', PLAN-42 T-192). */
+export const QUARTER_TIMES = Array.from(
+  { length: 96 },
+  (_, n) =>
+    `${String(Math.floor(n / 4)).padStart(2, '0')}:${String((n % 4) * 15).padStart(2, '0')}`,
+);
+
+/**
+ * A time chosen from the 15-minute steps, '—' for none. A time saved off those steps (an older
+ * item, a time read from the words) stays in the list, so opening the form does not change it.
+ */
+function TimeSelect({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  disabled?: boolean;
+  onChange: (time: string) => void;
+}) {
+  const times =
+    value && !QUARTER_TIMES.includes(value) ? [...QUARTER_TIMES, value].sort() : QUARTER_TIMES;
+  return (
+    <select
+      className="dash-event-time"
+      aria-label={label}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      <option value="">—</option>
+      {times.map((time) => (
+        <option key={time} value={time}>
+          {time}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 export function AgendaForm({
   fields,
   onChange,
@@ -184,13 +226,10 @@ export function AgendaForm({
           onChange={(event) => setStart(event.target.value)}
         />
         {allDay ? null : (
-          <input
-            type="time"
-            aria-label="시각"
+          <TimeSelect
+            label="시각"
             value={fields.time}
-            onChange={(event) =>
-              set({ time: event.target.value, ...(event.target.value ? {} : { endTime: '' }) })
-            }
+            onChange={(time) => set({ time, ...(time ? {} : { endTime: '' }) })}
           />
         )}
       </div>
@@ -205,12 +244,11 @@ export function AgendaForm({
           onChange={(event) => set({ endDate: event.target.value })}
         />
         {allDay ? null : (
-          <input
-            type="time"
-            aria-label="끝 시각"
+          <TimeSelect
+            label="끝 시각"
             value={fields.endTime}
             disabled={!fields.time}
-            onChange={(event) => set({ endTime: event.target.value })}
+            onChange={(endTime) => set({ endTime })}
           />
         )}
       </div>

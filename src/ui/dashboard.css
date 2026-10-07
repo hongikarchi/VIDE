@@ -1,10 +1,12 @@
-/* 대시보드 workspace tab (Design SCR-20): the project's name, the 할 일 column beside the large month
-   (layout '안 A', PLAN-39) and the folded line of linked files and folders, over the centre column.
+/* 대시보드 workspace tab (Design SCR-20): the project's name, the large month on the left and the
+   column of 할 일, linked files and folders on the right (PLAN-42 T-192), over the centre column.
    Colours, lines and radii come from tokens.css. */
 .dashboard-workspace {
   display: none;
 }
-body[data-workspace='dashboard'] .workspace > :not(.workspace-tabs):not(.dashboard-workspace) {
+body[data-workspace='dashboard']
+  .workspace
+  > :not(.workspace-tabs):not(.dashboard-workspace):not(.panel-resize-right) {
   display: none !important;
 }
 body[data-workspace='dashboard'] .dashboard-workspace {
@@ -248,9 +250,6 @@ button.dash-tile:hover {
   font: 12px var(--font-mono);
   color: var(--text-2);
 }
-.dash-agenda-by {
-  font-size: 11px;
-}
 .dash-agenda-tools {
   display: flex;
   gap: 2px;
@@ -316,9 +315,10 @@ button.dash-tile:hover {
 .dash-agenda-hint .dash-agenda-kind {
   margin-left: 6px;
 }
-/* 할 일 · 일정 (PLAN-30 T-135, PLAN-39 T-181 '안 A'): a fixed 할 일 column beside the month that
-   takes the rest when the row is wide, stacked when narrow (a container query, so opening the
-   right panel re-fits them). */
+/* 일정 | 할 일 · 연결 파일 · 프로젝트 폴더 (PLAN-42 T-192): the month takes the rest on the left,
+   the right column has the width dragged at the handle (--dash-side, dashboard-split.tsx; never
+   leaving the month under 520px), stacked when narrow (a container query, so opening the right
+   panel re-fits them). The right column's sections are separate cards. */
 .dash-agenda-board {
   container-type: inline-size;
 }
@@ -327,11 +327,45 @@ button.dash-tile:hover {
   grid-template-columns: minmax(0, 1fr);
   gap: 22px;
 }
+.dash-split {
+  display: none;
+}
 @container (min-width: 960px) {
   .dash-agenda-pair {
-    grid-template-columns: 320px minmax(0, 1fr);
-    gap: 20px;
+    grid-template-columns:
+      minmax(0, 1fr) 12px
+      min(var(--dash-side, 420px), calc(100% - 532px));
+    gap: 0 6px;
   }
+  .dash-split {
+    display: block;
+    align-self: stretch;
+    margin: 0 3px;
+    border-radius: var(--radius-pill);
+    cursor: col-resize;
+    touch-action: none;
+  }
+  .dash-split:hover,
+  .dash-split:focus-visible {
+    background: var(--border);
+    outline: none;
+  }
+}
+.dash-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.dash-side > .dash-section {
+  padding: 14px 16px;
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+.dash-side .dash-grid {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
 }
 .dash-schedule {
   container-type: inline-size;
@@ -719,7 +753,7 @@ button.dash-tile:hover {
   flex: 1 1 120px;
   min-width: 0;
 }
-.dash-event-line input[type='time'] {
+.dash-event-line .dash-event-time {
   flex: 0 1 96px;
   min-width: 0;
 }
@@ -754,21 +788,6 @@ button.dash-tile:hover {
 .dash-agenda-edit .dash-event-line,
 .dash-agenda-edit > input[type='text']:not(.dash-event-title) {
   flex: 1 1 200px;
-}
-/* The folded line of linked files and folders (Design §03 「대시보드의 아래 줄」). */
-.dash-more > summary {
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--text-3);
-}
-.dash-more > summary:hover {
-  color: var(--text-1);
-}
-.dash-more-body {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  margin-top: 12px;
 }
 /* 할 일 도우미 over the AI column on the dashboard (Design §03 「대시보드의 AI 열」). */
 .agenda-helper {

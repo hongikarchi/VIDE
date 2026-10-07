@@ -3,7 +3,9 @@
 .notes-tab {
   display: none;
 }
-body[data-workspace='notes'] .workspace > :not(.workspace-tabs):not(.notes-tab) {
+body[data-workspace='notes']
+  .workspace
+  > :not(.workspace-tabs):not(.notes-tab):not(.panel-resize-right) {
   display: none !important;
 }
 body[data-workspace='notes'] .notes-tab {

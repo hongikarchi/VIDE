@@ -1,7 +1,7 @@
 // 대시보드 workspace tab (Design SCR-20, user requests 2026-10-01 and 2026-10-06): the project's
-// name, then its 할 일 column and the large month (SPEC-01.14, dashboard-agenda.tsx; layout '안 A',
-// PLAN-39), and below them one folded line for the linked files and its folders on this PC
-// (SPEC-01.13). The jigs and the latest requests are not here (2026-10-06, '대시보드에서는 Jig,
+// name, then the large month on the left and on the right one column of titled sections: the 할 일
+// (SPEC-01.14, dashboard-agenda.tsx), the linked files and the project's folders on this PC
+// (SPEC-01.13), its width dragged at the handle between them (2026-10-07, PLAN-42 T-192). The jigs and the latest requests are not here (2026-10-06, '대시보드에서는 Jig,
 // 최근 작업 필요없을 듯': the JIG screen and the work history have them). Apart from the 할 일 and
 // the folders it reads only existing state (app.ts gives it through `provideDashboard`).
 import { useEffect, useState } from 'react';
@@ -34,8 +34,6 @@ let shownFor: string | undefined;
 const REFRESH = 'vide:dashboard-refresh';
 /** The tab was shown again: read the 할 일 again too. */
 const SHOWN = 'vide:dashboard-shown';
-/** Whether the folded line of files and folders is open (a viewer convenience). */
-const MORE_KEY = 'vide:dashboard-more';
 
 /** app.ts registers where the dashboard reads the project's state. */
 export function provideDashboard(next: DashboardSource) {
@@ -111,45 +109,6 @@ function AiToggle() {
   );
 }
 
-/**
- * The linked files and the project folders as one folded line under the 할 일 and the month
- * (Design §03 「대시보드의 아래 줄」); opened, the tiles and the folder list as before. The folders
- * stay mounted while folded, so the line can say how many there are.
- */
-function More({ projectId, data }: { projectId: string; data: DashboardData }) {
-  const [open, setOpen] = useState(() => {
-    try {
-      return localStorage.getItem(MORE_KEY) === 'open';
-    } catch {
-      return false;
-    }
-  });
-  const [folders, setFolders] = useState<number | undefined>();
-  return (
-    <details
-      className="dash-more"
-      open={open}
-      onToggle={(event) => {
-        const next = (event.currentTarget as HTMLDetailsElement).open;
-        setOpen(next);
-        try {
-          localStorage.setItem(MORE_KEY, next ? 'open' : 'closed');
-        } catch {
-          /* Kept for this session only. */
-        }
-      }}
-    >
-      <summary>
-        연결 파일 {data.linksLoaded ? data.links.length : '…'} · 프로젝트 폴더 {folders ?? '…'}
-      </summary>
-      <div className="dash-more-body">
-        <Links data={data} />
-        <ProjectFolders projectId={projectId} onCount={setFolders} />
-      </div>
-    </details>
-  );
-}
-
 function Dashboard({ projectId }: { projectId: string }) {
   const [, setTick] = useState(0);
   const [shown, setShown] = useState(0);
@@ -178,8 +137,16 @@ function Dashboard({ projectId }: { projectId: string }) {
         </div>
         <AiToggle />
       </header>
-      <AgendaBoard projectId={projectId} shown={shown} />
-      <More projectId={projectId} data={data} />
+      <AgendaBoard
+        projectId={projectId}
+        shown={shown}
+        aside={
+          <>
+            <Links data={data} />
+            <ProjectFolders projectId={projectId} />
+          </>
+        }
+      />
     </div>
   );
 }

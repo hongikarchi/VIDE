@@ -276,7 +276,7 @@ try {
   );
 
   // 대시보드 (the rail's first destination): the project's name, its 할 일 and month over the
-  // centre, the linked files folded below; no jigs and no latest requests (2026-10-06, PLAN-39
+  // centre, the linked files and folders under the 할 일 (PLAN-42 T-192); no jigs and no latest requests (2026-10-06, PLAN-39
   // T-181: the JIG screen and the work history have them). The AI column opens folded there.
   await rail('dashboard').click();
   assert.deepEqual(await pressed(), ['dashboard']);
@@ -287,8 +287,7 @@ try {
   assert.equal(await board.getByRole('region', { name: '최근 작업' }).count(), 0);
   assert.equal(await board.getByRole('region', { name: '이 프로젝트의 jig' }).count(), 0);
   assert.equal(await page.locator('#right').isVisible(), false);
-  await board.locator('details.dash-more > summary').click();
-  assert.ok(await board.getByRole('region', { name: '연결 파일' }).isVisible());
+  await board.getByRole('region', { name: '연결 파일' }).waitFor();
   if (shot) await page.screenshot({ path: join(shot, 'workspace-tabs-dashboard.png') });
   // The open jig's tab is still in the row; it brings the jig back, the AI column open again.
   await gridTab.click();

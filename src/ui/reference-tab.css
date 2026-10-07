@@ -3,7 +3,9 @@
 .reference-workspace {
   display: none;
 }
-body[data-workspace='reference'] .workspace > :not(.workspace-tabs):not(.reference-workspace) {
+body[data-workspace='reference']
+  .workspace
+  > :not(.workspace-tabs):not(.reference-workspace):not(.panel-resize-right) {
   display: none !important;
 }
 body[data-workspace='reference'] .reference-workspace {
