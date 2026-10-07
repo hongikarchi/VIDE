@@ -1031,6 +1031,9 @@ const BAKE_TEMPLATES: Record<string, string> = {
   'vide.bake.sweep-h@1': 'H형 부재',
   'vide.bake.extrude-column@1': '기둥',
   'vide.bake.textdot@1': '부호 문자',
+  'vide.bake.extrude-polygon@1': '돌출 매스',
+  'vide.bake.brep-faces@1': '닫힌 다면체',
+  'vide.bake.mesh@1': '메쉬',
 };
 /** The outline's 결과: what Rhino에 만들기 makes, the reports and the outputs other jigs read. */
 export function resultsOf(m: DraftManifest): { key: string; title: string; note: string }[] {

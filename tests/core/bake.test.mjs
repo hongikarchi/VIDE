@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  ATTR_VALUE_MAX,
   DATA_FORMAT,
+  SITE_ATTRS,
+  TEMPLATE_NAMES,
+  attrNameSafe,
+  splitMesh,
   decodeDataBlock,
   encodeDataBlock,
   itemProblems,
@@ -134,12 +139,7 @@ test('data block: every template round-trips through the reference reader with m
 });
 
 test('templates: one placeholder each; rendering only inserts base64 and keeps every other character', () => {
-  for (const name of [
-    'vide.bake.curves@1',
-    'vide.bake.sweep-h@1',
-    'vide.bake.extrude-column@1',
-    'vide.bake.textdot@1',
-  ]) {
+  for (const name of TEMPLATE_NAMES) {
     const template = loadTemplate(name);
     assert.equal(template.text.split(PLACEHOLDER).length, 2, `${name} has one placeholder`);
     assert.match(template.hash, /^[a-f0-9]{64}$/);
@@ -156,8 +156,8 @@ test('templates: one placeholder each; rendering only inserts base64 and keeps e
 
 test('templates: the output layer is made level by level under its own parent, never looked up by name at the root', () => {
   // ARCH-03 §9.5: one block, the same in every template, so a several-level new layer is made in place.
-  const blocks = ['curves', 'sweep-h', 'extrude-column', 'textdot'].map((name) => {
-    const text = loadTemplate(`vide.bake.${name}@1`).text;
+  const blocks = TEMPLATE_NAMES.map((name) => {
+    const text = loadTemplate(name).text;
     const start = text.indexOf('// The output layer');
     return text.slice(start, text.indexOf('\n}\n', start) + 3);
   });
@@ -848,4 +848,368 @@ test('bake plan output: lines keep arcs, members split by template, members need
   assert.deepEqual(replan.added, []);
   assert.equal(replan.replaced.length, lines.items.length);
   assert.equal(replan.deleteIds.length, lines.items.length);
+});
+
+// T-208 (PLAN-45): site and massing templates — extruded polygons (buildings), planar faces
+// (envelopes, SPIKE-2026-10-07-envelope) and meshes (terrain) — and free-text attribute values.
+/** A box as planar faces wound counter-clockwise seen from outside. */
+function boxFaces([x0, y0, z0], [x1, y1, z1]) {
+  const p = (x, y, z) => [x ? x1 : x0, y ? y1 : y0, z ? z1 : z0];
+  return [
+    [[p(0, 0, 0), p(0, 1, 0), p(1, 1, 0), p(1, 0, 0)]],
+    [[p(0, 0, 1), p(1, 0, 1), p(1, 1, 1), p(0, 1, 1)]],
+    [[p(0, 0, 0), p(1, 0, 0), p(1, 0, 1), p(0, 0, 1)]],
+    [[p(1, 1, 0), p(0, 1, 0), p(0, 1, 1), p(1, 1, 1)]],
+    [[p(0, 1, 0), p(0, 0, 0), p(0, 0, 1), p(0, 1, 1)]],
+    [[p(1, 0, 0), p(1, 1, 0), p(1, 1, 1), p(1, 0, 1)]],
+  ];
+}
+
+test('site templates: extruded polygons, planar faces and meshes round-trip; the engine volume stays f64', () => {
+  const far = [198765, 551234, 0]; // survey-sized: f64 origin + f32 differences
+  const at = ([x, y, z]) => [far[0] + x, far[1] + y, far[2] + z];
+  const building = {
+    key: 'bldg:1',
+    attrs: [
+      ['vide-height-source', '추정'],
+      ['vide-use', '제2종 근린생활시설'],
+    ],
+    height: 12.5,
+    rings: [
+      [at([0, 0, 3]), at([20, 0, 3]), at([20, 15, 3]), at([0, 15, 3])],
+      [at([5, 5, 3]), at([5, 10, 3]), at([10, 10, 3]), at([10, 5, 3])],
+    ],
+  };
+  const extruded = decodeDataBlock(
+    encodeDataBlock(header('vide.bake.extrude-polygon@1'), [building]),
+  );
+  assert.equal(extruded.items[0].height, 12.5);
+  assert.deepEqual(extruded.items[0].attrs, building.attrs);
+  assert.equal(extruded.items[0].rings.length, 2);
+  extruded.items[0].rings.flat().forEach((p, i) => near(p, building.rings.flat()[i], 1e-4));
+
+  const envelope = {
+    key: 'env:max',
+    attrs: [['vide-envelope', '최대']],
+    volume: 12445.123456789012,
+    faces: boxFaces(at([0, 0, 0]), at([10, 20, 30])),
+  };
+  const faces = decodeDataBlock(encodeDataBlock(header('vide.bake.brep-faces@1'), [envelope]));
+  assert.equal(faces.items[0].volume, envelope.volume, 'the engine volume is not rounded to f32');
+  assert.equal(faces.items[0].faces.length, 6);
+  faces.items[0].faces.flat(2).forEach((p, i) => near(p, envelope.faces.flat(2)[i], 1e-4));
+
+  const terrain = {
+    key: 'terrain:1',
+    attrs: [],
+    vertices: [at([0, 0, 1]), at([10, 0, 2]), at([10, 10, 3]), at([0, 10, 2]), at([20, 0, 1])],
+    faces: [
+      [0, 1, 2, 3],
+      [1, 4, 2],
+    ],
+  };
+  const mesh = decodeDataBlock(encodeDataBlock(header('vide.bake.mesh@1'), [terrain]));
+  assert.deepEqual(mesh.items[0].faces, terrain.faces);
+  mesh.items[0].vertices.forEach((p, i) => near(p, terrain.vertices[i], 1e-4));
+});
+
+test('site templates: the C# makes faces and joins at 1e-5 m, never merges, and refuses instead of flipping', () => {
+  const code = (name) =>
+    loadTemplate(name)
+      .text.split('\n')
+      .filter((line) => !line.trim().startsWith('//'))
+      .join('\n');
+  const faces = code('vide.bake.brep-faces@1');
+  assert.match(faces, /var fine = 1e-5 \* scale;/);
+  assert.match(faces, /Brep\.CreatePlanarBreps\([^;]*, fine\)/);
+  assert.match(faces, /Brep\.JoinBreps\(pieces, fine\)/);
+  assert.match(faces, /joined\.Length != 1\) return null/);
+  assert.match(
+    faces,
+    /!made\.IsSolid \|\| !made\.IsValid \|\| made\.SolidOrientation != BrepSolidOrientation\.Outward\) return null/,
+  );
+  assert.match(faces, /Math\.Abs\(mass\.Volume - expected\) <= 1e-6 \* expected/);
+  // JoinBreps orients a closed result outward by itself: the wound volume catches reversed data.
+  assert.match(faces, /Math\.Abs\(Wound\(faceList\) - expected\) > 1e-6 \* expected\) return null/);
+  assert.doesNotMatch(faces, /MergeCoplanarFaces|ModelAbsoluteTolerance|made\.Flip/);
+  const extrude = code('vide.bake.extrude-polygon@1');
+  assert.match(extrude, /CreateExtrusion\(/);
+  assert.match(extrude, /1e-6 \* expected/);
+  assert.doesNotMatch(extrude, /MergeCoplanarFaces/);
+  assert.match(loadTemplate('vide.bake.mesh@1').text, /UseDoublePrecisionVertices = true/);
+  for (const name of TEMPLATE_NAMES)
+    assert.match(
+      loadTemplate(name).text,
+      /return new \{ removed, keys = keys\.ToArray\(\), ids = ids\.ToArray\(\), failed = failed\.ToArray\(\) \};\n$/,
+      `${name} returns the shared receipt`,
+    );
+});
+
+test('site templates: items that cannot make a solid or mesh are reported before encoding', () => {
+  const ring = [
+    [0, 0, 0],
+    [1, 0, 0],
+    [1, 1, 0],
+  ];
+  assert.deepEqual(
+    itemProblems('vide.bake.extrude-polygon@1', [
+      { key: 'ok', attrs: [], height: 3, rings: [ring] },
+    ]),
+    [],
+  );
+  const extrude = itemProblems('vide.bake.extrude-polygon@1', [
+    { key: 'flat', attrs: [], height: 0, rings: [ring] },
+    { key: 'tilted', attrs: [], height: 3, rings: [[...ring.slice(0, 2), [1, 1, 0.5]]] },
+    { key: 'short', attrs: [], height: 3, rings: [ring.slice(0, 2)] },
+  ]);
+  assert.ok(extrude.some((p) => p.startsWith('flat:') && p.includes('높이')));
+  assert.ok(extrude.some((p) => p.startsWith('tilted:') && p.includes('수평면')));
+  assert.ok(extrude.some((p) => p.startsWith('short:')));
+  const box = boxFaces([0, 0, 0], [1, 1, 1]);
+  assert.deepEqual(
+    itemProblems('vide.bake.brep-faces@1', [{ key: 'box', attrs: [], volume: 1, faces: box }]),
+    [],
+  );
+  const faces = itemProblems('vide.bake.brep-faces@1', [
+    { key: 'negative', attrs: [], volume: -1, faces: box },
+    { key: 'open', attrs: [], volume: 1, faces: box.slice(0, 3) },
+  ]);
+  assert.ok(faces.some((p) => p.startsWith('negative:')));
+  assert.ok(faces.some((p) => p.startsWith('open:')));
+  const mesh = itemProblems('vide.bake.mesh@1', [
+    { key: 'ok', attrs: [], vertices: ring, faces: [[0, 1, 2]] },
+    { key: 'range', attrs: [], vertices: ring, faces: [[0, 1, 3]] },
+    { key: 'repeat', attrs: [], vertices: ring, faces: [[0, 1, 1]] },
+    { key: 'none', attrs: [], vertices: ring, faces: [] },
+  ]);
+  assert.deepEqual(
+    mesh.map((p) => p.split(':')[0]),
+    ['range', 'repeat', 'none'],
+  );
+});
+
+test('attribute names are kebab vide- words; free-text values allow addresses and refuse control characters', () => {
+  for (const names of Object.values(SITE_ATTRS))
+    for (const name of names) assert.ok(attrNameSafe(name), name);
+  for (const bad of [
+    'vide-',
+    'vide-A',
+    'vide--x',
+    'vide-x-',
+    'pnu',
+    'vide-key',
+    'vide-run',
+    'vide-' + 'a'.repeat(40),
+  ])
+    assert.equal(attrNameSafe(bad), false, bad);
+  const curve = {
+    kind: 'polyline',
+    points: [
+      [0, 0, 0],
+      [1, 0, 0],
+    ],
+  };
+  const item = (attrs) => ({ key: 'parcel:1', attrs, curve });
+  assert.deepEqual(
+    unsafeArgs([
+      item([
+        ['vide-jibun', '서울특별시 중구 세종대로 110'],
+        ['vide-area-m2', '1234.56'],
+        ['vide-source', '국토교통부 연속지적도 (2026-10-08)'],
+        ['vide-site-summary', JSON.stringify({ 면적: 1234.56, 주소: '가 "나" 다' })],
+        ['vide-mark', 'C1'],
+      ]),
+    ]),
+    [],
+  );
+  const failed = unsafeArgs([
+    item([
+      ['vide-jibun', '123-4\n'],
+      ['vide-use', 'a\u202eb'],
+      ['vide-notice', ''],
+      ['vide-source', 'x'.repeat(ATTR_VALUE_MAX + 1)],
+      ['vide-crs', '\ud800'],
+      ['vide-mark', 'C 1'],
+      ['vide-pnu', '1'],
+      ['vide-pnu', '2'],
+    ]),
+  ]);
+  assert.deepEqual(failed, [
+    'parcel:1:vide-jibun',
+    'parcel:1:vide-use',
+    'parcel:1:vide-notice',
+    'parcel:1:vide-source',
+    'parcel:1:vide-crs',
+    'parcel:1:vide-mark',
+    'parcel:1:attr-name',
+  ]);
+  assert.deepEqual(unsafeArgs([item(Array.from({ length: 33 }, (_, i) => [`vide-a${i}`, 'v']))]), [
+    'parcel:1:attr-count',
+  ]);
+  // A value with quotes and code characters still never reaches the C# text.
+  const hostile = item([['vide-jibun', '"); doc.Objects.Clear(); //']]);
+  const code = renderTemplate(
+    'vide.bake.curves@1',
+    encodeDataBlock(header('vide.bake.curves@1'), [hostile]),
+  ).code;
+  const template = loadTemplate('vide.bake.curves@1');
+  assert.equal(code.split('"').length, template.text.split('"').length);
+  assert.equal(code.includes('Objects.Clear'), false);
+});
+
+test('extractItems reads outlines, faces and meshes from step output', () => {
+  const decl = (template, map = {}) => ({
+    id: 'site',
+    template,
+    host: 'rhino',
+    items: 'step.site.items',
+    layer: 'jig 건물',
+    key: 'key',
+    map,
+    attrs: { 'vide-floors': 'floors', 'vide-height-source': 'heightSource' },
+    mode: 'replace-own',
+  });
+  const buildings = extractItems(
+    decl('vide.bake.extrude-polygon@1', { rings: 'outline', bottom: 'ground' }),
+    {
+      items: [
+        {
+          key: 'bldg:1',
+          floors: 3,
+          heightSource: '추정',
+          height: 9.9,
+          ground: 2,
+          outline: [
+            [0, 0],
+            [10, 0],
+            [10, 8],
+            [0, 8],
+            [0, 0],
+          ],
+        },
+        {
+          key: 'bldg:2',
+          height: 6,
+          outline: [
+            [
+              [0, 0, 1],
+              [9, 0, 1],
+              [9, 9, 1],
+              [0, 9, 1],
+            ],
+            [
+              [3, 3, 1],
+              [3, 6, 1],
+              [6, 6, 1],
+              [6, 3, 1],
+            ],
+          ],
+        },
+        { key: 'bldg:3', height: 6, outline: [[0, 0]] },
+      ],
+    },
+  );
+  assert.deepEqual(buildings.problems, ['bldg:3: 윤곽이 없습니다']);
+  assert.deepEqual(buildings.items[0].attrs, [
+    ['vide-floors', '3'],
+    ['vide-height-source', '추정'],
+  ]);
+  assert.deepEqual(buildings.items[0].rings, [
+    [
+      [0, 0, 2],
+      [10, 0, 2],
+      [10, 8, 2],
+      [0, 8, 2],
+    ],
+  ]);
+  assert.equal(buildings.items[1].rings.length, 2);
+  const envelope = extractItems(decl('vide.bake.brep-faces@1'), {
+    items: [{ key: 'env:max', faces: boxFaces([0, 0, 0], [2, 3, 4]), volume: 24 }],
+  });
+  assert.deepEqual(envelope.problems, []);
+  assert.equal(envelope.items[0].faces.length, 6);
+  assert.equal(envelope.items[0].volume, 24);
+  const terrain = extractItems(decl('vide.bake.mesh@1'), {
+    items: [
+      {
+        key: 'terrain',
+        vertices: [
+          [0, 0, 1],
+          [1, 0, 1],
+          [1, 1, 2],
+        ],
+        faces: [[0, 1, 2]],
+      },
+    ],
+  });
+  assert.deepEqual(terrain.problems, []);
+  assert.deepEqual(terrain.items[0].faces, [[0, 1, 2]]);
+});
+
+test('large site bakes: 300 buildings and a split terrain go in chunks within the worker limit', () => {
+  const buildings = Array.from({ length: 300 }, (_, i) => {
+    const x = (i % 20) * 25,
+      y = Math.floor(i / 20) * 25;
+    return {
+      key: `bldg:${i}`,
+      attrs: [
+        ['vide-floors', String(1 + (i % 12))],
+        ['vide-height', String(3.3 * (1 + (i % 12)))],
+        ['vide-height-source', i % 3 ? '대장' : '추정'],
+        ['vide-source', '합성 자료'],
+      ],
+      height: 3.3 * (1 + (i % 12)),
+      rings: [
+        [
+          [x, y, 0],
+          [x + 12, y, 0],
+          [x + 12, y + 9, 0],
+          [x + 6, y + 14, 0],
+          [x, y + 9, 0],
+        ],
+      ],
+    };
+  });
+  const chunks = renderChunks(header('vide.bake.extrude-polygon@1'), buildings);
+  assert.ok(chunks.every((chunk) => chunk.code.length <= MAX_BODY_CHARS));
+  assert.deepEqual(
+    chunks.flatMap((chunk) => chunk.keys),
+    buildings.map((b) => b.key),
+  );
+  // A 60 × 60 grid terrain (7200 triangles) split into pieces that each fit one body.
+  const n = 61;
+  const vertices = [];
+  for (let j = 0; j < n; j++)
+    for (let i = 0; i < n; i++) vertices.push([i * 8, j * 8, Math.sin(i / 7) * 3 + j / 10]);
+  const faces = [];
+  for (let j = 0; j < n - 1; j++)
+    for (let i = 0; i < n - 1; i++) {
+      const a = j * n + i;
+      faces.push([a, a + 1, a + n + 1], [a, a + n + 1, a + n]);
+    }
+  const whole = { key: 'terrain', attrs: [['vide-source', '합성 등고선']], vertices, faces };
+  assert.throws(
+    () => renderChunks(header('vide.bake.mesh@1'), [whole]),
+    /BAKE_ITEM_TOO_LARGE/,
+    'one terrain item larger than a body is refused, not truncated',
+  );
+  const pieces = splitMesh(whole);
+  assert.equal(pieces.length, Math.ceil(faces.length / 1500));
+  assert.deepEqual(
+    pieces.map((p) => p.key),
+    pieces.map((_, i) => `terrain:${i + 1}`),
+  );
+  assert.equal(
+    pieces.reduce((sum, p) => sum + p.faces.length, 0),
+    faces.length,
+  );
+  for (const piece of pieces)
+    for (const face of piece.faces)
+      for (const index of face) assert.ok(piece.vertices[index], 'index inside the piece');
+  assert.deepEqual(pieces[1].vertices[pieces[1].faces[0][0]], vertices[faces[1500][0]]);
+  const meshChunks = renderChunks(header('vide.bake.mesh@1'), pieces);
+  assert.ok(meshChunks.every((chunk) => chunk.code.length <= MAX_BODY_CHARS));
+  assert.equal(meshChunks.flatMap((c) => c.keys).length, pieces.length);
+  const small = { ...whole, faces: faces.slice(0, 10) };
+  assert.deepEqual(splitMesh(small), [small]);
 });

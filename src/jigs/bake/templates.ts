@@ -26,6 +26,9 @@ const FILES: Record<TemplateName, string> = {
   'vide.bake.sweep-h@1': 'sweep-h.cs',
   'vide.bake.extrude-column@1': 'extrude-column.cs',
   'vide.bake.textdot@1': 'textdot.cs',
+  'vide.bake.extrude-polygon@1': 'extrude-polygon.cs',
+  'vide.bake.brep-faces@1': 'brep-faces.cs',
+  'vide.bake.mesh@1': 'mesh.cs',
 };
 export interface Template {
   name: TemplateName;

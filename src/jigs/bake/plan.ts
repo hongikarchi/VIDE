@@ -46,6 +46,9 @@ const FIELD_DEFAULTS: Record<TemplateName, string[]> = {
     'strongAxis',
   ],
   'vide.bake.textdot@1': ['text', 'point'],
+  'vide.bake.extrude-polygon@1': ['rings', 'height', 'bottom'],
+  'vide.bake.brep-faces@1': ['faces', 'volume'],
+  'vide.bake.mesh@1': ['vertices', 'faces'],
 };
 
 const num = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : NaN);
@@ -79,6 +82,24 @@ export function curveOf(value: unknown): BakeCurve | undefined {
     return { kind, points: points as Vec3[] };
   }
   return undefined;
+}
+/** A ring of points (2D points get z 0); a closing point equal to the first is dropped. */
+function ringOf(value: unknown): Vec3[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const points = value.map(vec3);
+  if (!points.every(Boolean)) return undefined;
+  const ring = points as Vec3[];
+  const [first, last] = [ring[0], ring.at(-1)];
+  if (ring.length > 3 && first.every((v, i) => v === last![i])) ring.pop();
+  return ring.length >= 3 ? ring : undefined;
+}
+/** Rings of an outline with holes: a list of rings, or one ring alone. */
+export function ringsOf(value: unknown): Vec3[][] | undefined {
+  if (!Array.isArray(value) || !value.length) return undefined;
+  const single = ringOf(value);
+  if (single && !Array.isArray((value[0] as unknown[])[0])) return [single];
+  const rings = value.map(ringOf);
+  return rings.every(Boolean) ? (rings as Vec3[][]) : undefined;
 }
 
 /** The step id and the path inside its output that `decl.items` names (`step.<id>.<path>`). */
@@ -228,6 +249,37 @@ export function extractItems(decl: BakeDecl, output: unknown): Extracted {
         const point = vec3(fields.point);
         if (point) items.push({ ...base, text: String(fields.text ?? key), point });
         else problems.push(`${key}: 부호 위치가 없습니다`);
+        break;
+      }
+      case 'vide.bake.extrude-polygon@1': {
+        const rings = ringsOf(fields.rings);
+        // A bottom elevation, when given, puts every ring point on that level.
+        const bottom = fields.bottom === undefined ? undefined : num(fields.bottom);
+        if (rings)
+          items.push({
+            ...base,
+            height: num(fields.height),
+            rings:
+              bottom === undefined
+                ? rings
+                : rings.map((ring) => ring.map(([x, y]): Vec3 => [x, y, bottom])),
+          });
+        else problems.push(`${key}: 윤곽이 없습니다`);
+        break;
+      }
+      case 'vide.bake.brep-faces@1': {
+        const faces = Array.isArray(fields.faces) ? fields.faces.map(ringsOf) : [];
+        if (faces.length && faces.every(Boolean))
+          items.push({ ...base, volume: num(fields.volume), faces: faces as Vec3[][][] });
+        else problems.push(`${key}: 면 목록이 없습니다`);
+        break;
+      }
+      case 'vide.bake.mesh@1': {
+        const vertices = Array.isArray(fields.vertices) ? fields.vertices.map(vec3) : [];
+        const faces = Array.isArray(fields.faces) ? fields.faces : [];
+        if (vertices.length && vertices.every(Boolean) && faces.every(Array.isArray))
+          items.push({ ...base, vertices: vertices as Vec3[], faces: faces as number[][] });
+        else problems.push(`${key}: 메쉬 꼭짓점·면이 없습니다`);
         break;
       }
     }

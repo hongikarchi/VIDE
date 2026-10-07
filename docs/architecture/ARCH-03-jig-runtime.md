@@ -5,7 +5,7 @@ status: review
 version: 0.95
 updated: 2026-10-08
 owner: agent:claude
-related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, RESEARCH-10, RESEARCH-12]
+related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, PLAN-45, SPEC-12, RESEARCH-10, RESEARCH-12]
 ---
 
 # jig 런타임과 저장 스키마 v5의 물리 계약
@@ -479,7 +479,24 @@ jig 입력은 표시용 Sync가 아니라 jig 입력 읽기로 받는다.
 ### 9.1 틀
 
 - 공식 틀은 VIDE가 소유한 C# 메서드 본문 파일 `src/jigs/bake/templates/<name>.cs`이고 치환 자리는 `{{DATA_BASE64}}` 하나뿐이다. 1차 틀: `vide.bake.curves@1`(폴리라인·3점 원호), `vide.bake.sweep-h@1`(H·BH 단면을 상단 기준 레일 아래로, 웨브 연직), `vide.bake.extrude-column@1`(H 기둥, 강축 방향 지정), `vide.bake.textdot@1`(부호).
-- `bake.ts`는 치환 뒤 본문이 "틀 원문에서 치환 자리만 데이터 블록으로 바뀐 것"과 정확히 같은지 확인한다. 키·부호·단면 이름은 점검 `bake-args-safe`(`^[A-Za-z0-9가-힣:_>.\-]{1,64}$`)를 통과해야 한다.
+- 규모검토 틀(PLAN-45 T-208, [SPIKE-2026-10-07-envelope](../tdd/SPIKE-2026-10-07-envelope.md)):
+  - `vide.bake.extrude-polygon@1`(사이트 건물·층 매스): 바깥 고리와 구멍 고리를 고리 높이(바닥)에서 위로 `height`만큼 돌출한 닫힌 폴리서피스. 고리 방향을 바로잡고(바깥 반시계·구멍 시계, 위에서 볼 때) 평면 면 하나를 만든 뒤 덮개 있는 돌출을 한다. 돌출 자체의 방향만 뒤집어 맞추고, '한 조각·`IsSolid`·`IsValid`·`Outward`·바닥에서 바닥+높이까지·부피 = 고리 면적 × 높이(상대 1e-6)'가 아니면 그 키는 `failed[]`다.
+  - `vide.bake.brep-faces@1`(외피): 엔진이 만든 평면 면 목록 → 닫힌 폴리서피스. 면마다 `CreatePlanarBreps`, 전체를 `JoinBreps`로 잇고 둘 다 문서 허용 오차가 아니라 **1e-5 m**(문서 단위로 환산)로 한다. `MergeCoplanarFaces`는 부르지 않는다(실험에서 부피를 4.7~9.9% 바꿈). 실제 Rhino 8.35에서 면을 모두 뒤집은 상자도 결합 결과가 `Outward`였으므로(T-208) `SolidOrientation`만으로는 뒤집힌 자료를 거르지 못한다. 그래서 먼저 '감긴 방향 그대로의 면 목록 부피'(고리마다 부채꼴 사면체 합)가 엔진 부피와 상대 1e-6 안에 있는지 본다. 그 뒤 '한 조각·`IsSolid`·`IsValid`·`SolidOrientation == Outward`·Rhino 부피가 엔진 부피와 상대 1e-6 이내'가 아니면 `failed[]`이고, 뒤집어 고치지 않는다(SPEC-12.9의 4). 면 고리는 바깥이 밖에서 볼 때 반시계, 구멍은 그 반대로 감는다.
+  - `vide.bake.mesh@1`(지형): 꼭짓점과 삼각·사각 면 → 메쉬(꼭짓점 배정밀도). 번호가 범위를 벗어나거나 면이 빠지거나 `IsValid`가 아니면 `failed[]`. 본문 하나를 넘는 지형은 jig가 `splitMesh`(`data-block.ts`, 기본 1,500면)로 나눠 키 `<key>:<n>` 항목 여럿으로 보낸다.
+- `bake.ts`는 치환 뒤 본문이 "틀 원문에서 치환 자리만 데이터 블록으로 바뀐 것"과 정확히 같은지 확인한다. 키·부호·단면 이름·`vide-role` 값은 점검 `bake-args-safe`(`^[A-Za-z0-9가-힣:_>.\-]{1,64}$`)를 통과해야 한다.
+- **객체 속성(사용자 문자열, `data-block.ts`):** 이름은 `vide-` 뒤 소문자 영숫자 단어를 `-`로 이은 것(`^vide-[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`, 40자 이하)이고, 틀이 스스로 붙이는 `vide-jig`·`vide-instance`·`vide-run`·`vide-bake`·`vide-key`는 쓸 수 없다. 한 객체에 32개까지, 같은 이름 두 번은 거절한다. 값은 `vide-mark`·`vide-section`·`vide-role`만 위의 키 규칙을 따르고, 나머지는 자유 글(주소·한글 공백·숫자·짧은 JSON)로서 1~2,000자, 제어 문자(C0·DEL·C1)·줄/문단 구분자·양방향 재정의·격리 문자·짝 없는 대리 문자를 금지한다. 값은 base64 데이터 블록 안으로만 가고 C# 글이 되지 않는다. 규모검토 jig의 이름 목록(`SITE_ATTRS`, SPEC-12.6·12.9의 6·12.10의 8):
+
+  | 객체 | 속성 이름 |
+  |---|---|
+  | 필지 | `vide-pnu` · `vide-jibun` · `vide-jimok` · `vide-area-m2`(공부 면적) · `vide-source` · `vide-fetched-at` |
+  | 도로 | `vide-width-min` · `vide-width-avg` · `vide-width-source` |
+  | 건물 | `vide-floors` · `vide-height` · `vide-height-source`(대장·추정) · `vide-use` · `vide-source` · `vide-fetched-at` |
+  | 용도지역 경계 | `vide-zone-name` · `vide-zone-code` · `vide-notice`(고시 번호) |
+  | 대지 정보 | `vide-site-summary` · `vide-crs` · `vide-origin-survey`(기준점 측량 좌표) · `vide-true-north` |
+  | 외피 | `vide-envelope`(종류) · `vide-rules` · `vide-volume-m3` · `vide-unconfirmed`(미확정 조건 수) |
+  | 층 매스 | `vide-option` · `vide-floor` · `vide-area-m2` · `vide-use` |
+
+  길이는 m, 면적은 ㎡, 부피는 ㎥이고 이름에 단위가 있으면 그 단위다. 값은 글자로 남으며 Sync 표시 읽기(`DisplayScene`)의 사용자 문자열로 대화 AI가 읽는다.
 - 틀은 기존 워커의 감싸기(`TaskCode.Run(RhinoDoc doc)`)와 `CodePolicy`(메서드 하나)를 통과해야 한다. 로컬 함수가 통과하는지는 PLAN-22에서 확인하고, 막히면 인라인 루프로 쓴다. 제네릭 컬렉션은 감싸기의 `using`에 없으므로 전체 이름으로 쓴다.
 
 ### 9.2 데이터 블록 `vide.bake.data/1`
@@ -510,12 +527,17 @@ Item
     sweep-h@1         str section, f32 H_mm, B_mm, tw_mm, tf_mm, curve rail(상단선)
     extrude-column@1  str section, f32 H_mm, B_mm, tw_mm, tf_mm, vec3 base, vec3 top, f32 × 3 strongAxis(방향 단위 벡터)
     textdot@1         str text, vec3 point
+    extrude-polygon@1 f32 height(m), rings(고리[0] 바깥, 나머지 구멍; 점의 z = 바닥 높이)
+    brep-faces@1      f64 volume(엔진 부피 ㎥), i32 nFaces, rings × nFaces(면마다 바깥 + 구멍)
+    mesh@1            i32 nV, vec3 × nV, i32 nF, (i32 a, b, c, d) × nF(d < 0이면 삼각형)
+rings = i32 nRings, (i32 n, vec3 × n) × nRings   (닫는 점은 되풀이하지 않음)
 ```
 
 - 좌표는 VIDE 계약과 같은 m이고 틀이 `RhinoMath.UnitScale(UnitSystem.Meters, doc.ModelUnitSystem)`로 문서 단위로 바꾼다. 절대 좌표를 f32로 넣으면 측량 좌표계처럼 큰 값에서 cm 단위 오차가 나므로 f64 기준점 + f32 차이로 쓴다(1 km 범위 안에서 오차 0.1 mm 미만).
 - 틀은 모든 객체에 `vide-jig`, `vide-instance`, `vide-run`, `vide-bake`, `vide-key`를 붙이고 `Item`의 속성을 더 붙인다.
-- 워커 본문 한도는 65,536자다. 한도를 넘는 만들기는 항목을 나누어 같은 작업 안에서 여러 번 실행한다(`renderChunks`: 본문 한도에서 틀 길이를 뺀 base64 크기만큼 담고, 삭제 목록은 첫 묶음만). 한 항목이 혼자 한도를 넘으면 `BAKE_ITEM_TOO_LARGE`로 거절한다. 실제 Rhino에서의 묶음 크기 측정(SPIKE)은 남아 있다.
-- 반환값: `{ removed, keys[], ids[], failed[] }` — 만든 키와 그 GUID(같은 순서), 만들지 못한 키(퇴화한 곡선·닫히지 않은 솔리드). 틀은 VIDE가 넘긴 GUID 가운데 `vide-instance`·`vide-bake`가 일치하는 객체만 지우고, 지문을 다시 계산하지 않는다. 계획한 키가 두 목록 어디에도 없으면 `BAKE_RECEIPT_MISMATCH`다.
+- 워커 본문 한도는 65,536자다. 한도를 넘는 만들기는 항목을 나누어 같은 작업 안에서 여러 번 실행한다(`renderChunks`: 본문 한도에서 틀 길이를 뺀 base64 크기만큼 담고, 삭제 목록은 첫 묶음만). 한 항목이 혼자 한도를 넘으면 `BAKE_ITEM_TOO_LARGE`로 거절한다. 실제 Rhino 측정(T-208, `tests/integration/rhino-site-bake.mjs`): 건물 300동(속성 5개씩)은 본문 2개(65,342·55,546자, 데이터 43.7·36.3 KB), 지형 1,200면 조각 6개는 조각마다 본문 1개(41,500자), 외피 5개는 본문 1개 — 모두 9개 본문을 바로 적용으로 3.6~3.8초에 만들었다. 데이터 블록은 base64라 본문 글자 수의 약 3/4 바이트다.
+- 원점·정밀도: 기준점은 항목 전체 점의 평균을 정수 m로 반올림한 값이고, 차이는 f32다(1 km 범위에서 0.1 mm 미만). 외피처럼 기울어진 평면 면은 기준점에서 수백 m 안에 두어 f32 반올림이 1e-5 m 결합 허용 오차보다 작게 한다(실험의 대지 규모에서 꼭짓점 오차 ≤ 1.8e-6 m). 엔진 부피(`brep-faces@1`의 `volume`)는 f64로 보낸다.
+- 반환값: `{ removed, keys[], ids[], failed[] }` — 만든 키와 그 GUID(같은 순서), 만들지 못한 키(퇴화한 곡선·닫히지 않은 솔리드, §9.1의 점검을 통과하지 못한 돌출·외피·메쉬). 틀은 VIDE가 넘긴 GUID 가운데 `vide-instance`·`vide-bake`가 일치하는 객체만 지우고, 지문을 다시 계산하지 않는다. 계획한 키가 두 목록 어디에도 없으면 `BAKE_RECEIPT_MISMATCH`다.
 
 ### 9.3 실행 경로
 

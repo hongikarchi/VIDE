@@ -10,6 +10,9 @@ export const TEMPLATE_NAMES = [
   'vide.bake.sweep-h@1',
   'vide.bake.extrude-column@1',
   'vide.bake.textdot@1',
+  'vide.bake.extrude-polygon@1',
+  'vide.bake.brep-faces@1',
+  'vide.bake.mesh@1',
 ] as const;
 export type TemplateName = (typeof TEMPLATE_NAMES)[number];
 export type Vec3 = [number, number, number];
@@ -48,12 +51,47 @@ export interface TextDotItem extends ItemBase {
   text: string;
   point: Vec3;
 }
-export type BakeItem = CurveItem | SweepItem | ColumnItem | TextDotItem;
+/** A closed planar ring (n ≥ 3 points, the first point not repeated at the end). */
+export type Ring = Vec3[];
+/**
+ * A closed polygon extruded up by `height` m (T-208, site buildings). `rings[0]` is the outline,
+ * the rest are holes; every point's z is the bottom elevation (one horizontal plane).
+ */
+export interface ExtrudeItem extends ItemBase {
+  rings: Ring[];
+  height: number;
+}
+/**
+ * A closed polyhedron as its planar faces (T-208, envelopes; SPIKE-2026-10-07-envelope). Each face
+ * is an outer ring wound counter-clockwise seen from outside plus holes wound the other way;
+ * `volume` is the engine's (m³, positive). The template refuses faces whose wound volume or Brep
+ * volume differs from it by more than 1e-6 relative.
+ */
+export interface FacesItem extends ItemBase {
+  faces: Ring[][];
+  volume: number;
+}
+/** A mesh (T-208, terrain): triangles `[a, b, c]` and quads `[a, b, c, d]` by vertex index. */
+export interface MeshItem extends ItemBase {
+  vertices: Vec3[];
+  faces: number[][];
+}
+export type BakeItem =
+  | CurveItem
+  | SweepItem
+  | ColumnItem
+  | TextDotItem
+  | ExtrudeItem
+  | FacesItem
+  | MeshItem;
 export interface ItemsOf {
   'vide.bake.curves@1': CurveItem;
   'vide.bake.sweep-h@1': SweepItem;
   'vide.bake.extrude-column@1': ColumnItem;
   'vide.bake.textdot@1': TextDotItem;
+  'vide.bake.extrude-polygon@1': ExtrudeItem;
+  'vide.bake.brep-faces@1': FacesItem;
+  'vide.bake.mesh@1': MeshItem;
 }
 export interface DataBlockHeader {
   template: TemplateName;
@@ -67,11 +105,66 @@ export interface DataBlockHeader {
   deleteIds: string[];
 }
 
-/** Keys, marks, section names and dot texts (gate `bake-args-safe`, ARCH-03 §9.1). */
+/** Keys, marks, section names, roles and dot texts (gate `bake-args-safe`, ARCH-03 §9.1). */
 export const SAFE_ARG = /^[A-Za-z0-9가-힣:_>.\-]{1,64}$/;
-/** User-string names a bake may add; the five tags the template sets itself are reserved. */
-export const ATTR_NAME = /^vide-[a-z]{1,20}$/;
+/**
+ * User-string names a bake may add: `vide-` and lowercase kebab words, at most 40 characters
+ * (ARCH-03 §9.1); the five tags the template sets itself are reserved.
+ */
+export const ATTR_NAME = /^vide-[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+export const ATTR_NAME_MAX = 40;
 export const RESERVED_ATTRS = ['vide-jig', 'vide-instance', 'vide-run', 'vide-bake', 'vide-key'];
+/** Attributes whose values are identifiers and keep the key rule (the template names by `vide-mark`). */
+export const IDENTIFIER_ATTRS = ['vide-mark', 'vide-section', 'vide-role'];
+/** Longest other attribute value (UTF-16 units) and most attributes on one object. */
+export const ATTR_VALUE_MAX = 2000;
+export const ATTRS_MAX = 32;
+// Control characters (C0, DEL, C1), line/paragraph separators, bidirectional overrides and
+// isolates, and lone surrogates.
+const UNSAFE_TEXT =
+  /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+/**
+ * Other attribute values are free text (addresses, Korean with spaces, numbers, short JSON): 1 to
+ * 2000 characters with no control or direction characters. They travel inside the base64 data
+ * block and are set as user strings, never as C# text.
+ */
+export const attrValueSafe = (value: unknown) =>
+  typeof value === 'string' &&
+  value.length >= 1 &&
+  value.length <= ATTR_VALUE_MAX &&
+  !UNSAFE_TEXT.test(value);
+export const attrNameSafe = (name: unknown) =>
+  typeof name === 'string' &&
+  name.length <= ATTR_NAME_MAX &&
+  ATTR_NAME.test(name) &&
+  !RESERVED_ATTRS.includes(name);
+/**
+ * Attribute names of the site and massing jigs (SPEC-12.6, 12.9의 6, 12.10의 8; ARCH-03 §9.1).
+ * Lengths are metres, areas square metres, volumes cubic metres, as the name says.
+ */
+export const SITE_ATTRS = {
+  parcel: [
+    'vide-pnu',
+    'vide-jibun',
+    'vide-jimok',
+    'vide-area-m2',
+    'vide-source',
+    'vide-fetched-at',
+  ],
+  road: ['vide-width-min', 'vide-width-avg', 'vide-width-source'],
+  building: [
+    'vide-floors',
+    'vide-height',
+    'vide-height-source',
+    'vide-use',
+    'vide-source',
+    'vide-fetched-at',
+  ],
+  zone: ['vide-zone-name', 'vide-zone-code', 'vide-notice'],
+  site: ['vide-site-summary', 'vide-crs', 'vide-origin-survey', 'vide-true-north'],
+  envelope: ['vide-envelope', 'vide-rules', 'vide-volume-m3', 'vide-unconfirmed'],
+  mass: ['vide-option', 'vide-floor', 'vide-area-m2', 'vide-use'],
+} as const;
 export const bakeArgSafe = (value: unknown) => typeof value === 'string' && SAFE_ARG.test(value);
 
 /** Every argument of the items that would fail `bake-args-safe`, as `key:field` descriptions. */
@@ -80,9 +173,13 @@ export function unsafeArgs(items: readonly BakeItem[]): string[] {
   items.forEach((item, index) => {
     const at = bakeArgSafe(item.key) ? item.key : `#${index}`;
     if (!bakeArgSafe(item.key)) failed.push(`${at}:key`);
+    if (item.attrs.length > ATTRS_MAX) failed.push(`${at}:attr-count`);
+    const seen = new Set<string>();
     for (const [name, value] of item.attrs) {
-      if (!ATTR_NAME.test(name) || RESERVED_ATTRS.includes(name)) failed.push(`${at}:attr-name`);
-      if (!bakeArgSafe(value)) failed.push(`${at}:${name}`);
+      if (!attrNameSafe(name) || seen.has(name)) failed.push(`${at}:attr-name`);
+      seen.add(name);
+      const ok = IDENTIFIER_ATTRS.includes(name) ? bakeArgSafe(value) : attrValueSafe(value);
+      if (!ok) failed.push(`${at}:${attrNameSafe(name) ? name : 'attr-value'}`);
     }
     if ('section' in item && !bakeArgSafe(item.section)) failed.push(`${at}:section`);
     if ('text' in item && !bakeArgSafe(item.text)) failed.push(`${at}:text`);
@@ -101,11 +198,62 @@ function validCurve(curve: BakeCurve, at: string, problems: string[]) {
   else if (curve.kind === 'polyline' && curve.points.length < 2)
     problems.push(`${at}: 폴리라인은 두 점 이상이어야 합니다`);
 }
+/** Bottom planes of an extrusion may differ by this much (m) before the item is refused. */
+const LEVEL_TOLERANCE = 1e-6;
+function validRings(rings: unknown, at: string, problems: string[], what: string) {
+  if (!Array.isArray(rings) || !rings.length) {
+    problems.push(`${at}: ${what}의 고리가 없습니다`);
+    return false;
+  }
+  for (const ring of rings)
+    if (!Array.isArray(ring) || ring.length < 3 || !ring.every(isVec3)) {
+      problems.push(`${at}: ${what}의 고리는 수로 된 세 점 이상이어야 합니다`);
+      return false;
+    }
+  return true;
+}
+function validTemplateItem(template: TemplateName, item: BakeItem, at: string, problems: string[]) {
+  if (template === 'vide.bake.extrude-polygon@1') {
+    const solid = item as ExtrudeItem;
+    if (!finite(solid.height) || solid.height <= 0) problems.push(`${at}: 높이가 양수가 아닙니다`);
+    if (validRings(solid.rings, at, problems, '윤곽')) {
+      const z = solid.rings[0][0][2];
+      if (solid.rings.some((ring) => ring.some((p) => Math.abs(p[2] - z) > LEVEL_TOLERANCE)))
+        problems.push(`${at}: 윤곽이 한 수평면에 있지 않습니다`);
+    }
+  } else if (template === 'vide.bake.brep-faces@1') {
+    const solid = item as FacesItem;
+    if (!finite(solid.volume) || solid.volume <= 0)
+      problems.push(`${at}: 엔진 부피가 양수가 아닙니다`);
+    if (!Array.isArray(solid.faces) || solid.faces.length < 4)
+      problems.push(`${at}: 닫힌 다면체는 면이 넷 이상이어야 합니다`);
+    else for (const face of solid.faces) if (!validRings(face, at, problems, '면')) break;
+  } else if (template === 'vide.bake.mesh@1') {
+    const mesh = item as MeshItem;
+    const n = Array.isArray(mesh.vertices) ? mesh.vertices.length : 0;
+    if (n < 3 || !mesh.vertices.every(isVec3))
+      problems.push(`${at}: 메쉬 꼭짓점은 수로 된 세 점 이상이어야 합니다`);
+    if (!Array.isArray(mesh.faces) || !mesh.faces.length)
+      problems.push(`${at}: 메쉬 면이 없습니다`);
+    else if (
+      !mesh.faces.every(
+        (face) =>
+          Array.isArray(face) &&
+          (face.length === 3 || face.length === 4) &&
+          face.every((i) => Number.isInteger(i) && i >= 0 && i < n) &&
+          new Set(face).size === face.length,
+      )
+    )
+      problems.push(`${at}: 메쉬 면은 서로 다른 꼭짓점 번호 셋 또는 넷이어야 합니다`);
+  } else return false;
+  return true;
+}
 /** Why an item cannot be encoded (missing or non-finite numbers, bad curves), or nothing. */
 export function itemProblems(template: TemplateName, items: readonly BakeItem[]): string[] {
   const problems: string[] = [];
   items.forEach((item, index) => {
     const at = item.key || `#${index}`;
+    if (validTemplateItem(template, item, at, problems)) return;
     if (template === 'vide.bake.curves@1') validCurve((item as CurveItem).curve, at, problems);
     else if (template === 'vide.bake.textdot@1') {
       const dot = item as TextDotItem;
@@ -133,7 +281,36 @@ export function itemPoints(item: BakeItem): Vec3[] {
   if ('curve' in item) return item.curve.points;
   if ('rail' in item) return item.rail.points;
   if ('base' in item) return [item.base, item.top];
+  if ('rings' in item) return item.rings.flat();
+  if ('volume' in item) return item.faces.flat(2);
+  if ('vertices' in item) return item.vertices;
   return [item.point];
+}
+
+/**
+ * A mesh split into pieces of at most `maxFaces` faces, each with only the vertices it uses, so a
+ * terrain larger than one worker body bakes in several items (keys `<key>:<n>`, n from 1).
+ */
+export function splitMesh(item: MeshItem, maxFaces = 1500): MeshItem[] {
+  if (item.faces.length <= maxFaces) return [item];
+  const pieces: MeshItem[] = [];
+  for (let start = 0; start < item.faces.length; start += maxFaces) {
+    const index = new Map<number, number>();
+    const vertices: Vec3[] = [];
+    const faces = item.faces.slice(start, start + maxFaces).map((face) =>
+      face.map((i) => {
+        let j = index.get(i);
+        if (j === undefined) {
+          j = vertices.length;
+          index.set(i, j);
+          vertices.push(item.vertices[i]);
+        }
+        return j;
+      }),
+    );
+    pieces.push({ key: `${item.key}:${pieces.length + 1}`, attrs: item.attrs, vertices, faces });
+  }
+  return pieces;
 }
 /** A whole-metre origin near the items: keeps every f32 difference small. */
 export function originOf(items: readonly BakeItem[]): Vec3 {
@@ -189,6 +366,13 @@ class Writer {
     this.i32(curve.points.length);
     for (const point of curve.points) this.vec3(point, origin);
   }
+  rings(rings: readonly Ring[], origin: Vec3) {
+    this.i32(rings.length);
+    for (const ring of rings) {
+      this.i32(ring.length);
+      for (const point of ring) this.vec3(point, origin);
+    }
+  }
   bytes() {
     return this.buffer.subarray(0, this.size);
   }
@@ -200,7 +384,22 @@ function writeItem(w: Writer, template: TemplateName, item: BakeItem, origin: Ve
     w.str(name);
     w.str(value);
   }
-  if (template === 'vide.bake.curves@1') w.curve((item as CurveItem).curve, origin);
+  if (template === 'vide.bake.extrude-polygon@1') {
+    const solid = item as ExtrudeItem;
+    w.f32(solid.height);
+    w.rings(solid.rings, origin);
+  } else if (template === 'vide.bake.brep-faces@1') {
+    const solid = item as FacesItem;
+    w.f64(solid.volume);
+    w.i32(solid.faces.length);
+    for (const face of solid.faces) w.rings(face, origin);
+  } else if (template === 'vide.bake.mesh@1') {
+    const mesh = item as MeshItem;
+    w.i32(mesh.vertices.length);
+    for (const point of mesh.vertices) w.vec3(point, origin);
+    w.i32(mesh.faces.length);
+    for (const face of mesh.faces) for (let i = 0; i < 4; i++) w.i32(face[i] ?? -1);
+  } else if (template === 'vide.bake.curves@1') w.curve((item as CurveItem).curve, origin);
   else if (template === 'vide.bake.textdot@1') {
     const dot = item as TextDotItem;
     w.str(dot.text);
@@ -301,6 +500,15 @@ export function decodeDataBlock(bytes: Buffer): DecodedBlock {
     for (let i = 0; i < n; i++) points.push(vec3());
     return { kind, points };
   };
+  const rings = (): Vec3[][] => {
+    const list: Vec3[][] = [];
+    for (let r = i32(); r > 0; r--) {
+      const ring: Vec3[] = [];
+      for (let p = i32(); p > 0; p--) ring.push(vec3());
+      list.push(ring);
+    }
+    return list;
+  };
   const nDelete = i32();
   for (let i = 0; i < nDelete; i++) header.deleteIds.push(str());
   const items: BakeItem[] = [];
@@ -310,7 +518,24 @@ export function decodeDataBlock(bytes: Buffer): DecodedBlock {
     const attrs: [string, string][] = [];
     const nAttr = i32();
     for (let a = 0; a < nAttr; a++) attrs.push([str(), str()]);
-    if (template === 'vide.bake.curves@1') items.push({ key, attrs, curve: curve() });
+    if (template === 'vide.bake.extrude-polygon@1') {
+      const height = f32();
+      items.push({ key, attrs, height, rings: rings() });
+    } else if (template === 'vide.bake.brep-faces@1') {
+      const volume = f64();
+      const faces: Vec3[][][] = [];
+      for (let f = i32(); f > 0; f--) faces.push(rings());
+      items.push({ key, attrs, volume, faces });
+    } else if (template === 'vide.bake.mesh@1') {
+      const vertices: Vec3[] = [];
+      for (let v = i32(); v > 0; v--) vertices.push(vec3());
+      const faces: number[][] = [];
+      for (let f = i32(); f > 0; f--) {
+        const face = [i32(), i32(), i32(), i32()];
+        faces.push(face[3] < 0 ? face.slice(0, 3) : face);
+      }
+      items.push({ key, attrs, vertices, faces });
+    } else if (template === 'vide.bake.curves@1') items.push({ key, attrs, curve: curve() });
     else if (template === 'vide.bake.textdot@1')
       items.push({ key, attrs, text: str(), point: vec3() });
     else {
