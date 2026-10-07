@@ -10,9 +10,14 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Drawing" />
     <Reference Include="ZwManaged"><HintPath>$(ZwcadDirectory)\ZwManaged.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="ZwDatabaseMgd"><HintPath>$(ZwcadDirectory)\ZwDatabaseMgd.dll</HintPath><Private>false</Private></Reference>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+  <!-- xref display (XrefGraph.cs) reads drawings with the attached Sync's display reader. -->
+  <ItemGroup>
+    <Compile Include="..\connection\AttachedDisplay.cs" Link="AttachedDisplay.cs" />
   </ItemGroup>
 </Project>

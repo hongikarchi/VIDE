@@ -1,0 +1,63 @@
+/* 대시보드 › 프로젝트 폴더 › 도면 관계 (SPEC-01.11 11, Design SCR-20): a plain indented tree; no
+   side bars or guide lines in colour. */
+.dash-xref {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: var(--hairline) solid var(--border-subtle);
+  font-size: 12px;
+}
+.dash-xref-reason {
+  margin: 4px 0 0;
+  color: var(--warn);
+}
+.dash-xref-tree,
+.dash-xref-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.dash-xref-tree {
+  margin-top: 6px;
+}
+.dash-xref-tree ul {
+  padding-left: 16px;
+}
+.dash-xref-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 0;
+}
+.dash-xref-row[data-root] {
+  font-weight: 600;
+}
+.dash-xref-row button {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-weight: 400;
+}
+.dash-xref-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+.dash-xref-count {
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.dash-xref-badge {
+  flex-shrink: 0;
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-recessed);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 400;
+}
+.dash-xref-badge[data-tone='warn'] {
+  background: var(--warn-subtle);
+  color: var(--warn);
+}

@@ -2,7 +2,7 @@
 id: PLAN-43
 title: 단면 보기·마감 일람표 jig·도면 내보내기 실험·xref 관계·jig 관리자 제출·외부 서비스 연동 계약 (T-197~T-202)
 status: review
-version: 0.3
+version: 0.4
 updated: 2026-10-07
 owner: agent:claude
 related: [SPEC-01, SPEC-07, SPEC-08, SPEC-11, ARCH-01, DESIGN, ADR-037, ADR-040, ADR-041, RESEARCH-16, FR-01, FR-03, FR-04, FR-09, FR-14, FR-21, FR-24, C-04, C-05, C-06, C-07, C-08]
@@ -167,6 +167,6 @@ related: [SPEC-01, SPEC-07, SPEC-08, SPEC-11, ARCH-01, DESIGN, ADR-037, ADR-040,
 | T-197 | 구현·시험 완료(실호스트 확인 전) | `tests/integration/browser-section.mjs`, SPEC-01.15, Design 단면 |
 | T-198 | 구현·시험 완료 | SPEC-11, Design SCR-28, 공식 라이브러리 `vide/finish-codes`, 프로젝트 DB schema 12(`finish_rooms`·`finish_sheets`). `tests/core/finish.test.mjs`(검색·두께·배정 규칙·붙여넣기·표 행·CSV·자료 경계), `tests/server/finish-routes.test.mjs`(저장·거절·프로젝트별), `tests/integration/browser-finish.mjs`(탭 4개·배정·출력·인쇄·CSV) 통과. XLSX는 새 의존성이 필요해 범위 밖(SPEC-11.5 7) |
 | T-199 | 완료 | [SPIKE-2026-10-07-drawing-export](../tdd/SPIKE-2026-10-07-drawing-export.md) |
-| T-200 | 착수 | — |
+| T-200 | 구현·시험 완료(실제 ZWCAD 2023 합성 도면 확인) | SPEC-01.11의 11, ARCH-01 「도면 xref 관계(T-200)」, H-ZWCAD-12, Design 「도면 관계」. worker `VIDEXREFGRAPH`(`hosts/zwcad/worker/XrefGraph.cs`, 표시는 `AttachedDisplay` 공유), `src/core/xref-graph.ts`·`xref-store.ts`(프로젝트 DB 파생 표, 버전 스키마 밖), `src/server/xref.ts`, 경로 연결 `DocumentLinks.pathLink`, 연결 행 `placement`와 뷰포트 배치. `tests/core/xref-graph.test.mjs`(경로 해석·누락·중복·순환·루트·배치 합성), `tests/server/xref.test.mjs`(거절·다시 읽기·바뀐 것만·반영·같은 파일 재반영 없음), `tests/integration/browser-xref.mjs`(트리·표시·반영 뒤 연결 5개·배치 4개·뷰포트에서 배치된 선 고르기) 통과. 실호스트 `tests/integration/zwcad-xref.mjs`(없으면 건너뜀) 통과: 합성 7.7초, 읽기 7.1초, 반영 7.2초 |
 | T-201 | 구현·로컬 시험 완료, 사이트 배포 대기 | SPEC-07.19·04.13, ARCH-01 §6 「jig 관리자 제출」, Design SCR-27. `tests/server/jig-submit.test.mjs`(요청 형식·확인·원격 거절·풀기), `tests/sharing/jig-submissions.mjs`(비관리자 403·크기 상한·digest·자기 목록·엔진 묶음→관리자 목록→풀기) 통과. D1 `0014` 원격 적용과 Worker 배포는 사용자 확인 뒤 |
 | T-202 | 착수 | — |

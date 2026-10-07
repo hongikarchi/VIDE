@@ -151,6 +151,21 @@ interface DisplayObject extends DisplayGeometry {
   texts?: CadText[];
   /** Rhino block instance: shared definition geometry and its row-major 4x4 transform. */
   block?: { definition: string; transform: number[] };
+  /**
+   * A linked drawing shown as an xref of a root drawing (SPEC-01.11 11): row-major 4x4 from the
+   * object's coordinates to the root's. Display only.
+   */
+  placement?: number[];
+}
+/** Moves an object by its xref placement, on top of its own position or block transform. */
+function place(mesh: THREE.Object3D, placement?: number[]) {
+  if (placement?.length !== 16) return;
+  // A block instance already holds its transform in `matrix`.
+  if (mesh.matrixAutoUpdate) mesh.updateMatrix();
+  mesh.matrixAutoUpdate = false;
+  mesh.matrix.premultiply(
+    new THREE.Matrix4().set(...(placement as Parameters<THREE.Matrix4['set']>)),
+  );
 }
 const hexColor = (value: unknown) =>
   typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : undefined;
@@ -509,6 +524,7 @@ export function createViewport(
         instance.userData.plot = { colorIndex: objectIndex(object), lineWeight: object.lineWeight };
         instance.userData.id = object.id;
         instance.userData.geometryHash = object.geometryHash;
+        place(instance, object.placement);
         scene.add(instance);
         instance.visible = !hiddenIds.has(object.id);
         meshes.push(instance);
@@ -575,6 +591,7 @@ export function createViewport(
       mesh.userData.id = object.id;
       // CAD objects carry styles/annotations outside the hash; they are always rebuilt.
       mesh.userData.geometryHash = mesh.userData.cad ? undefined : object.geometryHash;
+      place(mesh, object.placement);
       scene.add(mesh);
       mesh.visible = !hiddenIds.has(object.id);
       meshes.push(mesh);

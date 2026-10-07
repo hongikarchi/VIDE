@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 0.93
+version: 0.94
 updated: 2026-10-07
 owner: agent:codex
 related: [ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35, PLAN-36, ADR-039, PLAN-38, PLAN-39, PLAN-42, ADR-040, ADR-041, PLAN-43]
@@ -213,6 +213,7 @@ T-002의 첫 HTTP 구현은 프로젝트 목록·생성과 입력 목록·생성
 | 요청(AI 턴·Sync·가져오기) | `GET·POST …/requests`, `GET …/requests/:r`, `…/:r/cancel`, `…/:r/interventions`, `…/:r/hide`, `…/:r/questions`, `…/:r/reconcile`, `…/:r/model\|open`, `…/:r/report`, `…/:r/quantities[.csv]`, `…/:r/publication-export` | 상태는 SPEC-00.10 |
 | 바로 적용 | `POST …/requests/:r/undo {executionId}` 또는 `{all: true}`(작업 단위, ADR-027), `…/:r/confirm {executionId?}`, `…/:r/continue`, `…/:r/acknowledge`(결과 불명 [확인함], T-102) | §4 「바로 적용 경로」. confirm·continue는 202, acknowledge는 200 |
 | 연결 파일·Sync | `GET·POST …/links`, `PUT …/links/:l`, `POST …/links/:l/remove`, `POST …/links/:l/split·merge·dismiss`, `POST …/links/:l/reads`, `…/live-sync`, `…/capture`, `…/import`, `…/imports/:i/reconcile` | §7 「프로젝트 연결 파일(Link)」 |
+| 도면 xref 관계 | `GET …/xref`, `POST …/xref/read`, `POST …/xref/apply {root}` | §7 「도면 xref 관계(T-200)」 |
 | 사본 적용(jig·가져오기 내부 사본) | `…/applications[/:a[/reconcile]]` | ADR-022로 AI 편집에는 쓰지 않음 |
 | 대화 | `…/conversations[/:c[/close\|reopen\|ledger\|handoff\|account\|answer\|renew\|bind\|unbind]]` | ARCH-03 §10. `account`·계정 인계는 PLAN-25 2단계에서 빼는 중 |
 | jig·만들기·자료 | `…/jigs…`, `…/jig-instances…`, `…/jig-reports`, `…/jig-drafts…`, `…/skills`, `…/facts…`, `…/jigs/knowledge…`, `…/jigs/structure…`, `…/jigs/sync` | ARCH-03 §7, ARCH-02 |
@@ -1091,6 +1092,17 @@ SPEC-01.11. 스키마 v4의 `document_links(id, projectId, host, name, path, ins
 플러그인은 사용자 권한으로 `%LOCALAPPDATA%/VIDE/launch.json`의 실행 주소(127.0.0.1)와 실행 토큰으로 `/api/v1/session`에 세션을 만든 뒤(Origin 헤더 포함) 프로젝트 목록 조회·Link를 호출한다. 호출은 호스트 UI 스레드 밖에서 하며, VIDE는 Link 응답을 바로 돌려주고 첫 Sync는 화면(연결 목록 폴링)이 수행한다(T-084부터는 엔진의 `SyncScheduler`, 아래 「엔진 주관 Sync(T-084)」). VIDE가 연 작업 사본 창(`/requests/:id/open`)도 같은 연결로 등록하며, 그 창은 열림 여부만 확인한다(자동 갱신 없음, ⟳로 Sync). 엔진이 플러그인 문서에 다시 요청하는 동안 플러그인이 UI 스레드에서 기다리지 않는다.
 
 화면은 보이기 연결마다 그 연결의 표시 결과(마지막 Sync 또는 사용자가 연 작업 사본 결과)를 레이어로 두고 하나의 장면으로 합친다. 여러 레이어일 때 장면·객체 ID는 `레이어키::원래ID`로 구분하고 객체의 `sourceId`·`revision`(기준 요청)으로 핀·검사를 원래 기준에 되돌린다. Live Sync 변경분은 해당 레이어에만 합쳐 증분 갱신한다.
+
+#### 도면 xref 관계(T-200)
+
+SPEC-01.11의 11. 원본 DWG는 `copyFile`로 `<데이터 폴더>/xref-work/<8자리 무작위>/`에 복사하고 그 작업이 끝나면 폴더째 지운다. ZWCAD는 약 250자보다 긴 `/b` 스크립트 경로를 찾지 못하므로 작업 폴더와 실행별 하위 폴더(`r<8자리>`) 이름을 짧게 둔다. 사본은 엔진이 띄운 숨은 ZWCAD 2023(`launchOwnedHost`, `/b` 스크립트로 worker DLL `NETLOAD` 뒤 명령 실행)이 사이드 DB(`ReadDwgFile … OpenForReadAndAllShare`)로 읽고, 엔진은 그 프로세스만 끈다(`hosts/zwcad/xref-dwg.ts`의 `zwcadXrefReader`).
+
+- **worker 명령 `VIDEXREFGRAPH`(`hosts/zwcad/worker/XrefGraph.cs`):** 환경 변수 `VIDE_XREF_MANIFEST`(`id<TAB>사본 경로` 줄), `VIDE_XREF_OUT`(JSON Lines, 끝나면 `<out>.done`), `VIDE_XREF_MODE`. `graph`는 도면마다 `{id, ms, error, units, scale, unitsAssumed, xrefs: [{name, path(저장된 그대로), overlay, status(XrefStatus)}], inserts: [{name, handle, space: model|paper|block, layout, block, nested, position, rotation, scale, transform(BlockTransform, 행 우선 16)}]}`. `display`는 연결 Sync와 같은 표시 읽기(`AttachedDisplay.Page`, 연결 DLL의 소스를 worker 프로젝트가 함께 컴파일)로 모형 공간 전체의 `{objects, scene, displayCoverage, displayWarnings}`를 `<out 폴더>/<id>.json`에 쓰고 줄에는 `file`을 둔다. INSUNITS가 없으면 사본의 메모리 DB에서만 mm로 두고 `unitsAssumed: true`. 시험용 `VIDEXREFFIXTURE`는 `VIDE_XREF_FIXTURE` 폴더에 합성 도면만 만든다.
+- **그래프(`src/core/xref-graph.ts`):** 노드는 원본 경로(대소문자 무시 키), 간선은 xref 블록 하나. 경로 해석은 원본 상위 도면의 폴더 기준(`resolveXref`: 절대 → 상대 → 같은 폴더의 파일 이름). 순환은 깊이 우선 탐색에서 스택에 있는 도면으로 가는 간선, 중복은 한 상위 도면에서 같은 파일로 가는 두 번째 이후 간선. `placementsOf(root)`는 모형 공간의 첫 삽입만 쓰고, 오버레이는 깊이 0에서만, 각 도면은 한 번. 배치 행렬은 `P_child = P_parent · S(상위 m/단위) · BlockTransform · S(1/하위 m/단위)`(표시 좌표는 m).
+- **저장(`src/core/xref-store.ts`):** 프로젝트 DB에 처음 쓸 때 만드는 파생 표 `xref_files(projectId, path, size, mtime, sha256, readAt, inFolders, data)`와 `xref_placements(projectId, linkId, rootPath, matrix)`. 버전 스키마에 넣지 않으며(이전 VIDE는 무시) [다시 읽기]·[모델에 반영]이 다시 만든다. 하나의 DB를 나눌 때(`project-split.ts`)는 복사하지 않는 `derivedTables`다.
+- **작업(`src/server/xref.ts` `XrefService`):** 프로젝트마다 작업 하나(`PROJECT_BUSY`), 상태는 메모리. [다시 읽기]는 폴더를 걸어(`.git`·`node_modules`·`.vide`·`$recycle.bin`과 SPEC-01.13 4의 금지 위치 제외, 최대 3,000개) 크기·수정 시각이 바뀐 도면만 읽고, 해석된 폴더 밖 도면을 최대 세 번 더 읽는다. [모델에 반영]은 `DocumentLinks.pathLink(projectId, 'zwcad', path)`(같은 경로의 호스트 행이 있으면 그 행, 아니면 `instance = 'file:' + 소문자 경로`의 파일 행)로 연결을 만들고 배치를 쓴 뒤, 파일 행 가운데 사본 sha256이 마지막 성공 Sync의 `sourceHash`와 다른 것만 `display`로 읽어 요청(`source: 'file'`, `linkId`, 결과 `displayOnly`·`referenceOnly`·`sourceHash`)으로 남긴다.
+- **표시:** `GET …/links`의 행에 `placement?: number[16]`을 붙인다. 화면(`showLayers`)은 그 연결의 장면 항목에 `placement`를 실어 보내고, 뷰포트는 메시(블록 인스턴스 포함)의 행렬 앞에 곱한다(`matrixAutoUpdate = false`). 묶음 그리기는 `matrixWorld`를 따르므로 그대로다. 배치는 표시 전용이며 객체 행·측정·호스트 호출의 좌표는 그 파일 자체의 것이다.
+- **경로·오류:** `GET …/xref` → `{state: idle|reading|applying|done|failed, done, total, error, readAt, roots(트리), standalone, unread, applied: {root, links, read, failed}}`. `POST …/xref/read`·`…/apply`는 작업을 시작하고 상태를 바로 돌려준다. 프로젝트 폴더가 없으면 `NO_PROJECT_FOLDER`, ZWCAD·worker가 없으면 `NO_ZWCAD`(409), 루트가 그래프에 없으면 `NOT_FOUND`, 원격 세션은 `FORBIDDEN`.
 
 ### 엔진 주관 Sync(T-084)
 

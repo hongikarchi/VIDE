@@ -40,6 +40,8 @@ export const linkRowSchema = z.object({
       at: z.string(),
     })
     .optional(),
+  /** Shown as an xref of a root drawing (SPEC-01.11 11): row-major 4x4 into the root's metres. */
+  placement: z.array(z.number()).length(16).optional(),
   /** The stored display to show: its revision rises with each Live Sync in place. */
   display: z.object({ requestId: z.string(), revision: z.number() }).nullable().optional(),
   /** A one-time note (SPEC-01.11 1, T-107): the row followed its window, or the id was stored. */

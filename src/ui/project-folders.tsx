@@ -3,11 +3,13 @@
 // VIDE program window [폴더 추가] opens the Windows folder picker (WebView2 message `folder:pick`);
 // in a browser, or a program window whose shell does not offer the picker, a path field opens.
 // The engine checks every path (exists, a folder, not a drive root, VIDE data or a key folder).
-// With a project folder, 자료 정리 (knowledge-collect.tsx, SPEC-08.9) sits under the list.
+// With a project folder, 자료 정리 (knowledge-collect.tsx, SPEC-08.9) and 도면 관계 (xref-tree.tsx,
+// SPEC-01.11 11) sit under the list.
 import { useEffect, useRef, useState } from 'react';
 import { api } from './gateway.ts';
 import { remoteSession } from './remote-panel.ts';
 import { KnowledgeCollect } from './knowledge-collect.tsx';
+import { XrefTree } from './xref-tree.tsx';
 
 interface Folder {
   path: string;
@@ -209,6 +211,7 @@ export function ProjectFolders({
             {own.map(row)}
           </ul>
           <KnowledgeCollect projectId={projectId} />
+          <XrefTree projectId={projectId} />
         </>
       )}
       {allowed.length ? (

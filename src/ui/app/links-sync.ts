@@ -482,7 +482,7 @@ export async function pollLinks() {
     if (shown && shown !== linksState.engineView) viewportEmpty.sync(shown);
     linksState.engineView = shown;
     const signature = JSON.stringify(
-      linksState.links.map((link) => [link.id, link.hidden, link.lastSync]),
+      linksState.links.map((link) => [link.id, link.hidden, link.lastSync, link.placement]),
     );
     if (signature !== linksState.linkSignature) {
       linksState.linkSignature = signature;
@@ -675,7 +675,10 @@ export function showLayers() {
     return result?.hostExecuted && result.objects && result.scene ? [{ layer, result }] : [];
   });
   linksState.currentLayers = drawable.map(({ layer }) => layer);
-  const signature = layerSignature(linksState.currentLayers);
+  // An xref placement (SPEC-01.11 11) changes where a file draws: a new placement redraws it.
+  const signature =
+    layerSignature(linksState.currentLayers) +
+    drawable.map(({ layer }) => layer.link?.placement?.join(',') ?? '').join('|');
   const refresh =
     linksState.liveRefresh !== undefined &&
     linksState.currentLayers.some((layer) => layer.requestId === linksState.liveRefresh);
@@ -711,7 +714,10 @@ export function showLayers() {
           listedRows.set(o, { row, item, many, layer: layer.name });
           return row;
         }),
-        scene: result.scene!,
+        // A drawing shown as an xref of a root drawing draws in the root's coordinates.
+        scene: layer.link?.placement
+          ? result.scene!.map((item) => ({ ...item, placement: layer.link!.placement }))
+          : result.scene!,
         definitions: result.definitions,
       };
     }),

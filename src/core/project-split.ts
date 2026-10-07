@@ -19,6 +19,8 @@ import { checkDatabase } from './database-check.ts';
 
 /** Shared by every project (one copy in app.sqlite). `projects` is also kept as each project DB's own row. */
 export const appTables = ['projects', 'ai_settings', 'extension_registrations', 'jig_packages'];
+/** Derived data made on first use, not copied: [다시 읽기] rebuilds it (xref-store.ts). */
+export const derivedTables = ['xref_files', 'xref_placements'];
 
 /**
  * Where each project table's rows belong: its own `projectId`, or the project of a parent row.
@@ -268,7 +270,10 @@ export async function splitProjectDatabase(
       const names = tableNames(snap);
       const unknown = names.filter(
         (name) =>
-          name !== 'schema_version' && !appTables.includes(name) && !(name in projectTables),
+          name !== 'schema_version' &&
+          !appTables.includes(name) &&
+          !derivedTables.includes(name) &&
+          !(name in projectTables),
       );
       if (unknown.length) fail('SPLIT_UNCLASSIFIED_TABLE', unknown.join(','));
       projects = snap

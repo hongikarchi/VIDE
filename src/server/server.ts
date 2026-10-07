@@ -112,8 +112,11 @@ interface ServerOptions {
     plan?: () => Promise<ModelPlan | null>;
     dwgReader?: DwgReader | null;
   };
+  /** Test seam for 도면 관계 (SPEC-01.11 11): the xref reader (null: no ZWCAD). */
+  xrefReader?: XrefReader | null;
 }
 import { readWebAsset } from './web-assets.ts';
+import { tmpdir } from 'node:os';
 import { Extensions } from '../core/extensions.ts';
 import { AgentTools } from './agent-tools.ts';
 import { SdkExecution } from './sdk-execution.ts';
@@ -153,6 +156,11 @@ import { AttachmentStore } from './attachments.ts';
 import { attachmentPathRoutes } from './attachment-paths.ts';
 import { checkFolder, deniedPath, folderRoutes } from './project-files.ts';
 import { collectRoutes, collectStatuses } from './collect-routes.ts';
+import { xrefRoutes, xrefStatuses } from './xref-routes.ts';
+import { XrefService } from './xref.ts';
+import { XrefStore } from '../core/xref-store.ts';
+import type { XrefReader } from '../core/xref-graph.ts';
+import { zwcadXrefReader } from '../../hosts/zwcad/xref-dwg.ts';
 import { KnowledgeCollector } from '../knowledge/collect/collector.ts';
 import {
   CliRunner,
@@ -272,6 +280,7 @@ const statuses: Record<string, number> = {
   ...collectStatuses,
   ...jigSubmitStatuses,
   ...finishStatuses,
+  ...xrefStatuses,
 };
 export async function startServer({
   filename,
@@ -290,6 +299,7 @@ export async function startServer({
   signInRequired = false,
   prefetchTools = false,
   collectOptions,
+  xrefReader,
 }: ServerOptions) {
   const { store, event: storeEvent } = await openStore(filename, storeSplit),
     bootstrap = randomBytes(32).toString('hex'),
@@ -779,6 +789,24 @@ export async function startServer({
         ? undefined
         : (collectOptions?.dwgReader ?? zwcadKnowledgeReader()),
   });
+  // 도면 관계 (SPEC-01.11 11): xref relations of the project folders' drawings, read when asked.
+  const xrefStore = new XrefStore(store);
+  const xref = new XrefService({
+    store: xrefStore,
+    links,
+    workspace,
+    reader: xrefReader === null ? undefined : (xrefReader ?? zwcadXrefReader()),
+    folders: (projectId) =>
+      folders
+        .list(projectId)
+        .filter((folder) => folder.kind === 'project')
+        .map((folder) => folder.path),
+    denied: (path) => deniedPath(path, fileContext),
+    workRoot:
+      filename === ':memory:'
+        ? join(tmpdir(), 'vide-xref-work')
+        : join(dirname(filename), 'xref-work'),
+  });
   const modelRouter = new ModelRouter({
     dataDirectory: dirname(filename),
     log: filename !== ':memory:',
@@ -1143,6 +1171,17 @@ export async function startServer({
         })
       )
         return;
+      // 도면 관계 (SPEC-01.11 11): the xref tree, [다시 읽기] and [모델에 반영].
+      if (
+        await xrefRoutes(url, request.method, {
+          xref,
+          project: (projectId) => store.project(projectId),
+          body: () => body(request),
+          send,
+          remote,
+        })
+      )
+        return;
       // The project's 할 일 on the dashboard (SPEC-01.14, ARCH-01 §3); remote sessions may edit.
       if (
         await agendaRoutes(url, request.method, {
@@ -1232,10 +1271,13 @@ export async function startServer({
               ? await sdk?.editors.has(link.instance)
               : await zwcadSdk?.editors.has(link.instance),
         );
+        // A drawing shown as part of a root drawing is drawn by its xref placement (SPEC-01.11 11).
+        const placements = xrefStore.placements(linkList[1]);
         send(
           200,
           rows.map((link) => {
             const doc = matched.get(link.id)?.document;
+            const placement = placements.get(link.id)?.matrix;
             const file = isFileLink(link);
             const syncs = linkRequests(link, requests);
             const last = syncs.filter((entry) => entry.state === 'succeeded').at(-1);
@@ -1266,6 +1308,7 @@ export async function startServer({
             return {
               ...link,
               kind: file ? 'file' : 'host',
+              ...(placement ? { placement } : {}),
               ...(notice
                 ? {
                     notice:

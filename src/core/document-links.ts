@@ -536,6 +536,29 @@ export class DocumentLinks {
     const link = this.link(projectId, { host, name, instance, documentId: 1 });
     return hidden ? this.setHidden(projectId, link.id, true) : link;
   }
+  /**
+   * A drawing of the project folders shown by [모델에 반영] (SPEC-01.11 11): keyed by its path
+   * (two xrefs of the same name in different folders stay apart), never matched to a host
+   * window. A host row of the same saved path is used as it is (its own Syncs show it).
+   */
+  pathLink(projectId: string, host: 'rhino' | 'zwcad', path: string) {
+    const rows = this.list(projectId).filter((row) => row.host === host);
+    const hostRow = rows.find((row) => !isFileLink(row) && samePath(row.path, path));
+    if (hostRow) return { link: hostRow, file: false };
+    const instance = fileInstance(path);
+    const existing = rows.find((row) => row.instance === instance);
+    if (existing) {
+      if (existing.hidden) this.setHidden(projectId, existing.id, false);
+      return { link: this.get(projectId, existing.id), file: true };
+    }
+    const id = randomUUID(),
+      now = new Date().toISOString(),
+      name = path.split(/[\\/]/).pop() || path;
+    this.of(projectId)
+      .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
+      .run(id, projectId, host, name, path, instance, 1, now, now);
+    return { link: this.get(projectId, id), file: true };
+  }
   /** Removes the file from the project's list; its Sync records and results are kept. */
   remove(projectId: string, id: string) {
     this.get(projectId, id);
