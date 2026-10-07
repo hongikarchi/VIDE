@@ -50,7 +50,12 @@ export function createAuth(env: Env, ctx: ExecutionContext) {
     secret: env.AUTH_SECRET,
     baseURL: env.AUTH_ORIGIN,
     trustedOrigins: [env.AUTH_ORIGIN],
-    advanced: { ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] } },
+    advanced: {
+      ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },
+      // The D1 migrations own the schema. Better Auth's own check re-read every table's columns
+      // on nearly every request (2026-10-07: 99% of 5.26M rows read a day, over the free 5M).
+      database: { validateSchema: false },
+    },
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: !manualApproval(env),
