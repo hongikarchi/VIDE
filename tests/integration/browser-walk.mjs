@@ -129,6 +129,31 @@ try {
     // Turning and running.
     view.walkTeleport([0, 0, 0], 0);
     out.turned = view.walkSimulate(['q'], 1000).yaw;
+    // Right-dragging the mouse aims the eye: right looks right (yaw falls), up looks up; a finger
+    // still drags the scene.
+    const lookCanvas = container.querySelector('canvas');
+    const drag = (type, x, y, pointerType = 'mouse') =>
+      lookCanvas.dispatchEvent(
+        new PointerEvent(type, {
+          pointerId: 7,
+          pointerType,
+          isPrimary: true,
+          button: 2,
+          clientX: x,
+          clientY: y,
+          bubbles: true,
+        }),
+      );
+    view.walkTeleport([0, 0, 0], 0);
+    drag('pointerdown', 300, 300);
+    drag('pointermove', 400, 260);
+    drag('pointerup', 400, 260);
+    out.mouseLook = { yaw: view.walkState().yaw, pitch: view.walkState().pitch };
+    view.walkTeleport([0, 0, 0], 0);
+    drag('pointerdown', 300, 300, 'touch');
+    drag('pointermove', 400, 300, 'touch');
+    drag('pointerup', 400, 300, 'touch');
+    out.touchLook = view.walkState().yaw;
     view.walkTeleport([-9, 0, 0], 0);
     out.run = view.walkSimulate(['w', 'shift'], 1000).feet;
     // Leaving restores the orbit camera and hides the bar.
@@ -186,6 +211,16 @@ try {
     `jump: ${result.jumpedTo}`,
   );
   assert.ok(result.turned > 1.4 && result.turned < 1.8, `turn ${result.turned}`);
+  assert.ok(
+    result.mouseLook.yaw < 0 && result.mouseLook.pitch > 0,
+    `mouse look ${JSON.stringify(result.mouseLook)}`,
+  );
+  assert.ok(result.touchLook > 0, `touch look ${result.touchLook}`);
+  assert.ok(
+    result.mouseLook.yaw < 0 && result.mouseLook.pitch > 0,
+    `mouse look ${JSON.stringify(result.mouseLook)}`,
+  );
+  assert.ok(result.touchLook > 0, `touch look ${result.touchLook}`);
   assert.ok(result.run[0] > -9 + 3.5, `run ${result.run}`);
   assert.equal(result.left, false);
   assert.equal(result.barAfter, true);

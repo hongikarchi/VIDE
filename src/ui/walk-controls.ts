@@ -350,7 +350,12 @@ export function createWalk(host: WalkHost) {
     const looking = e.pointerType === 'touch' ? e.isPrimary : e.button === 2;
     if (!looking) return;
     look = { id: e.pointerId, x: e.clientX, y: e.clientY };
-    if (e.pointerType !== 'touch') dom.setPointerCapture?.(e.pointerId);
+    if (e.pointerType !== 'touch')
+      try {
+        dom.setPointerCapture?.(e.pointerId);
+      } catch {
+        /* The pointer is already gone (or synthetic): looking still follows the moves. */
+      }
   }
   function pointermove(e: PointerEvent) {
     if (!active || !look || look.id !== e.pointerId) return;
@@ -358,9 +363,11 @@ export function createWalk(host: WalkHost) {
       dy = e.clientY - look.y;
     look.x = e.clientX;
     look.y = e.clientY;
-    // Drag the view: moving the pointer right turns the view to the left, like Rhino's walk.
-    yaw += dx * WALK.lookRate;
-    pitch = THREE.MathUtils.clamp(pitch + dy * WALK.lookRate, -PITCH_LIMIT, PITCH_LIMIT);
+    // The mouse aims the eye: right looks right, up looks up (user, 2026-10-07: the old drag that
+    // pulled the scene felt reversed). A finger still drags the scene, like a panorama.
+    const sign = e.pointerType === 'touch' ? 1 : -1;
+    yaw += sign * dx * WALK.lookRate;
+    pitch = THREE.MathUtils.clamp(pitch + sign * dy * WALK.lookRate, -PITCH_LIMIT, PITCH_LIMIT);
     place();
   }
   function pointerup(e: PointerEvent) {

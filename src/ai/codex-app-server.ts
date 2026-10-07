@@ -907,6 +907,8 @@ export class CodexAppServer extends CodexCli {
       // tool item that has not completed (a long host execute, a shell command) holds it.
       const clock = new IdleClock(this.timeoutMs, () => stop('TIMEOUT'));
       signal?.addEventListener('abort', abort, { once: true });
+      // A cancel while the process or the input was being prepared fired before this listener.
+      if (signal?.aborted) queueMicrotask(abort);
       // The paths of each file change item, for its approval request (which names only the item).
       const changes = new Map<string, string[]>();
       const handle = (message: Message) => {
