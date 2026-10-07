@@ -40,7 +40,7 @@ public sealed class XrefGraphCommand
     }
 
     /** One drawing's xref records and their INSERTs. */
-    static Dictionary<string, object> Graph(Database db, Transaction tr)
+    internal static Dictionary<string, object> Graph(Database db, Transaction tr)
     {
         var table = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
         var xrefs = new List<object>(); var inserts = new List<object>();
@@ -86,8 +86,11 @@ public sealed class XrefGraphCommand
         return new Dictionary<string, object> { { "xrefs", xrefs }, { "inserts", inserts } };
     }
 
-    /** Model space display rows of the whole drawing, page by page (the attached Sync's reader). */
-    static Dictionary<string, object> Display(Database db)
+    /**
+     * Model space display rows of the whole drawing (or of the layout block `space`), page by page
+     * (the attached Sync's reader).
+     */
+    internal static Dictionary<string, object> Display(Database db, ObjectId space = default(ObjectId))
     {
         var objects = new List<object>(); var scene = new List<object>();
         var omittedTypes = new Dictionary<string, int>(); var warnings = new Dictionary<string, int>();
@@ -95,7 +98,7 @@ public sealed class XrefGraphCommand
         do
         {
             int next;
-            object page = AttachedDisplay.Page(db, offset, 250, 0, out next, out total);
+            object page = AttachedDisplay.Page(db, offset, 250, 0, out next, out total, null, space);
             Func<string, object> field = name => page.GetType().GetProperty(name).GetValue(page, null);
             objects.AddRange((List<object>)field("objects")); scene.AddRange((List<object>)field("scene"));
             displayed += (int)field("displayed"); omitted += (int)field("omitted");

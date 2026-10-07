@@ -149,12 +149,15 @@ namespace Vide.Zwcad.Connection
         private static Context ContextOf(Transaction tx, Database db) =>
             new Context { Tx = tx, Scale = Scale(db), Layers = (LayerTable)tx.GetObject(db.LayerTableId, OpenMode.ForRead) };
 
-        /** A page of model space; `seen` receives every entity read (Live Sync's display state). */
-        internal static object Page(Database db, int offset, int limit, long revision, out int next, out int total, Action<EntityRead> seen = null)
+        /**
+         * A page of model space (or of the layout block `spaceId`: a paper space of the title block
+         * preview, PLAN-47 T-235); `seen` receives every entity read (Live Sync's display state).
+         */
+        internal static object Page(Database db, int offset, int limit, long revision, out int next, out int total, Action<EntityRead> seen = null, ObjectId spaceId = default(ObjectId))
         {
             using (var tx = db.TransactionManager.StartTransaction()) {
                 var table = (BlockTable)tx.GetObject(db.BlockTableId, OpenMode.ForRead);
-                var space = (BlockTableRecord)tx.GetObject(table[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                var space = (BlockTableRecord)tx.GetObject(spaceId.IsNull ? table[BlockTableRecord.ModelSpace] : spaceId, OpenMode.ForRead);
                 var ids = space.Cast<ObjectId>().ToArray();
                 if (offset < 0 || offset > ids.Length || limit < 1 || limit > 250) throw new InvalidOperationException("INVALID_PAGE");
                 var context = ContextOf(tx, db);

@@ -219,6 +219,7 @@ test('worker saves outside the grant are only the listed engine work-copy paths'
   // writes must use OutputGrant (PLAN-47 T-226).
   assert.deepEqual(saving.sort(), [
     'DrawingOutput.cs',
+    'DrawingSheets.cs',
     'DwgEditor.cs',
     'EditorSession.cs',
     'OutputGrant.cs',
@@ -230,6 +231,11 @@ test('worker saves outside the grant are only the listed engine work-copy paths'
   assert.equal(output.match(/\.SaveAs\(/g).length, 1);
   assert.match(output, /static void Synthetic[\s\S]*db\.SaveAs\(path, version\)/);
   assert.match(output, /grant\.Stage\(db, target\)/);
+  // The title block read (T-235) saves only its synthetic fixture.
+  const sheets = await readFile(new URL('DrawingSheets.cs', folder), 'utf8');
+  assert.equal(sheets.match(/\.SaveAs\(/g).length, 1);
+  assert.match(sheets, /static void Save\(string path[\s\S]*db\.SaveAs\(path, version\)/);
+  assert.doesNotMatch(sheets.split('VIDEDRAWINGSHEETSFIXTURE')[0], /\.SaveAs\(|\.Save\(/);
 });
 
 test('worker and connection code never read the ZWCAD members that crash the host', async () => {
@@ -258,7 +264,10 @@ test('worker and connection code never read the ZWCAD members that crash the hos
     for (const name of (await readdir(folder)).filter((n) => n.endsWith('.cs'))) {
       const text = await readFile(new URL(name, folder), 'utf8');
       // Text style ids of DBText/MText are safe; a dimension's is read through its style.
-      const code = text.replace(/\/\/.*$/gm, '').replace(/"[^"\n]*"/g, '""');
+      const code = text
+        .replace(/\/\/.*$/gm, '')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/"[^"\n]*"/g, '""');
       for (const match of code.matchAll(/(\w+)\.TextStyleId\b/g))
         assert.doesNotMatch(match[1], /^dim/i, `${dir}${name}: ${match[0]}`);
       for (const member of never)

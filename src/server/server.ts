@@ -133,8 +133,17 @@ interface ServerOptions {
     proseRunner?: ProseRunner;
     writers?: () => Promise<WriterAvailability>;
   };
+  /** Test seam for 도곽 미리보기 (SPEC-14.15): the title block reader (null: no ZWCAD). */
+  sheetsReader?: SheetsReader | null;
+  /** Test seam: CAD folders searched for .ctb files (default: ZWCAD 2023 Printstyle folders). */
+  ctbSupportFolders?: () => Promise<string[]>;
 }
 import { readWebAsset } from './web-assets.ts';
+import { drawingSheetsRoutes } from './drawing-sheets-routes.ts';
+import { DrawingSheetsService } from './drawing-sheets.ts';
+import { DrawingSheetsStore } from '../core/drawing-sheets-store.ts';
+import type { SheetsReader } from '../core/drawing-sheets.ts';
+import { zwcadSheetsReader } from '../../hosts/zwcad/drawing-sheets.ts';
 import { tmpdir } from 'node:os';
 import { Extensions } from '../core/extensions.ts';
 import { AgentTools } from './agent-tools.ts';
@@ -353,6 +362,8 @@ export async function startServer({
   backflowReader,
   siteDataOptions,
   serviceOptions,
+  sheetsReader,
+  ctbSupportFolders,
 }: ServerOptions) {
   const { store, event: storeEvent } = await openStore(filename, storeSplit),
     bootstrap = randomBytes(32).toString('hex'),
@@ -938,6 +949,23 @@ export async function startServer({
         .map((folder) => folder.path),
     denied: (path) => deniedPath(path, fileContext),
   });
+  // 도곽 미리보기 (SPEC-14.15): sheets of a drawing that 도면 관계 read, and its preview.
+  const drawingSheets = new DrawingSheetsService({
+    xref: xrefStore,
+    store: new DrawingSheetsStore(store),
+    reader: sheetsReader === null ? undefined : (sheetsReader ?? zwcadSheetsReader()),
+    folders: (projectId) =>
+      folders
+        .list(projectId)
+        .filter((folder) => folder.kind === 'project')
+        .map((folder) => folder.path),
+    denied: (path) => deniedPath(path, fileContext),
+    workRoot:
+      filename === ':memory:'
+        ? join(tmpdir(), 'vide-sheets-work')
+        : join(dirname(filename), 'sheets-work'),
+    supportFolders: ctbSupportFolders,
+  });
   const modelRouter = new ModelRouter({
     dataDirectory: dirname(filename),
     log: filename !== ':memory:',
@@ -1356,6 +1384,17 @@ export async function startServer({
       if (
         await drawingBackflowRoutes(url, request.method, {
           backflow: drawingBackflow,
+          project: (projectId) => store.project(projectId),
+          body: () => body(request),
+          send,
+          remote,
+        })
+      )
+        return;
+      // 도곽 미리보기 (SPEC-14.15): sheets, preview rows, the plot style table and settings.
+      if (
+        await drawingSheetsRoutes(url, request.method, {
+          sheets: drawingSheets,
           project: (projectId) => store.project(projectId),
           body: () => body(request),
           send,

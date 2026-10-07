@@ -62,6 +62,8 @@ export const SIDE_DATABASE_COMMANDS: Readonly<Record<string, string>> = Object.f
   VIDEDRAWINGFIXTURE: 'DrawingOutput.cs',
   VIDEDRAWINGINSPECT: 'DrawingInspect.cs',
   VIDEKNOWLEDGEDWG: 'KnowledgeDwg.cs',
+  VIDEDRAWINGSHEETS: 'DrawingSheets.cs',
+  VIDEDRAWINGSHEETSFIXTURE: 'DrawingSheets.cs',
 });
 
 /** Default no-progress limit: a crashed ZWCAD shows no new step or result after this. */

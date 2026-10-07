@@ -1,7 +1,7 @@
 /**
  * AutoCAD Color Index palette and plot style tables (CTB) for the viewport's plot preview.
  * A CTB maps each ACI index to a pen colour and lineweight. `monochrome` mirrors monochrome.ctb.
- * A parsed .ctb file can be plugged in later as another `PlotStyleTable` (see `plotStyleTable`).
+ * A project's .ctb (SPEC-14.15 3) arrives from the engine and is checked by `parsePlotStyleTable`.
  */
 
 /** ACI 1–255 → #rrggbb. 0 (ByBlock) and 256 (ByLayer) are not colours and return undefined. */
@@ -94,9 +94,43 @@ export function lineWeightPixels(mm: number) {
   return Math.min(8, Math.max(1, mm * 3.78));
 }
 /**
- * Hook for user-supplied plot styles. A .ctb is a zlib-compressed text table
- * (`plot_style{ 0{ color=… lineweight=… } … }`); parse it into `pens` and pass the result here.
+ * The table to plot with: a project's .ctb (read by the engine, src/core/ctb.ts, and checked with
+ * `parsePlotStyleTable`) or the built-in monochrome.
  */
 export function plotStyleTable(table?: PlotStyleTable) {
   return table ?? monochrome;
+}
+const penOf = (value: unknown): PlotPen | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const { color, lineWeight } = value as Record<string, unknown>;
+  const okColor =
+    color === 'object' || (typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color));
+  const okWeight =
+    lineWeight === 'object' ||
+    (typeof lineWeight === 'number' && Number.isFinite(lineWeight) && lineWeight >= 0);
+  return okColor && okWeight
+    ? { color: color as PlotPen['color'], lineWeight: lineWeight as PlotPen['lineWeight'] }
+    : undefined;
+};
+/** The engine's table JSON (SPEC-14.15 3) → a `PlotStyleTable`, or undefined when malformed. */
+export function parsePlotStyleTable(value: unknown): PlotStyleTable | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  const fallback = penOf(raw.fallback);
+  if (typeof raw.name !== 'string' || !fallback || !raw.pens || typeof raw.pens !== 'object')
+    return undefined;
+  const pens: PlotStyleTable['pens'] = {};
+  for (const [key, entry] of Object.entries(raw.pens as Record<string, unknown>)) {
+    const index = Number(key),
+      pen = penOf(entry);
+    if (!Number.isInteger(index) || index < 1 || index > 255 || !pen) return undefined;
+    pens[index] = pen;
+  }
+  const weight = Number(raw.defaultLineWeight);
+  return {
+    name: raw.name,
+    pens,
+    fallback,
+    defaultLineWeight: Number.isFinite(weight) && weight > 0 ? weight : 0.25,
+  };
 }

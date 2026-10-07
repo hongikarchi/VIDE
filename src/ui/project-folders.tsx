@@ -4,12 +4,14 @@
 // in a browser, or a program window whose shell does not offer the picker, a path field opens.
 // The engine checks every path (exists, a folder, not a drive root, VIDE data or a key folder).
 // With a project folder, 자료 정리 (knowledge-collect.tsx, SPEC-08.9) and 도면 관계 (xref-tree.tsx,
-// SPEC-01.11 11) sit under the list.
+// SPEC-01.11 11) sit under the list, then 도곽 미리보기 (drawing-sheets.tsx, SPEC-14.15) once
+// 도면 관계 has read drawings.
 import { useEffect, useRef, useState } from 'react';
 import { api } from './gateway.ts';
 import { remoteSession } from './remote-panel.ts';
 import { KnowledgeCollect } from './knowledge-collect.tsx';
 import { XrefTree } from './xref-tree.tsx';
+import { DrawingSheets } from './drawing-sheets.tsx';
 
 interface Folder {
   path: string;
@@ -212,6 +214,7 @@ export function ProjectFolders({
           </ul>
           <KnowledgeCollect projectId={projectId} />
           <XrefTree projectId={projectId} />
+          <DrawingSheets projectId={projectId} />
         </>
       )}
       {allowed.length ? (
