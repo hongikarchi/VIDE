@@ -158,6 +158,14 @@ test('backflow rows from confirmed pairs, unsettled when the drawing changes', a
     ],
   );
   assert.ok(diff.json.id);
+  // The apply routes (T-233): an unknown diff, no writer on this engine, bad input.
+  const unknown = await api(`${base}/backflow/apply`, 'POST', { diff: 'f'.repeat(24) });
+  assert.deepEqual([unknown.status, unknown.json.code], [409, 'DIFF_NOT_FOUND']);
+  const noWriter = await api(`${base}/backflow/apply`, 'POST', { diff: diff.json.id });
+  assert.deepEqual([noWriter.status, noWriter.json.code], [409, 'NO_ZWCAD']);
+  assert.equal((await api(`${base}/backflow/apply`, 'POST', { diff: 'x' })).status, 400);
+  const noCard = await api(`${base}/backflow/apply/${'a'.repeat(24)}/confirm`, 'POST', {});
+  assert.deepEqual([noCard.status, noCard.json.code], [409, 'APPLY_NOT_FOUND']);
 
   // The drawing changed during the computation: rows are not settled.
   state.touch = true;

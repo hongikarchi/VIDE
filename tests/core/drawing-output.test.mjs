@@ -218,6 +218,7 @@ test('worker saves outside the grant are only the listed engine work-copy paths'
   // (candidates, session files) or synthetic test fixtures, never a user folder; new drawing
   // writes must use OutputGrant (PLAN-47 T-226).
   assert.deepEqual(saving.sort(), [
+    'DrawingBackflow.cs',
     'DrawingOutput.cs',
     'DrawingSheets.cs',
     'DwgEditor.cs',
@@ -236,6 +237,13 @@ test('worker saves outside the grant are only the listed engine work-copy paths'
   assert.equal(sheets.match(/\.SaveAs\(/g).length, 1);
   assert.match(sheets, /static void Save\(string path[\s\S]*db\.SaveAs\(path, version\)/);
   assert.doesNotMatch(sheets.split('VIDEDRAWINGSHEETSFIXTURE')[0], /\.SaveAs\(|\.Save\(/);
+  // The backflow apply (T-233) also writes only through the grant; its one SaveAs is the fixture.
+  const backflow = await readFile(new URL('DrawingBackflow.cs', folder), 'utf8');
+  assert.equal(backflow.match(/\.SaveAs\(/g).length, 1);
+  assert.match(backflow, /static void Synthetic[\s\S]*db\.SaveAs\(path, version\)/);
+  assert.match(backflow, /grant\.Stage\(db, target\)/);
+  // The shared apply (worker and plugin) never saves: an open drawing is saved by the person.
+  assert.doesNotMatch(await readFile(new URL('BackflowOps.cs', folder), 'utf8'), /\.Save(As)?\(/);
 });
 
 test('worker and connection code never read the ZWCAD members that crash the host', async () => {

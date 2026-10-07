@@ -118,6 +118,8 @@ interface ServerOptions {
   drawingInspector?: DrawingInspector | null;
   /** Test seam for 역반영 (SPEC-14.10): the source and drawing entity reader (null: none). */
   backflowReader?: BackflowReader | null;
+  /** Test seam for 역반영 적용 (SPEC-14.11): the open/closed drawing writer (null or absent: none). */
+  backflowWriter?: BackflowWriter | null;
   /**
    * Test seams for 공공 자료 수집 (T-205): the fetch the site-data library uses and the
    * environment its keys are read from (default process.env).
@@ -194,9 +196,11 @@ import type { XrefReader } from '../core/xref-graph.ts';
 import { zwcadXrefReader } from '../../hosts/zwcad/xref-dwg.ts';
 import { drawingLayerRoutes, drawingLayerStatuses } from './drawing-layer-routes.ts';
 import { DrawingLayerService } from './drawing-layers.ts';
-import { drawingBackflowRoutes } from './drawing-backflow-routes.ts';
+import { drawingBackflowRoutes, drawingBackflowStatuses } from './drawing-backflow-routes.ts';
 import { DrawingBackflowService, type BackflowReader } from './drawing-backflow.ts';
 import { DrawingBackflowStore } from '../core/drawing-backflow.ts';
+import { OutputTokens } from '../core/drawing-output.ts';
+import { ZwcadBackflowHost, type BackflowWriter } from './drawing-backflow-host.ts';
 import { DrawingLayerStore, type DrawingInspector } from '../core/drawing-layers.ts';
 import { zwcadDrawingInspector } from '../../hosts/zwcad/drawing-inspect.ts';
 import { KnowledgeCollector } from '../knowledge/collect/collector.ts';
@@ -337,6 +341,7 @@ const statuses: Record<string, number> = {
   ...siteDataStatuses,
   ...xrefStatuses,
   ...drawingLayerStatuses,
+  ...drawingBackflowStatuses,
   ...serviceSettingsStatuses,
   ...legalStatuses,
 };
@@ -360,6 +365,7 @@ export async function startServer({
   xrefReader,
   drawingInspector,
   backflowReader,
+  backflowWriter,
   siteDataOptions,
   serviceOptions,
   sheetsReader,
@@ -935,13 +941,28 @@ export async function startServer({
         ? join(tmpdir(), 'vide-drawing-work')
         : join(dirname(filename), 'drawing-work'),
   });
-  // 역반영 차이 계산 (SPEC-14.10, T-232): rows from baselines, layer tables and the xref graph.
-  // The entity reader arrives with the apply path (T-233); without it a diff answers NO_ZWCAD.
+  // 역반영 (SPEC-14.10·14.11, T-232·T-233): rows from baselines, layer tables and the xref graph; the
+  // apply on open drawings (attached ZWCAD) and closed ones (hidden ZWCAD, new file after the card).
+  const drawingWork =
+    filename === ':memory:'
+      ? join(tmpdir(), 'vide-drawing-work')
+      : join(dirname(filename), 'drawing-work');
+  const backflowHost =
+    backflowReader === undefined
+      ? new ZwcadBackflowHost({
+          attached: zwcadSdk?.editors.attached,
+          workspace,
+          workRoot: drawingWork,
+        })
+      : undefined;
   const drawingBackflow = new DrawingBackflowService({
     store: new DrawingBackflowStore(store),
     layers: drawingLayerStore,
     xref: xrefStore,
-    reader: backflowReader ?? undefined,
+    reader: backflowReader === undefined ? backflowHost : (backflowReader ?? undefined),
+    writer: backflowWriter === undefined ? backflowHost : (backflowWriter ?? undefined),
+    tokens: new OutputTokens({ workRoot: drawingWork }),
+    workRoot: drawingWork,
     folders: (projectId) =>
       folders
         .list(projectId)
@@ -1388,6 +1409,21 @@ export async function startServer({
           body: () => body(request),
           send,
           remote,
+          // The Sync jig's Syncs: the Rhino one names the link, the CAD one the open drawing.
+          syncSources: (projectId, rhino, cad) => {
+            const rows = workspace.list(projectId);
+            const of = (id: string) =>
+              rows.find((row) => row.id === id && row.state === 'succeeded');
+            const r = of(rhino),
+              c = of(cad);
+            if (!r || !c) throw new DomainError('STALE_REFERENCE');
+            if ((r.result?.host ?? 'rhino') !== 'rhino' || c.result?.host !== 'zwcad')
+              throw new DomainError('TARGET_MISMATCH');
+            const document = (c.result?.sourceDocument ?? {}) as { path?: unknown };
+            if (typeof r.input.linkId !== 'string' || typeof document.path !== 'string')
+              throw new DomainError('ZWCAD_ATTACHED_EDIT_UNAVAILABLE');
+            return { linkId: r.input.linkId, path: document.path };
+          },
         })
       )
         return;

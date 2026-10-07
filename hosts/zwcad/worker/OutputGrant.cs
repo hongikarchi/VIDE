@@ -80,19 +80,8 @@ namespace Vide.Zwcad
             }
         }
 
-        internal static string Magic(DwgVersion version)
-        {
-            switch (version)
-            {
-                case DwgVersion.AC1015: return "AC1015";
-                case DwgVersion.AC1800: return "AC1018";
-                case DwgVersion.AC1021: return "AC1021";
-                case DwgVersion.AC1024: return "AC1024";
-                case DwgVersion.AC1027: return "AC1027";
-                case DwgVersion.AC1032: return "AC1032";
-                default: return version.ToString();
-            }
-        }
+        /** The header magic of a DWG version (BackflowOps.Version, shared with the connection plugin). */
+        internal static string Magic(DwgVersion version) => BackflowOps.Version(version);
 
         /** The full path when `path` may be written now; OutputRefused otherwise. */
         internal string Authorize(string path)

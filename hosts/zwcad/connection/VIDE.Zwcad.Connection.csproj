@@ -24,6 +24,8 @@
   <ItemGroup>
     <Compile Include="..\worker\SdkCompiler.cs" Link="SdkCompiler.cs" />
     <Compile Include="..\worker\CompilerDependencies.cs" Link="CompilerDependencies.cs" />
+    <!-- 역반영 (PLAN-47 T-233): the same entity read, snapshot and apply as the hidden worker. -->
+    <Compile Include="..\worker\BackflowOps.cs" Link="BackflowOps.cs" />
     <Compile Include="..\..\common\PanelPage.cs" Link="PanelPage.cs" />
     <Compile Include="..\..\common\DiagnosticLog.cs" Link="DiagnosticLog.cs" />
   </ItemGroup>

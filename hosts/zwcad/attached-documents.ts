@@ -164,6 +164,24 @@ export async function readDisplayPages(
   }
 }
 
+/** A backflow answer: an older plugin's UNSUPPORTED_METHOD means the plugin must be updated. */
+function backflowAnswer(result: unknown) {
+  const rejected = z
+    .object({ ok: z.literal(false), code: z.string() })
+    .passthrough()
+    .safeParse(result);
+  if (rejected.success && rejected.data.code === 'UNSUPPORTED_METHOD')
+    throw new DomainError('ZWCAD_PLUGIN_UPDATE_REQUIRED');
+  if (
+    rejected.success &&
+    rejected.data.code !== 'OP_REFUSED' &&
+    rejected.data.code !== 'FILE_CHANGED'
+  )
+    throw new DomainError(rejected.data.code);
+  if (!result || typeof result !== 'object') throw new DomainError('HOST_INVALID_RESPONSE');
+  return result as Record<string, unknown>;
+}
+
 export class AttachedZwcadDocuments {
   private connections = new Map<string, Connection>();
   private directory: string;
@@ -221,7 +239,12 @@ export class AttachedZwcadDocuments {
       {
         port: identity.port,
         timeoutMs: 70000,
-        maxResponseBytes: ['displayPage', 'displayChanges'].includes(method)
+        maxResponseBytes: [
+          'displayPage',
+          'displayChanges',
+          'backflow-read',
+          'backflow-apply',
+        ].includes(method)
           ? 128 * 1024 * 1024
           : 16 * 1024 * 1024,
         beforeSend: verify
@@ -336,6 +359,37 @@ export class AttachedZwcadDocuments {
     return directUndoResultSchema.parse(
       await this.call(target, 'direct-undo', { undoId }, false, true),
     );
+  }
+  /**
+   * 역반영 (PLAN-47 T-233): the open drawing's model space entities, dimensions and layers as a backflow
+   * reads them (with the preservation snapshot when asked). An older plugin answers
+   * `ZWCAD_PLUGIN_UPDATE_REQUIRED`.
+   */
+  async backflowRead(target: HostTarget, snapshot = false) {
+    await this.discover();
+    const result = await this.call(target, 'backflow-read', { snapshot }, false, true);
+    return backflowAnswer(result) as Record<string, unknown> & {
+      documentHash: string;
+      revision: number;
+      path: string;
+      units: number;
+      version: string;
+    };
+  }
+  /**
+   * Applies a backflow's ops to the open drawing as one ZWCAD UNDO step (one VIDEAIRUN command), only
+   * while its documentHash is `expected`. The answer has the state before and after and an undoId
+   * for `directUndo`; a refused op leaves the drawing as it was ({ok:false, code:'OP_REFUSED'}).
+   */
+  async backflowApply(
+    target: HostTarget,
+    input: { ops: unknown[]; expected: string; stamp: number },
+  ) {
+    await this.discover();
+    return backflowAnswer(await this.call(target, 'backflow-apply', input, false, true)) as Record<
+      string,
+      unknown
+    >;
   }
   async fingerprint(target: HostTarget) {
     await this.discover();

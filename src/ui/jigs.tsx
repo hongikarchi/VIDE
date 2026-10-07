@@ -44,6 +44,27 @@ const jigSchema = z.object({
 });
 type Jig = z.infer<typeof jigSchema>;
 const point = z.tuple([z.number(), z.number(), z.number()]);
+/** The answer of `POST …/drawing/backflow/sync` (the parts this tab shows). */
+const syncApplySchema = z
+  .object({
+    state: z.enum(['applied', 'confirm', 'failed', 'unclear']),
+    id: z.string().optional(),
+    code: z.string().optional(),
+    applied: z.array(z.string()).optional(),
+    refused: z.array(z.object({ id: z.string(), code: z.string() })).optional(),
+    files: z
+      .array(
+        z
+          .object({
+            rows: z.array(z.string()),
+            check: z.object({ ok: z.boolean(), differences: z.number() }).passthrough().nullable(),
+            dimensions: z.array(z.unknown()),
+          })
+          .passthrough(),
+      )
+      .default([]),
+  })
+  .passthrough();
 const syncSchema = z.object({
   alignment: z.object({
     rotation: z.number(),
@@ -662,14 +683,6 @@ const stateText: Record<Row['state'], string> = {
   'rhino-only': 'Rhino에만',
   'cad-only': 'CAD에만',
 };
-const unitScale: Record<string, number> = {
-  Millimeters: 1000,
-  Centimeters: 100,
-  Meters: 1,
-  Inches: 39.37007874,
-  Feet: 3.280839895,
-};
-
 const round = (values: number[], k = 1e4) => values.map((v) => Math.round(v * k) / k);
 
 // The JIG list (SCR-18): this project's jigs (installed and pinned here, or being written in this
@@ -1200,6 +1213,8 @@ function SyncJig({ context }: { context: JigContext }) {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  /** The last "CAD를 Rhino에 맞춤" apply on the open drawing, for [되돌리기] (T-233). */
+  const [applied, setApplied] = useState<string>();
   const run = async (extra: Record<string, unknown> = {}) => {
     if (!rhino || !cad) return;
     setBusy(true);
@@ -1236,41 +1251,80 @@ function SyncJig({ context }: { context: JigContext }) {
     [result, filter],
   );
   const a = result?.alignment;
-  const cadUnits = result?.cadUnits ?? 'Millimeters';
-  const scale = unitScale[cadUnits] ?? 1000;
   const chosen = (result?.rows ?? []).filter((row) => picked.has(row.id));
-  // Edits that make the drawing follow the model (coordinates in drawing units).
-  const cadEdits = () => {
+  // The drawing follows the model through the engine's backflow apply (T-233, SPEC-14.11 1): the
+  // open drawing's entities take the Rhino objects' shapes in place (type, layer, handle kept),
+  // Rhino-only objects are added on the matched drawing layer, CAD-only entities are deleted.
+  const cadRows = () => {
     const bestLayer = (layer: string) => result?.layers.find((l) => l.rhino === layer)?.cad;
-    return chosen.flatMap((row): Record<string, unknown>[] => {
-      const at = (p: number[]) =>
-        round(
-          p.map((v) => v * scale),
-          1e3,
+    return chosen.map((row) => ({
+      id: row.id,
+      state: row.state,
+      ...(row.rhino ? { rhino: row.rhino.nativeId } : {}),
+      ...(row.cad ? { cad: row.cad.nativeId } : {}),
+      ...(row.state === 'rhino-only' && row.rhino
+        ? { layer: bestLayer(row.rhino.layer) ?? null }
+        : {}),
+    }));
+  };
+  const applyCad = async () => {
+    if (!a) return '';
+    const body = {
+      rhino,
+      cad,
+      relation: { rotation: a.rotation, translation: a.translation, dz: a.dz },
+      rows: cadRows(),
+    };
+    const path = `/projects/${context.projectId}/drawing/backflow/sync`;
+    let answer;
+    try {
+      answer = await api(path, 'POST', body, { quiet: ['DELETE_CONFIRMATION_REQUIRED'] });
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'DELETE_CONFIRMATION_REQUIRED') throw error;
+      const count = body.rows.filter((row) => row.state === 'cad-only').length;
+      if (!confirm(`도면에서 ${count}개를 지웁니다. 계속할까요?`)) return '반영하지 않았습니다.';
+      answer = await api(path, 'POST', { ...body, confirmDeletes: true });
+    }
+    const value = syncApplySchema.parse(answer);
+    const refused = value.refused?.length ? ` · 반영 안 함 ${value.refused.length}행` : '';
+    if (value.state !== 'applied') {
+      setApplied(undefined);
+      return value.state === 'unclear'
+        ? `결과를 확인하지 못했습니다. 도면을 다시 읽으니 ${value.applied?.length ?? 0}행이 반영되어 있습니다. 다시 적용하지 않습니다.`
+        : `반영하지 못했습니다 (${value.code ?? '실패'}). 도면은 그대로입니다.${refused}`;
+    }
+    setApplied(value.id);
+    const file = value.files[0];
+    const check = file?.check?.ok
+      ? '형식 보존 확인 이상 없음'
+      : `형식 차이 ${file?.check?.differences ?? '?'}건`;
+    const dims = file?.dimensions.length ? ` · 치수 확인 필요 ${file.dimensions.length}개` : '';
+    return `열린 도면에 ${file?.rows.length ?? 0}행을 반영했습니다(되돌리기 한 번에 원상) · ${check}${dims}${refused}. 저장은 ZWCAD에서 하세요.`;
+  };
+  const undoCad = async () => {
+    if (!applied) return;
+    setBusy(true);
+    try {
+      const value = z
+        .object({ files: z.array(z.object({ undone: z.boolean() })) })
+        .parse(
+          await api(
+            `/projects/${context.projectId}/drawing/backflow/apply/${applied}/undo`,
+            'POST',
+            {},
+          ),
         );
-      if (row.state === 'offset' && row.cad && row.ends)
-        return [
-          {
-            row: row.id,
-            action: 'move-ends',
-            handle: row.cad.nativeId,
-            from: row.ends.cad.map(at),
-            to: row.ends.rhino.map((p) => at([p[0], p[1], row.ends!.cad[0][2]])),
-          },
-        ];
-      if (row.state === 'rhino-only' && row.rhino && row.ends)
-        return [
-          {
-            row: row.id,
-            action: 'add-line',
-            layer: bestLayer(row.rhino.layer) ?? row.rhino.layer,
-            points: row.ends.rhino.map((p) => at([p[0], p[1], 0])),
-          },
-        ];
-      if (row.state === 'cad-only' && row.cad)
-        return [{ row: row.id, action: 'erase', handle: row.cad.nativeId }];
-      return [];
-    });
+      setApplied(undefined);
+      setNotice(
+        value.files.every((f) => f.undone)
+          ? '반영을 되돌렸습니다.'
+          : '되돌리지 못했습니다. 그 뒤에 도면이 바뀌었으면 ZWCAD에서 Ctrl+Z로 되돌리세요.',
+      );
+    } catch (error) {
+      setNotice((error instanceof Error && error.message) || '되돌리지 못했습니다.');
+    } finally {
+      setBusy(false);
+    }
   };
   // Edits that make the model follow the drawing (metres, the AI's working units in Rhino).
   const rhinoEdits = () => {
@@ -1342,15 +1396,10 @@ function SyncJig({ context }: { context: JigContext }) {
           permission: 'review',
           jig: { kind: 'sync-review', rows: result.rows.map((row) => row.id) },
         });
-      else if (kind === 'cad')
-        await context.send({
-          body: `첨부 sync-edits.json의 편집을 열린 도면에 그대로 적용해 줘 (좌표 단위: ${cadUnits}). move-ends는 해당 핸들 선의 두 끝점을 from→to로 옮기고, add-line은 지정 레이어(없으면 만들기)에 선을 추가하고, erase는 해당 핸들을 지워. 목록에 없는 객체는 건드리지 마. 끝나면 조회해서 결과를 행 번호별로 알려 줘.`,
-          files: [{ name: 'sync-edits.json', text: JSON.stringify(cadEdits()) }],
-          permission: 'candidate',
-          host: 'zwcad',
-          baseRequestId: cad,
-          jig: { kind: 'sync-apply', side: 'cad' },
-        });
+      else if (kind === 'cad') {
+        setNotice(await applyCad());
+        return;
+      }
       // Rhino follows the drawing in the open document (자동, ADR-022): one undo record per
       // execute, reverted with Rhino Ctrl+Z or [되돌리기]; no work copy to apply afterwards.
       else
@@ -1617,11 +1666,17 @@ function SyncJig({ context }: { context: JigContext }) {
             >
               선택 {chosen.length}개 · Rhino를 CAD에 맞춤
             </button>
+            {applied ? (
+              <button type="button" disabled={busy} onClick={() => void undoCad()}>
+                CAD 반영 되돌리기
+              </button>
+            ) : null}
           </div>
           <small>
-            오차는 끝점을 옮기고, 한쪽에만 있는 것은 반대쪽에 선을 추가하거나(맞출 대상 쪽이 기준)
-            지웁니다. 반영은 대화에 요청으로 보내며 CAD는 열린 도면에 바로(UNDO 가능), Rhino는
-            사본에서 수정 후 문서에 적용합니다.
+            CAD를 Rhino에 맞추면 열린 도면의 개체가 그 자리에서 Rhino 모양을
+            따릅니다(종류·레이어·핸들 유지, 선·폴리선·호·원·블록 위치). 한쪽에만 있는 것은 반대쪽에
+            추가하거나(맞출 대상 쪽이 기준, 도면에 있는 레이어만) 지웁니다. CAD는 열린 도면에
+            바로(되돌리기 한 번), Rhino는 대화 요청으로 문서에 적용합니다.
           </small>
         </>
       ) : null}

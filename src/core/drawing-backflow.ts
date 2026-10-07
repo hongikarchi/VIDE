@@ -309,7 +309,7 @@ export function pairsFromSyncRows(
 }
 
 /** A similarity p → scale·R(rotation)·p + translation (XY), z shifted and scaled. */
-interface Frame {
+export interface Frame {
   rotation: number;
   scale: number;
   map: (p: Point) => Point;
@@ -388,12 +388,18 @@ export function sameGeometry(x: Geometry, y: Geometry, tolerance: number): boole
       );
     }
     case 'arc': {
+      // End points within the tolerance (a length): angles alone would ask µrad of a large arc.
       const o = b as typeof a;
+      const at = (g: typeof a, t: number): Point => [
+        g.center[0] + g.radius * Math.cos(t),
+        g.center[1] + g.radius * Math.sin(t),
+        g.center[2],
+      ];
       return (
         nearPoint(a.center, o.center, tolerance) &&
         near(a.radius, o.radius, tolerance) &&
-        nearAngle(a.start, o.start) &&
-        nearAngle(a.end, o.end)
+        nearPoint(at(a, a.start), at(o, o.start), tolerance) &&
+        nearPoint(at(a, a.end), at(o, o.end), tolerance)
       );
     }
     case 'circle': {
@@ -402,8 +408,9 @@ export function sameGeometry(x: Geometry, y: Geometry, tolerance: number): boole
     }
     case 'insert': {
       const o = b as typeof a;
+      // A Rhino Sync does not keep the block name (''): then position and rotation only.
       return (
-        a.block.toLowerCase() === o.block.toLowerCase() &&
+        (!a.block || !o.block || a.block.toLowerCase() === o.block.toLowerCase()) &&
         nearPoint(a.position, o.position, tolerance) &&
         nearAngle(a.rotation, o.rotation)
       );
@@ -411,7 +418,7 @@ export function sameGeometry(x: Geometry, y: Geometry, tolerance: number): boole
   }
 }
 /** Whether the entity can take the source's shape without being redrawn (a line stays a line). */
-const writable = (source: Geometry, entity: Geometry) =>
+export const writable = (source: Geometry, entity: Geometry) =>
   normalGeometry(source).kind === normalGeometry(entity).kind;
 const points = (g: Geometry): Point[] =>
   g.kind === 'line' || g.kind === 'polyline'
@@ -455,10 +462,10 @@ const touches = (a: Geometry, b: Geometry, margin: number) => {
 };
 
 const ABSOLUTE = /^([a-z]:|\\\\)/i;
-const metresPerUnit = (units: number | null) => (units === 4 || units === 0 ? 0.001 : null);
+export const metresPerUnit = (units: number | null) => (units === 4 || units === 0 ? 0.001 : null);
 
 /** How a source point reaches a file: the relation, then the inverse xref placement. */
-function frameOf(
+export function frameOf(
   relation: Relation,
   fileScale: number,
   placement: number[] | null,

@@ -135,6 +135,9 @@ namespace Vide.Zwcad.Connection
             }
             if (method == "direct-execute") return DirectExecute(request);
             if (method == "direct-undo") return DirectUndo(Value(request, "undoId"));
+            // 역반영 (PLAN-47 T-233): the drawing's entities as a backflow reads them, and its apply.
+            if (method == "backflow-read") return BackflowRead(String.Equals(Value(request, "snapshot"), "true", StringComparison.OrdinalIgnoreCase));
+            if (method == "backflow-apply") return BackflowApply(request);
             if (method == "displayPage") {
                 if (Value(request, "revision") != revision.ToString()) throw new InvalidOperationException("SOURCE_CHANGED");
                 int offset = Convert.ToInt32(request["offset"]), next, total;
@@ -209,6 +212,70 @@ namespace Vide.Zwcad.Connection
                 return result;
             });
         }
+        private Dictionary<string, object> State(Transaction tx, ICollection<string> only, bool snapshot)
+        {
+            var db = Document.Database;
+            var state = new Dictionary<string, object> {
+                ["entities"] = Vide.Zwcad.BackflowOps.Entities(db, tx, only), ["dims"] = Vide.Zwcad.BackflowOps.Dimensions(db, tx),
+                ["layers"] = Vide.Zwcad.BackflowOps.Layers(db, tx) };
+            if (snapshot) state["snapshot"] = Vide.Zwcad.BackflowOps.Snapshot(db, tx);
+            return state;
+        }
+        /// <summary>The open drawing's model space entities (geometry, kept properties, VIDE_ORIGIN marks).</summary>
+        private object BackflowRead(bool snapshot)
+        {
+            using (Document.LockDocument(DocumentLockMode.Read, null, null, false))
+            using (var tx = Document.Database.TransactionManager.StartTransaction())
+            {
+                var result = State(tx, null, snapshot);
+                result["ok"] = true; result["documentHash"] = Fingerprint(); result["revision"] = revision;
+                result["path"] = Document.Name; result["units"] = (int)Document.Database.Insunits;
+                result["version"] = Vide.Zwcad.BackflowOps.Version(Document.Database.OriginalFileVersion);
+                tx.Abort();
+                return result;
+            }
+        }
+        /// <summary>
+        /// 역반영 on the open drawing (SPEC-14.11 1): the engine's ops in one VIDEAIRUN command, so one
+        /// ZWCAD UNDO step reverts them, only while the drawing is still the one the rows were computed
+        /// from (documentHash). The answer carries the state before and after (re-read in the same
+        /// command) and an undoId like a direct execute. Any refused op leaves the drawing untouched.
+        /// </summary>
+        private object BackflowApply(Dictionary<string, object> request)
+        {
+            object raw; request.TryGetValue("ops", out raw);
+            var ops = raw as System.Collections.ArrayList;
+            int stamp; Int32.TryParse(Value(request, "stamp"), out stamp);
+            string expected = Value(request, "expected");
+            if (ops == null || ops.Count == 0 || ops.Count > 20000 || String.IsNullOrEmpty(expected)) throw new InvalidOperationException("INVALID_INPUT");
+            var touched = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (object item in ops)
+                if (item is Dictionary<string, object> op && op.ContainsKey("handle") && op["handle"] != null) touched.Add(Convert.ToString(op["handle"]).ToUpperInvariant());
+            long before = revision;
+            return AttachedEdit.Queue(Document, () => {
+                if (Fingerprint() != expected) return new Dictionary<string, object> { ["ok"] = false, ["code"] = "FILE_CHANGED" };
+                var db = Document.Database;
+                var result = new Dictionary<string, object>();
+                using (Document.LockDocument())
+                {
+                    using (var tx = db.TransactionManager.StartTransaction()) { result["before"] = State(tx, touched, true); tx.Abort(); }
+                    Dictionary<string, object> applied;
+                    using (var tx = db.TransactionManager.StartTransaction())
+                    {
+                        applied = Vide.Zwcad.BackflowOps.Apply(db, tx, ops, stamp);
+                        if (true.Equals(applied["ok"])) tx.Commit(); else tx.Abort();
+                    }
+                    result["results"] = applied["results"]; result["failed"] = applied["failed"];
+                    if (!true.Equals(applied["ok"])) return new Dictionary<string, object> { ["ok"] = false, ["code"] = "OP_REFUSED", ["failed"] = applied["failed"] };
+                    using (var tx = db.TransactionManager.StartTransaction()) { result["after"] = State(tx, null, true); tx.Abort(); }
+                }
+                try { Document.Editor.Regen(); } catch { }
+                string undoId = null;
+                if (revision != before) { undoId = Guid.NewGuid().ToString(); lastUndo = undoId; lastUndoRevision = revision; }
+                result["ok"] = true; result["undoId"] = undoId; result["documentHash"] = Fingerprint(); result["revision"] = revision;
+                return result;
+            });
+        }
         private object DirectUndo(string undoId)
         {
             if (undoId == null || undoId != lastUndo || revision != lastUndoRevision || undoing != null) return new { ok = false, reason = "not-latest" };
@@ -241,7 +308,7 @@ namespace Vide.Zwcad.Connection
                     string method = "?"; long bytesIn = 0, bytesOut = 0;
                     try {
                         int size = IPAddress.NetworkToHostOrder(BitConverter.ToInt32(Read(stream, 4), 0));
-                        if (size < 1 || size > 1024 * 1024) throw new InvalidOperationException("INVALID_REQUEST");
+                        if (size < 1 || size > 8 * 1024 * 1024) throw new InvalidOperationException("INVALID_REQUEST");
                         bytesIn = size;
                         var envelope = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(Encoding.UTF8.GetString(Read(stream, size)));
                         var request = (Dictionary<string, object>)envelope["params"];
