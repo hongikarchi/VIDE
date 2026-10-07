@@ -198,6 +198,13 @@ const drawingLayers = `CREATE TABLE IF NOT EXISTS drawing_reads(projectId TEXT N
 CREATE TABLE IF NOT EXISTS drawing_layer_maps(projectId TEXT NOT NULL REFERENCES projects(id),
   key TEXT NOT NULL, path TEXT NOT NULL, entries TEXT NOT NULL, sha256 TEXT NOT NULL,
   revision INTEGER NOT NULL, updatedAt TEXT NOT NULL, PRIMARY KEY(projectId, key)) WITHOUT ROWID;`;
+// 역반영 기준 (SPEC-14.10·14.12, PLAN-47 T-232): one baseline per drawing file — every entity's
+// digest by handle and the pairs (source object ↔ handle with the source and entity digests when
+// recorded) as JSON. `key` is the Windows path key; `revision` grows by one per save.
+const drawingBackflow = `CREATE TABLE IF NOT EXISTS drawing_backflow_baselines(
+  projectId TEXT NOT NULL REFERENCES projects(id), key TEXT NOT NULL, path TEXT NOT NULL,
+  data TEXT NOT NULL, revision INTEGER NOT NULL, updatedAt TEXT NOT NULL,
+  PRIMARY KEY(projectId, key)) WITHOUT ROWID;`;
 export const migrations: Migration[] = [
   { version: 2, sql: baselineSchema },
   { version: 3, sql: hiddenRequests },
@@ -211,9 +218,7 @@ export const migrations: Migration[] = [
   { version: 11, sql: agendaFields },
   { version: 12, sql: finishSchedule },
   { version: 13, sql: legalQa },
-  // RESERVED for a parallel ticket (2026-10-08): its migration replaces this empty step when the
-  // branches are merged. Never release a build with this placeholder.
-  { version: 14, sql: '' },
+  { version: 14, sql: drawingBackflow },
   { version: 15, sql: drawingLayers },
 ];
 

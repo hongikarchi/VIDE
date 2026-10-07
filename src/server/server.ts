@@ -116,6 +116,8 @@ interface ServerOptions {
   xrefReader?: XrefReader | null;
   /** Test seam for 도면 읽기 (SPEC-14.3): the drawing inspector (null: no ZWCAD). */
   drawingInspector?: DrawingInspector | null;
+  /** Test seam for 역반영 (SPEC-14.10): the source and drawing entity reader (null: none). */
+  backflowReader?: BackflowReader | null;
   /**
    * Test seams for 공공 자료 수집 (T-205): the fetch the site-data library uses and the
    * environment its keys are read from (default process.env).
@@ -182,6 +184,9 @@ import type { XrefReader } from '../core/xref-graph.ts';
 import { zwcadXrefReader } from '../../hosts/zwcad/xref-dwg.ts';
 import { drawingLayerRoutes, drawingLayerStatuses } from './drawing-layer-routes.ts';
 import { DrawingLayerService } from './drawing-layers.ts';
+import { drawingBackflowRoutes } from './drawing-backflow-routes.ts';
+import { DrawingBackflowService, type BackflowReader } from './drawing-backflow.ts';
+import { DrawingBackflowStore } from '../core/drawing-backflow.ts';
 import { DrawingLayerStore, type DrawingInspector } from '../core/drawing-layers.ts';
 import { zwcadDrawingInspector } from '../../hosts/zwcad/drawing-inspect.ts';
 import { KnowledgeCollector } from '../knowledge/collect/collector.ts';
@@ -344,6 +349,7 @@ export async function startServer({
   collectOptions,
   xrefReader,
   drawingInspector,
+  backflowReader,
   siteDataOptions,
   serviceOptions,
 }: ServerOptions) {
@@ -899,8 +905,9 @@ export async function startServer({
         : join(dirname(filename), 'xref-work'),
   });
   // 도면 읽기와 레이어 대응 (SPEC-14.3): copies of project drawings read when asked, tables per drawing.
+  const drawingLayerStore = new DrawingLayerStore(store);
   const drawingLayers = new DrawingLayerService({
-    store: new DrawingLayerStore(store),
+    store: drawingLayerStore,
     inspector:
       drawingInspector === null ? undefined : (drawingInspector ?? zwcadDrawingInspector()),
     folders: (projectId) =>
@@ -913,6 +920,20 @@ export async function startServer({
       filename === ':memory:'
         ? join(tmpdir(), 'vide-drawing-work')
         : join(dirname(filename), 'drawing-work'),
+  });
+  // 역반영 차이 계산 (SPEC-14.10, T-232): rows from baselines, layer tables and the xref graph.
+  // The entity reader arrives with the apply path (T-233); without it a diff answers NO_ZWCAD.
+  const drawingBackflow = new DrawingBackflowService({
+    store: new DrawingBackflowStore(store),
+    layers: drawingLayerStore,
+    xref: xrefStore,
+    reader: backflowReader ?? undefined,
+    folders: (projectId) =>
+      folders
+        .list(projectId)
+        .filter((folder) => folder.kind === 'project')
+        .map((folder) => folder.path),
+    denied: (path) => deniedPath(path, fileContext),
   });
   const modelRouter = new ModelRouter({
     dataDirectory: dirname(filename),
@@ -1307,6 +1328,17 @@ export async function startServer({
       if (
         await drawingLayerRoutes(url, request.method, {
           layers: drawingLayers,
+          project: (projectId) => store.project(projectId),
+          body: () => body(request),
+          send,
+          remote,
+        })
+      )
+        return;
+      // 역반영 차이 계산 (SPEC-14.10): rows and confirmed pairs, at this PC.
+      if (
+        await drawingBackflowRoutes(url, request.method, {
+          backflow: drawingBackflow,
           project: (projectId) => store.project(projectId),
           body: () => body(request),
           send,

@@ -183,6 +183,7 @@ function fill(db, p, n) {
   run('INSERT INTO finish_sheets VALUES(?,?,?)', p, '{}', at);
   run("INSERT INTO drawing_reads VALUES(?,'c:\\a.dwg','C:\\a.dwg',1,?,'h',?,'{}')", p, at, at);
   run("INSERT INTO drawing_layer_maps VALUES(?,'c:\\a.dwg','C:\\a.dwg','[]','h',1,?)", p, at);
+  run("INSERT INTO drawing_backflow_baselines VALUES(?,'c:\\a.dwg','C:\\a.dwg','{}',1,?)", p, at);
   run(
     "INSERT INTO legal_profile(projectId,key,value_json,source,updated_at) VALUES(?,'site.area','420','user',?)",
     p,

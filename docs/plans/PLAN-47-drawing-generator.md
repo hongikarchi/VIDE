@@ -2,7 +2,7 @@
 id: PLAN-47
 title: CAD 도면 역반영과 도곽 미리보기 (T-225~T-235)
 status: draft
-version: 0.6
+version: 0.7
 updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-14, SPEC-01, SPEC-02, SPEC-05, PLAN-43, PLAN-44, ARCH-01, DESIGN, SPIKE-2026-10-07-drawing-export, ADR-022, ADR-027, ADR-030, HOST-RHINO, HOST-ZWCAD, RESEARCH-04, C-08, FR-02, FR-03, FR-04, FR-12, FR-14, FR-16, FR-18]
@@ -142,6 +142,7 @@ T-232는 Sync jig만 있으면 기존 도면 경로부터 시작할 수 있고, 
   - 닫힌 도면: 숨은 ZWCAD가 사본에 적용해 원본과 같은 폴더·같은 DWG 버전의 새 파일로 쓴다(T-226, SPEC-14.7의 2·3).
   - Sync jig의 "CAD를 Rhino에 맞춤"을 같은 적용 경로로 옮기고 지원 유형을 넓힌다(SPEC-05.8 보완).
   - 반영 기준 갱신은 적용 확인된 행만, 되돌리기 시 이전 기준 복원.
+  - T-232의 읽기 이음매 `BackflowReader`의 실제 구현: 열린 연결 도면(`queryEntities` 확장)과 숨은 ZWCAD 사본의 개체 기하·`VIDE_ORIGIN` xdata 읽기, Rhino 연결의 원천 스냅숏(선·폴리선·호·원·블록 삽입, 미터). 그때까지 차이 계산 경로는 `NO_ZWCAD`를 돌려준다.
 - **선행:** T-226, T-227, T-232.
 - **검증:** 실호스트(없으면 건너뜀) 합성 도면에서 유형별 수정의 Handle·레이어 유지, 고치지 않은 개체·스타일·레이아웃·xref·DWG 버전 불변, 되돌리기 한 번에 원상, 두 파일(루트+xref) 중 하나 실패 시 둘 다 원상, 결과 불명확 시 재적용 없음. 닫힌 도면은 원본 해시 불변·새 파일 생성.
 - **완료:** H-ZWCAD 지원표에 역반영 행 추가, 시험 통과.
@@ -190,7 +191,7 @@ T-232는 Sync jig만 있으면 기존 도면 경로부터 시작할 수 있고, 
 | T-229 | 폐기(2026-10-07, T-228 폐기로 대상 없음) | — |
 | T-230 | 계획(좁힘: 새 도면 시작 보조, 역반영 뒤) | — |
 | T-231 | 폐기(2026-10-07, 사용자 검토: Rhino에서 도면 생성 안 함) | — |
-| T-232 | 계획(중심) | — |
+| T-232 | 완료(2026-10-08): `src/core/drawing-backflow.ts` 차이 계산(짝: 반영 기준 → 출처 표시(문자열 Handle ≠ 실제 Handle은 사본) → Sync 일치 행, 위치만으로 짝 없음), 행 분류 6종과 이유, 삭제 기본 미선택·충돌/끊김/지원 안 함 선택 불가, 원천 ID 재생성 → 끊김, 반영 기준 없는 짝의 차이 → 충돌, xref 소유 파일과 배치 역변환·누락/순환/폴더 밖 거절·다른 루트·절대 경로 xref 표시·xref 삽입 이동, 추가 행의 레이어(T-227 표, 없으면 레이어 지정 필요). 반영 기준 schema 14 `drawing_backflow_baselines`, 경로 `POST …/drawing/backflow`(계산 전후 파일 변경 → `settled: false`)·`…/backflow/pairs`(Sync 일치 행 → 기준)·`GET …/backflow?path=`. 남음: 실제 읽기 이음매 `BackflowReader`(열린 도면·숨은 사본의 개체·xdata 읽기, Rhino 원천 스냅숏)는 T-233, 치수 확인 필요 목록은 T-233의 다시 읽기 | `tests/core/drawing-backflow.test.mjs`·`tests/server/drawing-backflow.test.mjs`, `tests/core/project-split.test.mjs` |
 | T-233 | 계획(중심) | — |
 | T-234 | 계획 | — |
 | T-235 | 계획(2026-10-07 추가, 선택) | — |

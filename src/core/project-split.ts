@@ -64,6 +64,7 @@ export const projectTables: Record<string, string> = {
   legal_answers: 'projectId=?',
   legal_articles: 'projectId=?',
   legal_contributions: 'projectId=?',
+  drawing_backflow_baselines: 'projectId=?',
   object_versions: 'projectId=?',
   sync_manifests: 'projectId=?',
   sync_manifest_items: 'projectId=?',

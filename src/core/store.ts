@@ -419,6 +419,7 @@ export class Store {
         'DELETE FROM legal_answers WHERE projectId=?',
         'DELETE FROM legal_articles WHERE projectId=?',
         'DELETE FROM legal_contributions WHERE projectId=?',
+        'DELETE FROM drawing_backflow_baselines WHERE projectId=?',
         'DELETE FROM review_notes WHERE projectId=?',
         'DELETE FROM review_snapshots WHERE projectId=?',
         'DELETE FROM shared_feedback WHERE projectId=?',

@@ -64,7 +64,8 @@ async function sha256(path: string) {
   for await (const bytes of createReadStream(path)) hash.update(bytes);
   return hash.digest('hex');
 }
-const within = (folder: string, path: string) => {
+/** Whether `path` is inside `folder` (Windows path keys). */
+export const within = (folder: string, path: string) => {
   const root = pathKey(folder).replace(/\\+$/, '') + '\\';
   return pathKey(path).startsWith(root);
 };
