@@ -2,7 +2,7 @@
 id: SPEC-13
 title: 법규 Q&A (cLAWde 연동)
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-10-07
 owner: agent:claude
 related: [C-04, C-06, FR-09, FR-18, FR-24, FR-25, OQ-16, OQ-17, ADR-026, ADR-030, ADR-037, ADR-040, ARCH-01, SPEC-02, SPEC-07, SPEC-08, SPEC-12, PLAN-46, RESEARCH-04, RESEARCH-16]
@@ -12,7 +12,7 @@ related: [C-04, C-06, FR-09, FR-18, FR-24, FR-25, OQ-16, OQ-17, ADR-026, ADR-030
 
 이 명세는 VIDE 안에서 법규를 묻고 답을 보는 동작만 정한다. 법령 DB·온톨로지·수집·판정 규칙은 cLAWde 저장소가 소유한다([ADR-040](../decisions/ADR-040-domain-services.md)). 서비스와 주고받는 물리 계약(주소·인증·필드)은 [ARCH-01](../architecture/ARCH-01-system.md) §「외부 도메인 서비스」, jig 공통 동작은 [SPEC-07](SPEC-07-jig-platform.md), 대화·경로 판정·질문 카드는 [SPEC-02](SPEC-02-execution-candidates.md) SPEC-02.17·19, 프로젝트 자료와 인용 규칙은 [SPEC-08](SPEC-08-project-facts.md), 대지 형상과 가능 매스는 SPEC-12가 소유한다. 구현 순서와 시험은 [PLAN-46](../plans/PLAN-46-legal-qa.md)이다.
 
-이 기능은 PRD 후보 C-06(법규 질의응답)과 C-04(외부 서비스 연동)를 구체화한다. 후보를 FR로 채택하는 판단은 PRD가 소유한다(PLAN-46 「결정이 필요한 질문」 1).
+이 기능은 PRD C-06(법규 질의응답)과 C-04(외부 서비스 연동)를 구체화한다. 2026-10-07 사용자가 두 후보를 채택했고 제공 범위는 PRD §14.2의 '법규 Q&A' 행이다. cLAWde는 새 저장소로 시작하며 과거 법규 검토 자산 세 곳(RESEARCH-04 S-01·S-04·S-19)을 종합한다(PLAN-46 T-215).
 
 ## 대충 물어도 근거와 함께 적용 여부를 답한다 — SPEC-13.1
 

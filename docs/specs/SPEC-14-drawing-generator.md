@@ -1,8 +1,8 @@
 ---
 id: SPEC-14
 title: 도면 생성기와 모델 → CAD 역반영 (형식 보존)
-status: draft
-version: 0.1
+status: review
+version: 0.2
 updated: 2026-10-07
 owner: agent:claude
 related: [C-08, FR-02, FR-03, FR-04, FR-12, FR-14, FR-16, FR-18, AC-21, AC-24, AC-27, AC-30, AC-33, AC-38, SPEC-01, SPEC-02, SPEC-05, PLAN-47, PLAN-43, SPIKE-2026-10-07-drawing-export, ADR-022, ADR-027, ADR-030, HOST-RHINO, HOST-ZWCAD]
@@ -12,11 +12,7 @@ related: [C-08, FR-02, FR-03, FR-04, FR-12, FR-14, FR-16, FR-18, AC-21, AC-24, A
 
 근거: 2026-10-07 사용자 메모 "도면 생성기(export to cad. sheet. annotation. dimension. xref 등의 설정이 그대로 잘 넘어가는지)", "모델링 수정하면 그거를 역으로 cad에 반영(수정하는 방식으로. 형식 잘 지켜서)"와 같은 날의 상세 계획 지시. 실험 근거는 [SPIKE-2026-10-07-drawing-export](../tdd/SPIKE-2026-10-07-drawing-export.md)(PLAN-43 T-199), xref 관계 읽기는 [SPEC-01.11](SPEC-01-project-input-sync.md)의 11(T-200)이다. 구현 계획은 [PLAN-47](../plans/PLAN-47-drawing-generator.md)이다.
 
-연결되는 제품 약속은 FR-04(네이티브 생성·수정), FR-12(바로 적용·되돌리기·확인), FR-14(파일 내보내기), FR-03(Sync 기준), FR-02(여러 문서 연계), FR-16(불명확 쓰기 재실행 금지), FR-18(권한)이다. 이 기능은 PRD [C-08](../PRD.md) 후보이며 아직 채택 전이다. 아래 R-01이 채택 제안이다. 채택 전에는 이 명세를 근거로 구현하지 않는다(PLAN-47의 SPIKE 티켓은 예외).
-
-<!-- claude-review:start -->
-> **[검토 · claude · R-01 · 높음]** C-08은 PRD §4.4 후보이고, §14.2 제외에는 '전문 스킬 완성(FR-21, 도면 포함)'과 '요청 없는 호스트 간 원본 자동 동기화'가 있다. 이 명세의 범위(사용자가 누르는 도면 생성과 사용자가 고른 변경만 반영하는 역반영)는 후자에 걸리지 않지만, 전자의 '도면' 전문 스킬과 겹쳐 PRD 결정이 필요하다. 제안: PRD §4.4 C-08에 "2026-10-07 채택, 동작은 SPEC-14"를 적고, §14.2 포함 표에 `도면 생성·역반영 | 템플릿 기반 새 DWG 생성과 정리 패스, 연결 도면의 고른 변경 반영과 실행별 되돌리기 (C-08, FR-04·12·14)` 행을 더하며, 제외의 FR-21 문구를 "구조 분석(FR-23)과 도면 생성·역반영(C-08)을 뺀 전문 스킬 완성"으로 좁힌다. 사용자가 수락 범위를 정한다.
-<!-- claude-review:end -->
+연결되는 제품 약속은 FR-04(네이티브 생성·수정), FR-12(바로 적용·되돌리기·확인), FR-14(파일 내보내기), FR-03(Sync 기준), FR-02(여러 문서 연계), FR-16(불명확 쓰기 재실행 금지), FR-18(권한)이다. 이 기능은 PRD [C-08](../PRD.md)이며 2026-10-07 사용자가 채택했다. 제공 범위는 PRD §14.2의 '도면 생성·역반영' 행이다. 구현은 기존 코드(도면 내보내기 실험, ZWCAD worker, Sync jig)를 재사용한다(PLAN-47 「재사용할 기존 코드·저장소」).
 
 ## 사용자가 하는 일 — SPEC-14.1
 
