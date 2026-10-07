@@ -2,7 +2,7 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 0.98
+version: 0.99
 updated: 2026-10-08
 owner: agent:claude
 related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, PLAN-45, SPEC-12, RESEARCH-10, RESEARCH-12, SPEC-13, PLAN-46]
@@ -492,7 +492,7 @@ jig 입력은 표시용 Sync가 아니라 jig 입력 읽기로 받는다.
 - **`geometry-kit/solid.ts`(일반 기하, 법규 없음):** 평면 다각형 솔리드의 BSP 불리언(합·차·교, csg.js 계열 알고리즘을 TS로 다시 씀, 평면 허용 오차 1e-7 m), 용접(1e-7 m, 평면 허용 오차보다 굵게 하지 않음)과 T자 이음 보정, 닫힘 점검 `checkSolid`(열린 변·비다양체 변·껍질 1·오일러 지표 2·부피 양수·퇴화 다각형, 경고로 1e-4 m보다 짧은 면 사이 변), 수평 단면 면적, 덮개 귀 자르기(`earClip`; `triangulate`는 가는 삼각형을 버리는 망 규칙이 있어 덮개에 쓰지 않음), 돌출(`prismSolid`)과 대응 변이 평행한 두 고리 사이 솔리드(`loftSolid`), 같은 평면 다각형 병합 `mergeCoplanar`. 병합은 같은 평면(법선·거리 1e-5 반올림)이고 변으로 이어진 다각형을 바깥 고리(밖에서 볼 때 반시계) + 구멍으로 잇되 꼭짓점을 하나도 지우지 않는다(이웃 면의 변이 1:1로 맞게). 좌표는 로컬 m(대지 근처 기준점)이어야 한다. 라이브러리 판은 0.2.1(덧붙임만, `^0.2.0` 호환).
 - **`massing-kit/`(규칙):** `rules.ts`(규제 조건 항목의 닫힌 목록 `REGULATION_ITEMS`, 항목 형식 `{id, group, title, value, unit, applies, status, origin, basis, source, target?}`, 닫힌 규칙 목록 `RULES`, 설정값 → 항목 `regulationsFromParams`, 사람 값 우선 병합 `mergeRegulations`), `legal-adapter.ts`(SPEC-13 결과 → 항목의 자리 `regulationsFromLegal`, T-220 전에는 늘 '법규 결과 없음'), `boundary-segments.ts`(대지 변을 도로·인접 필지 변과 겹치는 구간으로 나눔, 둘 다·아무것도 아니면 `unknown`·'확인 필요', 닫힌 도로 영역에서 구간 바깥 법선으로 잰 도로 너비), `setback.ts`(제한선 자료 `Cutter`: 선분 캡슐(둥근 끝은 외접 64각형, 같은 규칙의 다음 구간이 볼록·일직선 모퉁이에서 같거나 큰 거리로 덮으면 평평한 끝) · 다각형(가각 삼각형, 건축한계선의 도로 쪽), 일조 `SunRule`(기준선 선분·기준 높이·이하 거리·비율·거리 정의·정북 단위 벡터·적용 구역), 1 m 판으로 잰 2D 가능 영역과 규칙별 감소), `envelope.ts`(돌출·일조 사선·최대 외피), `solid-check.ts`(점검과 만들기 면 목록), `steps.ts`(jig 단계 함수).
 - **일조 거리:** `euclidean`이면 기준선 선분까지의 최단 거리(벽 = 캡슐 기둥, 사선 = 반경 `비율 × z`인 캡슐 사이 솔리드), `north`이면 정북으로 잰 거리(벽·사선 = 선분을 남쪽으로 `r`만큼 민 평행사변형, 사선은 `r = 비율 × z`). 정해지지 않았으면(`ask`) 최단 거리로 계산하고 미확정 1개를 더한다(최단 거리 ≤ 정북 거리라 더 많이 깎는다).
-- **jig 단계 출력(`vide/buildable-mass`):** `site`(로컬 고리·구간·모퉁이·도로 영역·정북 벡터), `regulations`(항목·법규 결과 유무·차이·사람 입력 필요·미확정), `plan`, `limits`(`cutters`·`sun`·미반영 조건·구간별 규칙 표·`sides`), `buildable`(면적·영역 고리·변형별 면적·규칙별 감소와 근거 항목·건폐율 비교·빈 영역 메시지·만들기용 곡선 `lines`), `envelope`(변형 `base`/`without`별 높이 상한과 출처·외피 부피·점검·층 중간 높이 단면·일조가 줄인 부피, 만들기 항목 `items`). 외피 항목은 `{key: env:<변형>:<종류>, kind, faces, volume, volumeText, rules, unconfirmed}`이고 만들기 선언 `envelopes`가 `vide.bake.brep-faces@1`로 보낸다. 엔진은 보내기 전에 병합한 면의 감긴 부피가 점검 부피와 상대 1e-9 안인지 확인한다.
+- **jig 단계 출력(`vide/buildable-mass`):** `site`(로컬 고리·구간·모퉁이·도로 영역·정북 벡터), `regulations`(항목·법규 결과 유무·차이·사람 입력 필요·미확정), `plan`, `limits`(`cutters`·`sun`·미반영 조건·구간별 규칙 표·`sides`), `buildable`(면적·영역 고리·변형별 면적·규칙별 감소와 근거 항목·건폐율 비교·빈 영역 메시지·만들기용 곡선 `lines`), `envelope`(변형 `base`/`without`별 높이 상한과 출처·외피 부피·점검·층 중간 높이 단면·일조가 줄인 부피, 만들기 항목 `items`). 외피 항목은 `{key: env:<변형>:<종류>, kind, faces, volume, volumeText, rules, unconfirmed}`이고 만들기 선언 `envelopes`가 `vide.bake.brep-faces@1`로 보낸다. 엔진은 보내기 전에 병합한 면의 감긴 부피가 점검 부피와 상대 1e-9 안인지 확인한다. 변형마다 점검한 최대 외피의 용접 메쉬 `maxMesh {v, f}`를 함께 넘긴다(층 나누기·사람 수정 점검용).
 
 ### 8.3 공공 자료 입력 `site-data` (T-207)
 
@@ -502,6 +502,16 @@ jig 입력은 표시용 Sync가 아니라 jig 입력 읽기로 받는다.
 - **단계에 주는 값:** `input.<key>`는 `{query, lookup, targets: {pnus, by}, collection: {…수집 결과, radius}, shp}`이고 부분을 `input.<key>.<part>`(`query`·`lookup`·`targets`·`collection`·`shp`, 설명서 검사 `SITE_DATA_PARTS`)로 따로 읽는다. 지문은 부분마다 사본 해시로 낸다. `targets`의 지문은 PNU 목록만이라 누가 제안했는지는 대상 필지 확정(`confirm-target` 사람 단계)을 다시 묻지 않는다.
 - **바뀜:** 경로가 바꾼 부분을 읽는 단계만 `stale`이 되고 사람 단계는 지문 비교로 다시 확인한다.
 - **만들기:** 사이트 jig의 만들기 선언은 `requires: ['target-confirmed']`로 확정 전 만들기를 막는다(§11).
+
+### 8.4 층·대안·용도·주차 (`vide/massing-kit` 0.2.0, PLAN-45 T-211·T-212)
+
+건축 가능 영역·매스 jig(SPEC-12.10~12.12)의 외피 뒤 단계다. 계산은 모두 엔진(TS)이고 `geometry-kit/solid.ts`의 불리언으로 평면 영역(`PlanRegion {outer, holes}`)을 다룬다. 법정 값은 코드에 없다.
+
+- **파일:** `floors.ts`(층 높이 목록 `floorLevels`, 층 윤곽 = 최대 외피 ∩ 층 판의 윗면(`floorRegions`), 윤곽 프리즘이 외피 안인지 `floorFits`, 지하 윤곽 = 대지 − 모든 변의 캡슐(지하 이격), 영역 합·차·교와 면적, 위층 축소 `trimRegions`: 정북에 수직인 선의 위치를 면적으로 이분 탐색하고 영역은 불리언으로 자름), `alternatives.ts`(닫힌 대안 목록 `max`·`base`·`incentive`·`open-space`·`human-k`, 상한 8, `trimToCap`, 표 줄 `alternativeRow`), `open-space.ts`(필요 면적, 그린·모서리 후보, 고를 후보), `use-mix.ts`(용도 표, 허용 용도 대조, AI 초안 받기 `acceptUseDraft`), `parking.ts`(법정 대수, 진입 가능 구간, 방식 대안), `landscape.ts`(법정·계획 조경 면적), `mass-steps.ts`(단계 함수).
+- **수정 사항(SPEC-07.8)의 종류:** 라이브러리 단계는 셋째 인자로 작업본의 수정 사항을 받는다. `{kind: 'regulation', identity: {id, target?}}` `set` `{value, applies, basis?}`(목록·대상별 규제 조건; 같은 항목의 설정값보다 앞섬), `{kind: 'floor-exclusion', identity: {floor}}` `set` `{area, basis}`, `{kind: 'mass-floor', identity: {alternative: 'human-k', floor}}` `set` `{outline, holes?}` 또는 `remove`, `{kind: 'use-floor', identity: {floor, alternative?}}` `set` `{use}` 또는 `{uses: [{use, ratio}]}`. `by: 'ai'`인 수정 사항은 어느 단계도 쓰지 않고 `problems`에 이유를 남긴다.
+- **새 규제 조건 항목:** `incentiveFar`·`incentiveHeight`·`openSpaceIncentiveFar`, `parkingRounding`(`half-up`·`ceil`·`floor`)·`parkingRoundScope`(`sum`·`each`)·`parkingAreaBasis`(`gross`·`far`)·`parkingEntryCornerDistance`, `parkingRule`(단위 ㎡/대, 대상 = 용도). 항목 값 형식에 문자열 목록(`string[]`)을 더했다.
+- **단계와 출력:** `floors`(기준 변형, 지상 `floors[]`·지하 `basement[]` `{floor, index, z0, z1, regions, area}`, `basementRegions`, 표 `rows`), `openSpace`(`requirement`·`candidates`(영역 포함)·표 `rows`·`picked`·곡선 `lines`), `alternatives`(`alternatives[]` 층 영역까지, 표 `rows`, 막대 `bars`, `skipped`, `problems`), 사람 단계 `confirmChoice`(slot `confirm-inputs`, 읽기 = 대안 출력 + `param.chosenAlternative`, 막는 단계 `chosen`), `chosen`(`{id, title, row, alternative}`, 건축개요의 입력), AI 단계 `useDraft`(`draft-only`, AI 뒤 점검 `numbers-in-source`·`no-plan-dependent-conclusion`; 런타임이 AI 단계를 아직 돌리지 않아 늘 `AI_UNAVAILABLE`, 꺼진 상태로 시작) → 사람 단계 `acceptUseDraft` → `useDraftApplied`(출력 `apply.overrides`, §6.3 적용 요청, id `use-floor:<층>`·`by: 'user'`·note 'AI 초안을 사람이 받음'), `useMix`(대안별 층 용도·용도별 합계·판정, 만들기 항목 `items`), `parking`(대안별 법정·계획 대수, 고른 대안의 용도별 줄·방식 대안·지상 여유·진입 구간·조경·공개공지, 곡선 `lines`, 추정 지하층 `masses`).
+- **만들기 선언:** `alternativeMasses`(`vide.bake.extrude-polygon@1`, 항목 `{key: alt:<대안>:<층>:<영역>, rings, bottom, height, option, floor, areaText, use, unconfirmed}`, 속성 `vide-option`·`vide-floor`·`vide-area-m2`·`vide-use`·`vide-unconfirmed`), `groundZones`(`vide.bake.curves@1`, 속성 `vide-ground`·`vide-area-m2`), `parkingMasses`(`vide.bake.extrude-polygon@1`, `park:under:B<k>:<영역>`). 호스트 단계 `makeMass`가 셋을 만든다(외피의 `make`와 따로).
 
 ## 9. Rhino에 만들기
 
@@ -523,7 +533,8 @@ jig 입력은 표시용 Sync가 아니라 jig 입력 읽기로 받는다.
   | 용도지역 경계 | `vide-zone-name` · `vide-zone-code` · `vide-notice`(고시 번호) |
   | 대지 정보 | `vide-site-summary` · `vide-crs` · `vide-origin-survey`(기준점 측량 좌표) · `vide-true-north` |
   | 외피 | `vide-envelope`(종류) · `vide-rules` · `vide-volume-m3` · `vide-unconfirmed`(미확정 조건 수) |
-  | 층 매스 | `vide-option` · `vide-floor` · `vide-area-m2` · `vide-use` |
+  | 층 매스 | `vide-option` · `vide-floor` · `vide-area-m2` · `vide-use` · `vide-unconfirmed` |
+  | 주차·공지 곡선 | `vide-ground`(종류) · `vide-area-m2` |
 
   길이는 m, 면적은 ㎡, 부피는 ㎥이고 이름에 단위가 있으면 그 단위다. 값은 글자로 남으며 Sync 표시 읽기(`DisplayScene`)의 사용자 문자열로 대화 AI가 읽는다.
 - 틀은 기존 워커의 감싸기(`TaskCode.Run(RhinoDoc doc)`)와 `CodePolicy`(메서드 하나)를 통과해야 한다. 로컬 함수가 통과하는지는 PLAN-22에서 확인하고, 막히면 인라인 루프로 쓴다. 제네릭 컬렉션은 감싸기의 `using`에 없으므로 전체 이름으로 쓴다.

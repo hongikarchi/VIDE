@@ -403,3 +403,37 @@ export function star(n) {
 }
 
 export const paramsOf = (site) => ({ ...BASE_PARAMS, ...(site.params ?? {}) });
+
+/**
+ * The whole `vide/buildable-mass` pipeline as library calls (PLAN-45 T-211·T-212): site → … →
+ * envelope → floors → 공개공지 → 대안 → 용도 → 주차. `overrides` are 수정 사항 as the engine hands
+ * them; `drawn` adds input roles (공개공지·조경 영역, 주차 출입 제외 선).
+ */
+export async function runMass(site, extra = {}, overrides = [], drawn = {}) {
+  const kit = await import('../../src/jigs/official/massing-kit/index.ts');
+  const params = { ...paramsOf(site), ...extra };
+  const own = { ...site.inputs.site, ...drawn };
+  const s = kit.siteStep({ site: own }, params);
+  const regulations = kit.regulationStep({}, params, overrides);
+  const plan = kit.planStep({}, params);
+  const limits = kit.limitStep({ site: own, steps: { site: s, regulations } });
+  const envelope = kit.envelopeStep({ steps: { site: s, regulations, plan, limits } });
+  const floors = kit.floorsStep({ steps: { site: s, plan, envelope } });
+  const openSpace = kit.openSpaceStep({ site: own, steps: { site: s, regulations } }, params);
+  const steps = { site: s, regulations, plan, limits, envelope, floors, openSpace };
+  steps.alternatives = kit.alternativesStep({ steps }, params, overrides);
+  steps.useMix = kit.useMixStep({ steps }, params, overrides);
+  steps.parking = kit.parkingStep({ site: own, steps }, params);
+  return { params, steps, kit };
+}
+
+/** A 수정 사항 as the instance keeps it (SPEC-07.8). */
+export const override = (kind, identity, fields, op = 'set', by = 'user') => ({
+  id: `${kind}:${Object.values(identity).join(':')}`,
+  target: { kind, identity },
+  op,
+  fields,
+  origin: 'table',
+  by,
+  at: '2026-10-08T00:00:00Z',
+});

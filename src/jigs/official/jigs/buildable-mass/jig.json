@@ -1,10 +1,10 @@
 {
   "contractVersion": 3,
   "id": "vide/buildable-mass",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "kind": "tool",
   "name": "건축 가능 영역·매스",
-  "summary": "대지와 규제 조건으로 제한선별 2D 건축 가능 영역과 3D 가능 외피(돌출·일조 사선·최대)를 계산하고 Rhino에 만든다. 규제 조건의 값은 법규 결과나 사람이 넣으며, 탐색용 규모검토로 인허가 도서·면적 산정·법규 검토를 대체하지 않는다.",
+  "summary": "대지와 규제 조건으로 2D 건축 가능 영역·3D 가능 외피를 계산하고, 층을 나눠 대안(최대·기준 용적률·인센티브·공개공지·사람 수정)을 비교해 하나를 고르며 용도·주차·조경을 본다. 탐색용 규모검토로 인허가 도서·면적 산정·법규 검토를 대체하지 않는다.",
   "icon": "building",
   "hosts": {
     "rhino": "optional"
@@ -96,6 +96,42 @@
           "hints": {
             "layers": ["*용도지역*", "*zone*"],
             "words": ["용도지역"]
+          },
+          "extract": "rows"
+        },
+        {
+          "role": "openSpaceZones",
+          "title": "공개공지 영역(그릴 때만)",
+          "shape": "polygon",
+          "many": true,
+          "required": false,
+          "hints": {
+            "layers": ["*공개공지*"],
+            "words": ["공개공지"]
+          },
+          "extract": "rows"
+        },
+        {
+          "role": "landscapeZones",
+          "title": "조경 영역(계획)",
+          "shape": "polygon",
+          "many": true,
+          "required": false,
+          "hints": {
+            "layers": ["*조경*"],
+            "words": ["조경"]
+          },
+          "extract": "rows"
+        },
+        {
+          "role": "parkingExclusions",
+          "title": "주차 출입 제외 구간(그린 선)",
+          "shape": "polyline",
+          "many": true,
+          "required": false,
+          "hints": {
+            "layers": ["*주차*"],
+            "words": ["주차 출입 제외"]
           },
           "extract": "rows"
         }
@@ -952,6 +988,737 @@
         "status": "assumed"
       },
       "affects": ["site"]
+    },
+    {
+      "key": "farBaseState",
+      "title": "기준 용적률 — 적용 여부",
+      "group": "규제 조건 · 밀도",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "farBase",
+      "title": "기준 용적률",
+      "group": "규제 조건 · 밀도",
+      "type": "ratio",
+      "display": {
+        "unit": "%",
+        "decimals": 1
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 20,
+        "step": 0.001
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "farAllowedState",
+      "title": "허용 용적률 — 적용 여부",
+      "group": "규제 조건 · 밀도",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "farAllowed",
+      "title": "허용 용적률",
+      "group": "규제 조건 · 밀도",
+      "type": "ratio",
+      "display": {
+        "unit": "%",
+        "decimals": 1
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 20,
+        "step": 0.001
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "farMaxState",
+      "title": "상한 용적률 — 적용 여부",
+      "group": "규제 조건 · 밀도",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "farMax",
+      "title": "상한 용적률",
+      "group": "규제 조건 · 밀도",
+      "type": "ratio",
+      "display": {
+        "unit": "%",
+        "decimals": 1
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 20,
+        "step": 0.001
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "incentiveState",
+      "title": "인센티브 — 적용 여부",
+      "group": "규제 조건 · 인센티브",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "incentiveFar",
+      "title": "인센티브 완화량(용적률에 더함)",
+      "group": "규제 조건 · 인센티브",
+      "type": "ratio",
+      "display": {
+        "unit": "%",
+        "decimals": 1
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 20,
+        "step": 0.001
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "incentiveHeight",
+      "title": "인센티브 완화량(높이)",
+      "group": "규제 조건 · 인센티브",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 1000,
+        "step": 0.01
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "openSpaceIncentiveState",
+      "title": "공개공지 완화 — 적용 여부",
+      "group": "규제 조건 · 인센티브",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "openSpaceIncentiveFar",
+      "title": "공개공지 설치에 따른 완화량(용적률에 더함)",
+      "group": "규제 조건 · 인센티브",
+      "type": "ratio",
+      "display": {
+        "unit": "%",
+        "decimals": 1
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 20,
+        "step": 0.001
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "publicOpenSpaceState",
+      "title": "공개공지 대상 — 적용 여부",
+      "group": "규제 조건 · 주차·공지",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "publicOpenSpace",
+      "title": "공개공지 면적 비율(대지면적 대비)",
+      "group": "규제 조건 · 주차·공지",
+      "type": "ratio",
+      "display": {
+        "unit": "%",
+        "decimals": 1
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": 0.001
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "landscapeRatioState",
+      "title": "조경 면적 비율 — 적용 여부",
+      "group": "규제 조건 · 주차·공지",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "landscapeRatio",
+      "title": "조경 면적 비율(대지면적 대비)",
+      "group": "규제 조건 · 주차·공지",
+      "type": "ratio",
+      "display": {
+        "unit": "%",
+        "decimals": 1
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": 0.001
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "parkingState",
+      "title": "주차 산정 방식 — 적용 여부",
+      "group": "규제 조건 · 주차·공지",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "parkingRounding",
+      "title": "주차 대수 끝수 처리",
+      "group": "규제 조건 · 주차·공지",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "half-up",
+          "label": "0.5 이상 올림"
+        },
+        {
+          "value": "ceil",
+          "label": "올림"
+        },
+        {
+          "value": "floor",
+          "label": "버림"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "parkingRoundScope",
+      "title": "끝수 처리 단위",
+      "group": "규제 조건 · 주차·공지",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "sum",
+          "label": "용도별 값을 합한 뒤 한 번"
+        },
+        {
+          "value": "each",
+          "label": "용도마다"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "parkingAreaBasis",
+      "title": "주차 산정에 쓰는 면적",
+      "group": "규제 조건 · 주차·공지",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "gross",
+          "label": "용도별 바닥면적 합계(지상·지하)"
+        },
+        {
+          "value": "far",
+          "label": "용도별 용적률 산정 면적(제외 면적을 뺌)"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "parkingEntryState",
+      "title": "주차 출입 제외 거리 — 적용 여부",
+      "group": "규제 조건 · 주차·공지",
+      "type": "choice",
+      "default": "ask",
+      "choices": [
+        {
+          "value": "ask",
+          "label": "사람 입력 필요"
+        },
+        {
+          "value": "apply",
+          "label": "적용"
+        },
+        {
+          "value": "none",
+          "label": "미적용"
+        },
+        {
+          "value": "undecided",
+          "label": "판단 필요"
+        }
+      ],
+      "affects": ["regulations"]
+    },
+    {
+      "key": "parkingEntryCornerDistance",
+      "title": "주차 출입 제외 거리(두 도로가 만나는 모퉁이에서)",
+      "group": "규제 조건 · 주차·공지",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 1000,
+        "step": 0.01
+      },
+      "affects": ["regulations"]
+    },
+    {
+      "key": "basementFloorHeight",
+      "title": "지하 층고",
+      "group": "계획 조건",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 3.5,
+      "range": {
+        "min": 0,
+        "max": 20,
+        "step": 0.01
+      },
+      "affects": ["plan"],
+      "basis": {
+        "status": "assumed",
+        "note": "계획 가정값"
+      }
+    },
+    {
+      "key": "basementSetback",
+      "title": "지하 이격(대지 경계에서)",
+      "group": "계획 조건",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "m",
+        "decimals": 2
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 50,
+        "step": 0.01
+      },
+      "affects": ["plan"],
+      "basis": {
+        "status": "assumed",
+        "note": "계획 가정값, 0이면 대지 경계까지"
+      }
+    },
+    {
+      "key": "trimMethod",
+      "title": "덜어 내는 방식",
+      "group": "대안",
+      "type": "choice",
+      "default": "shrink-top",
+      "choices": [
+        {
+          "value": "shrink-top",
+          "label": "위층 축소(정북 쪽부터)",
+          "consequence": "위층부터 통째로 빼고 남은 초과분은 그 아래층을 정북 쪽에서 잘라 냄"
+        },
+        {
+          "value": "drop-floors",
+          "label": "층수 줄이기",
+          "consequence": "위층부터 층을 통째로 뺌"
+        }
+      ],
+      "affects": ["alternatives"]
+    },
+    {
+      "key": "humanBase",
+      "title": "사람 수정 대안의 출발점",
+      "group": "대안",
+      "type": "choice",
+      "default": "max",
+      "choices": [
+        {
+          "value": "max",
+          "label": "최대(참고용)"
+        },
+        {
+          "value": "base",
+          "label": "기준 용적률"
+        },
+        {
+          "value": "incentive",
+          "label": "인센티브 반영"
+        },
+        {
+          "value": "open-space",
+          "label": "공개공지 반영"
+        }
+      ],
+      "affects": ["alternatives"]
+    },
+    {
+      "key": "openSpaceCandidate",
+      "title": "공개공지 반영 대안에 쓸 후보(표의 번호, 0 = 자동)",
+      "group": "대안",
+      "type": "count",
+      "unit": "EA",
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 50,
+        "step": 1
+      },
+      "affects": ["openSpace"]
+    },
+    {
+      "key": "chosenAlternative",
+      "title": "고른 대안",
+      "group": "대안",
+      "type": "choice",
+      "default": "unset",
+      "choices": [
+        {
+          "value": "unset",
+          "label": "미정"
+        },
+        {
+          "value": "max",
+          "label": "최대(참고용)"
+        },
+        {
+          "value": "base",
+          "label": "기준 용적률"
+        },
+        {
+          "value": "incentive",
+          "label": "인센티브 반영"
+        },
+        {
+          "value": "open-space",
+          "label": "공개공지 반영"
+        },
+        {
+          "value": "human-1",
+          "label": "사람 수정 1"
+        },
+        {
+          "value": "human-2",
+          "label": "사람 수정 2"
+        },
+        {
+          "value": "human-3",
+          "label": "사람 수정 3"
+        },
+        {
+          "value": "human-4",
+          "label": "사람 수정 4"
+        }
+      ],
+      "affects": ["confirmChoice", "chosen"]
+    },
+    {
+      "key": "plannedParking",
+      "title": "계획 주차 대수(0 = 법정 대수)",
+      "group": "주차",
+      "type": "count",
+      "unit": "EA",
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 5000,
+        "step": 1
+      },
+      "affects": ["parking"]
+    },
+    {
+      "key": "parkingAreaGround",
+      "title": "대당 필요 면적 — 지상 자주식",
+      "group": "주차",
+      "type": "area",
+      "unit": "m2",
+      "display": {
+        "unit": "m2",
+        "decimals": 1
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 200,
+        "step": 0.1
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "계획 값(법정 값 아님), 0이면 사람 입력 필요"
+      },
+      "affects": ["parking"]
+    },
+    {
+      "key": "parkingAreaUnder",
+      "title": "대당 필요 면적 — 지하 자주식",
+      "group": "주차",
+      "type": "area",
+      "unit": "m2",
+      "display": {
+        "unit": "m2",
+        "decimals": 1
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 200,
+        "step": 0.1
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "계획 값(법정 값 아님), 0이면 사람 입력 필요"
+      },
+      "affects": ["parking"]
+    },
+    {
+      "key": "parkingAreaMech",
+      "title": "대당 필요 면적 — 기계식",
+      "group": "주차",
+      "type": "area",
+      "unit": "m2",
+      "display": {
+        "unit": "m2",
+        "decimals": 1
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 200,
+        "step": 0.1
+      },
+      "basis": {
+        "status": "assumed",
+        "note": "계획 값(법정 값 아님), 0이면 사람 입력 필요"
+      },
+      "affects": ["parking"]
+    },
+    {
+      "key": "parkingAlternative",
+      "title": "주차 방식 대안을 볼 대안",
+      "group": "주차",
+      "type": "choice",
+      "default": "base",
+      "choices": [
+        {
+          "value": "max",
+          "label": "최대(참고용)"
+        },
+        {
+          "value": "base",
+          "label": "기준 용적률"
+        },
+        {
+          "value": "incentive",
+          "label": "인센티브 반영"
+        },
+        {
+          "value": "open-space",
+          "label": "공개공지 반영"
+        },
+        {
+          "value": "human-1",
+          "label": "사람 수정 1"
+        },
+        {
+          "value": "human-2",
+          "label": "사람 수정 2"
+        },
+        {
+          "value": "human-3",
+          "label": "사람 수정 3"
+        },
+        {
+          "value": "human-4",
+          "label": "사람 수정 4"
+        }
+      ],
+      "affects": ["parking"]
     }
   ],
   "steps": [
@@ -1016,7 +1783,28 @@
         "param.sunNearDistance",
         "param.sunRatio",
         "param.sunDatumRoad",
-        "param.sunDistance"
+        "param.sunDistance",
+        "param.farBaseState",
+        "param.farBase",
+        "param.farAllowedState",
+        "param.farAllowed",
+        "param.farMaxState",
+        "param.farMax",
+        "param.incentiveState",
+        "param.incentiveFar",
+        "param.incentiveHeight",
+        "param.openSpaceIncentiveState",
+        "param.openSpaceIncentiveFar",
+        "param.publicOpenSpaceState",
+        "param.publicOpenSpace",
+        "param.landscapeRatioState",
+        "param.landscapeRatio",
+        "param.parkingState",
+        "param.parkingRounding",
+        "param.parkingRoundScope",
+        "param.parkingAreaBasis",
+        "param.parkingEntryState",
+        "param.parkingEntryCornerDistance"
       ],
       "writes": "regulations",
       "speed": "live",
@@ -1038,7 +1826,9 @@
         "param.basementFloors",
         "param.targetFar",
         "param.studyHeight",
-        "param.northBasis"
+        "param.northBasis",
+        "param.basementFloorHeight",
+        "param.basementSetback"
       ],
       "writes": "plan",
       "speed": "live",
@@ -1111,6 +1901,195 @@
       }
     },
     {
+      "id": "floors",
+      "title": "층 나누기",
+      "kind": "library",
+      "use": "vide/massing-kit#floorsStep",
+      "needs": ["envelope", "plan"],
+      "reads": ["step.site", "step.plan", "step.envelope"],
+      "writes": "floors",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "no-nan"
+        }
+      ],
+      "budget": {
+        "wallClockMs": 60000
+      }
+    },
+    {
+      "id": "openSpace",
+      "title": "공개공지",
+      "kind": "library",
+      "use": "vide/massing-kit#openSpaceStep",
+      "needs": ["site", "regulations"],
+      "reads": [
+        "step.site",
+        "step.regulations",
+        "input.site.openSpaceZones",
+        "param.openSpaceCandidate"
+      ],
+      "writes": "openSpace",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "no-nan"
+        }
+      ],
+      "budget": {
+        "wallClockMs": 30000
+      }
+    },
+    {
+      "id": "alternatives",
+      "title": "대안",
+      "kind": "library",
+      "use": "vide/massing-kit#alternativesStep",
+      "needs": ["floors", "openSpace"],
+      "reads": [
+        "step.site",
+        "step.regulations",
+        "step.envelope",
+        "step.floors",
+        "step.openSpace",
+        "param.trimMethod",
+        "param.humanBase"
+      ],
+      "writes": "alternatives",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "no-nan"
+        }
+      ],
+      "budget": {
+        "wallClockMs": 120000
+      }
+    },
+    {
+      "id": "confirmChoice",
+      "title": "고른 대안 확정",
+      "kind": "human",
+      "slot": "confirm-inputs",
+      "needs": ["alternatives"],
+      "reads": ["step.alternatives", "param.chosenAlternative"],
+      "writes": "confirmChoice",
+      "speed": "confirm",
+      "blocks": ["chosen"]
+    },
+    {
+      "id": "chosen",
+      "title": "고른 대안",
+      "kind": "library",
+      "use": "vide/massing-kit#chosenStep",
+      "needs": ["confirmChoice", "alternatives"],
+      "reads": ["step.alternatives", "param.chosenAlternative"],
+      "writes": "chosen",
+      "speed": "live",
+      "gates": [
+        {
+          "use": "no-nan"
+        }
+      ]
+    },
+    {
+      "id": "useDraft",
+      "title": "용도 배분 AI 초안",
+      "kind": "ai",
+      "prompt": "prompts/use-draft.md",
+      "authority": "draft-only",
+      "needs": ["alternatives"],
+      "reads": ["step.alternatives", "step.plan", "step.regulations"],
+      "writes": "useDraft",
+      "speed": "button",
+      "gates": [
+        {
+          "use": "numbers-in-source"
+        },
+        {
+          "use": "no-plan-dependent-conclusion"
+        }
+      ]
+    },
+    {
+      "id": "acceptUseDraft",
+      "title": "AI 초안 받기",
+      "kind": "human",
+      "slot": "confirm-inputs",
+      "needs": ["useDraft"],
+      "reads": ["step.useDraft"],
+      "writes": "acceptUseDraft",
+      "speed": "confirm",
+      "blocks": ["useDraftApplied"]
+    },
+    {
+      "id": "useDraftApplied",
+      "title": "받은 초안을 용도 표에 넣기",
+      "kind": "library",
+      "use": "vide/massing-kit#applyUseDraft",
+      "needs": ["acceptUseDraft", "alternatives"],
+      "reads": ["step.useDraft", "step.alternatives"],
+      "writes": "useDraftApplied",
+      "speed": "button",
+      "gates": [
+        {
+          "use": "no-nan"
+        }
+      ]
+    },
+    {
+      "id": "useMix",
+      "title": "용도 배분",
+      "kind": "library",
+      "use": "vide/massing-kit#useMixStep",
+      "needs": ["alternatives"],
+      "reads": ["step.alternatives", "step.plan", "step.regulations"],
+      "writes": "useMix",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "no-nan"
+        }
+      ],
+      "budget": {
+        "wallClockMs": 30000
+      }
+    },
+    {
+      "id": "parking",
+      "title": "주차·조경",
+      "kind": "library",
+      "use": "vide/massing-kit#parkingStep",
+      "needs": ["useMix", "floors", "openSpace"],
+      "reads": [
+        "step.site",
+        "step.regulations",
+        "step.plan",
+        "step.useMix",
+        "step.alternatives",
+        "step.floors",
+        "step.openSpace",
+        "input.site.landscapeZones",
+        "input.site.parkingExclusions",
+        "param.plannedParking",
+        "param.parkingAreaGround",
+        "param.parkingAreaUnder",
+        "param.parkingAreaMech",
+        "param.parkingAlternative"
+      ],
+      "writes": "parking",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "no-nan"
+        }
+      ],
+      "budget": {
+        "wallClockMs": 60000
+      }
+    },
+    {
       "id": "make",
       "title": "Rhino에 만들기",
       "kind": "host",
@@ -1118,6 +2097,16 @@
       "needs": ["envelope"],
       "reads": ["step.buildable", "step.envelope"],
       "writes": "made",
+      "speed": "button"
+    },
+    {
+      "id": "makeMass",
+      "title": "대안 매스·주차·공지 Rhino에 만들기",
+      "kind": "host",
+      "bake": ["alternativeMasses", "groundZones", "parkingMasses"],
+      "needs": ["parking"],
+      "reads": ["step.useMix", "step.parking"],
+      "writes": "madeMass",
       "speed": "button"
     }
   ],
@@ -1148,6 +2137,50 @@
         "vide-unconfirmed": "unconfirmed"
       },
       "mode": "replace-own"
+    },
+    {
+      "id": "alternativeMasses",
+      "template": "vide.bake.extrude-polygon@1",
+      "host": "rhino",
+      "items": "step.useMix.items",
+      "layer": "대안 매스",
+      "key": "key",
+      "attrs": {
+        "vide-option": "option",
+        "vide-floor": "floor",
+        "vide-area-m2": "areaText",
+        "vide-use": "use",
+        "vide-unconfirmed": "unconfirmed"
+      },
+      "mode": "replace-own"
+    },
+    {
+      "id": "groundZones",
+      "template": "vide.bake.curves@1",
+      "host": "rhino",
+      "items": "step.parking.lines",
+      "layer": "주차·공지",
+      "key": "key",
+      "attrs": {
+        "vide-ground": "kind",
+        "vide-area-m2": "areaText"
+      },
+      "mode": "replace-own"
+    },
+    {
+      "id": "parkingMasses",
+      "template": "vide.bake.extrude-polygon@1",
+      "host": "rhino",
+      "items": "step.parking.masses",
+      "layer": "주차 추정",
+      "key": "key",
+      "attrs": {
+        "vide-option": "option",
+        "vide-floor": "floor",
+        "vide-area-m2": "areaText",
+        "vide-use": "use"
+      },
+      "mode": "replace-own"
     }
   ],
   "capabilities": [
@@ -1162,6 +2195,10 @@
     {
       "name": "host.bake",
       "reason": "제한선과 외피를 Rhino에 만듭니다"
+    },
+    {
+      "name": "ai.once",
+      "reason": "용도 배분 초안(꺼진 상태로 시작, 사람이 받아야 표에 들어감)"
     }
   ],
   "panel": "panel.json",

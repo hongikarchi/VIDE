@@ -27,5 +27,10 @@
   "northBasis": "true",
   "gridNorthDeg": 0,
   "convergenceDeg": 0,
-  "segmentTolerance": 0.05
+  "segmentTolerance": 0.05,
+  "farBaseState": "apply",
+  "farBase": 4,
+  "incentiveState": "apply",
+  "incentiveFar": 0.5,
+  "chosenAlternative": "base"
 }

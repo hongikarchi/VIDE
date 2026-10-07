@@ -31,6 +31,76 @@
           ]
         }
       ]
+    },
+    "floors": {
+      "height": 30,
+      "rows": [
+        {
+          "floor": "1F",
+          "area": 522.5
+        },
+        {
+          "floor": "2F",
+          "area": 522.5
+        },
+        {
+          "floor": "3F",
+          "area": 445.55
+        },
+        {
+          "floor": "4F",
+          "area": 414.2
+        },
+        {
+          "floor": "5F",
+          "area": 382.85
+        },
+        {
+          "floor": "6F",
+          "area": 351.5
+        },
+        {
+          "floor": "7F",
+          "area": 320.15
+        },
+        {
+          "floor": "8F",
+          "area": 288.8
+        }
+      ]
+    },
+    "alternatives": {
+      "rows": [
+        {
+          "id": "max",
+          "gfaAbove": 3248.05,
+          "buildingArea": 522.5,
+          "floorsAbove": 8
+        },
+        {
+          "id": "base",
+          "farArea": 2400,
+          "far": 4,
+          "floorsAbove": 6
+        },
+        {
+          "id": "incentive",
+          "farArea": 2700,
+          "far": 4.5,
+          "floorsAbove": 7
+        }
+      ]
+    },
+    "chosen": {
+      "id": "base",
+      "row": {
+        "farArea": 2400
+      }
     }
+  },
+  "statuses": {
+    "useDraft": "failed",
+    "acceptUseDraft": "blocked",
+    "useDraftApplied": "blocked"
   }
 }

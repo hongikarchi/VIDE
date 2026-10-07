@@ -25,13 +25,96 @@
       "items": [
         { "label": "대지면적", "from": "step.buildable.siteArea", "unit": "m²", "decimals": 2 },
         { "label": "가능 영역", "from": "step.buildable.area", "unit": "m²", "decimals": 2 },
-        { "label": "미확정 조건", "from": "step.envelope.unconfirmed", "unit": "개" }
+        { "label": "미확정 조건", "from": "step.envelope.unconfirmed", "unit": "개" },
+        { "label": "고른 대안", "from": "step.chosen.title", "empty": "사람이 고르기 전" }
       ]
     }
   },
   "drawer": {
     "part": "result-tabs",
     "tabs": [
+      {
+        "title": "대안 비교",
+        "part": "compare-bars",
+        "from": "step.alternatives.bars",
+        "label": "label",
+        "value": "value",
+        "shade": "shade",
+        "unit": "용적률",
+        "decimals": 3
+      },
+      {
+        "title": "대안 표",
+        "part": "table",
+        "from": "step.alternatives.rows",
+        "columns": [
+          { "field": "title", "label": "대안" },
+          { "field": "buildingArea", "label": "건축면적", "unit": "m²", "decimals": 2 },
+          { "field": "coverageVerdict", "label": "건폐율 판정" },
+          { "field": "gfaTotal", "label": "연면적", "unit": "m²", "decimals": 2 },
+          { "field": "far", "label": "용적률", "decimals": 3 },
+          { "field": "farVerdict", "label": "용적률 판정" },
+          { "field": "floorsAbove", "label": "지상 층수" },
+          { "field": "height", "label": "높이", "unit": "m", "decimals": 2 }
+        ],
+        "csv": "대안-표"
+      },
+      {
+        "title": "공개공지",
+        "part": "table",
+        "from": "step.openSpace.rows",
+        "columns": [
+          { "field": "no", "label": "번호" },
+          { "field": "source", "label": "후보" },
+          { "field": "area", "label": "면적", "unit": "m²", "decimals": 2 },
+          { "field": "required", "label": "필요 면적", "unit": "m²", "decimals": 2 },
+          { "field": "verdict", "label": "판정" },
+          { "field": "incentive", "label": "관련 완화량" },
+          { "field": "picked", "label": "대안" }
+        ],
+        "csv": "공개공지-후보"
+      },
+      {
+        "title": "용도 배분",
+        "part": "table",
+        "from": "step.useMix.floorRows",
+        "columns": [
+          { "field": "alternative", "label": "대안" },
+          { "field": "floor", "label": "층" },
+          { "field": "uses", "label": "용도" },
+          { "field": "area", "label": "바닥면적", "unit": "m²", "decimals": 2 },
+          { "field": "origin", "label": "출처" },
+          { "field": "verdict", "label": "판정" }
+        ],
+        "csv": "용도-배분"
+      },
+      {
+        "title": "주차 대수",
+        "part": "table",
+        "from": "step.parking.alternatives",
+        "columns": [
+          { "field": "title", "label": "대안" },
+          { "field": "raw", "label": "끝수 처리 전", "decimals": 2 },
+          { "field": "legal", "label": "법정 대수" },
+          { "field": "planned", "label": "계획 대수" },
+          { "field": "status", "label": "상태" }
+        ],
+        "csv": "주차-대수"
+      },
+      {
+        "title": "주차 방식",
+        "part": "table",
+        "from": "step.parking.types",
+        "columns": [
+          { "field": "title", "label": "방식" },
+          { "field": "required", "label": "필요 면적", "unit": "m²", "decimals": 1 },
+          { "field": "available", "label": "쓸 수 있는 면적", "unit": "m²", "decimals": 1 },
+          { "field": "floors", "label": "지하 층수" },
+          { "field": "verdict", "label": "판정" },
+          { "field": "note", "label": "비고" }
+        ],
+        "csv": "주차-방식"
+      },
       {
         "title": "제한선별 감소",
         "part": "table",

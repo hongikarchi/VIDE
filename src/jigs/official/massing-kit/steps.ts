@@ -21,8 +21,11 @@ import {
   itemOf,
   mergeRegulations,
   numberOf,
+  regulationsFromOverrides,
   regulationsFromParams,
   ruleOf,
+  withOverrides,
+  type StepOverride,
   type RegulationId,
   type RegulationItem,
   type RuleId,
@@ -164,17 +167,28 @@ export interface RegulationsOutput {
   needsInput: { id: RegulationId; title: string }[];
   /** '판단 필요'·'가정' items (SPEC-12.7 7). */
   unconfirmed: { id: RegulationId; title: string; status: string }[];
+  /** Table entries (수정 사항) that were not taken, and why. */
+  problems?: string[];
 }
 
-/** 규제 조건 (SPEC-12.7 2): the person's settings, then the SPEC-13 slot (`input.legal`). */
-export function regulationStep(inputs: Record<string, unknown>, params: Record<string, unknown>) {
-  const person = regulationsFromParams(params);
+/**
+ * 규제 조건 (SPEC-12.7 2): the person's settings and table entries (수정 사항 of kind
+ * `regulation`, T-211·T-212), then the SPEC-13 slot (`input.legal`).
+ */
+export function regulationStep(
+  inputs: Record<string, unknown>,
+  params: Record<string, unknown>,
+  overrides: StepOverride[] = [],
+) {
+  const table = regulationsFromOverrides(overrides);
+  const person = withOverrides(regulationsFromParams(params), table.items);
   const legal = regulationsFromLegal(inputs.legal);
   const { items, differences } = mergeRegulations(person, legal.items);
   return {
     items,
     legal: { available: legal.available, reason: legal.reason },
     differences,
+    problems: table.problems,
     needsInput: items
       .filter((i) => i.status === '사람 입력 필요')
       .map((i) => ({ id: i.id, title: i.title })),
@@ -191,6 +205,9 @@ export interface PlanOutput {
   floorHeightGround: number;
   floorHeightTypical: number;
   basementFloors: number;
+  /** 지하 층고 (m) and 지하 이격 (m, SPEC-12.10 1). */
+  basementFloorHeight: number;
+  basementSetback: number;
   targetFar: number | null;
   studyHeight: number;
   northBasis: 'true' | 'grid';
@@ -209,10 +226,12 @@ export function planStep(_inputs: Record<string, unknown>, params: Record<string
     floorHeightGround: num(params.floorHeightGround, 0),
     floorHeightTypical: num(params.floorHeightTypical, 0),
     basementFloors: num(params.basementFloors, 0),
+    basementFloorHeight: num(params.basementFloorHeight, 0),
+    basementSetback: Math.max(0, num(params.basementSetback, 0)),
     targetFar: targetFar > 0 ? targetFar : null,
     studyHeight: num(params.studyHeight, 0),
     northBasis: params.northBasis === 'grid' ? 'grid' : 'true',
-    assumptions: ['층고(1층·기준층)', '검토 높이(높이 상한이 없을 때의 계산 상한)'],
+    assumptions: ['층고(1층·기준층)', '지하 층고', '검토 높이(높이 상한이 없을 때의 계산 상한)'],
     questions: mainUse ? [] : ['주용도가 무엇인가요?'],
   } satisfies PlanOutput;
 }
@@ -753,6 +772,8 @@ export function envelopeStep(inputs: Record<string, unknown>) {
         sunCut: r6(s.extrude - s.max),
       })),
       sunCutVolume: r6(set.sunCutVolume),
+      /** The checked maximum envelope as a welded mesh: the floors step cuts it (T-211). */
+      maxMesh: set.envelopes.find((e) => e.kind === 'max')!.mesh,
     };
   });
   return { variants, items, unresolved, unconfirmed, note: ENVELOPE_NOTE, study: STUDY_NOTE };

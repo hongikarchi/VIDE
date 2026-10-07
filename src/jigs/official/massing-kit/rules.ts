@@ -38,7 +38,8 @@ export interface RegulationItem {
   id: RegulationId;
   group: RegulationGroup;
   title: string;
-  value: number | string | null;
+  /** A number, a choice, or a list (허용 용도 · 층별 용도 제한). */
+  value: number | string | string[] | null;
   unit: string;
   applies: Applies;
   status: ItemStatus;
@@ -103,11 +104,58 @@ export const REGULATION_ITEMS = {
     choices: ['ask', 'euclidean', 'north'],
   },
   incentive: { group: '인센티브', title: '인센티브 항목', unit: '' },
+  incentiveFar: {
+    group: '인센티브',
+    title: '인센티브 완화량(용적률에 더함)',
+    unit: '비율',
+    positive: true,
+  },
+  incentiveHeight: { group: '인센티브', title: '인센티브 완화량(높이)', unit: 'm', positive: true },
+  openSpaceIncentiveFar: {
+    group: '인센티브',
+    title: '공개공지 설치에 따른 완화량(용적률에 더함)',
+    unit: '비율',
+    positive: true,
+  },
   allowedUses: { group: '용도', title: '허용 용도', unit: '' },
   floorUses: { group: '용도', title: '층별 용도 제한', unit: '' },
-  parkingRule: { group: '주차·공지', title: '용도별 주차 산정 기준', unit: '' },
-  landscapeRatio: { group: '주차·공지', title: '조경 면적 비율', unit: '비율' },
-  publicOpenSpace: { group: '주차·공지', title: '공개공지 대상 여부와 면적 비율', unit: '비율' },
+  parkingRule: {
+    group: '주차·공지',
+    title: '용도별 주차 산정 기준(면적 n ㎡당 1대)',
+    unit: '㎡/대',
+    positive: true,
+  },
+  parkingRounding: {
+    group: '주차·공지',
+    title: '주차 대수 끝수 처리',
+    unit: '',
+    choices: ['ask', 'half-up', 'ceil', 'floor'],
+  },
+  parkingRoundScope: {
+    group: '주차·공지',
+    title: '끝수 처리 단위',
+    unit: '',
+    choices: ['ask', 'sum', 'each'],
+  },
+  parkingAreaBasis: {
+    group: '주차·공지',
+    title: '주차 산정에 쓰는 면적',
+    unit: '',
+    choices: ['ask', 'gross', 'far'],
+  },
+  parkingEntryCornerDistance: {
+    group: '주차·공지',
+    title: '주차 출입 제외 거리(두 도로가 만나는 모퉁이에서)',
+    unit: 'm',
+    positive: true,
+  },
+  landscapeRatio: { group: '주차·공지', title: '조경 면적 비율', unit: '비율', positive: true },
+  publicOpenSpace: {
+    group: '주차·공지',
+    title: '공개공지 대상 여부와 면적 비율',
+    unit: '비율',
+    positive: true,
+  },
 } as const satisfies Record<string, ItemDef>;
 export type RegulationId = keyof typeof REGULATION_ITEMS;
 
@@ -121,6 +169,13 @@ export const CHOICE_LABELS: Record<string, string> = {
   boundary: '대지 경계(도로 쪽)',
   euclidean: '기준선까지의 최단 거리',
   north: '정북 방향으로 잰 거리',
+  'half-up': '0.5 이상 올림',
+  ceil: '올림',
+  floor: '버림',
+  sum: '용도별 값을 합한 뒤 한 번',
+  each: '용도마다',
+  gross: '용도별 바닥면적 합계(지상·지하)',
+  far: '용도별 용적률 산정 면적(제외 면적을 뺌)',
 };
 
 /** State settings (`<item>State`) and the 적용 여부 they mean. */
@@ -154,6 +209,18 @@ export const PARAM_ITEMS: { key: RegulationId; state: string }[] = [
   { key: 'sunRatio', state: 'sunState' },
   { key: 'sunDatumRoad', state: 'sunState' },
   { key: 'sunDistance', state: 'sunState' },
+  { key: 'farBase', state: 'farBaseState' },
+  { key: 'farAllowed', state: 'farAllowedState' },
+  { key: 'farMax', state: 'farMaxState' },
+  { key: 'incentiveFar', state: 'incentiveState' },
+  { key: 'incentiveHeight', state: 'incentiveState' },
+  { key: 'openSpaceIncentiveFar', state: 'openSpaceIncentiveState' },
+  { key: 'publicOpenSpace', state: 'publicOpenSpaceState' },
+  { key: 'landscapeRatio', state: 'landscapeRatioState' },
+  { key: 'parkingRounding', state: 'parkingState' },
+  { key: 'parkingRoundScope', state: 'parkingState' },
+  { key: 'parkingAreaBasis', state: 'parkingState' },
+  { key: 'parkingEntryCornerDistance', state: 'parkingEntryState' },
 ];
 
 const def = (id: RegulationId): ItemDef => REGULATION_ITEMS[id];
@@ -216,6 +283,98 @@ export function regulationsFromParams(params: Record<string, unknown>): Regulati
   return out;
 }
 
+/** A 수정 사항 (SPEC-07.8) as the library steps receive it. */
+export interface StepOverride {
+  id?: string;
+  target: { kind: string; identity: Record<string, string | number> };
+  op: 'move' | 'add' | 'remove' | 'set' | 'pin';
+  fields: Record<string, unknown>;
+  by?: 'user' | 'ai';
+  note?: string;
+}
+
+const APPLIES: readonly string[] = ['적용', '미적용', '판단 필요'];
+
+/**
+ * 규제 조건 typed in the table (수정 사항 `{kind: 'regulation', identity: {id, target?}}`, op
+ * `set`, fields `{value, applies, basis?}`): items the settings cannot hold — lists (허용 용도,
+ * 층별 용도 제한) and items per target (용도별 주차 산정 기준, 인센티브 항목). A person's entry; an
+ * AI-proposed override (`by: 'ai'`) is not taken (SPEC-07.8: the person accepts it first). Items
+ * with a wrong value type are returned as problems and left out.
+ */
+export function regulationsFromOverrides(overrides: readonly StepOverride[] | undefined) {
+  const items: RegulationItem[] = [];
+  const problems: string[] = [];
+  for (const o of overrides ?? []) {
+    if (o?.target?.kind !== 'regulation' || o.op !== 'set') continue;
+    const id = String(o.target.identity?.id ?? '') as RegulationId;
+    if (!(id in REGULATION_ITEMS)) {
+      problems.push(`없는 규제 조건 항목: ${id}`);
+      continue;
+    }
+    if (o.by === 'ai') {
+      problems.push(`${id}: AI가 제안한 값은 사람이 받아야 들어갑니다`);
+      continue;
+    }
+    const target =
+      o.target.identity.target === undefined ? undefined : String(o.target.identity.target);
+    const d = def(id);
+    const item = emptyItem(id, target);
+    const applies = String(o.fields.applies ?? '');
+    if (!APPLIES.includes(applies)) {
+      problems.push(`${id}${target ? `@${target}` : ''}: 적용 여부가 없습니다`);
+      continue;
+    }
+    item.applies = applies as Applies;
+    item.status = applies === '판단 필요' ? '판단 필요' : '확정';
+    item.origin = '사용자가 확정함';
+    item.source = `override.${o.id ?? id}`;
+    const raw = o.fields.value;
+    if (applies !== '미적용') {
+      const ok = d.choices
+        ? typeof raw === 'string' && raw !== 'ask' && d.choices.includes(raw)
+        : Array.isArray(raw)
+          ? raw.every((v) => typeof v === 'string' && v.length > 0)
+          : typeof raw === 'number'
+            ? Number.isFinite(raw) && raw >= 0 && (!d.positive || raw > 0)
+            : typeof raw === 'string' && raw.length > 0;
+      if (!ok) {
+        item.status = '사람 입력 필요';
+        item.origin = '없음';
+      } else item.value = Array.isArray(raw) ? [...(raw as string[])] : (raw as number | string);
+    }
+    const basis = o.fields.basis as RegulationBasis | undefined;
+    if (basis && typeof basis === 'object')
+      item.basis = {
+        ...(typeof basis.clause === 'string' ? { clause: basis.clause } : {}),
+        ...(typeof basis.link === 'string' ? { link: basis.link } : {}),
+        ...(typeof basis.note === 'string' ? { note: basis.note } : {}),
+      };
+    items.push(item);
+  }
+  return { items, problems };
+}
+
+/** Person items: the table's (수정 사항) win over the settings' for the same item and target. */
+export function withOverrides(params: RegulationItem[], table: RegulationItem[]) {
+  const keyOf = (i: RegulationItem) => `${i.id}@${i.target ?? ''}`;
+  const byKey = new Map(params.map((i) => [keyOf(i), i]));
+  for (const item of table) byKey.set(keyOf(item), item);
+  return [...byKey.values()];
+}
+
+/** Items of one id: the site-wide one and every target (용도별 주차 기준, 인센티브 목록). */
+export const itemsOf = (items: readonly RegulationItem[], id: RegulationId) =>
+  items.filter((i) => i.id === id);
+
+/** Text of a list value (허용 용도). */
+export const listOf = (item: RegulationItem): string[] | null =>
+  Array.isArray(item.value)
+    ? item.value
+    : typeof item.value === 'string' && item.value
+      ? [item.value]
+      : null;
+
 /**
  * Merge a person's items with the legal result's: the person's entry wins; a legal item fills one
  * the person left at '사람 입력 필요'. Differences are returned, never applied silently
@@ -228,7 +387,10 @@ export function mergeRegulations(person: RegulationItem[], legal: RegulationItem
   for (const item of legal) {
     const mine = byKey.get(keyOf(item));
     if (!mine || mine.status === '사람 입력 필요') byKey.set(keyOf(item), item);
-    else if (mine.value !== item.value || mine.applies !== item.applies)
+    else if (
+      JSON.stringify(mine.value) !== JSON.stringify(item.value) ||
+      mine.applies !== item.applies
+    )
       differences.push({
         id: item.id,
         ...(item.target ? { target: item.target } : {}),

@@ -163,7 +163,8 @@ export const SITE_ATTRS = {
   zone: ['vide-zone-name', 'vide-zone-code', 'vide-notice'],
   site: ['vide-site-summary', 'vide-crs', 'vide-origin-survey', 'vide-true-north'],
   envelope: ['vide-envelope', 'vide-rules', 'vide-volume-m3', 'vide-unconfirmed'],
-  mass: ['vide-option', 'vide-floor', 'vide-area-m2', 'vide-use'],
+  mass: ['vide-option', 'vide-floor', 'vide-area-m2', 'vide-use', 'vide-unconfirmed'],
+  ground: ['vide-ground', 'vide-area-m2'],
 } as const;
 export const bakeArgSafe = (value: unknown) => typeof value === 'string' && SAFE_ARG.test(value);
 

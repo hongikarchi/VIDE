@@ -4,7 +4,7 @@
 // without node: imports; the solid booleans are `vide/geometry-kit` (`solid.ts`). No legal value is
 // written here: every number a rule uses is a 규제 조건 item with its source (SPEC-12.7 5·6).
 
-export const library = { id: 'vide/massing-kit', version: '0.1.0' } as const;
+export const library = { id: 'vide/massing-kit', version: '0.2.0' } as const;
 
 export {
   CHOICE_LABELS,
@@ -16,7 +16,11 @@ export {
   itemOf,
   mergeRegulations,
   numberOf,
+  regulationsFromOverrides,
   regulationsFromParams,
+  withOverrides,
+  itemsOf,
+  listOf,
   ruleOf,
 } from './rules.ts';
 export type {
@@ -29,6 +33,7 @@ export type {
   RegulationItem,
   RuleDef,
   RuleId,
+  StepOverride,
 } from './rules.ts';
 export { regulationsFromLegal } from './legal-adapter.ts';
 export type { LegalAdapterResult } from './legal-adapter.ts';
@@ -61,3 +66,53 @@ export {
   regulationStep,
   siteStep,
 } from './steps.ts';
+// T-211·T-212: floors, alternatives, 공개공지, 용도 배분, 주차·조경.
+export {
+  basementRegions,
+  floorFits,
+  floorLevels,
+  floorRegions,
+  intersectRegions,
+  meshSolid,
+  regionSolid,
+  regionsArea,
+  subtractRegions,
+  trimRegions,
+  unionArea,
+  unionRegions,
+} from './floors.ts';
+export type { FloorDef } from './floors.ts';
+export {
+  ALTERNATIVE_MAX,
+  TRIM_TITLES,
+  alternativeRow,
+  exclusionsOf,
+  farTargets,
+  makeAlternatives,
+  trimToCap,
+} from './alternatives.ts';
+export type {
+  AltFloor,
+  Alternative,
+  AlternativeKind,
+  AlternativeRow,
+  FloorShape,
+  TrimMethod,
+} from './alternatives.ts';
+export { openSpaceCandidates, openSpaceRequirement, pickCandidate } from './open-space.ts';
+export type { OpenSpaceCandidate, OpenSpaceRequirement } from './open-space.ts';
+export { acceptUseDraft, allocateUses, useTable } from './use-mix.ts';
+export type { FloorUse, UseShare, UseTotal } from './use-mix.ts';
+export { PARKING_TYPE_TITLES, entryZone, legalParking, parkingTypes } from './parking.ts';
+export type { LegalParking, ParkingType, ParkingTypeRow } from './parking.ts';
+export { landscapeAreas } from './landscape.ts';
+export {
+  alternativesStep,
+  applyUseDraft,
+  chosenStep,
+  floorsStep,
+  openSpaceStep,
+  parkingStep,
+  useMixStep,
+} from './mass-steps.ts';
+export type { AlternativesOutput, FloorsOutput } from './mass-steps.ts';
