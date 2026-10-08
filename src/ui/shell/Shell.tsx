@@ -15,6 +15,7 @@ import { RightColumn } from './right-column.tsx';
 import { StatusBar } from './status-bar.tsx';
 import { Toast } from './toast.tsx';
 import { SettingsDialog } from './settings-dialog.tsx';
+import { AccountPopover } from './account-button.tsx';
 import { RegionBoundary } from './region-boundary.tsx';
 import { TelemetryCards } from './telemetry.tsx';
 
@@ -61,6 +62,9 @@ export const Shell = memo(function Shell() {
       {'\n\n'}
       <RegionBoundary name="settings">
         <SettingsDialog />
+      </RegionBoundary>
+      <RegionBoundary name="account">
+        <AccountPopover />
       </RegionBoundary>
       <RegionBoundary name="telemetry">
         <TelemetryCards />

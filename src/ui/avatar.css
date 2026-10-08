@@ -1,0 +1,53 @@
+/* The account circle (Design SCR-34): the same colours in light and dark, white letters (contrast
+   at least 4.5:1). Signed out: a neutral person mark. */
+:root {
+  --avatar-1: #4f6fa8;
+  --avatar-2: #3b7d60;
+  --avatar-3: #9a6a2f;
+  --avatar-4: #85509a;
+  --avatar-5: #a8504a;
+  --avatar-6: #3c7f8c;
+  --avatar-7: #6b7232;
+  --avatar-8: #94506c;
+}
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  color: #fff;
+  font-family: Inter, var(--font-sans, system-ui), sans-serif;
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+  background: var(--avatar-1);
+}
+.avatar[data-avatar='2'] {
+  background: var(--avatar-2);
+}
+.avatar[data-avatar='3'] {
+  background: var(--avatar-3);
+}
+.avatar[data-avatar='4'] {
+  background: var(--avatar-4);
+}
+.avatar[data-avatar='5'] {
+  background: var(--avatar-5);
+}
+.avatar[data-avatar='6'] {
+  background: var(--avatar-6);
+}
+.avatar[data-avatar='7'] {
+  background: var(--avatar-7);
+}
+.avatar[data-avatar='8'] {
+  background: var(--avatar-8);
+}
+.avatar[data-avatar='none'] {
+  background: var(--bg-active);
+  color: var(--text-3);
+}
+.avatar svg {
+  width: 60%;
+  height: 60%;
+}

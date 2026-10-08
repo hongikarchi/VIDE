@@ -122,7 +122,7 @@ try {
     data: { username, password },
   });
   assert.equal(login.status, 200, JSON.stringify(login));
-  // 2. The PC signs in with the same ID (settings → VIDE 계정) and turns remote access on.
+  // 2. The PC signs in with the same ID (the account panel, SPEC-05.10) and turns remote access on.
   const launch = new URL(app.launchUrl);
   const session = await fetch(launch.origin + '/api/v1/session', {
     method: 'POST',
@@ -142,7 +142,7 @@ try {
   };
   let began = Date.now();
   await local('/remote/link', { username, password, name: 'Test PC', origin: sharing });
-  // Signing in leaves remote access off (ADR-039 3): turn it on as the user does in Settings.
+  // Signing in leaves remote access off (ADR-039 3): turn it on as the user does in the account panel.
   await local('/remote/remote', { enabled: true });
   let status;
   for (let i = 0; i < 90; i++) {

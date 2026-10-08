@@ -1237,7 +1237,6 @@ body.left-hidden.right-hidden main {
 /* Workspace controls: compact defaults, detail on demand. */
 .rail-settings {
   margin-top: auto;
-  margin-bottom: 10px;
   font-size: 20px;
 }
 /* Feedback and the theme toggle sit at the bottom of the rail, above the settings. */
@@ -2590,6 +2589,217 @@ body.panel-mode .chat-heading h2 {
 .remote-error {
   color: var(--ng);
 }
+/* The VIDE account button and panel (Design SCR-34): the circle at the rail's end, 8 px below the
+   settings; hover draws a ring, never a background or a side bar. */
+.rail .rail-account {
+  position: relative;
+  margin: -1px 0 10px;
+  border-radius: 50%;
+  background: transparent;
+}
+.rail .rail-account:hover,
+.rail .rail-account[aria-expanded='true'] {
+  background: transparent;
+}
+.rail .rail-account:hover .avatar,
+.rail .rail-account[aria-expanded='true'] .avatar {
+  box-shadow: 0 0 0 2px var(--border);
+}
+.account-dot {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--bg-surface);
+  background: var(--ok);
+  box-sizing: content-box;
+}
+.account-dot[data-state='warn'] {
+  background: var(--warn);
+}
+.account-dot[data-state='ng'] {
+  background: var(--ng);
+}
+.mobile-tabs .mobile-account {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  background: transparent;
+}
+.account-popover {
+  position: fixed;
+  inset: auto;
+  left: 56px;
+  bottom: 36px;
+  margin: 0;
+  width: min(320px, calc(100vw - 16px));
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+  padding: 16px;
+  background: var(--bg-elevated);
+  color: var(--text-1);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-float);
+  z-index: 60;
+}
+.account-popover:focus {
+  outline: none;
+}
+.account-popover > section,
+.account-popover > .account-signout-slot:not(:empty) {
+  padding: 12px 0;
+}
+.account-popover > section:first-child {
+  padding-top: 0;
+}
+.account-popover > * + * {
+  border-top: var(--hairline) solid var(--border-subtle);
+}
+.account-popover > .account-signout-slot:empty,
+.account-popover > section[hidden] {
+  display: none;
+}
+.account-popover h3,
+.account-popover h4 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+.account-popover small {
+  display: block;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+.account-popover .account-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.account-popover .account-who {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  min-width: 0;
+}
+.account-popover .account-who strong {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.account-popover .account-who small {
+  font-size: 12px;
+}
+.account-popover .account-site {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.account-popover .account-site[data-state]::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  flex-shrink: 0;
+}
+.account-popover .account-site[data-state='warn']::before {
+  background: var(--warn);
+}
+.account-popover .account-remote {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: var(--hairline) solid var(--border-subtle);
+}
+.account-popover .account-remote .remote-toggle {
+  margin-top: 0;
+}
+.account-popover .account-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.account-ai-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+.account-ai-rows li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.account-ai-state {
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-ai-switch:not(:empty) {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+.account-signout {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.account-signout button {
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  padding: 4px 6px;
+}
+.account-signout button.danger {
+  color: var(--ng);
+}
+.account-signout small {
+  flex: 1;
+}
+/* Narrow screens: a sheet from the bottom with 16 px sides. */
+@media (max-width: 850px) {
+  .account-popover {
+    left: 16px !important;
+    right: 16px;
+    bottom: 16px !important;
+    width: auto;
+  }
+}
+/* Settings: the account lives in the account panel; a line under the tabs points there. */
+.settings-account-pointer {
+  margin-top: auto;
+  padding: 10px 10px 2px;
+  border-top: var(--hairline) solid var(--border-subtle);
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.settings-account-pointer small {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.45;
+}
+.settings-nav .settings-account-pointer button {
+  padding: 0;
+  color: var(--text-1);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.settings-nav .settings-account-pointer button:hover {
+  background: transparent;
+}
 /* 설정 › 외부 서비스 (SPEC-13.11): label above each field, the row's status pill on the right. */
 .services-form {
   display: grid;
@@ -2769,6 +2979,16 @@ body.panel-mode .chat-heading h2 {
   }
   .settings-nav button {
     white-space: nowrap;
+  }
+  .settings-account-pointer {
+    margin: 0 0 0 auto;
+    padding: 0 0 0 8px;
+    border-top: 0;
+    display: flex;
+    align-items: center;
+  }
+  .settings-account-pointer small {
+    display: none;
   }
   .settings-panes {
     padding: 4px 16px 18px;

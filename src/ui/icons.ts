@@ -35,6 +35,7 @@ import {
   Slice,
   Sun,
   Trash2,
+  User,
   Wrench,
   X,
 } from 'lucide';
@@ -66,6 +67,7 @@ const icons: Record<string, IconNode> = {
   send: ArrowUp,
   'list-plus': ListPlus,
   trash: Trash2,
+  user: User,
   dashboard: LayoutDashboard,
   database: Database,
   notebook: NotebookPen,

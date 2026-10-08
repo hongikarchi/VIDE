@@ -3,7 +3,8 @@
 // the dialog, keeps its tab, hands the empty panel sections to their panels and puts the actions the
 // buttons call in the store.
 import { element as $ } from './elements.ts';
-import { attachAccountPanel, remoteSession } from './remote-panel.ts';
+import { remoteSession } from './remote-panel.ts';
+import { initializeAccountPopover } from './account-popover.ts';
 import { attachDesktopPanel, inDesktop } from './desktop-panel.ts';
 import { attachConnectorsPanel } from './connectors-panel.ts';
 import { attachAccountUsage } from './account-usage-panel.ts';
@@ -42,17 +43,20 @@ export function initializeWorkspaceStatus({
     close();
   });
   function show(id: SettingsTab) {
-    if (tabHidden(id, statusState)) id = 'account';
+    // The first tab not hidden here: AI, else (through the tunnel) 상태 · 오류.
+    if (tabHidden(id, statusState)) id = tabHidden('ai', statusState) ? 'status' : 'ai';
     statusState.tab = id;
     statusState.bump();
   }
   const open = (source: HTMLElement, pane: SettingsTab = statusState.tab) => {
     opener = source;
+    if (!dialog.open) statusState.opened++;
     show(pane);
     if (!dialog.open) dialog.showModal();
   };
-  // One settings place, one topic per tab: account, AI, connected programs, this program, status.
-  const account = attachAccountPanel(section('account'), dialog, (status) =>
+  // One settings place, one topic per tab: AI, services, connected programs, this program, status.
+  // The VIDE account and remote access are the account panel's (SPEC-05.10).
+  const account = initializeAccountPopover((status) =>
     onAccount(status.linked ? status.site : undefined),
   );
   attachAccountUsage(section('ai', 1), dialog);
@@ -70,8 +74,12 @@ export function initializeWorkspaceStatus({
     openFailure,
     openAiSettings,
     openExecutionLimits,
+    openAccount: () => {
+      close();
+      account.open();
+    },
   };
-  show('account');
+  show('ai');
   $('workspace-settings').onclick = () => open($('workspace-settings'));
   window.addEventListener('vide:api-error', (event) => {
     statusState.notifications.push((event as CustomEvent<string>).detail);

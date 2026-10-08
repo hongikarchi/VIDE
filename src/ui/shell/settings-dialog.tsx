@@ -1,8 +1,9 @@
 // SettingsDialog (PLAN-26 T-113, region E): the settings dialog `.workspace-status-dialog`, one topic
-// per tab: account, AI, connected programs, this program, status. Drawn from store/status.ts and the
-// connection lines in store/session.ts; src/ui/workspace-status.ts is its controller (opening,
-// closing, the tab, the actions). The account, usage, programs and PC program sections are rendered
-// empty and filled by their panels (remote-panel, account-usage-panel, connectors-panel,
+// per tab: AI, external services, connected programs, this program, status. The VIDE account and
+// remote access are the account panel's (SPEC-05.10, shell/account-button.tsx); a line under the tabs
+// points there. Drawn from store/status.ts and the connection lines in store/session.ts;
+// src/ui/workspace-status.ts is its controller (opening, closing, the tab, the actions). The usage,
+// programs and PC program sections are rendered empty and filled by their panels (account-usage-panel, connectors-panel,
 // desktop-panel), which own their content; React never gives those sections children.
 import { memo, useState, type ReactNode } from 'react';
 import { z } from 'zod';
@@ -17,7 +18,6 @@ import { PublicDataSection } from './public-data-section.tsx';
 import { ServicesSection } from './services-settings.tsx';
 
 const tabs: [SettingsTab, string][] = [
-  ['account', '계정 · 원격 접속'],
   ['ai', 'AI'],
   ['services', '외부 서비스'],
   ['programs', '연결 프로그램'],
@@ -272,11 +272,14 @@ export const SettingsDialog = memo(function SettingsDialog() {
           {tabs.map(([id, label]) => (
             <TabButton key={id} id={id} label={label} />
           ))}
+          <div className="settings-account-pointer">
+            <small>VIDE 계정과 원격 접속은 왼쪽 아래 계정 단추에서 합니다.</small>
+            <button type="button" onClick={() => statusState.actions.openAccount()}>
+              계정 열기
+            </button>
+          </div>
         </nav>
         <div className="settings-panes">
-          <Pane id="account">
-            <section className="remote-panel" />
-          </Pane>
           <Pane id="ai">
             <section className="settings-ai">
               <h3>AI</h3>

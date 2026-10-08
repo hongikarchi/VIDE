@@ -34,7 +34,7 @@ const statusText: Record<ServiceStatus, string> = {
 };
 const errorText: Record<string, string> = {
   ACCOUNT_NOT_LINKED:
-    'VIDE 계정에 로그인한 PC에서만 연결할 수 있습니다. 계정 · 원격 접속에서 로그인하세요.',
+    'VIDE 계정에 로그인한 PC에서만 연결할 수 있습니다. 왼쪽 아래 계정 단추에서 로그인하세요.',
   SITE_UNREACHABLE: '계정 사이트에 닿지 않습니다. 잠시 뒤 다시 누르세요.',
   SERVICE_TOKEN_UNAVAILABLE:
     '계정 사이트가 아직 서비스 토큰을 발급하지 않습니다. 개발용 토큰을 넣어 연결하세요.',

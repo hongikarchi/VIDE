@@ -57,15 +57,28 @@ try {
   await aiSettings.waitFor();
   await aiSettings.getByRole('button', { name: '닫기', exact: true }).click();
   await page.locator('#workspace-settings').click();
-  await settings.getByRole('button', { name: '계정 · 원격 접속', exact: true }).click();
+  // The VIDE account is not a settings tab any more (SPEC-05.10 4): [계정 열기] opens the panel.
+  assert.equal(await settings.locator('[data-tab="account"]').count(), 0);
+  assert.equal(await settings.locator('[data-tab="ai"]').getAttribute('aria-pressed'), 'true');
+  await settings.getByRole('button', { name: '계정 열기', exact: true }).click();
+  const account = page.getByRole('dialog', { name: 'VIDE 계정', exact: true });
+  await account.waitFor();
+  assert.equal(await settings.isVisible(), false);
   // VIDE account login: typed values survive the panel's status polling; password can be shown.
-  await settings.getByLabel('아이디', { exact: true }).fill('studio');
-  await settings.getByLabel('비밀번호', { exact: true }).fill('secret-pass');
+  await account.getByLabel('아이디', { exact: true }).fill('studio');
+  await account.getByLabel('비밀번호', { exact: true }).fill('secret-pass');
   await page.waitForTimeout(3500);
-  assert.equal(await settings.getByLabel('아이디', { exact: true }).inputValue(), 'studio');
-  assert.equal(await settings.getByLabel('비밀번호', { exact: true }).inputValue(), 'secret-pass');
-  await settings.getByRole('button', { name: '비밀번호 보기' }).click();
-  assert.equal(await settings.getByLabel('비밀번호', { exact: true }).getAttribute('type'), 'text');
+  assert.equal(await account.getByLabel('아이디', { exact: true }).inputValue(), 'studio');
+  assert.equal(await account.getByLabel('비밀번호', { exact: true }).inputValue(), 'secret-pass');
+  await account.getByRole('button', { name: '비밀번호 보기' }).click();
+  assert.equal(await account.getByLabel('비밀번호', { exact: true }).getAttribute('type'), 'text');
+  await page.keyboard.press('Escape');
+  await account.waitFor({ state: 'hidden' });
+  assert.equal(
+    await page.locator('#account-button').evaluate((node) => node === document.activeElement),
+    true,
+  );
+  await page.locator('#workspace-settings').click();
   await settings.getByRole('button', { name: '닫기', exact: true }).click();
   assert.equal(
     await page.locator('#workspace-settings').evaluate((node) => node === document.activeElement),

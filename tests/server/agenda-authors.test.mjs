@@ -175,7 +175,8 @@ test('the avatar color and letter are fixed by the ID; the line names author and
   assert.equal(authorLine(null, null), '작성자 정보 없음');
   assert.equal(authorLine({ name: 'kim' }, { name: 'kim' }), '작성 kim');
   assert.equal(authorLine({ name: 'kim' }, { name: 'lee' }), '작성 kim · 고침 lee');
-  assert.equal(authorLine(null, { name: 'lee' }), '고침 lee');
+  // An item older than authors keeps saying so after an edit; the editor is not shown as author.
+  assert.equal(authorLine(null, { name: 'lee' }), '작성자 정보 없음 · 고침 lee');
 });
 
 function call(port, path, { method = 'GET', body, cookie, origin } = {}) {

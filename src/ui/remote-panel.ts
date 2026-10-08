@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { append as el } from './elements.ts';
 import { api } from './gateway.ts';
+import { avatarNode } from './shell/avatar.tsx';
 
-// Settings section "VIDE 계정": sign this PC in with the account's ID and password. A signed-in
-// PC appears on the account website; its projects are listed there and open here (on this PC
-// directly, on other devices through remote access).
+// The account panel's "VIDE 계정" (SPEC-05.10, SCR-34): sign this PC in with the account's ID and
+// password, see the site connection and turn remote access on. A signed-in PC appears on the account
+// website; its projects are listed there and open here (on other devices through remote access).
 export const SITE_ORIGIN = 'https://vide-sharing-staging.archivibe.workers.dev';
 export const accountStatusSchema = z.object({
   linked: z.boolean(),
@@ -48,10 +49,15 @@ const tunnelError = (code: string | undefined) => !!code && /^(CLOUDFLARED_|TUNN
 /** True when this page itself was opened through the remote tunnel. */
 export const remoteSession = () => location.protocol === 'https:';
 
+/**
+ * The VIDE account and remote access in the account panel (SPEC-05.10, SCR-34). `dialog` is the
+ * panel (polled while open); `signOut`, when given, holds [이 PC 로그아웃] at the panel's end.
+ */
 export function attachAccountPanel(
   section: HTMLElement,
   dialog: HTMLDialogElement,
   onStatus: (status: AccountStatus) => void,
+  signOut?: HTMLElement,
 ) {
   let status: AccountStatus | undefined,
     busy = false,
@@ -86,13 +92,16 @@ export function attachAccountPanel(
       if (JSON.stringify(next) === JSON.stringify(status)) return;
       status = next;
       onStatus(next);
-      if (!section.contains(document.activeElement)) draw();
+      // Never while the user is typing in the login form.
+      const typing = document.activeElement?.matches?.('input:not([type="checkbox"])');
+      if (!(typing && section.contains(document.activeElement))) draw();
     } catch {
       /* The next check or an action reports problems. */
     }
   };
   function draw() {
     section.replaceChildren();
+    signOut?.replaceChildren();
     el('h3', 'VIDE 계정', section);
     if (!status) {
       el('p', '확인 중…', section);
@@ -170,23 +179,59 @@ export function attachAccountPanel(
       site.append('에서 가입 코드로 만드세요.');
       return;
     }
-    el('p', `${status.username ?? ''} · ${status.name ?? ''}`, section, { class: 'account-who' });
-    if (status.error && (status.remote || !tunnelError(status.error)))
-      el('p', errorText[status.error] || status.error, section, { class: 'remote-error' });
+    // The account (SCR-34): the circle, the ID and the PC name, then the site connection.
+    const head = el('div', '', section, { class: 'account-head' });
+    head.append(avatarNode(status.username, 40));
+    const who = el('div', '', head, { class: 'account-who' });
+    el('strong', status.username ?? '', who);
+    el('small', status.name ?? '', who);
+    const error = status.error;
+    const site = el('p', '', section, { class: 'account-site' });
+    if (error === 'ACCOUNT_UNLINKED') {
+      site.classList.add('remote-error');
+      site.textContent = errorText.ACCOUNT_UNLINKED!;
+    } else if (error === 'HEARTBEAT_FAILED') {
+      site.dataset.state = 'warn';
+      const last = status.lastHeartbeat ? new Date(status.lastHeartbeat) : undefined;
+      site.textContent =
+        '웹사이트에 연결하지 못했습니다' +
+        (last && !Number.isNaN(last.getTime())
+          ? ' · 마지막 ' +
+            last.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
+          : '');
+    } else {
+      site.dataset.state = 'ok';
+      site.textContent = '웹사이트 연결됨';
+    }
+    // Other notices (e.g. the project list not uploaded); tunnel errors only while remote is on.
+    if (
+      error &&
+      error !== 'ACCOUNT_UNLINKED' &&
+      error !== 'HEARTBEAT_FAILED' &&
+      !tunnelError(error)
+    )
+      el('p', errorText[error] || error, section, { class: 'remote-error' });
     const links = el('div', '', section, { class: 'settings-actions' });
-    el('a', '웹사이트에서 모든 프로젝트 보기', links, {
+    el('a', '웹사이트에서 모든 프로젝트 보기 ↗', links, {
       href: status.site ?? SITE_ORIGIN,
       target: '_blank',
       rel: 'noopener',
     });
-    if (remoteSession()) return;
-    const remote = el('label', '', section, { class: 'remote-toggle' });
+    if (remoteSession()) {
+      el('p', '원격 접속과 로그아웃은 PC에서 합니다.', section, { class: 'account-note' });
+      return;
+    }
+    const remoteGroup = el('div', '', section, { class: 'account-group account-remote' });
+    el('h4', '원격 접속', remoteGroup);
+    const remote = el('label', '', remoteGroup, { class: 'remote-toggle' });
     const toggle = el('input', '', remote, { type: 'checkbox' });
     toggle.checked = status.remote;
     toggle.disabled = busy;
     remote.append(' 다른 기기에서 열기 (원격 접속)');
     toggle.onchange = () =>
       void run(() => api('/remote/remote', 'POST', { enabled: toggle.checked }));
+    if (status.remote && tunnelError(error))
+      el('p', errorText[error!] || error!, remoteGroup, { class: 'remote-error' });
     el(
       'small',
       !status.remote
@@ -198,9 +243,11 @@ export function attachAccountPanel(
             : status.starting
               ? '켜는 중…'
               : '켜기 실패 · 위 안내를 확인하세요.',
-      section,
+      remoteGroup,
     );
-    const actions = el('div', '', section, { class: 'settings-actions' });
+    if (!signOut) return;
+    const actions = el('div', '', signOut, { class: 'account-signout' });
+    if (confirmUnlink) el('small', '이 PC의 프로젝트 자료는 남습니다.', actions);
     el('button', confirmUnlink ? '로그아웃 확인' : '이 PC 로그아웃', actions, {
       type: 'button',
       ...(confirmUnlink ? { class: 'danger' } : {}),
@@ -211,16 +258,32 @@ export function attachAccountPanel(
         return;
       }
       confirmUnlink = false;
-      void run(() => api('/remote/unlink', 'POST', {}));
+      void run(async () => {
+        const result = await api('/remote/unlink', 'POST', {});
+        // The installed VIDE needs the sign-in (ADR-039 1): back to the first-run screen. The
+        // engine without the sign-in check (dev server) stays and the button turns neutral.
+        const gate = z
+          .object({ signInRequired: z.boolean().optional() })
+          .passthrough()
+          .safeParse(await api('/onboarding').catch(() => ({})));
+        if (gate.success && gate.data.signInRequired) location.reload();
+        return result;
+      });
     };
   }
-  // Refresh while the dialog is open (heartbeat, tunnel start/exit).
+  // Refresh while the panel is open (heartbeat, tunnel start/exit); while it is closed, only while
+  // remote access is on (the button's dot follows the tunnel).
   new MutationObserver(() => {
     clearInterval(timer);
     confirmUnlink = false;
     if (dialog.open) {
       void poll();
       timer = setInterval(() => void poll(), 3000);
+    } else {
+      draw();
+      timer = setInterval(() => {
+        if (status?.remote) void poll();
+      }, 15000);
     }
   }).observe(dialog, { attributes: true, attributeFilter: ['open'] });
   draw();

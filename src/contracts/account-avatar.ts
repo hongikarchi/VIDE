@@ -1,8 +1,8 @@
-/**
- * The account circle's color (Design SCR-34, ARCH-01 §8): one of eight, fixed by the account ID so
- * the same account always looks the same on the PC and on the site. FNV-1a 32-bit over the ID's
- * UTF-16 code units, modulo 8. The colors hold white text at 4.5:1 or more in both themes.
- */
+// The account circle's colour (Design SCR-34, SPEC-05.10 1, ARCH-01 §8): a VIDE account always gets
+// the same letter and colour on every PC and on the site. The colour is the FNV-1a 32-bit hash of
+// the username's UTF-8 bytes, mod 8, picking `--avatar-1` … `--avatar-8`. The colours hold white
+// text at 4.5:1 or more in both themes. The app and the site both use this one definition.
+
 export const AVATAR_COLORS = [
   '#4f6fa8',
   '#3b7d60',
@@ -14,30 +14,33 @@ export const AVATAR_COLORS = [
   '#94506c',
 ] as const;
 
-export function avatarIndex(username: string) {
+/** 0…7: which avatar colour the username gets. */
+export function avatarIndex(username: string): number {
   let hash = 0x811c9dc5;
-  for (let index = 0; index < username.length; index++) {
-    hash ^= username.charCodeAt(index);
+  for (const byte of new TextEncoder().encode(username)) {
+    hash ^= byte;
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
   return hash % AVATAR_COLORS.length;
 }
 
-/** The letter in the circle: the ID's first character, upper case ('?' for an empty ID). */
-export const avatarInitial = (username: string) =>
-  (Array.from(username.trim())[0] ?? '?').toUpperCase();
+/** The letter in the circle: the username's first character, upper-case ('' for an empty name). */
+export function avatarInitial(username: string): string {
+  const first = [...username.trim()][0] ?? '';
+  return first.toUpperCase();
+}
 
 /**
- * '작성 kim', or '작성 kim · 고침 lee' when someone else changed it last; '작성자 정보 없음' for an
- * item with neither (SPEC-01.14 12).
+ * The byline of a 할 일 item (SPEC-01.14 12): '작성 kim', or '작성 kim · 고침 lee' when someone
+ * else changed it last. An item without an author (made before authors were kept) always says
+ * '작성자 정보 없음', followed by '· 고침 lee' once someone has changed it, so the editor is never
+ * read as the author.
  */
 export function authorLine(
   createdBy: { name: string } | null | undefined,
   updatedBy: { name: string } | null | undefined,
 ) {
-  if (!createdBy && !updatedBy) return '작성자 정보 없음';
-  const parts: string[] = [];
-  if (createdBy) parts.push(`작성 ${createdBy.name}`);
+  const parts = [createdBy ? `작성 ${createdBy.name}` : '작성자 정보 없음'];
   if (updatedBy && updatedBy.name !== createdBy?.name) parts.push(`고침 ${updatedBy.name}`);
   return parts.join(' · ');
 }

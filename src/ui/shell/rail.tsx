@@ -2,7 +2,7 @@
 // the screen shown. The model screen's two left-panel sections are two destinations (모델, 작업
 // 이력); a context tab (a jig instance) belongs to JIG. Pressed is a soft background only
 // (style.css `.rail`). It renders from the workspace tabs (src/ui/workspaces.ts) and the layout
-// slice. The settings button is wired by src/ui/workspace-status.ts; the other icons are filled by
+// slice. The VIDE account button (SCR-34) sits at the very bottom, below the settings. The settings button is wired by src/ui/workspace-status.ts; the other icons are filled by
 // paintIcons (src/ui/icons.ts), except the theme toggle's, which this component draws.
 import { memo } from 'react';
 import { useStore } from '../store/core.ts';
@@ -23,6 +23,7 @@ import {
 import { showFeedback } from '../feedback.ts';
 import { currentTheme, setTheme } from '../theme.ts';
 import { iconSvg } from '../icons.ts';
+import { AccountButton } from './account-button.tsx';
 
 /**
  * 대시보드 · 자료 · 노트·일지 · JIG (the list) · 산출물 open their screens once a project is open. Order (user
@@ -156,6 +157,7 @@ export const Rail = memo(function Rail() {
         <button id="workspace-settings" className="rail-settings" title="설정" aria-label="설정">
           ⚙
         </button>
+        <AccountButton />
       </nav>
     </>
   );

@@ -29,15 +29,18 @@ type View = z.infer<typeof viewSchema>;
 
 export const PublicDataSection = memo(function PublicDataSection() {
   const shown = useStore(statusState, (s) => s.tab === 'ai');
+  // Read when the AI tab is shown, each time the dialog opens (AI is the first tab).
+  const opened = useStore(statusState, (s) => s.opened);
+  const ready = useStore(sessionState, (s) => s.ready);
   const [view, setView] = useState<View | null>(null);
   const [drafts, setDrafts] = useState<Partial<Record<KeyName, string>>>({});
   const [error, setError] = useState('');
   useEffect(() => {
-    if (!shown || !sessionState.ready) return;
+    if (!shown || !ready) return;
     api('/settings/public-data', 'GET', undefined, { quiet: ['FORBIDDEN'] })
       .then((value) => setView(viewSchema.parse(value)))
       .catch(() => setView(null));
-  }, [shown]);
+  }, [shown, opened, ready]);
   const save = async (name: KeyName, value: string) => {
     setError('');
     try {

@@ -4,7 +4,7 @@
 // shell components import only stores.
 import { createSlice } from './core.ts';
 
-export type SettingsTab = 'account' | 'ai' | 'services' | 'programs' | 'desktop' | 'status';
+export type SettingsTab = 'ai' | 'services' | 'programs' | 'desktop' | 'status';
 export interface Failure {
   id: string;
   label: string;
@@ -27,6 +27,8 @@ export interface StatusActions {
   openFailure(id: string): void;
   openAiSettings(): void;
   openExecutionLimits(): void;
+  /** [계정 열기]: closes the settings and opens the account panel (SPEC-05.10 4). */
+  openAccount(): void;
   /** The connection banner's [다시 연결]. */
   reconnect(): void;
 }
@@ -40,6 +42,8 @@ export interface StatusFields {
   notifications: string[];
   coverage: DisplayCoverage | undefined;
   tab: SettingsTab;
+  /** Raised each time the dialog opens (sections that read on open follow it). */
+  opened: number;
   /** Opened through the tunnel: no AI or programs tab (set at start). */
   remote: boolean;
   /** Inside the desktop app: the PC program tab (set at start). */
@@ -53,7 +57,8 @@ export const statusState = createSlice<StatusFields>({
   failures: [],
   notifications: [],
   coverage: undefined,
-  tab: 'account',
+  tab: 'ai',
+  opened: 0,
   remote: false,
   desktop: false,
   actions: {
@@ -63,6 +68,7 @@ export const statusState = createSlice<StatusFields>({
     openFailure: none,
     openAiSettings: none,
     openExecutionLimits: none,
+    openAccount: none,
     reconnect: none,
   },
 });
