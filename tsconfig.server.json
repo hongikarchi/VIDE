@@ -23,6 +23,7 @@
     "hosts/**/*.ts",
     "extensions/**/*.ts",
     "src/jigs/runtime/child-entry.ts",
-    "src/jigs/official/site-data/**/*"
+    "src/jigs/official/site-data/**/*",
+    "src/jigs/official/compliance-kit/**/*"
   ]
 }
