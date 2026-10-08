@@ -14,6 +14,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
@@ -270,15 +271,23 @@ export function devReadPaths(jig: LoadedJig): Pick<ChildRunnerOptions, 'extraRea
   const root = repositoryJigRoot();
   if (!root) return {};
   const repo = resolve(root, '..', '..');
-  return {
-    extraReadPaths: [
-      join(repo, 'src', 'jigs', 'official'),
-      join(repo, 'src', 'jigs', 'structure'),
-      join(repo, 'src', 'contracts'),
-      join(repo, 'src', 'native', 'structure'),
-      join(repo, 'node_modules'),
-    ],
+  const paths = [
+    join(repo, 'src', 'jigs', 'official'),
+    join(repo, 'src', 'jigs', 'structure'),
+    join(repo, 'src', 'contracts'),
+    join(repo, 'src', 'native', 'structure'),
+    join(repo, 'node_modules'),
+  ];
+  // Imports resolve to real paths: a junctioned `node_modules` (a worktree sharing the main
+  // checkout's) is read at its target, so the target is allowed too.
+  const real = (p: string) => {
+    try {
+      return realpathSync.native(p);
+    } catch {
+      return p;
+    }
   };
+  return { extraReadPaths: [...new Set(paths.flatMap((p) => [p, real(p)]))] };
 }
 
 // --- signing ---------------------------------------------------------------------------------
