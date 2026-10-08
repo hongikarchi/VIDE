@@ -184,6 +184,32 @@ export function memberSettingsFromParams(
   return resolveMemberSettings(given, sources);
 }
 
+/**
+ * Stage-3 settings from the jig's flat values (flatnessTol, planarize, typeTol, maxTypes, flatRadius,
+ * nodeAngleStep; lengths in metres). `maxTypes` 0 or empty means no limit (the jig's '0이면 제한
+ * 없음'); a negative or fractional count is passed on as given so the settings check refuses it.
+ * Missing or invalid values count as empty (추천값, 'assumed'), as do the keys in `assumed`.
+ */
+export function optimizeSettingsFromParams(
+  params: Record<string, unknown>,
+  assumed: readonly string[] = [],
+): OptimizeSettings {
+  const given: Partial<Values<OptimizeSettings>> = {};
+  const sources: Partial<Record<keyof OptimizeSettings, SettingSource>> = {};
+  for (const key of ['flatnessTol', 'typeTol', 'flatRadius', 'nodeAngleStep'] as const) {
+    const value = positive(params[key]);
+    if (value !== undefined) given[key] = value;
+  }
+  const planarize = pick(params.planarize, ['none', 'best-fit', 'pq'] as const);
+  if (planarize) given.planarize = planarize;
+  if (typeof params.maxTypes === 'number' && Number.isFinite(params.maxTypes))
+    given.maxTypes = params.maxTypes === 0 ? null : params.maxTypes;
+  else if (params.maxTypes === null) given.maxTypes = null;
+  for (const key of assumed)
+    if (key in RECOMMENDED_OPTIMIZE) sources[key as keyof OptimizeSettings] = 'assumed';
+  return resolveOptimizeSettings(given, sources);
+}
+
 /** The values of settings without their sources (what the computation reads; `settingsHash`). */
 export function settingValues<T extends Record<string, { value: unknown }>>(settings: T) {
   return Object.fromEntries(Object.entries(settings).map(([k, v]) => [k, v.value]));

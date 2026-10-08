@@ -1,16 +1,23 @@
 // The jig steps of `vide/paneling` that run this library (ARCH-03 §2.3 `library` step: inputs as the
 // step reads them, the flat setting values). Stage 1 writes the `PanelLayout` itself, so the later
-// stages and the screen read `step.preview` as the contract shape.
+// stages and the screen read `step.preview` as the contract shape; stage 3 reads `step.preview` and
+// `step.members` (`inputs.steps.<id>`) the same way.
 
 import {
   surfaceSampleSchema,
   type MemberSet,
   type PanelLayout,
+  type PanelTyping,
   type SurfaceSample,
 } from '../../../contracts/paneling.ts';
 import { layoutPanels } from './layout.ts';
 import { buildMembers } from './members.ts';
-import { memberSettingsFromParams, previewSettingsFromParams } from './settings.ts';
+import { optimizePanels } from './optimize.ts';
+import {
+  memberSettingsFromParams,
+  optimizeSettingsFromParams,
+  previewSettingsFromParams,
+} from './settings.ts';
 
 /** The 기준 면 input: the sample itself, or a pinned value `{ value }` around it. */
 function sampleOf(input: unknown): SurfaceSample {
@@ -65,4 +72,42 @@ export function membersStep(
     previewSettingsFromParams(params),
     memberSettingsFromParams(params),
   ).members;
+}
+
+/** The stage result an earlier step wrote (`inputs.steps.<id>`). */
+function stepOutput<T>(
+  inputs: Record<string, unknown>,
+  id: string,
+  schema: string,
+  what: string,
+): T {
+  const steps = (inputs.steps ?? {}) as Record<string, unknown>;
+  const value = steps[id] as { schema?: string } | undefined;
+  if (!value || value.schema !== schema)
+    throw new Error(`${what} 결과가 없습니다 · ${what}를 먼저 계산하세요`);
+  return value as T;
+}
+
+/** Stage 3 '최적화·타입화': flatness, planarization, types, nodes and joints (SPEC-16.7). */
+export function optimizeStep(
+  inputs: Record<string, unknown>,
+  params: Record<string, unknown>,
+): PanelTyping {
+  const sample = sampleOf(inputs.surface);
+  const layout = stepOutput<PanelLayout>(
+    inputs,
+    'preview',
+    'vide.paneling.layout@1',
+    '1단계 미리보기',
+  );
+  const members = stepOutput<MemberSet>(inputs, 'members', 'vide.paneling.members@1', '2단계 부재');
+  const result = optimizePanels({
+    sample,
+    layout,
+    members,
+    direction: previewSettingsFromParams(params).direction.value,
+    settings: optimizeSettingsFromParams(params),
+  });
+  if (!result.ok) throw new Error(result.message);
+  return result.typing;
 }
