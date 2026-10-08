@@ -3,7 +3,13 @@
 // 부피 and everything outside the 최대 외피 — moved to each ground case (SPEC-15.5 5), and the part
 // outside the site. Each part keeps its volume, extent, segments and objects (SPEC-15.7 4).
 
-import type { ComplianceState, Exceedance, Mesh, ZoneRule } from '../../../contracts/compliance.ts';
+import type {
+  ComplianceLimits,
+  ComplianceState,
+  Exceedance,
+  Mesh,
+  ZoneRule,
+} from '../../../contracts/compliance.ts';
 import { ZONE_RULES } from '../../../contracts/compliance.ts';
 import { regionSolid } from '../massing-kit/floors.ts';
 import { solidUnionAll, type Solid } from '../geometry-kit/solid.ts';
@@ -20,7 +26,7 @@ import {
   type PreparedSolid,
 } from './geometry.ts';
 import type { GroundCase } from './ground.ts';
-import { numOf, readAll, readLimit, type LimitRead } from './limits-read.ts';
+import { numOf, pendingItems, readAll, readLimit, type LimitRead } from './limits-read.ts';
 import { naOf, type CheckOut } from './scale.ts';
 import {
   AXIS_REASONS,
@@ -72,6 +78,14 @@ const boxesMeet = (a: PreparedSolid['box'], b: PreparedSolid['box']) =>
   a.min[2] <= b.max[2] &&
   b.min[2] <= a.max[2];
 
+interface ExceedanceMeta {
+  rule: string;
+  variant: 'base' | 'without';
+  segments: string[];
+  /** The 구간 the band belongs to (one band per target). */
+  part?: string;
+}
+
 interface Run {
   pieces: Exceedance[];
   failed: string[];
@@ -84,7 +98,7 @@ function runParts(
   forbidden: Solid,
   op: BooleanOp,
   ground: GroundCase | null,
-  meta: { rule: string; variant: 'base' | 'without'; segments: string[] },
+  meta: ExceedanceMeta,
 ): Run {
   const run: Run = { pieces: [], failed: [], volume: 0 };
   const fBox = forbidden.length ? boxOf(forbidden) : null;
@@ -110,12 +124,13 @@ function exceedanceOf(
   volume: number,
   box: PreparedSolid['box'],
   ground: GroundCase | null,
-  meta: { rule: string; variant: 'base' | 'without'; segments: string[] },
+  meta: ExceedanceMeta,
 ): Exceedance {
   const groundCase = ground?.key ?? 'ground:none';
   const mesh: Mesh = solidMesh(solid);
+  const band = meta.part ? `@${meta.part}` : '';
   return {
-    id: `${meta.rule}:${meta.variant}:${groundCase}:${part.objectId}`.slice(0, 80),
+    id: `${meta.rule}${band}:${meta.variant}:${groundCase}:${part.objectId}`.slice(0, 80),
     no: 1, // renumbered over the whole result (SPEC-15.11)
     rule: meta.rule.slice(0, 60),
     variant: meta.variant,
@@ -202,6 +217,13 @@ function volumeRow(r: RowDraft, runs: Run[]) {
 
 // ── 평면 규칙 ───────────────────────────────────────────────────────────────────────────────────
 
+/** Why a 미반영 조건 matters, as the row says it. */
+const unappliedText = (u: { title: string; reason: string }) =>
+  `미반영 조건: ${u.title} — ${u.reason}`;
+
+type Band = ComplianceLimits['zones'][number]['regions'];
+type Geo = { state: ComplianceState; reasons: string[]; outcomes: Outcome[] };
+
 export function zoneRow(ctx: Ctx, rule: ZoneRule): CheckOut {
   const id = `zone:${rule}` as const;
   const r = draft(id, ZONE_TITLES[rule], ['mass', 'rooftop']);
@@ -219,34 +241,61 @@ export function zoneRow(ctx: Ctx, rule: ZoneRule): CheckOut {
         readAll(ctx.regs, other).filter((x) => x.item),
       );
   if (!placed(ctx, r)) return { row: r };
+  // 미반영 조건 (SPEC-15.7 6): the bands the massing work copy made are still checked. A 구간 the
+  // rule was not applied to needs a person, a rule-wide one keeps the row from 적합 — and a 위반
+  // found in another 구간 stays 위반 (SPEC-15.9 2).
   const unapplied = unappliedFor(ctx, [itemId, rule, ZONE_RULE_ID[rule]]);
-  if (unapplied.length && active.every((x) => x.kind === 'value' || x.kind === 'undecided-value'))
+  const unappliedAt = new Map<string, string[]>();
+  const ruleWide: string[] = [];
+  for (const u of unapplied) {
+    if (u.segments?.length)
+      for (const seg of u.segments)
+        unappliedAt.set(seg, [...(unappliedAt.get(seg) ?? []), unappliedText(u)]);
+    else ruleWide.push(unappliedText(u));
+  }
+  const regions: Band = zone?.regions ?? [];
+  const segOf =
+    zone?.regionSegments && zone.regionSegments.length === regions.length
+      ? zone.regionSegments
+      : null;
+  const targets = new Set(active.flatMap((x) => (x.target ? [x.target] : [])));
+  // Only an applied item with a value makes a band (massing-kit `limitStep`): one such item owns
+  // every region even when the limits do not say which region is whose.
+  const banded = active.filter((x) => x.kind === 'value' || x.kind === 'undecided-value');
+  /** The band of one 구간: its own regions when the limits say which region is whose. */
+  const bandOf = (read: LimitRead): { regions: Band; segments: string[] } | null => {
+    if (!segOf) {
+      if (!banded.includes(read)) return { regions: [], segments: [] };
+      return banded.length === 1 ? { regions, segments: zone?.segments ?? [] } : null;
+    }
+    const picked = regions.flatMap((_, i) =>
+      (read.target ? segOf[i] === read.target : !targets.has(segOf[i] ?? '')) ? [i] : [],
+    );
     return {
-      row: setState(
-        r,
-        '사람 입력 필요',
-        ...unapplied.map((u) => `미반영 조건: ${u.title} — ${u.reason}`),
-      ),
+      regions: picked.map((i) => regions[i]),
+      segments: [...new Set(picked.flatMap((i) => (segOf[i] ? [segOf[i]!] : [])))],
     };
-  const needsGeometry = active.some((x) => x.kind !== 'none');
-  let geo: { state: ComplianceState; reasons: string[]; outcomes: Outcome[] } | null = null;
-  const regions = zone?.regions ?? [];
-  if (needsGeometry && regions.length) {
-    const b = prerequisites(ctx, r);
+  };
+  let b: Building | null = null;
+  if (active.some((x) => x.kind !== 'none') && regions.length) {
+    b = prerequisites(ctx, r);
     if (!b) return { row: r };
-    const runs: Run[] = [];
+  }
+  const runs: Run[] = [];
+  /** The building's parts inside one band, for every ground case. */
+  const geometryOf = (band: Band, segments: string[], part?: string): Geo => {
+    const building = b!;
     const outcomes: Outcome[] = ctx.grounds.map((g) => {
-      const top = Math.max(...b.parts.map((p) => p.solid.box.max[2])) + 1;
+      const top = Math.max(...building.parts.map((p) => p.solid.box.max[2])) + 1;
       let column: Solid;
       try {
         column = solidUnionAll(
-          regions
+          band
             .filter(() => top > g.local + PIECE_THICKNESS)
             .map((reg) => regionSolid(reg, g.local, top)),
         );
       } catch {
-        const run: Run = { pieces: [], failed: b.parts.map((p) => p.objectId), volume: 0 };
-        runs.push(run);
+        runs.push({ pieces: [], failed: building.parts.map((p) => p.objectId), volume: 0 });
         return {
           label: g.label,
           keys: { ground: g.key },
@@ -256,10 +305,11 @@ export function zoneRow(ctx: Ctx, rule: ZoneRule): CheckOut {
           reason: '형상 연산 실패',
         };
       }
-      const run = runParts(b, column, 'intersect', g, {
+      const run = runParts(building, column, 'intersect', g, {
         rule: ZONE_TITLES[rule],
         variant: 'base',
-        segments: zone?.segments ?? [],
+        segments,
+        ...(part ? { part } : {}),
       });
       runs.push(run);
       const s = runState(run);
@@ -272,19 +322,71 @@ export function zoneRow(ctx: Ctx, rule: ZoneRule): CheckOut {
         reason: s.reason,
       };
     });
-    volumeRow(r, runs);
-    const c = combine(outcomes);
-    geo = { ...c, outcomes };
+    return { ...combine(outcomes), outcomes };
+  };
+  type Part = {
+    read: LimitRead;
+    state: ComplianceState;
+    reasons: string[];
+    planned: number | null;
+  };
+  const parts: Part[] = [];
+  let single: Outcome[] | null = null;
+  let joined: Geo | null = null;
+  for (const read of active) {
+    const own = read.target ? unappliedAt.get(read.target) : undefined;
+    if (read.kind === 'none') {
+      parts.push({ read, state: '사람 입력 필요', reasons: [read.reason], planned: null });
+      continue;
+    }
+    const band = bandOf(read);
+    let geo: Geo | null = null;
+    let indistinct = false;
+    if (b && band && band.regions.length)
+      geo = geometryOf(
+        band.regions,
+        band.segments,
+        segOf && active.length > 1 ? (read.target ?? '대지 전체') : undefined,
+      );
+    else if (b && !band) {
+      joined ??= geometryOf(regions, zone?.segments ?? []);
+      geo = joined;
+      indistinct = true;
+    }
+    if (active.length === 1 && geo) single = geo.outcomes;
+    const planned = geo ? Math.max(0, ...geo.outcomes.map((o) => o.planned ?? 0)) : null;
+    if (own && geo?.state !== '위반') {
+      parts.push({ read, state: '사람 입력 필요', reasons: own, planned });
+      continue;
+    }
+    const p = partOf(read, geo, !!geo);
+    if (indistinct && p.state !== '적합' && p.state !== '검사 불가')
+      parts.push({
+        read,
+        state: '판단 필요',
+        reasons: ['구간별 금지 띠를 나눌 수 없음 — 행 전체 결과만 확정', ...p.reasons],
+        planned,
+      });
+    else parts.push({ read, state: p.state, reasons: p.reasons, planned });
   }
-  const partStates = active.map((read) => partOf(read, geo, regions.length > 0));
-  if (partStates.length === 1) {
-    const [p] = partStates;
+  volumeRow(r, runs);
+  if (segOf && parts.length > 1) {
+    const sums = ctx.grounds.map((g) =>
+      runs
+        .flatMap((run) => run.pieces)
+        .filter((x) => x.groundCase === g.key)
+        .reduce((t, x) => t + x.volume, 0),
+    );
+    r.planned = { value: Math.max(0, ...sums), unit: '㎥' };
+  }
+  if (parts.length === 1) {
+    const [p] = parts;
     setState(r, p.state, ...p.reasons);
-    if (geo) {
+    if (single && (p.state === '적합' || p.state === '위반' || p.state === '판단 필요')) {
       const outcomes =
         p.read.kind === 'undecided-applies'
           ? [
-              ...geo.outcomes.map((o) => ({
+              ...single.map((o) => ({
                 ...o,
                 label: `${o.label} · 적용`,
                 keys: { ...o.keys, limit: 'in' },
@@ -297,25 +399,42 @@ export function zoneRow(ctx: Ctx, rule: ZoneRule): CheckOut {
                 limit: null,
               },
             ]
-          : geo.outcomes;
+          : single;
       r.cases = casesOf(outcomes);
     }
   } else {
-    r.parts = partStates.map((p) => ({
+    r.parts = parts.map((p) => ({
       label: (p.read.target ?? p.read.title).slice(0, 120),
       target: p.read.target?.slice(0, 80) ?? null,
       state: p.state,
-      planned: r.planned?.value ?? null,
+      planned: p.planned,
       limit: numOf(p.read),
       reason: (p.reasons.join('; ') || (p.state === '적합' ? '' : p.state)).slice(0, 300),
     }));
-    setState(
-      r,
-      worstOf(partStates.map((p) => p.state)),
-      ...partStates
-        .filter((p) => p.state !== '적합')
-        .flatMap((p) => p.reasons.map((x) => `${p.read.target ?? p.read.title}: ${x}`)),
-    );
+    let state = worstOf(parts.map((p) => p.state));
+    const reasons = parts
+      .filter((p) => p.state !== '적합')
+      .flatMap((p) => p.reasons.map((x) => `${p.read.target ?? p.read.title}: ${x}`));
+    // Bands that cannot be told apart: the row is 위반 when the joined band is and every item is a
+    // decided value (some band is crossed, whichever it is); each 구간 stays 판단 필요.
+    if (
+      joined?.state === '위반' &&
+      state !== '위반' &&
+      active.every((x) => x.kind === 'value') &&
+      !unapplied.length
+    ) {
+      state = '위반';
+      reasons.unshift('구간을 나눌 수 없으나 금지 띠 안에 든 부분이 있음');
+    }
+    setState(r, state, ...reasons);
+  }
+  if (ruleWide.length) {
+    r.unconfirmed.push(...ruleWide);
+    if (r.state !== '위반') {
+      r.state = '사람 입력 필요';
+      r.reasons.push(...ruleWide);
+      r.cases = [];
+    }
   }
   return { row: r };
 }
@@ -353,18 +472,18 @@ export function sunRow(ctx: Ctx): CheckOut {
   useItems(r, [sun, ...SUN_ITEMS.map((id) => readLimit(ctx.regs, id)).filter((x) => x.item)]);
   if (!placed(ctx, r)) return { row: r };
   if (sun.kind === 'none') return { row: setState(r, '사람 입력 필요', sun.reason) };
-  const unapplied = unappliedFor(ctx, ['sun', ...SUN_ITEMS, 'sun-ground', 'sun-slope']);
-  if (unapplied.length && sun.kind !== 'undecided-applies')
-    return {
-      row: setState(
-        r,
-        '사람 입력 필요',
-        ...unapplied.map((u) => `미반영 조건: ${u.title} — ${u.reason}`),
-      ),
-    };
+  // 미반영 조건 (a datum 구간 left out, values missing): the part of the 금지 부피 the massing work
+  // copy made is still checked; a 위반 there stays 위반, otherwise the row needs a person.
+  const unapplied = unappliedFor(ctx, ['sun', ...SUN_ITEMS, 'sun-ground', 'sun-slope']).map(
+    unappliedText,
+  );
   const variants = ctx.limits.variants;
   if (sun.kind !== 'undecided-applies' && !variants.find((v) => v.id === 'base')?.sunCut)
-    return { row: setState(r, '검사 불가', '일조 금지 부피를 만들지 못함') };
+    return {
+      row: unapplied.length
+        ? setState(r, '사람 입력 필요', ...unapplied)
+        : setState(r, '검사 불가', '일조 금지 부피를 만들지 못함'),
+    };
   if (sun.kind === 'undecided-applies' && !variants.some((v) => v.sunCut))
     return { row: setState(r, '판단 필요', `${sun.reason} — 일조 금지 부피 없이 계산됨`) };
   const b = prerequisites(ctx, r);
@@ -409,8 +528,16 @@ export function sunRow(ctx: Ctx): CheckOut {
     state = '판단 필요';
     reasons = [sun.reason];
   }
-  setState(r, state, ...reasons);
   r.cases = casesOf(outcomes);
+  if (unapplied.length) {
+    r.unconfirmed.push(...unapplied);
+    if (sun.kind !== 'undecided-applies' && state !== '위반') {
+      state = '사람 입력 필요';
+      reasons = unapplied;
+      r.cases = [];
+    }
+  }
+  setState(r, state, ...reasons);
   return { row: r };
 }
 
@@ -432,6 +559,13 @@ export function envelopeRow(ctx: Ctx): CheckOut {
   const relief = readAll(ctx.regs, 'incentiveHeight').filter((x) => numOf(x) !== null);
   const reliefSum = relief.reduce((s, x) => s + numOf(x)!, 0);
   if (relief.length) useItems(r, relief, 'm');
+  const pending = pendingItems(ctx.regs, 'incentiveHeight');
+  if (pending.length)
+    useItems(
+      r,
+      pending.map((x) => x.read),
+      'm',
+    );
   const runs: Run[] = [];
   const outcomes: Outcome[] = [];
   for (const v of limits.variants) {
@@ -466,11 +600,30 @@ export function envelopeRow(ctx: Ctx): CheckOut {
       });
       runs.push(run);
       let s = runState(run);
-      if (s.state === '위반' && v.heightCap && reliefSum > 0) {
+      const tol = PIECE_THICKNESS;
+      if (s.state === '위반' && !v.heightCap) {
+        // No height item: the envelope stops at the massing work copy's 검토 높이, which is not
+        // a limit — what is above it is not judged (SPEC-15.5 6 '사람 입력 필요').
+        const top = prep(v.envelope).box.max[2] + g.shift;
+        if (run.pieces.every((p) => p.min[2] >= top - tol))
+          s = {
+            state: '사람 입력 필요',
+            reason: '높이 상한 사람 입력 필요 — 검토 높이 위 부분은 판정하지 않음',
+          };
+      }
+      if (s.state === '위반' && v.heightCap) {
         const cap = g.local + v.heightCap.value;
-        const tol = PIECE_THICKNESS;
-        if (run.pieces.every((p) => p.min[2] >= cap - tol && p.max[2] <= cap + reliefSum + tol))
+        const inBand = (extra: number) =>
+          run.pieces.every((p) => p.min[2] >= cap - tol && p.max[2] <= cap + extra + tol);
+        if (reliefSum > 0 && inBand(reliefSum))
           s = { state: '판단 필요', reason: '높이 완화 적용 미확정' };
+        else if (
+          pending.length &&
+          (pending.some((x) => x.value === null)
+            ? run.pieces.every((p) => p.min[2] >= cap - tol)
+            : inBand(reliefSum + pending.reduce((t, x) => t + x.value!, 0)))
+        )
+          s = { state: '사람 입력 필요', reason: pending.map((x) => x.read.reason).join('; ') };
       }
       outcomes.push({
         label: label || '계산',

@@ -12,9 +12,10 @@ import type { PlanRegion } from '../massing-kit/setback.ts';
 import type { UseTotal } from '../massing-kit/use-mix.ts';
 import type { Ctx } from './context.ts';
 import { lookup, readAll, readLimit, type LimitRead } from './limits-read.ts';
-import { floorAreas, naOf, type CheckOut } from './scale.ts';
+import { floorAreas, naOf, unlabelledBlock, type CheckOut } from './scale.ts';
 import {
   AXIS_REASONS,
+  atLeast,
   casesOf,
   combine,
   draft,
@@ -36,9 +37,17 @@ const siteAxis = (ctx: Ctx) => ({
     ctx.siteAreas.length > 1 ? ctx.siteAreas.map((s) => ({ key: s.key, label: s.label })) : [],
 });
 
-/** A '판단 필요' 값 never decides 적합 or 위반 (SPEC-15.5 6). */
-function undecidedValue(r: RowDraft, reads: readonly LimitRead[]) {
-  const u = reads.find((x) => x.kind === 'undecided-value');
+/**
+ * A '판단 필요' 값 never decides 적합 or 위반 (SPEC-15.5 6). `kinds` adds '판단 필요' 적용 여부 for
+ * items a row cannot split into 경우 (the 주차 끝수 처리·산정 범위·산정 면적 choices); the 조경 and
+ * 공개공지 limits split or stop on their own '판단 필요' 적용 여부.
+ */
+function undecidedValue(
+  r: RowDraft,
+  reads: readonly LimitRead[],
+  kinds: readonly LimitRead['kind'][] = ['undecided-value'],
+) {
+  const u = reads.find((x) => kinds.includes(x.kind));
   if (u && (r.state === '적합' || r.state === '위반')) {
     r.state = '판단 필요';
     r.reasons.push(u.reason);
@@ -50,6 +59,7 @@ function undecidedValue(r: RowDraft, reads: readonly LimitRead[]) {
 export function parkingRow(ctx: Ctx): CheckOut {
   const r = draft('parking', '주차 대수', ['parking', 'floor']);
   r.lower = true;
+  r.counted = ['parking'];
   if (!ctx.limits) return { row: setState(r, '사람 입력 필요', ctx.limitsMissing) };
   const rules = readAll(ctx.regs, 'parkingRule');
   if (rules.every((x) => x.kind === 'na')) return naOf('parking', rules[0]);
@@ -134,8 +144,11 @@ export function parkingRow(ctx: Ctx): CheckOut {
     ruleRead ??= reads.find((x) => x.kind === 'value') ?? reads[0] ?? null;
     const legal = legalParking(uses, ctx.items);
     if (legal.count === null) {
-      const undecided = legal.rows.some((x) => x.status === '미검토');
-      return { row: setState(r, undecided ? '판단 필요' : '사람 입력 필요', legal.status) };
+      // A value a person must enter comes before a reading to settle (SPEC-15.8 1, 15.9 2).
+      const ask =
+        legal.rows.some((x) => x.status === '사람 입력 필요') ||
+        !legal.rows.some((x) => x.status === '미검토');
+      return { row: setState(r, ask ? '사람 입력 필요' : '판단 필요', legal.status) };
     }
     r.numbers.push({
       label: `법정 주차 대수${t.ground ? `(${t.ground.label})` : ''}`,
@@ -151,17 +164,19 @@ export function parkingRow(ctx: Ctx): CheckOut {
     outcomes.push({
       label: t.ground?.label ?? '계산',
       keys: { ground: t.ground?.key ?? '-' },
-      state: planned >= legal.count ? '적합' : '위반',
+      state: atLeast(planned, legal.count) ? '적합' : '위반',
       planned,
       limit: legal.count,
     });
   }
   const { state, reasons } = combine(outcomes);
   setState(r, state, ...reasons);
-  undecidedValue(r, [...rules, ...choices]);
+  undecidedValue(r, rules);
+  undecidedValue(r, choices, ['undecided-value', 'undecided-applies']);
   r.cases = casesOf(outcomes, true);
   const legalMax = Math.max(...outcomes.map((o) => o.limit ?? 0));
   if (ruleRead) r.limit = { value: legalMax, unit: '대', read: ruleRead };
+  unlabelledBlock(r, ft.tables);
   return { row: r };
 }
 
@@ -170,6 +185,7 @@ export function parkingRow(ctx: Ctx): CheckOut {
 export function landscapeRow(ctx: Ctx): CheckOut {
   const r = draft('landscape', '조경 면적', ['landscape', 'landscape-roof', 'open-space']);
   r.lower = true;
+  r.counted = ['landscape', 'landscape-roof'];
   if (!ctx.limits) return { row: setState(r, '사람 입력 필요', ctx.limitsMissing) };
   const read = readLimit(ctx.regs, 'landscapeRatio');
   if (read.kind === 'na') return naOf('landscape', read);
@@ -291,7 +307,7 @@ export function landscapeRow(ctx: Ctx): CheckOut {
       c.keys.limit === 'out'
         ? null
         : legalOf.get((c.keys.site ?? ctx.siteAreas[0].key) as 'site:area')!;
-    const state: ComplianceState = legal === null || p >= legal ? '적합' : '위반';
+    const state: ComplianceState = legal === null || atLeast(p, legal) ? '적합' : '위반';
     return { label: c.labels.join(' · ') || '계산', keys: c.keys, state, planned: p, limit: legal };
   });
   const { state, reasons } = combine(outcomes, { ...AXIS_REASONS, limit: read.reason });
@@ -307,6 +323,7 @@ export function landscapeRow(ctx: Ctx): CheckOut {
 export function openSpaceRow(ctx: Ctx): CheckOut {
   const r = draft('open-space', '공개공지 면적', ['open-space']);
   r.lower = true;
+  r.counted = ['open-space'];
   r.reasons.push('위치 요건은 검사하지 않음');
   if (!ctx.limits) return { row: setState(r, '사람 입력 필요', ctx.limitsMissing) };
   const read = readLimit(ctx.regs, 'publicOpenSpace');
@@ -355,7 +372,7 @@ export function openSpaceRow(ctx: Ctx): CheckOut {
     outcomes.push({
       label: ctx.siteAreas.length > 1 ? s.label : '계산',
       keys: { site: s.key },
-      state: planned >= req.required ? '적합' : '위반',
+      state: atLeast(planned, req.required) ? '적합' : '위반',
       planned,
       limit: req.required,
     });

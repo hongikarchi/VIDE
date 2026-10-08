@@ -16,6 +16,21 @@ import { basisOf, regNumber, type LimitRead } from './limits-read.ts';
 
 export const MAX_CASES = 32;
 
+/**
+ * Floating-point noise of the comparison (SPEC-15.9 8): planned and limit closer than this share of
+ * the limit (at least 1) are equal. A numeric tolerance of the arithmetic (mm → m scaling, offsets),
+ * not a legal number; an exact limit therefore stays 적합.
+ */
+export const COMPARE_TOL = 1e-9;
+export const nearlyEqual = (a: number, b: number) =>
+  Math.abs(a - b) <= COMPARE_TOL * Math.max(1, Math.abs(b));
+/** planned ≤ limit, with the comparison tolerance. */
+export const within = (planned: number, limit: number) =>
+  planned <= limit || nearlyEqual(planned, limit);
+/** planned ≥ limit (a required minimum), with the comparison tolerance. */
+export const atLeast = (planned: number, limit: number) =>
+  planned >= limit || nearlyEqual(planned, limit);
+
 /** One reading of the row's uncertain inputs; `keys` names the axis values (ground, roof, …). */
 export interface Outcome {
   label: string;
@@ -91,7 +106,7 @@ export function casesOf(outcomes: readonly Outcome[], lower = false): Compliance
           ? '위반'
           : o.planned !== null &&
               o.limit !== null &&
-              (lower ? o.planned >= o.limit : o.planned <= o.limit)
+              (lower ? atLeast(o.planned, o.limit) : within(o.planned, o.limit))
             ? '적합'
             : '위반';
     const label = binary === o.state ? o.label : `${o.label} (${o.state})`;
@@ -153,6 +168,12 @@ export interface RowDraft {
   roles: ComplianceRoleName[];
   /** A required minimum (주차·조경·공개공지): 적합 when planned ≥ limit; margin = planned − limit. */
   lower: boolean;
+  /**
+   * For a minimum row: the roles whose objects make up the planned value (주차 구획, 조경 영역,
+   * 공개공지). A hidden or unusable one of them lowers the plan, so it keeps the row from 위반 too
+   * (SPEC-15.9 7); roles that raise the requirement (층 윤곽) only keep it from 적합.
+   */
+  counted: ComplianceRoleName[];
 }
 
 export function draft(id: ComplianceCheckId, title: string, roles: ComplianceRoleName[]): RowDraft {
@@ -172,6 +193,7 @@ export function draft(id: ComplianceCheckId, title: string, roles: ComplianceRol
     unconfirmed: [],
     roles,
     lower: false,
+    counted: [],
   };
 }
 
@@ -210,19 +232,21 @@ export function textOf(value: number, unit: string, digits = DIGITS[unit] ?? 2):
   return unit ? `${n} ${unit}` : n;
 }
 
-/** Texts of planned and limit with enough digits that rounding never makes them look equal. */
+/**
+ * Texts of planned and limit with enough digits that rounding never makes them look equal. Values
+ * equal within the comparison tolerance keep the same text; `equal` is true when two different
+ * values still read the same at the most digits (the row then marks the side that is over).
+ */
 export function textsOf(planned: number | null, limit: number | null, unit: string) {
   let d = DIGITS[unit] ?? 2;
   const text = (v: number | null) => (v === null ? '' : textOf(v, unit, d));
-  while (
-    planned !== null &&
-    limit !== null &&
-    planned !== limit &&
-    text(planned) === text(limit) &&
-    d < 10
-  )
-    d++;
-  return { planned: text(planned), limit: text(limit) };
+  const differ = planned !== null && limit !== null && !nearlyEqual(planned, limit);
+  while (differ && text(planned) === text(limit) && d < 12) d++;
+  return {
+    planned: text(planned),
+    limit: text(limit),
+    equal: differ && text(planned) === text(limit),
+  };
 }
 
 const uniq = (list: readonly string[]) => [...new Set(list.filter(Boolean))];
@@ -261,6 +285,29 @@ export function finalize(r: RowDraft, blockers: Blockers): ComplianceItem {
       );
     }
   }
+  if (state === '위반' && r.lower) {
+    const own = r.counted.flatMap((role) => {
+      const unusable = blockers.unusable.get(role) ?? [];
+      const hidden = blockers.hidden.get(role) ?? [];
+      r.objectIds.push(...unusable, ...hidden);
+      return [
+        ...(unusable.length
+          ? [
+              `쓰지 못한 ${COMPLIANCE_ROLE_LABELS[role]} 객체 ${unusable.length}개 — 계획 값이 모자라게 셌을 수 있음`,
+            ]
+          : []),
+        ...(hidden.length
+          ? [
+              `숨긴 ${COMPLIANCE_ROLE_LABELS[role]} 객체 ${hidden.length}개 — 계획 값에 넣지 않음, 포함해서 다시 체크하거나 검사에서 빼세요`,
+            ]
+          : []),
+      ];
+    });
+    if (own.length) {
+      state = '검사 불가';
+      reasons.push(...own);
+    }
+  }
   const isVolume =
     r.id.startsWith('zone:') || r.id === 'sun' || r.id === 'envelope' || r.id === 'outside-site';
   if (state === '적합' && !isVolume && (!r.planned || !r.limit)) {
@@ -276,7 +323,9 @@ export function finalize(r: RowDraft, blockers: Blockers): ComplianceItem {
   const texts = textsOf(r.planned?.value ?? null, r.limit?.value ?? null, unit);
   const plannedText = r.planned
     ? r.limit
-      ? texts.planned
+      ? texts.equal && state === '위반'
+        ? `${texts.planned} (${r.lower ? '한계 미만' : '한계 초과'})`
+        : texts.planned
       : textOf(r.planned.value, r.planned.unit)
     : '';
   return {
@@ -300,9 +349,11 @@ export function finalize(r: RowDraft, blockers: Blockers): ComplianceItem {
       : null,
     margin:
       r.planned && r.limit && !isVolume
-        ? r.lower
-          ? r.planned.value - r.limit.value
-          : r.limit.value - r.planned.value
+        ? nearlyEqual(r.planned.value, r.limit.value)
+          ? 0
+          : r.lower
+            ? r.planned.value - r.limit.value
+            : r.limit.value - r.planned.value
         : null,
     basis: r.basis
       .map(basisOf)

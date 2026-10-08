@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -232,6 +232,13 @@ async function fixture(t, { propose } = {}) {
       return document.model(scope);
     },
     importFile: async () => assert.fail('a host link never imports'),
+    // The connection's change token without a read (`…/compliance/revision`).
+    fingerprint: async (target) => {
+      assert.equal(target.instance, INSTANCE);
+      if (document.doc.closed)
+        throw Object.assign(new Error('closed'), { code: 'STALE_CONNECTION' });
+      return { documentHash: `rev-${document.doc.revision}`, revision: document.doc.revision };
+    },
   };
   const asked = [];
   const proposeFn =
@@ -299,7 +306,18 @@ async function fixture(t, { propose } = {}) {
     layerRoot: 'VIDE::법규 체크',
   });
   assert.equal(created.status, 200, JSON.stringify(created));
-  return { project, link, document, reads, asked, call, base, iid: created.data.id, roles };
+  return {
+    project,
+    link,
+    document,
+    reads,
+    asked,
+    call,
+    base,
+    iid: created.data.id,
+    roles,
+    workspace,
+  };
 }
 
 test('the check read classifies the whole document, keeps it as the step input, and versions records', async (t) => {
@@ -478,11 +496,32 @@ test('AI proposals stay proposals until a person takes them; gate drops what is 
     action: 'accept',
     role: 'rooftop',
   });
-  const layerRecord = changed.data.records.find((r) => r.scope === 'layer');
-  assert.deepEqual(
-    [layerRecord.key, layerRecord.role, layerRecord.by],
-    ['Layer 01', 'rooftop', 'person'],
+  // A whole-layer proposal still writes object records for the objects it named (SPEC-15.4 3):
+  // objects drawn later, sub-layers and other jigs' objects on that layer keep their own reading.
+  assert.equal(
+    changed.data.records.some((r) => r.scope === 'layer'),
+    false,
   );
+  const towerRecord = changed.data.records.find((r) => r.key === tower.toLowerCase());
+  assert.deepEqual(
+    [towerRecord.scope, towerRecord.role, towerRecord.by],
+    ['object', 'rooftop', 'person'],
+  );
+  const later = document.add('Layer 01', boxMesh([140, 210, 0], [150, 220, 10]));
+  const neighbour = document.add('Layer 01', boxMesh([160, 210, 0], [170, 220, 10]), {
+    attrs: { 'vide-jig': 'vide/site-model', 'vide-key': 'bldg:1' },
+  });
+  const garden = document.add(
+    'Layer 01::조경',
+    { line: rectLine(100, 230, 110, 240) },
+    { type: 'Curve' },
+  );
+  const reread = await call('POST', `${base}/compliance/read`, { instanceId: iid });
+  const rowOf = (id) => reread.data.rows.find((r) => r.objectId === id);
+  assert.deepEqual([rowOf(tower).role, rowOf(tower).roleSource], ['rooftop', 'person-object']);
+  assert.deepEqual([rowOf(later).role, rowOf(later).reason], [null, '역할 없음']);
+  assert.equal(rowOf(neighbour).reason, '다른 jig의 결과');
+  assert.deepEqual([rowOf(garden).role, rowOf(garden).roleSource], ['landscape', 'layer-rule']);
 });
 
 test('failures: no AI answer, units unknown, nothing read, no link, remote sessions', async (t) => {
@@ -575,4 +614,154 @@ test('no linked Rhino: HOST_NOT_CONNECTED', async (t) => {
     ),
     { code: 'HOST_NOT_CONNECTED' },
   );
+});
+
+// PLAN-48 T-238·T-239 (2026-10-08 검토 보강): the official `vide/compliance-check` jig end to end
+// with the fake Rhino — the check runs only when asked by name, after the engine read the
+// document; a geometry run (open, settings) keeps the last result; the revision route tells a
+// changed or closed document; a remote screen cannot change settings or run the check.
+const CHAIN_LIMITS = (linkId) => {
+  const fixtureInput = JSON.parse(
+    readFileSync(
+      join(
+        import.meta.dirname,
+        '../../src/jigs/official/jigs/compliance-check/fixtures/chain/input.json',
+      ),
+      'utf8',
+    ),
+  );
+  return {
+    ...fixtureInput.limits.value,
+    frame: { linkId, documentKey: linkId, origin: [100, 200, 0], groundZ: 0 },
+  };
+};
+
+test('the official 법규 체크 jig: read, check only on request, revision, remote view only', async (t) => {
+  const f = await fixture(t);
+  const { document, call, base, link, workspace } = f;
+  provideJigOutput(workspace, { jig: 'vide/buildable-mass', output: 'limits' }, () =>
+    CHAIN_LIMITS(link.id),
+  );
+  const created = await call('POST', `${base}/jig-instances`, {
+    jig: 'vide/compliance-check',
+    version: '0.1.0',
+    title: '법규 체크 1',
+    layerRootLater: true,
+  });
+  assert.equal(created.status, 200, JSON.stringify(created));
+  const iid = created.data.id;
+  // The building in document coordinates (the massing frame origin is 100, 200, 0).
+  document.add('건물', boxMesh([102, 204, 0], [118, 224, 10.8]));
+  const north = document.add('건물', boxMesh([102, 224, 7.2], [118, 228, 10.8]));
+  ['1F', '2F', '3F'].forEach((floor, i) =>
+    document.add(
+      '층',
+      { line: rectLine(102, 204, 118, 224, i * 3.6) },
+      {
+        type: 'Curve',
+        attrs: { 'vide-floor': floor, 'vide-use': '업무시설' },
+      },
+    ),
+  );
+  for (let i = 0; i < 10; i++)
+    document.add('주차', { line: rectLine(101 + i, 200.5, 101.8 + i, 201.5) }, { type: 'Curve' });
+  document.add('조경', { line: rectLine(100, 200, 102, 230) }, { type: 'Curve' });
+  document.add('공개공지', { line: rectLine(110, 200, 116, 205) }, { type: 'Curve' });
+
+  const ground = await call('PUT', `${base}/jig-instances/${iid}/params`, {
+    values: [
+      { key: 'groundState', value: 'set' },
+      { key: 'groundLevel', value: 0 },
+      { key: 'exclusionsComplete', value: true },
+    ],
+    by: 'user',
+  });
+  assert.equal(ground.status, 200, JSON.stringify(ground));
+  // Opening (a geometry run) never computes the check.
+  const opened = await call('POST', `${base}/jig-instances/${iid}/run`, { mode: 'geometry' });
+  assert.equal(opened.status, 200, JSON.stringify(opened));
+  assert.equal(opened.data.steps.find((s) => s.id === 'check').status, 'skipped');
+  // Nor does a confirmed run that does not name it (a started request).
+  const started = await call('POST', `${base}/jig-instances/${iid}/run`, { mode: 'confirmed' });
+  assert.equal(started.data.steps.find((s) => s.id === 'check').status, 'skipped');
+
+  // [법규 체크]: the engine reads the document, then the step runs by name.
+  const read = await call('POST', `${base}/compliance/read`, { instanceId: iid });
+  assert.equal(read.status, 200, JSON.stringify(read));
+  const checked = await call('POST', `${base}/jig-instances/${iid}/run`, {
+    mode: 'confirmed',
+    until: 'check',
+  });
+  const step = checked.data.steps.find((s) => s.id === 'check');
+  assert.equal(step.status, 'done', JSON.stringify(step.error));
+  const result = checked.data.outputs.check;
+  const row = (id) => result.items.find((i) => i.id === id);
+  assert.equal(row('sun').state, '위반');
+  assert.ok(row('sun').exceedances[0].objectIds.includes(north));
+  assert.deepEqual(result.display.origin, [100, 200, 0]);
+  assert.equal(result.inputs.model.linkId, link.id);
+  assert.equal(result.inputs.limits, null, 'a provided output has no work copy reference');
+  // Reading an unchanged document again (the panel opening) leaves the check as it is.
+  await call('POST', `${base}/compliance/read`, { instanceId: iid });
+  const reopened = await call('GET', `${base}/jig-instances/${iid}`);
+  assert.equal(reopened.data.steps.find((s) => s.id === 'check').status, 'done');
+
+  // A setting change marks the step stale; the next geometry run keeps the last result.
+  const changed = await call('PUT', `${base}/jig-instances/${iid}/params`, {
+    values: [{ key: 'includeHidden', value: true }],
+    by: 'user',
+  });
+  assert.ok(changed.data.affected.includes('check'));
+  const after = await call('POST', `${base}/jig-instances/${iid}/run`, { mode: 'geometry' });
+  const kept = after.data.steps.find((s) => s.id === 'check');
+  assert.equal(kept.status, 'skipped');
+  assert.equal(after.data.outputs.check.checkedAt, result.checkedAt, 'the last result is shown');
+  const view = await call('GET', `${base}/jig-instances/${iid}`);
+  assert.equal(view.data.steps.find((s) => s.id === 'check').status, 'stale');
+
+  // The document's revision now: equal, changed, closed.
+  const revision = () =>
+    call('GET', `${base}/compliance/revision?linkId=${encodeURIComponent(link.id)}`);
+  assert.equal((await revision()).data.revisionKey, result.inputs.model.revisionKey);
+  document.doc.revision++;
+  assert.notEqual((await revision()).data.revisionKey, result.inputs.model.revisionKey);
+  document.doc.closed = true;
+  const closed = await revision();
+  assert.equal(closed.data.revisionKey, null);
+  assert.ok(closed.data.reason);
+  document.doc.closed = false;
+  assert.equal((await revision()).data.revisionKey !== null, true);
+
+  // A remote screen sees results but cannot change settings or run the check.
+  const remote = { remote: true };
+  assert.equal(
+    (
+      await call(
+        'PUT',
+        `${base}/jig-instances/${iid}/params`,
+        { values: [{ key: 'noneParking', value: true }], by: 'user' },
+        remote,
+      )
+    ).code,
+    'FORBIDDEN',
+  );
+  assert.equal(
+    (
+      await call(
+        'POST',
+        `${base}/jig-instances/${iid}/run`,
+        { mode: 'confirmed', until: 'check' },
+        remote,
+      )
+    ).code,
+    'FORBIDDEN',
+  );
+  const looked = await call(
+    'POST',
+    `${base}/jig-instances/${iid}/run`,
+    { mode: 'geometry' },
+    remote,
+  );
+  assert.equal(looked.status, 200);
+  assert.equal((await revision()).status, 200);
 });

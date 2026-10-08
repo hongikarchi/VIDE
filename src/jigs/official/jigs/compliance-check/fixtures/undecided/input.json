@@ -1,0 +1,775 @@
+{
+  "model": {
+    "schema": "vide.compliance.model@1",
+    "source": {
+      "linkId": "link-1",
+      "documentKey": "link-1",
+      "readId": "read-1",
+      "revisionKey": "rhino|doc-1|1",
+      "readAt": "2026-10-08T09:00:00.000Z",
+      "toMeters": 1
+    },
+    "objects": [
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000001",
+        "layer": "건물::매스",
+        "role": "mass",
+        "shape": {
+          "kind": "solid",
+          "mesh": {
+            "v": [
+              2, 4, 10.8, 18, 4, 10.8, 18, 24, 10.8, 2, 24, 10.8, 2, 24, 0, 18, 24, 0, 18, 4, 0, 2,
+              4, 0, 2, 4, 0, 18, 4, 0, 18, 4, 10.8, 2, 4, 10.8, 18, 4, 0, 18, 24, 0, 18, 24, 10.8,
+              18, 4, 10.8, 18, 24, 0, 2, 24, 0, 2, 24, 10.8, 18, 24, 10.8, 2, 24, 0, 2, 4, 0, 2, 4,
+              10.8, 2, 24, 10.8
+            ],
+            "f": [
+              0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12, 14, 15, 16,
+              17, 18, 16, 18, 19, 20, 21, 22, 20, 22, 23
+            ]
+          },
+          "closed": true,
+          "volume": null
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000002",
+        "layer": "건물::매스",
+        "role": "mass",
+        "shape": {
+          "kind": "solid",
+          "mesh": {
+            "v": [
+              2, 24, 10.8, 18, 24, 10.8, 18, 28, 10.8, 2, 28, 10.8, 2, 28, 7.2, 18, 28, 7.2, 18, 24,
+              7.2, 2, 24, 7.2, 2, 24, 7.2, 18, 24, 7.2, 18, 24, 10.8, 2, 24, 10.8, 18, 24, 7.2, 18,
+              28, 7.2, 18, 28, 10.8, 18, 24, 10.8, 18, 28, 7.2, 2, 28, 7.2, 2, 28, 10.8, 18, 28,
+              10.8, 2, 28, 7.2, 2, 24, 7.2, 2, 24, 10.8, 2, 28, 10.8
+            ],
+            "f": [
+              0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12, 14, 15, 16,
+              17, 18, 16, 18, 19, 20, 21, 22, 20, 22, 23
+            ]
+          },
+          "closed": true,
+          "volume": null
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": "1F",
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000010",
+        "layer": "floor",
+        "role": "floor",
+        "shape": {
+          "kind": "region",
+          "region": {
+            "outer": [
+              [2, 4],
+              [18, 4],
+              [18, 24],
+              [2, 24]
+            ],
+            "holes": []
+          },
+          "z": 0
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": "2F",
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000011",
+        "layer": "floor",
+        "role": "floor",
+        "shape": {
+          "kind": "region",
+          "region": {
+            "outer": [
+              [2, 4],
+              [18, 4],
+              [18, 24],
+              [2, 24]
+            ],
+            "holes": []
+          },
+          "z": 3.6
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": "3F",
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000012",
+        "layer": "floor",
+        "role": "floor",
+        "shape": {
+          "kind": "region",
+          "region": {
+            "outer": [
+              [2, 4],
+              [18, 4],
+              [18, 24],
+              [2, 24]
+            ],
+            "holes": []
+          },
+          "z": 7.2
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000100",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [1, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000101",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [2, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000102",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [3, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000103",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [4, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000104",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [5, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000105",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [6, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000106",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [7, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000107",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [8, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000108",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [9, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000109",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [10, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000200",
+        "layer": "landscape",
+        "role": "landscape",
+        "shape": {
+          "kind": "region",
+          "region": {
+            "outer": [
+              [0, 0],
+              [2, 0],
+              [2, 30],
+              [0, 30]
+            ],
+            "holes": []
+          },
+          "z": 0
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000201",
+        "layer": "open-space",
+        "role": "open-space",
+        "shape": {
+          "kind": "region",
+          "region": {
+            "outer": [
+              [10, 0],
+              [16, 0],
+              [16, 5],
+              [10, 5]
+            ],
+            "holes": []
+          },
+          "z": 0
+        }
+      }
+    ],
+    "unclassified": [],
+    "rolesVersion": 1
+  },
+  "siteModel": null,
+  "limits": {
+    "source": {
+      "instanceId": "mass-1",
+      "title": "매스 검토 1",
+      "jig": "vide/buildable-mass",
+      "version": "0.5.0",
+      "step": "limitsHandoff",
+      "status": "done",
+      "at": "2026-10-08T09:00:00.000Z",
+      "updatedAt": "2026-10-08T09:00:00.000Z",
+      "hash": "mass-1:limitsHandoff:0"
+    },
+    "value": {
+      "schema": "vide.compliance.limits@1",
+      "frame": {
+        "linkId": "link-1",
+        "documentKey": "link-1",
+        "origin": [0, 0, 0],
+        "groundZ": 0
+      },
+      "site": {
+        "ring": [
+          [0, 0],
+          [20, 0],
+          [20, 30],
+          [0, 30]
+        ],
+        "area_m2": 600,
+        "areaSource": "그린 대지 경계(도구로 계산함)",
+        "otherArea_m2": null,
+        "northDeg": 0,
+        "northSource": "시험"
+      },
+      "regulations": [
+        {
+          "id": "coverage",
+          "group": "밀도",
+          "title": "건폐율 상한",
+          "value": 0.6,
+          "unit": "비율",
+          "applies": "적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 coverage"
+          },
+          "source": "param.coverage"
+        },
+        {
+          "id": "farBase",
+          "group": "밀도",
+          "title": "기준 용적률",
+          "value": 2,
+          "unit": "비율",
+          "applies": "적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 farBase"
+          },
+          "source": "param.farBase"
+        },
+        {
+          "id": "farMax",
+          "group": "밀도",
+          "title": "상한 용적률",
+          "value": 2.5,
+          "unit": "비율",
+          "applies": "적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 farMax"
+          },
+          "source": "param.farMax"
+        },
+        {
+          "id": "heightMax",
+          "group": "높이",
+          "title": "최고 높이",
+          "value": 10.8,
+          "unit": "m",
+          "applies": "적용",
+          "status": "판단 필요",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 heightMax"
+          },
+          "source": "param.heightMax"
+        },
+        {
+          "id": "streetHeight",
+          "group": "높이",
+          "title": "가로구역 최고 높이",
+          "value": null,
+          "unit": "m",
+          "applies": "미적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 streetHeight"
+          },
+          "source": "param.streetHeight"
+        },
+        {
+          "id": "altitudeHeight",
+          "group": "높이",
+          "title": "고도지구 높이",
+          "value": null,
+          "unit": "m",
+          "applies": "미적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 altitudeHeight"
+          },
+          "source": "param.altitudeHeight"
+        },
+        {
+          "id": "floorsMax",
+          "group": "높이",
+          "title": "지상 층수 상한",
+          "value": 5,
+          "unit": "층",
+          "applies": "판단 필요",
+          "status": "판단 필요",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 floorsMax"
+          },
+          "source": "param.floorsMax"
+        },
+        {
+          "id": "roadSetback",
+          "group": "건축선",
+          "title": "도로 후퇴 거리",
+          "value": 2,
+          "unit": "m",
+          "applies": "적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 roadSetback"
+          },
+          "source": "param.roadSetback",
+          "target": "도로 1"
+        },
+        {
+          "id": "chamferLength",
+          "group": "건축선",
+          "title": "가각 전제 길이",
+          "value": null,
+          "unit": "m",
+          "applies": "미적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 chamferLength"
+          },
+          "source": "param.chamferLength"
+        },
+        {
+          "id": "limitLine",
+          "group": "건축선",
+          "title": "건축한계선·지정선(그린 선)",
+          "value": null,
+          "unit": "",
+          "applies": "미적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 limitLine"
+          },
+          "source": "param.limitLine"
+        },
+        {
+          "id": "openSpaceRoad",
+          "group": "이격",
+          "title": "대지 안의 공지(건축선에서)",
+          "value": null,
+          "unit": "m",
+          "applies": "미적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 openSpaceRoad"
+          },
+          "source": "param.openSpaceRoad"
+        },
+        {
+          "id": "openSpaceAdjacent",
+          "group": "이격",
+          "title": "대지 안의 공지(인접 대지 경계선에서)",
+          "value": null,
+          "unit": "m",
+          "applies": "미적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 openSpaceAdjacent"
+          },
+          "source": "param.openSpaceAdjacent"
+        },
+        {
+          "id": "civilSetback",
+          "group": "이격",
+          "title": "민법상 이격 거리",
+          "value": null,
+          "unit": "m",
+          "applies": "미적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 civilSetback"
+          },
+          "source": "param.civilSetback"
+        },
+        {
+          "id": "otherSetback",
+          "group": "이격",
+          "title": "기타 이격(그린 선에서 거리)",
+          "value": null,
+          "unit": "m",
+          "applies": "미적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 otherSetback"
+          },
+          "source": "param.otherSetback"
+        },
+        {
+          "id": "sun",
+          "group": "일조",
+          "title": "정북 일조 적용 여부",
+          "value": "적용",
+          "unit": "",
+          "applies": "적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 sun"
+          },
+          "source": "param.sun"
+        },
+        {
+          "id": "sunBaseHeight",
+          "group": "일조",
+          "title": "기준 높이",
+          "value": 9,
+          "unit": "m",
+          "applies": "적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 sunBaseHeight"
+          },
+          "source": "param.sunBaseHeight"
+        },
+        {
+          "id": "parkingRule",
+          "group": "주차·공지",
+          "title": "용도별 주차 산정 기준(면적 n ㎡당 1대)",
+          "value": 100,
+          "unit": "㎡/대",
+          "applies": "적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 parkingRule"
+          },
+          "source": "param.parkingRule",
+          "target": "업무시설"
+        },
+        {
+          "id": "parkingRounding",
+          "group": "주차·공지",
+          "title": "주차 대수 끝수 처리",
+          "value": "ceil",
+          "unit": "",
+          "applies": "적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 parkingRounding"
+          },
+          "source": "param.parkingRounding"
+        },
+        {
+          "id": "parkingRoundScope",
+          "group": "주차·공지",
+          "title": "끝수 처리 단위",
+          "value": "sum",
+          "unit": "",
+          "applies": "적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 parkingRoundScope"
+          },
+          "source": "param.parkingRoundScope"
+        },
+        {
+          "id": "parkingAreaBasis",
+          "group": "주차·공지",
+          "title": "주차 산정에 쓰는 면적",
+          "value": "gross",
+          "unit": "",
+          "applies": "적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 parkingAreaBasis"
+          },
+          "source": "param.parkingAreaBasis"
+        },
+        {
+          "id": "landscapeRatio",
+          "group": "주차·공지",
+          "title": "조경 면적 비율",
+          "value": 0.1,
+          "unit": "비율",
+          "applies": "적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 landscapeRatio"
+          },
+          "source": "param.landscapeRatio"
+        },
+        {
+          "id": "publicOpenSpace",
+          "group": "주차·공지",
+          "title": "공개공지 대상 여부와 면적 비율",
+          "value": 0.05,
+          "unit": "비율",
+          "applies": "적용",
+          "status": "확정",
+          "origin": "사용자가 확정함",
+          "basis": {
+            "clause": "시험용 조항 publicOpenSpace"
+          },
+          "source": "param.publicOpenSpace"
+        }
+      ],
+      "unapplied": [],
+      "zones": [
+        {
+          "rule": "roadSetback",
+          "items": ["roadSetback"],
+          "regions": [
+            {
+              "outer": [
+                [0, 0],
+                [20, 0],
+                [20, 2],
+                [0, 2]
+              ],
+              "holes": []
+            }
+          ],
+          "segments": ["도로 1"],
+          "regionSegments": ["도로 1"]
+        }
+      ],
+      "variants": [
+        {
+          "id": "base",
+          "heightCap": {
+            "value": 20,
+            "items": ["heightMax"]
+          },
+          "sunCut": {
+            "v": [
+              0, 26, 100, 20, 26, 100, 20, 30, 100, 0, 30, 100, 0, 30, 9, 20, 30, 9, 20, 26, 9, 0,
+              26, 9, 0, 26, 9, 20, 26, 9, 20, 26, 100, 0, 26, 100, 20, 26, 9, 20, 30, 9, 20, 30,
+              100, 20, 26, 100, 20, 30, 9, 0, 30, 9, 0, 30, 100, 20, 30, 100, 0, 30, 9, 0, 26, 9, 0,
+              26, 100, 0, 30, 100
+            ],
+            "f": [
+              0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12, 14, 15, 16,
+              17, 18, 16, 18, 19, 20, 21, 22, 20, 22, 23
+            ]
+          },
+          "envelope": {
+            "v": [
+              0, 26, 20, 0, 2, 20, 20, 2, 20, 20, 26, 20, 0, 30, 0, 20, 30, 0, 20, 2, 0, 0, 2, 0, 0,
+              2, 9, 0, 2, 0, 20, 2, 0, 20, 2, 9, 0, 2, 9, 20, 2, 9, 20, 2, 20, 0, 2, 20, 20, 2, 9,
+              20, 2, 0, 20, 30, 0, 20, 30, 9, 20, 2, 9, 20, 26, 9, 20, 26, 20, 20, 2, 20, 20, 30, 9,
+              20, 30, 0, 0, 30, 0, 0, 30, 9, 0, 30, 9, 0, 30, 0, 0, 2, 0, 0, 2, 9, 0, 26, 9, 0, 2,
+              9, 0, 2, 20, 0, 26, 20, 0, 26, 9, 20, 26, 9, 20, 30, 9, 0, 30, 9, 0, 26, 20, 20, 26,
+              20, 20, 26, 9, 0, 26, 9
+            ],
+            "f": [
+              0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12, 14, 15, 16,
+              17, 18, 16, 18, 19, 20, 21, 22, 20, 22, 23, 24, 25, 26, 24, 26, 27, 28, 29, 30, 28,
+              30, 31, 32, 33, 34, 32, 34, 35, 36, 37, 38, 36, 38, 39, 40, 41, 42, 40, 42, 43
+            ]
+          },
+          "envelopeVolume": 10320,
+          "unconfirmed": []
+        }
+      ],
+      "plan": {
+        "mainUse": "업무시설",
+        "floorHeightGround": 3.6,
+        "floorHeightTypical": 3.6,
+        "chosenOption": null
+      }
+    },
+    "snapshot": {
+      "hash": "mass-1:limitsHandoff:1"
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "한계 — 법규 체크 jig가 받는 규제 조건·대지·금지 띠·외피 (src/contracts/compliance.ts complianceLimitsSchema)",
+  "type": "object",
+  "required": ["schema", "frame", "site", "regulations", "unapplied", "zones", "variants", "plan"],
+  "properties": {
+    "schema": { "const": "vide.compliance.limits@1" },
+    "frame": {
+      "type": "object",
+      "required": ["linkId", "documentKey", "origin", "groundZ"],
+      "properties": {
+        "origin": { "type": "array", "items": { "type": "number" } },
+        "groundZ": { "type": "number" }
+      }
+    },
+    "site": {
+      "type": "object",
+      "required": ["ring", "area_m2", "areaSource", "otherArea_m2", "northDeg", "northSource"],
+      "properties": {
+        "ring": { "type": "array" },
+        "area_m2": { "type": "number" },
+        "areaSource": { "type": "string" },
+        "northDeg": { "type": "number" },
+        "northSource": { "type": "string" }
+      }
+    },
+    "regulations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "value", "unit", "applies", "status", "origin", "source"]
+      }
+    },
+    "unapplied": {
+      "type": "array",
+      "items": { "type": "object", "required": ["id", "title", "reason"] }
+    },
+    "zones": {
+      "type": "array",
+      "items": { "type": "object", "required": ["rule", "items", "regions", "segments"] }
+    },
+    "variants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "heightCap", "sunCut", "envelope", "envelopeVolume", "unconfirmed"]
+      }
+    },
+    "plan": {
+      "type": "object",
+      "required": ["mainUse", "floorHeightGround", "floorHeightTypical", "chosenOption"]
+    }
+  }
+}

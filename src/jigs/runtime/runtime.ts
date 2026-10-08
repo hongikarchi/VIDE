@@ -135,6 +135,8 @@ export interface InstanceView {
     source: string;
     /** `jig.json` `icon` (PLAN-26 T-100), when it names one. */
     icon?: string;
+    /** `jig.json` `remote`: `view` = a remote screen only looks (SPEC-15.16). */
+    remote?: 'view';
   };
   title: string;
   status: JigInstanceRow['status'];
@@ -158,6 +160,8 @@ export interface RoleSnapshot {
   rows: Record<string, unknown>[];
   definitions: Record<string, unknown>;
   snapshot: { ref: string; hash: string };
+  /** The Links the role was read from (not part of its fingerprint). */
+  sources?: { linkId: string; revisionKey: string }[];
 }
 
 const decode64 = (value: unknown) => {
@@ -455,6 +459,7 @@ export class JigRuntime {
         summary: jig.manifest.summary,
         source: jig.source,
         ...(jig.manifest.icon ? { icon: jig.manifest.icon } : {}),
+        ...(jig.manifest.remote ? { remote: jig.manifest.remote } : {}),
       },
       title: instance.title,
       status: instance.status,
@@ -751,7 +756,17 @@ export class JigRuntime {
             rows: Record<string, unknown>[];
             definitions: Record<string, unknown>;
           }>(assembled.snapshot.ref);
-          if (snapshot) roles[role.role] = { ...snapshot, snapshot: assembled.snapshot };
+          // `sources`: which Link each role was read from (the 법규 체크 frame needs the site's,
+          // SPEC-15.5 5). The fingerprint stays the snapshot's hash.
+          if (snapshot)
+            roles[role.role] = {
+              ...snapshot,
+              snapshot: assembled.snapshot,
+              sources: assembled.sources.map((s) => ({
+                linkId: s.linkId,
+                revisionKey: s.revisionKey,
+              })),
+            };
         }
         inputs[input.key] = roles;
       } else if (input.kind === 'zone') inputs[input.key] = body.zones[input.key] ?? [];
@@ -801,7 +816,14 @@ export class JigRuntime {
     const jig = await this.jigOf(instance);
     const input = jig.manifest.inputs.find((i) => i.key === key);
     if (!input || input.kind !== 'host-document') throw new DomainError('NOT_FOUND');
-    const hash = hashValue([kept.revisionKey, kept.rolesVersion, hashValue(kept.model)]);
+    // Which read it was (`source.readId`·`readAt`) is not content: reading an unchanged document
+    // again (the panel's role check on open) must not make the steps '다시 계산 필요'.
+    const model = kept.model as { source?: Record<string, unknown> } | null;
+    const content =
+      model && typeof model === 'object' && model.source && typeof model.source === 'object'
+        ? { ...model, source: { ...model.source, readId: null, readAt: null } }
+        : kept.model;
+    const hash = hashValue([kept.revisionKey, kept.rolesVersion, hashValue(content)]);
     const ref = `models/${instanceId}/${key.replace(/[^A-Za-z0-9_.-]/g, '_')}-${hash.slice(0, 16)}.json.gz`;
     this.writeGz(ref, kept.model);
     const body = bodyOf(instance.body);

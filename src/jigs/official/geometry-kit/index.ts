@@ -3,7 +3,7 @@
 // step and a step-runner bundle can carry a copy (with `delaunator` and `@kninnug/constrainautor`,
 // its only dependencies). Project-specific rules do not belong here.
 
-export const library = { id: 'vide/geometry-kit', version: '0.2.3' } as const;
+export const library = { id: 'vide/geometry-kit', version: '0.2.4' } as const;
 
 export {
   GeometryError,
@@ -79,6 +79,7 @@ export {
   SHORT_EDGE,
   SOLID_EPS,
   checkSolid,
+  closedVolumeCheck,
   cleanRing,
   earClip,
   facesVolume,

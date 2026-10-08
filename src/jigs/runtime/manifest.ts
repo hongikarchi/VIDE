@@ -248,6 +248,12 @@ const stepBase = {
   reads: z.array(z.string().min(1).max(200)).max(100),
   writes: key,
   speed: z.enum(['live', 'release', 'button', 'confirm']),
+  /**
+   * Runs only when a person asks for this step by name (a confirmed run `until` it, or the self
+   * test): opening the panel, a setting change or a started request never computes it, and the
+   * step keeps its last result until then (법규 체크 [법규 체크], SPEC-15.3 1·15.13).
+   */
+  manual: z.literal(true).optional(),
   gates: z.array(gateUse).max(30).optional(),
   budget: z
     .object({ wallClockMs: z.number().int().positive().max(600_000) })
@@ -338,6 +344,11 @@ export const manifestSchema = z
     kind: z.enum(['tool', 'library']),
     name: z.string().min(1).max(100),
     summary: z.string().min(1).max(300),
+    /**
+     * `view`: a remote screen (SPEC-04) only looks — the instance's settings, 수정 사항 and runs are
+     * this PC's (법규 체크, SPEC-15.16).
+     */
+    remote: z.enum(['view']).optional(),
     /** How the jig looks in the lists: a name from VIDE's fixed icon list (PLAN-26 T-100). */
     icon: z.enum(JIG_ICONS).optional(),
     hosts: z

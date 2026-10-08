@@ -1,0 +1,124 @@
+{
+  "tolerance": {
+    "length": 0.000001,
+    "ratio": 1e-9
+  },
+  "steps": {
+    "check": {
+      "schema": "vide.compliance.result@1",
+      "counts": {
+        "적합": 8,
+        "위반": 2,
+        "판단 필요": 1,
+        "사람 입력 필요": 0,
+        "검사 불가": 0
+      },
+      "unconfirmedCount": 0,
+      "items": [
+        {
+          "id": "coverage",
+          "state": "판단 필요",
+          "planned": {
+            "value": 0.64
+          }
+        },
+        {
+          "id": "far",
+          "state": "적합",
+          "planned": {
+            "value": 1.6
+          }
+        },
+        {
+          "id": "height:heightMax",
+          "state": "적합",
+          "planned": {
+            "value": 10.8
+          }
+        },
+        {
+          "id": "floors",
+          "state": "적합",
+          "planned": {
+            "value": 3
+          }
+        },
+        {
+          "id": "zone:roadSetback",
+          "state": "적합",
+          "planned": {
+            "value": 0
+          }
+        },
+        {
+          "id": "sun",
+          "state": "위반",
+          "planned": {
+            "value": 57.60000000000002
+          }
+        },
+        {
+          "id": "envelope",
+          "state": "위반",
+          "planned": {
+            "value": 57.60000000000002
+          }
+        },
+        {
+          "id": "outside-site",
+          "state": "적합",
+          "planned": {
+            "value": 0
+          }
+        },
+        {
+          "id": "parking",
+          "state": "적합",
+          "planned": {
+            "value": 10
+          }
+        },
+        {
+          "id": "landscape",
+          "state": "적합",
+          "planned": {
+            "value": 60
+          }
+        },
+        {
+          "id": "open-space",
+          "state": "적합",
+          "planned": {
+            "value": 30
+          }
+        }
+      ],
+      "notApplicable": [
+        {
+          "check": "height:streetHeight"
+        },
+        {
+          "check": "height:altitudeHeight"
+        },
+        {
+          "check": "zone:chamfer"
+        },
+        {
+          "check": "zone:limitLine"
+        },
+        {
+          "check": "zone:openSpaceRoad"
+        },
+        {
+          "check": "zone:openSpaceAdjacent"
+        },
+        {
+          "check": "zone:civilSetback"
+        },
+        {
+          "check": "zone:otherSetback"
+        }
+      ]
+    }
+  }
+}

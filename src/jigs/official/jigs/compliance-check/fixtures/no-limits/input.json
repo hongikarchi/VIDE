@@ -1,0 +1,362 @@
+{
+  "model": {
+    "schema": "vide.compliance.model@1",
+    "source": {
+      "linkId": "link-1",
+      "documentKey": "link-1",
+      "readId": "read-1",
+      "revisionKey": "rhino|doc-1|1",
+      "readAt": "2026-10-08T09:00:00.000Z",
+      "toMeters": 1
+    },
+    "objects": [
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000001",
+        "layer": "건물::매스",
+        "role": "mass",
+        "shape": {
+          "kind": "solid",
+          "mesh": {
+            "v": [
+              2, 4, 10.8, 18, 4, 10.8, 18, 24, 10.8, 2, 24, 10.8, 2, 24, 0, 18, 24, 0, 18, 4, 0, 2,
+              4, 0, 2, 4, 0, 18, 4, 0, 18, 4, 10.8, 2, 4, 10.8, 18, 4, 0, 18, 24, 0, 18, 24, 10.8,
+              18, 4, 10.8, 18, 24, 0, 2, 24, 0, 2, 24, 10.8, 18, 24, 10.8, 2, 24, 0, 2, 4, 0, 2, 4,
+              10.8, 2, 24, 10.8
+            ],
+            "f": [
+              0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12, 14, 15, 16,
+              17, 18, 16, 18, 19, 20, 21, 22, 20, 22, 23
+            ]
+          },
+          "closed": true,
+          "volume": null
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000002",
+        "layer": "건물::매스",
+        "role": "mass",
+        "shape": {
+          "kind": "solid",
+          "mesh": {
+            "v": [
+              2, 24, 10.8, 18, 24, 10.8, 18, 28, 10.8, 2, 28, 10.8, 2, 28, 7.2, 18, 28, 7.2, 18, 24,
+              7.2, 2, 24, 7.2, 2, 24, 7.2, 18, 24, 7.2, 18, 24, 10.8, 2, 24, 10.8, 18, 24, 7.2, 18,
+              28, 7.2, 18, 28, 10.8, 18, 24, 10.8, 18, 28, 7.2, 2, 28, 7.2, 2, 28, 10.8, 18, 28,
+              10.8, 2, 28, 7.2, 2, 24, 7.2, 2, 24, 10.8, 2, 28, 10.8
+            ],
+            "f": [
+              0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12, 14, 15, 16,
+              17, 18, 16, 18, 19, 20, 21, 22, 20, 22, 23
+            ]
+          },
+          "closed": true,
+          "volume": null
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": "1F",
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000010",
+        "layer": "floor",
+        "role": "floor",
+        "shape": {
+          "kind": "region",
+          "region": {
+            "outer": [
+              [2, 4],
+              [18, 4],
+              [18, 24],
+              [2, 24]
+            ],
+            "holes": []
+          },
+          "z": 0
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": "2F",
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000011",
+        "layer": "floor",
+        "role": "floor",
+        "shape": {
+          "kind": "region",
+          "region": {
+            "outer": [
+              [2, 4],
+              [18, 4],
+              [18, 24],
+              [2, 24]
+            ],
+            "holes": []
+          },
+          "z": 3.6
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": "3F",
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000012",
+        "layer": "floor",
+        "role": "floor",
+        "shape": {
+          "kind": "region",
+          "region": {
+            "outer": [
+              [2, 4],
+              [18, 4],
+              [18, 24],
+              [2, 24]
+            ],
+            "holes": []
+          },
+          "z": 7.2
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000100",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [1, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000101",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [2, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000102",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [3, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000103",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [4, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000104",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [5, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000105",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [6, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000106",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [7, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000107",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [8, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000108",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [9, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000109",
+        "layer": "주차",
+        "role": "parking",
+        "shape": {
+          "kind": "point",
+          "at": [10, 1, 0]
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000200",
+        "layer": "landscape",
+        "role": "landscape",
+        "shape": {
+          "kind": "region",
+          "region": {
+            "outer": [
+              [0, 0],
+              [2, 0],
+              [2, 30],
+              [0, 30]
+            ],
+            "holes": []
+          },
+          "z": 0
+        }
+      },
+      {
+        "roleSource": "layer-rule",
+        "floor": null,
+        "use": null,
+        "hidden": false,
+        "geometryHash": null,
+        "count": 1,
+        "geometryChanged": false,
+        "objectId": "00000000-0000-4000-8000-000000000201",
+        "layer": "open-space",
+        "role": "open-space",
+        "shape": {
+          "kind": "region",
+          "region": {
+            "outer": [
+              [10, 0],
+              [16, 0],
+              [16, 5],
+              [10, 5]
+            ],
+            "holes": []
+          },
+          "z": 0
+        }
+      }
+    ],
+    "unclassified": [],
+    "rolesVersion": 1
+  },
+  "siteModel": null,
+  "limits": null
+}

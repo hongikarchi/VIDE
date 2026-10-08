@@ -315,6 +315,10 @@ export function JigPanel({
         ? settings.filter((s) => s.group === group)
         : settings;
   const busy = jig.busy;
+  // A jig a remote screen only looks at (`remote: 'view'`, 법규 체크 SPEC-15.16): its settings
+  // cannot be changed there (the engine refuses too).
+  const viewOnly = !!host.remote && (view.jig as { remote?: string }).remote === 'view';
+  const locked = busy || viewOnly;
   const change = jig.change;
   const isStale = (binding?: string) => {
     const step = stepOf(binding);
@@ -464,7 +468,7 @@ export function JigPanel({
             title={part.title}
             settings={settingsOf(part.params, part.group)}
             values={values}
-            disabled={busy}
+            disabled={locked}
             onChange={change}
           />
         );
@@ -479,7 +483,7 @@ export function JigPanel({
             setting={setting}
             value={values[setting.key]}
             control={CONTROL[part.part]}
-            disabled={busy}
+            disabled={locked}
             onChange={(value, phase) => change(setting.key, value, phase)}
           />
         ) : null;
@@ -491,7 +495,7 @@ export function JigPanel({
             title={part.title}
             settings={part.params ? settingsOf(part.params) : settings.filter((s) => s.board)}
             values={values}
-            disabled={busy}
+            disabled={locked}
             onChange={change}
           />
         );

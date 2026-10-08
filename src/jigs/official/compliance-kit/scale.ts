@@ -14,7 +14,7 @@ import { heightBuilding } from './building.ts';
 import type { Ctx } from './context.ts';
 import { LEVEL_TOL, projectionRegions, sliceAbove } from './geometry.ts';
 import type { FloorTable } from './ground.ts';
-import { numOf, readAll, readLimit, titleOf, type LimitRead } from './limits-read.ts';
+import { numOf, pendingItems, readAll, readLimit, titleOf, type LimitRead } from './limits-read.ts';
 import {
   AXIS_REASONS,
   casesOf,
@@ -23,6 +23,7 @@ import {
   product,
   setState,
   useItems,
+  within,
   worstOf,
   type Outcome,
   type RowDraft,
@@ -182,6 +183,19 @@ function siteNumbers(ctx: Ctx): NumberSource[] {
 const regionsOf = (ctx: Ctx, role: ComplianceRoleName): PlanRegion[] =>
   ctx.objs(role).flatMap((o) => (o.shape.kind === 'region' ? [o.shape.region] : []));
 
+/**
+ * Unnamed floor outlines no height order could name (SPEC-15.3 4): they are not in any floor, so
+ * a row that would read 적합 without them is 판단 필요; a 위반 stays (more floors only add).
+ */
+export function unlabelledBlock(r: RowDraft, tables: readonly FloorTable[]) {
+  const ids = [...new Set(tables.flatMap((t) => t.unlabelled))];
+  if (!ids.length) return;
+  const why = `층 이름 없는 윤곽 ${ids.length}개 — 높이 순서로 붙일 층 이름이 다른 높이의 이름 있는 층과 겹침(층 이름을 정하세요)`;
+  r.unconfirmed.push(why);
+  r.objectIds.push(...ids);
+  if (r.state === '적합') setState(r, '판단 필요', why);
+}
+
 // ── 건폐율 ──────────────────────────────────────────────────────────────────────────────────────
 
 export function coverage(ctx: Ctx): CheckOut {
@@ -276,7 +290,7 @@ export function coverage(ctx: Ctx): CheckOut {
     [lim],
     [area, siteAxis(ctx)],
     (p) => (areaOf.get(p[area.name]?.key ?? '') ?? [...areaOf.values()][0]) / siteArea(ctx, p),
-    (planned, limit) => ({ state: planned <= limit ? '적합' : '위반' }),
+    (planned, limit) => ({ state: within(planned, limit) ? '적합' : '위반' }),
     '비율',
   );
   if (projection && r.state !== '적합' && r.state !== '사람 입력 필요' && r.state !== '검사 불가') {
@@ -314,6 +328,18 @@ export function height(ctx: Ctx, id: (typeof HEIGHT_ITEMS)[number]): CheckOut {
   const relief = readAll(ctx.regs, 'incentiveHeight').filter((x) => numOf(x) !== null);
   const reliefSum = relief.reduce((s, x) => s + numOf(x)!, 0);
   if (relief.length) useItems(r, relief, 'm');
+  // A 높이 완화 item that is there but not usable (AI 추정, 사람 입력 필요) leaves a height between the
+  // cap and cap + its value (any height over the cap when it has none) to a person.
+  const pending = pendingItems(ctx.regs, 'incentiveHeight');
+  if (pending.length)
+    useItems(
+      r,
+      pending.map((x) => x.read),
+      'm',
+    );
+  const pendingReach = pending.some((x) => x.value === null)
+    ? Infinity
+    : pending.reduce((t, x) => t + x.value!, 0);
   const top = (parts: typeof b.parts) =>
     parts.length ? Math.max(...parts.map((p) => p.solid.box.max[2])) : -Infinity;
   const mainTop = top(b.parts),
@@ -347,9 +373,15 @@ export function height(ctx: Ctx, id: (typeof HEIGHT_ITEMS)[number]): CheckOut {
       return t - g.local;
     },
     (planned, limit) => {
-      if (planned <= limit) return { state: '적합' };
-      if (reliefSum > 0 && planned <= limit + reliefSum)
+      if (within(planned, limit)) return { state: '적합' };
+      if (reliefSum > 0 && within(planned, limit + reliefSum))
         return { state: '판단 필요', reason: '높이 완화 적용 미확정', limit };
+      if (pending.length && within(planned, limit + reliefSum + pendingReach))
+        return {
+          state: '사람 입력 필요',
+          reason: pending.map((x) => x.read.reason).join('; '),
+          limit,
+        };
       return { state: '위반', limit };
     },
     'm',
@@ -433,10 +465,33 @@ export function floorsRow(ctx: Ctx): CheckOut {
       const s = statOf(p);
       return (p.floors?.key === 'count' ? s.count : s.max) + (p.roof?.key === 'in' ? 1 : 0);
     },
-    (planned, limit) => ({ state: planned <= limit ? '적합' : '위반' }),
+    (planned, limit) => ({ state: within(planned, limit) ? '적합' : '위반' }),
     '층',
     { ...AXIS_REASONS, roof: '옥탑 등의 층수 산입 여부' },
   );
+  // One floor name at more than one height (SPEC-15.3 4): counted as one floor, which may hide a
+  // floor copied above the top one with its name, so it never reads 적합.
+  const floorHeight = Math.min(
+    ctx.limits.plan.floorHeightGround,
+    ctx.limits.plan.floorHeightTypical,
+  );
+  const multi = new Map<string, { levels: number; apart: boolean; ids: string[] }>();
+  for (const t of ft.tables)
+    for (const f of t.floors)
+      if (f.levels.length > 1)
+        multi.set(f.label, {
+          levels: f.levels.length,
+          apart: f.levels.at(-1)! - f.levels[0] >= floorHeight - LEVEL_TOL,
+          ids: f.objectIds,
+        });
+  for (const [label, m] of multi) {
+    const why = m.apart
+      ? `같은 층 이름의 바닥이 다른 층 높이에 있음(${label}, ${m.levels}개) — 층 이름을 확인하세요`
+      : `한 층에 높이가 다른 바닥 ${m.levels}개(${label}) — 중층·복층인지 확인하세요`;
+    r.unconfirmed.push(why);
+    if (r.state === '적합') setState(r, '판단 필요', why);
+  }
+  unlabelledBlock(r, ft.tables);
   return { row: r };
 }
 
@@ -572,8 +627,55 @@ export function far(ctx: Ctx): CheckOut {
       note: reliefConfirmed ? '완화 항목 확정' : '완화 조건 미확정',
     });
   r.numbers.push(...ladder);
+  const baseNa = base.kind === 'na';
   if (baseV === null && loosest === null)
-    return { row: setState(r, '사람 입력 필요', base.reason || '기준 용적률') };
+    return {
+      row: setState(
+        r,
+        '사람 입력 필요',
+        baseNa
+          ? '기준 용적률 미적용 — 허용·상한 용적률 사람 입력 필요'
+          : base.reason || '기준 용적률',
+      ),
+    };
+  // Steps that are there but give no limit yet (AI 추정, 사람 입력 필요): a design they might allow
+  // is not 위반 — it waits for that item (SPEC-15.6 5). A relief never goes past a confirmed 상한.
+  const pendingRelief = [
+    ...pendingItems(ctx.regs, 'incentiveFar'),
+    ...pendingItems(ctx.regs, 'openSpaceIncentiveFar'),
+  ];
+  const pendingCaps = maxV === null ? [...pendingItems(ctx.regs, 'farMax')] : [];
+  if (maxV === null && allowedV === null) pendingCaps.push(...pendingItems(ctx.regs, 'farAllowed'));
+  const pendingAll = [...pendingRelief, ...pendingCaps];
+  useItems(
+    r,
+    pendingAll.map((x) => x.read),
+    '비율',
+  );
+  /** Whether the open items could still allow p, and why. */
+  const pendingAllows = (p: number): string | null => {
+    if (!pendingAll.length) return null;
+    let bound = -Infinity;
+    let open = false;
+    if (pendingRelief.length && baseV !== null) {
+      if (pendingRelief.some((x) => x.value === null)) open = true;
+      else
+        bound = Math.max(
+          bound,
+          (relief ?? baseV) + pendingRelief.reduce((t, x) => t + x.value!, 0),
+        );
+      if (maxV !== null) {
+        open = false;
+        bound = Math.min(Math.max(bound, maxV), maxV);
+      }
+    }
+    for (const x of pendingCaps) {
+      if (x.value === null) open = true;
+      else bound = Math.max(bound, x.value);
+    }
+    if (!open && !within(p, bound)) return null;
+    return pendingAll.map((x) => x.read.reason).join('; ');
+  };
   const undecided = (x: LimitRead | null) =>
     !!x && (x.kind === 'undecided-value' || x.kind === 'undecided-applies');
   const tableAxis: Axis = {
@@ -607,18 +709,34 @@ export function far(ctx: Ctx): CheckOut {
         reason: why,
       };
     };
+    const waits = (limit: number | null, read: LimitRead | null, fallback: () => Outcome) => {
+      const why = pendingAllows(p);
+      return why ? out('사람 입력 필요', limit, read, why) : fallback();
+    };
     if (baseV === null) {
-      if (loosest !== null && p > loosest) return out('위반', loosest, loosestRead);
+      if (loosest !== null && !within(p, loosest))
+        return waits(loosest, loosestRead, () => out('위반', loosest, loosestRead));
+      if (baseNa && loosest !== null)
+        return out(
+          '판단 필요',
+          loosest,
+          loosestRead,
+          '기준 용적률 미적용 — 허용·상한 용적률 안이지만 기준 없이 적합으로 정하지 않음',
+        );
       return out('사람 입력 필요', loosest, base, `${base.title} 사람 입력 필요`);
     }
-    if (p <= baseV) return out('적합', baseV, base);
-    if (relief !== null && reliefItems.length && p <= relief)
+    if (within(p, baseV)) return out('적합', baseV, base);
+    if (relief !== null && reliefItems.length && within(p, relief))
       return reliefConfirmed
         ? out('적합', relief, reliefItems[0])
         : out('판단 필요', relief, base, '완화 조건 미확정');
-    if (loosest !== null && p <= loosest)
-      return out('판단 필요', loosest, base, '기준을 넘지만 넘는 근거가 되는 완화 항목 없음');
-    return out('위반', loosest ?? baseV, loosestRead ?? base);
+    if (loosest !== null && within(p, loosest))
+      return waits(loosest, base, () =>
+        out('판단 필요', loosest, base, '기준을 넘지만 넘는 근거가 되는 완화 항목 없음'),
+      );
+    return waits(loosest ?? baseV, loosestRead ?? base, () =>
+      out('위반', loosest ?? baseV, loosestRead ?? base),
+    );
   });
   const { state, reasons } = combine(outcomes);
   setState(r, state, ...reasons);
@@ -644,5 +762,6 @@ export function far(ctx: Ctx): CheckOut {
     if (r.state === '위반') r.state = '판단 필요';
     r.reasons.push('산정 제외 면적 입력 전');
   }
+  unlabelledBlock(r, ft.tables);
   return { row: r };
 }

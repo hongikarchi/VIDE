@@ -2,11 +2,13 @@
 // the linked Rhino document has. The order is fixed (the first that decides wins):
 //
 //   1. object attribute `vide-check-role` (with `vide-floor` · `vide-use` · `vide-count`)
-//   2. a person's classification record — object first, then layer (SPEC-15.4 4)
+//   2. a classification record — object first (a person's or an accepted AI proposal's), then a
+//      layer record a person set (SPEC-15.4 4)
 //   3. jig tags: the chosen alternative's floor masses of `vide/buildable-mass` read as `floor`;
 //      every other jig object is context or an estimate and is left out
 //   4. layer names: a path step equal to a name of the table below; the deeper step wins and two
-//      roles at the same depth decide nothing (the AI proposal takes it)
+//      roles at the same depth decide nothing (the AI proposal takes it). An AI-accepted layer
+//      record (older projects) stands here, below a deeper layer name
 //
 // Pure TypeScript without node: imports. No legal value lives here — only names.
 
@@ -195,8 +197,7 @@ export function roleOf(row: RoleRow, index: RecordIndex, readOption: string | nu
       objectRecord,
     );
   const onLayer = layerRecord(index, row.layer);
-  if (onLayer)
-    return decided(onLayer.role, onLayer.by === 'person' ? 'person-layer' : 'ai-accepted', onLayer);
+  if (onLayer?.by === 'person') return decided(onLayer.role, 'person-layer', onLayer);
   // 3. Jig tags: only the read alternative's floor masses; everything else a jig made is left out.
   const jig = attrs[JIG_TAGS.jig];
   if (jig) {
@@ -208,8 +209,15 @@ export function roleOf(row: RoleRow, index: RecordIndex, readOption: string | nu
     }
     return { role: null, reason: '다른 jig의 결과' };
   }
-  // 4. Layer names.
+  // 4. Layer names. A layer record only a person confirmed decides above; one taken from an AI
+  // proposal (older projects — accepting a proposal now writes object records) never overrides a
+  // jig tag, nor a layer name deeper in the path than the record's layer (SPEC-15.4 3).
   const rule = layerRule(row.layer);
+  if (onLayer) {
+    const recordDepth = onLayer.key.split('::').length - 1;
+    if (!rule.role || rule.depth <= recordDepth)
+      return decided(onLayer.role, 'ai-accepted', onLayer);
+  }
   if (rule.role) return decided(rule.role, 'layer-rule', null);
   return { role: null, reason: '역할 없음' };
 }

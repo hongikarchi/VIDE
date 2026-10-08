@@ -134,8 +134,13 @@ export function pairText(
   let decimals = defaultDecimals(unit);
   const text = (side: { value: number; unit: string } | null, d: number) =>
     side ? valueText(side.value, side.unit, d) : '—';
-  if (planned && limit && planned.value !== limit.value)
-    while (decimals < 10 && text(planned, decimals) === text(limit, decimals)) decimals++;
+  // Values equal within the engine's comparison tolerance (relative 1e-9, SPEC-15.9 8) are equal.
+  const differ =
+    planned &&
+    limit &&
+    Math.abs(planned.value - limit.value) > 1e-9 * Math.max(1, Math.abs(limit.value));
+  if (planned && limit && differ)
+    while (decimals < 12 && text(planned, decimals) === text(limit, decimals)) decimals++;
   return { planned: text(planned, decimals), limit: text(limit, decimals), decimals };
 }
 

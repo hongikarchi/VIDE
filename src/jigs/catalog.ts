@@ -115,6 +115,17 @@ export const JIGS: JigEntry[] = [
     basis: 'S-03·S-04 · SPEC-12.13',
   },
   {
+    // The official tool jig `vide/compliance-check` (PLAN-48 T-237~T-239).
+    id: 'vide/compliance-check',
+    code: 'J-12',
+    name: '법규 체크',
+    summary:
+      '연결 Rhino 모델을 읽어 규제 조건과 숫자·형상으로 비교하고, 항목마다 적합·위반·판단 필요를 근거와 함께 보입니다. [법규 체크]를 누를 때만 계산합니다.',
+    inputs: ['설계 모델(Rhino)', '규제 조건·외피(매스 검토)', '대지 요약(선택)'],
+    status: 'available',
+    basis: 'SPEC-15 · PLAN-48',
+  },
+  {
     id: 'schedule',
     code: 'J-05',
     name: '일정표',

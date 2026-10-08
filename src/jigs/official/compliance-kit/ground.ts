@@ -117,6 +117,11 @@ export interface FloorTable {
   /** The ground case the unnamed outlines were labelled from (null = every outline is named). */
   ground: GroundCase | null;
   floors: FloorEntry[];
+  /**
+   * Unnamed outlines whose height order gives a floor name that a named floor at another height
+   * already has: left out of every floor and reported (the rows reading floors are 판단 필요).
+   */
+  unlabelled: string[];
 }
 
 const labelIndex = (label: string) =>
@@ -153,25 +158,47 @@ export function floorTable(
   const add = (label: string, o: ClassifiedObject, byHeight: boolean) => {
     const e = byLabel.get(label) ?? byLabel.set(label, { objs: [], byHeight }).get(label)!;
     e.objs.push(o);
+    e.byHeight ||= byHeight;
   };
+  const unlabelled: string[] = [];
   const unnamed = floors.filter((o) => !o.floor);
-  for (const o of floors) if (o.floor) add(o.floor, o, false);
+  const named = floors.filter((o) => o.floor);
+  for (const o of named) add(o.floor!, o, false);
   if (ground && unnamed.length) {
-    const zOf = new Map(unnamed.map((o) => [o.objectId, baseOf(o, solids.get(o.objectId)) ?? 0]));
-    const above = levelsOf(
-      unnamed.map((o) => zOf.get(o.objectId)!).filter((z) => z >= ground.local - LEVEL_TOL),
-    );
-    const below = levelsOf(
-      unnamed.map((o) => zOf.get(o.objectId)!).filter((z) => z < ground.local - LEVEL_TOL),
-    ).reverse();
+    // Heights of the named floors (each name at its lowest level) and of the unnamed outlines,
+    // ordered together: an unnamed outline at a named floor's height takes that name; any other
+    // gets its place in the order (1F, 2F … up from the ground, B1, B2 … down), unless a named
+    // floor at another height already has that name (SPEC-15.3 4).
+    const zOf = (o: ClassifiedObject) => baseOf(o, solids.get(o.objectId)) ?? 0;
+    const namedAt = new Map<string, number>();
+    for (const o of named) {
+      const z = zOf(o);
+      const label = o.floor!;
+      if (!namedAt.has(label) || z < namedAt.get(label)!) namedAt.set(label, z);
+    }
+    const sameLevel = (a: number, b: number) => Math.abs(a - b) <= LEVEL_TOL;
+    const isAbove = (z: number) => z >= ground.local - LEVEL_TOL;
+    const levels = (above: boolean) => {
+      const zs = [
+        ...unnamed.map(zOf).filter((z) => isAbove(z) === above),
+        ...[...namedAt].filter(([label]) => !label.startsWith('B') === above).map(([, z]) => z),
+      ];
+      return above ? levelsOf(zs) : levelsOf(zs).reverse();
+    };
+    const above = levels(true);
+    const below = levels(false);
     for (const o of unnamed) {
-      const z = zOf.get(o.objectId)!;
-      const ai = above.findIndex((l) => Math.abs(z - l) <= LEVEL_TOL);
-      if (z >= ground.local - LEVEL_TOL && ai >= 0) add(`${ai + 1}F`, o, true);
-      else {
-        const bi = below.findIndex((l) => Math.abs(z - l) <= LEVEL_TOL);
-        add(`B${bi + 1}`, o, true);
+      const z = zOf(o);
+      const match = [...namedAt].find(([, at]) => sameLevel(at, z));
+      if (match) {
+        add(match[0], o, true);
+        continue;
       }
+      const list = isAbove(z) ? above : below;
+      const i = list.findIndex((l) => sameLevel(l, z));
+      const label = isAbove(z) ? `${i + 1}F` : `B${i + 1}`;
+      if (i < 0 || namedAt.has(label)) unlabelled.push(o.objectId);
+      else add(label, o, true);
     }
   }
   const useOverride = new Map<string, string>();
@@ -217,5 +244,9 @@ export function floorTable(
     });
   }
   out.sort((a, b) => b.index - a.index);
-  return { ground: ground && unnamed.length ? ground : null, floors: out };
+  return {
+    ground: ground && unnamed.length ? ground : null,
+    floors: out,
+    unlabelled: unlabelled.sort(),
+  };
 }

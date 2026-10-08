@@ -731,6 +731,26 @@ export function checkSolid(m: SolidMesh): SolidCheck {
   };
 }
 
+/**
+ * A closed volume for checks that take any closed shape (법규 체크, SPEC-15.3 2): no open or
+ * non-manifold edge, no degenerate polygon (so every edge is used once each way: consistently
+ * oriented) and a volume that is not zero. Unlike `checkSolid` it takes several shells and any
+ * genus — a mass with a courtyard or a through-opening is closed. `orientation: 'outward'` also
+ * asks for a positive volume. Massing envelopes keep the stricter `checkSolid`.
+ */
+export function closedVolumeCheck(
+  c: SolidCheck,
+  orientation: 'outward' | 'any' = 'outward',
+): { ok: boolean; reasons: string[] } {
+  const reasons = c.reasons.filter(
+    (r) =>
+      !r.startsWith('껍질 ') &&
+      !r.startsWith('오일러 지표 ') &&
+      !(orientation === 'any' && r.startsWith('부피 ') && c.volume !== 0),
+  );
+  return { ok: c.polygons > 0 && reasons.length === 0, reasons };
+}
+
 /** Signed volume of a solid (welded first). */
 export const solidVolume = (s: Solid) => (s.length ? checkSolid(weldSolid(s)).volume : 0);
 

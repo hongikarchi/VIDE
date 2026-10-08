@@ -1,7 +1,7 @@
 {
   "contractVersion": 3,
   "id": "vide/buildable-mass",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "kind": "tool",
   "name": "건축 가능 영역·매스",
   "summary": "대지와 규제 조건으로 2D 건축 가능 영역·3D 가능 외피를 계산하고, 층을 나눠 대안(최대·기준 용적률·인센티브·공개공지·사람 수정)을 비교해 하나를 고르며 용도·주차·조경을 본다. 탐색용 규모검토로 인허가 도서·면적 산정·법규 검토를 대체하지 않는다.",
@@ -1993,6 +1993,31 @@
       }
     },
     {
+      "id": "limitsHandoff",
+      "title": "넘겨줄 결과(한계 · 법규 체크)",
+      "kind": "library",
+      "use": "vide/massing-kit#limitsHandoffStep",
+      "needs": ["envelope", "alternatives"],
+      "reads": [
+        "step.site",
+        "step.regulations",
+        "step.plan",
+        "step.limits",
+        "step.envelope",
+        "step.alternatives",
+        "param.chosenAlternative",
+        "input.site.boundary",
+        "input.siteModel"
+      ],
+      "writes": "limitsHandoff",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "no-nan"
+        }
+      ]
+    },
+    {
       "id": "confirmChoice",
       "title": "고른 대안 확정",
       "kind": "human",
@@ -2163,6 +2188,11 @@
       "key": "chosen",
       "from": "step.handoff",
       "schema": "schemas/outputs/chosen.json"
+    },
+    {
+      "key": "limits",
+      "from": "step.limitsHandoff",
+      "schema": "schemas/outputs/limits.json"
     }
   ],
   "bake": [

@@ -424,7 +424,16 @@ export async function jigRoutes(
       send(200, await rt.upgrade(projectId, instanceId));
       return true;
     }
+    // A jig a remote screen only looks at (`remote: 'view'`, 법규 체크 SPEC-15.16): its settings,
+    // 수정 사항 and confirmed runs are this PC's. A geometry run stays open (it only shows results).
+    const viewOnly = async () => {
+      if (!remote) return;
+      const view = await rt.view(projectId, instanceId);
+      const jig = await rt.registry.resolve(view.jig.id, view.jig.version);
+      if (jig.manifest.remote === 'view') throw new DomainError('FORBIDDEN');
+    };
     if (rest === 'params' && method === 'PUT') {
+      await viewOnly();
       const input = setParams.parse(await body(request));
       send(
         200,
@@ -438,6 +447,7 @@ export async function jigRoutes(
       return true;
     }
     if (rest === 'params/undo' && method === 'POST') {
+      await viewOnly();
       const { seq } = z
         .object({ seq: z.number().int().positive() })
         .strict()
@@ -450,6 +460,7 @@ export async function jigRoutes(
       return true;
     }
     if (rest === 'overrides' && method === 'POST') {
+      await viewOnly();
       const input = overridesInput.parse(await body(request));
       send(200, { overrides: await rt.setOverrides(projectId, instanceId, input) });
       return true;
@@ -542,6 +553,7 @@ export async function jigRoutes(
     }
     if (rest === 'run' && method === 'POST') {
       const input = runInput.parse(await body(request));
+      if ((input.mode ?? 'geometry') !== 'geometry') await viewOnly();
       send(
         200,
         await rt.run(projectId, instanceId, { until: input.until, mode: input.mode ?? 'geometry' }),
@@ -990,6 +1002,63 @@ export async function readForJig(
     .at(-1);
   if (!latest) throw new DomainError('STALE_REFERENCE');
   return fromSync(latest.id, link.id);
+}
+
+/**
+ * The revision key a read of this Link would carry now (the form `readForJig` gives), without
+ * reading the document: the attached connection's change revision (`fingerprint`), or a linked
+ * file's newest import. Null with the reason when it cannot be known (closed, not connected,
+ * another host) — the 법규 체크 screen then says '모델 판 확인 불가' (SPEC-15.13).
+ */
+export async function currentRevisionKey(
+  context: {
+    workspace: Workspace;
+    links?: DocumentLinks;
+    sdk?: { fingerprint?: (target: { instance: string; documentId: number }) => Promise<unknown> };
+  },
+  projectId: string,
+  linkId: string,
+): Promise<{ revisionKey: string | null; reason?: string }> {
+  const { workspace, links, sdk } = context;
+  let link: DocumentLink;
+  try {
+    if (!links) throw new DomainError('NOT_FOUND');
+    link = links.get(projectId, linkId);
+  } catch {
+    return { revisionKey: null, reason: '연결을 찾을 수 없음' };
+  }
+  if (link.host !== 'rhino') return { revisionKey: null, reason: 'Rhino 연결이 아님' };
+  if (isFileLink(link)) {
+    const latest = workspace
+      .list(projectId)
+      .filter(
+        (entry) =>
+          entry.state === 'succeeded' &&
+          entry.input.host !== 'zwcad' &&
+          (entry.input.linkId === link.id ||
+            (entry.input.source === 'file' &&
+              `file:${String(entry.input.body)
+                .replace(/ 불러오기$/, '')
+                .toLowerCase()}` === link.instance)),
+      )
+      .at(-1);
+    const copy = latest ? fileImport.safeParse(latest.result) : undefined;
+    return copy?.success
+      ? { revisionKey: `${link.instance}|${link.documentId}|${copy.data.fileHash}` }
+      : { revisionKey: null, reason: '파일을 아직 읽지 않음' };
+  }
+  if (!sdk?.fingerprint) return { revisionKey: null, reason: 'Rhino에 연결되지 않음' };
+  try {
+    const now = (await sdk.fingerprint({
+      instance: link.instance,
+      documentId: link.documentId as number,
+    })) as { revision?: unknown };
+    return {
+      revisionKey: `${link.instance}|${link.documentId}|${now.revision === undefined || now.revision === null ? '' : String(now.revision)}`,
+    };
+  } catch {
+    return { revisionKey: null, reason: '문서가 닫혔거나 연결이 끊김' };
+  }
 }
 
 // --- jig reports (SPEC-07.11, ARCH-03 §5.2, PLAN-22 T-057) ---------------------------------------

@@ -278,8 +278,8 @@ export class ComplianceRoles {
   }
 
   /**
-   * [받기] / [역할 바꾸기] / [버리기] of one proposal (SPEC-15.4 3). Accepting writes records: a layer
-   * record for a whole-layer proposal, else object records (also when objects were taken out).
+   * [받기] / [역할 바꾸기] / [버리기] of one proposal (SPEC-15.4 3). Accepting writes object records
+   * for the objects the proposal named, less the ones taken out — also for a whole-layer proposal.
    */
   decide(
     projectId: string,
@@ -319,26 +319,20 @@ export class ComplianceRoles {
       const hashes = new Map(
         Object.entries(JSON.parse(row.hashes_json) as Record<string, string | null>),
       );
-      if (row.scope === 'layer' && exclude.size === 0)
+      // Only the objects the proposal named (and the person saw counted) get a role — also for a
+      // whole-layer proposal: a layer record would reach objects the AI never looked at (the
+      // layer's sub-layers, other jigs' objects on it, objects drawn later). A layer record is
+      // written only when a person sets it directly (`setRecords`, SPEC-15.4 3·4).
+      for (const id of objectIds)
         this.write(
           db,
           projectId,
           row.documentKey,
-          { scope: 'layer', key: row.layer, role, floor, use },
+          { scope: 'object', key: id, role, floor, use },
           by,
           at,
+          hashes,
         );
-      else
-        for (const id of objectIds)
-          this.write(
-            db,
-            projectId,
-            row.documentKey,
-            { scope: 'object', key: id, role, floor, use },
-            by,
-            at,
-            hashes,
-          );
       db.prepare("UPDATE compliance_proposals SET state='accepted' WHERE projectId=? AND id=?").run(
         projectId,
         proposalId,

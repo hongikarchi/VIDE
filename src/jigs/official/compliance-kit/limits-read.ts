@@ -112,6 +112,23 @@ export const readAll = (regs: readonly RegulationItemData[], id: string): LimitR
   return all.length ? all.map((i) => readItem(id, i)) : [readItem(id, null)];
 };
 
+/**
+ * Items of an id that are there but give no limit (AI 추정, 사람 입력 필요, 단위가 다름): a relief
+ * or upper step whose use is still open. `value` is the number the item carries, unconfirmed (null
+ * when it has none). An item that is not in the 규제 조건 at all is not pending.
+ */
+export function pendingItems(
+  regs: readonly RegulationItemData[],
+  id: string,
+): { read: LimitRead; value: number | null }[] {
+  return readAll(regs, id)
+    .filter((x) => x.item !== null && x.kind === 'none')
+    .map((read) => ({
+      read,
+      value: typeof read.item!.value === 'number' ? read.item!.value : null,
+    }));
+}
+
 /** A number from a read (null for non-numbers and kinds without a value). */
 export const numOf = (r: LimitRead): number | null =>
   (r.kind === 'value' || r.kind === 'undecided-applies' || r.kind === 'undecided-value') &&

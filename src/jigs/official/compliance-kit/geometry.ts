@@ -6,6 +6,7 @@
 import { signedArea, type Polygon, type Vec2, type Vec3 } from '../geometry-kit/plan.ts';
 import {
   checkSolid,
+  closedVolumeCheck,
   mergeCoplanar,
   prismSolid,
   sectionArea,
@@ -76,7 +77,7 @@ export function boxOf(s: Solid): Box3 {
 
 export interface PreparedSolid {
   solid: Solid;
-  /** True when the welded mesh passes the closed-solid check (SPEC-12.9 4). */
+  /** True when the welded mesh is a closed volume (`closedVolumeCheck`, SPEC-15.3 2). */
   ok: boolean;
   reasons: string[];
   volume: number;
@@ -102,7 +103,8 @@ export function prepareMesh(m: Mesh): PreparedSolid {
   let reasons: string[] = ['면 없음'];
   if (solid.length) {
     try {
-      const check = checkSolid(weldSolid(solid));
+      // Any closed, consistently oriented volume: several shells and courtyards are fine.
+      const check = closedVolumeCheck(checkSolid(weldSolid(solid)));
       ok = check.ok;
       reasons = check.reasons;
     } catch (error) {

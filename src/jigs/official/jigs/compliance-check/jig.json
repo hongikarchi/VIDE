@@ -1,0 +1,154 @@
+{
+  "contractVersion": 3,
+  "id": "vide/compliance-check",
+  "version": "0.1.0",
+  "kind": "tool",
+  "name": "법규 체크",
+  "summary": "연결 Rhino 문서의 건물을 읽어 건축 가능 영역·매스의 규제 조건과 숫자·형상으로 비교하고, 항목마다 적합·위반·판단 필요·사람 입력 필요·검사 불가를 근거와 함께 보입니다. [법규 체크]를 누를 때만 읽고 계산합니다. 탐색용으로 인허가 검토·법규 검토를 대체하지 않습니다.",
+  "icon": "scale",
+  "remote": "view",
+  "inputs": [
+    {
+      "key": "model",
+      "title": "설계 모델(연결 Rhino 문서)",
+      "kind": "host-document",
+      "host": "rhino",
+      "required": true
+    },
+    {
+      "key": "limits",
+      "title": "규제 조건·외피(건축 가능 영역·매스)",
+      "kind": "jig-output",
+      "from": { "jig": "vide/buildable-mass", "output": "limits" }
+    },
+    {
+      "key": "siteModel",
+      "title": "대지 요약(사이트 모델링)",
+      "kind": "jig-output",
+      "from": { "jig": "vide/site-model", "output": "summary" }
+    }
+  ],
+  "params": [
+    {
+      "key": "groundState",
+      "title": "기준 지반",
+      "group": "기준 지반",
+      "type": "choice",
+      "default": "unset",
+      "choices": [
+        {
+          "value": "unset",
+          "label": "사이트 모델링 후보(최저·최고)",
+          "consequence": "후보가 없으면 기준 지반을 쓰는 행은 사람 입력 필요"
+        },
+        { "value": "set", "label": "사람이 넣은 높이" }
+      ],
+      "affects": ["check"]
+    },
+    {
+      "key": "groundLevel",
+      "title": "기준 지반 높이(문서 z)",
+      "group": "기준 지반",
+      "type": "level",
+      "unit": "m",
+      "default": 0,
+      "range": { "min": -1000, "max": 10000, "step": 0.01 },
+      "affects": ["check"]
+    },
+    {
+      "key": "groundBasis",
+      "title": "기준 지반 근거",
+      "group": "기준 지반",
+      "type": "choice",
+      "default": "none",
+      "choices": [
+        { "value": "none", "label": "근거 없음" },
+        { "value": "survey", "label": "측량·현황 자료" },
+        { "value": "design", "label": "설계 기준 레벨" },
+        { "value": "permit", "label": "인허가 협의 값" }
+      ],
+      "affects": ["check"]
+    },
+    {
+      "key": "exclusionsComplete",
+      "title": "산정 제외 면적 입력 끝남",
+      "group": "산정",
+      "type": "toggle",
+      "default": false,
+      "affects": ["check"]
+    },
+    {
+      "key": "noneParking",
+      "title": "주차 구획 없음 확정",
+      "group": "없음 확정",
+      "type": "toggle",
+      "default": false,
+      "affects": ["check"]
+    },
+    {
+      "key": "noneLandscape",
+      "title": "조경 없음 확정",
+      "group": "없음 확정",
+      "type": "toggle",
+      "default": false,
+      "affects": ["check"]
+    },
+    {
+      "key": "noneOpenSpace",
+      "title": "공개공지 없음 확정",
+      "group": "없음 확정",
+      "type": "toggle",
+      "default": false,
+      "affects": ["check"]
+    },
+    {
+      "key": "includeHidden",
+      "title": "숨긴 객체 포함",
+      "group": "모델 읽기",
+      "type": "toggle",
+      "default": false,
+      "affects": ["check"]
+    }
+  ],
+  "steps": [
+    {
+      "id": "check",
+      "title": "법규 체크",
+      "kind": "library",
+      "use": "vide/compliance-kit#checkStep",
+      "reads": [
+        "input.model",
+        "input.limits",
+        "input.siteModel",
+        "param.groundState",
+        "param.groundLevel",
+        "param.groundBasis",
+        "param.exclusionsComplete",
+        "param.noneParking",
+        "param.noneLandscape",
+        "param.noneOpenSpace",
+        "param.includeHidden"
+      ],
+      "writes": "check",
+      "speed": "button",
+      "manual": true,
+      "budget": { "wallClockMs": 120000 }
+    }
+  ],
+  "panel": "panel.json",
+  "capabilities": [
+    {
+      "name": "sync.read",
+      "reason": "[법규 체크]를 누를 때 연결 Rhino 문서를 읽습니다(문서는 바꾸지 않음)"
+    },
+    {
+      "name": "jig.read",
+      "reason": "건축 가능 영역·매스의 규제 조건·외피와 사이트 모델링의 대지 요약을 받습니다"
+    },
+    { "name": "library.call", "reason": "vide/compliance-kit의 규칙으로 계산합니다" },
+    { "name": "export.file", "reason": "결과 보고서(HTML)와 표(CSV)를 냅니다" }
+  ],
+  "selftest": { "fixtures": "fixtures", "requiresHost": false },
+  "skill": "skill.md",
+  "open": { "reuse": "last" }
+}

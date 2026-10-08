@@ -322,3 +322,40 @@ a.cmp-chip:hover {
     min-width: 0;
   }
 }
+/* What [역할 제안 받기] sends, before it is sent (SPEC-15.4 1). */
+.cmp-send {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-recessed);
+}
+.cmp-send p {
+  margin: 0;
+}
+.cmp-send-list,
+.cmp-exclude ul,
+.cmp-own ul {
+  display: grid;
+  gap: 2px;
+  max-height: 12rem;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+.cmp-exclude summary,
+.cmp-own summary {
+  cursor: pointer;
+  color: var(--info);
+}
+.cmp-own {
+  display: grid;
+  gap: var(--s2);
+}
+.cmp-own li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1, 4px);
+}

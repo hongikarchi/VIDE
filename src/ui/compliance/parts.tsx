@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { PanelHost } from '../jig-panel/panel.tsx';
-import type { InstanceState } from '../jig-panel/instance.ts';
+import { messageOf, type InstanceState } from '../jig-panel/instance.ts';
 import { selectNative } from '../legal-target.ts';
 import type { ComplianceView } from './context.ts';
 import {
@@ -66,9 +66,35 @@ function download(name: string, body: string, type: string) {
 
 // ── [법규 체크] ─────────────────────────────────────────────────────────────────────────
 
+/**
+ * [법규 체크] (SPEC-15.1 3): read the linked document again, then compute the `check` step by
+ * name. A read that fails stops here with its reason (SPEC-15.14) and the result stays as it was.
+ */
+function useCheck(view: ComplianceView, jig: InstanceState) {
+  const [problem, setProblem] = useState<string>();
+  const [reading, setReading] = useState(false);
+  const run = async () => {
+    setProblem(undefined);
+    setReading(true);
+    try {
+      await view.readDocument(true);
+    } catch (error) {
+      setProblem(messageOf(error));
+      return;
+    } finally {
+      setReading(false);
+    }
+    await jig.runStep(view.step);
+  };
+  return { run, problem, busy: reading || jig.busy || jig.computing, reading };
+}
+
 export function ComplianceRun({ view, jig }: { view: ComplianceView; jig: InstanceState }) {
   const result = view.read.kind === 'ok' ? view.read.result : null;
   const model = result?.inputs.model;
+  const check = useCheck(view, jig);
+  // Why the last [법규 체크] did not go through: the read, the run request, or the step itself.
+  const why = check.problem ?? (jig.notice && !check.busy ? jig.notice : undefined) ?? view.failure;
   return (
     <section className="kit-section cmp-run" aria-label="법규 체크 실행">
       {view.remote ? (
@@ -80,15 +106,27 @@ export function ComplianceRun({ view, jig }: { view: ComplianceView; jig: Instan
           type="button"
           className="kit-button cmp-run-button"
           data-primary
-          disabled={jig.busy || jig.computing}
-          onClick={() => void jig.runStep(view.step)}
+          disabled={check.busy}
+          onClick={() => void check.run()}
         >
-          {jig.busy || jig.computing ? '읽고 계산하는 중…' : '법규 체크'}
+          {check.reading
+            ? '모델을 읽는 중…'
+            : jig.busy || jig.computing
+              ? '계산하는 중…'
+              : why
+                ? '법규 체크 다시 누르기'
+                : '법규 체크'}
         </button>
       )}
+      {why ? (
+        <p className="cmp-warn" role="alert" data-check-failed="">
+          {why}
+          {result ? ' · 아래는 이전 결과입니다' : ''}
+        </p>
+      ) : null}
       <p className="kit-muted" data-last-check="">
         {result
-          ? `마지막 체크 ${stamp(result.checkedAt)}${model ? ` · 문서 판 ${revisionOf(model.revisionKey)}` : ''}`
+          ? `${why ? '마지막 체크 실패 · 이전 결과 ' : '마지막 체크 '}${stamp(result.checkedAt)}${model ? ` · 문서 판 ${revisionOf(model.revisionKey)}` : ''}`
           : '아직 체크하지 않았습니다 · 누를 때만 모델을 읽고 계산합니다'}
       </p>
     </section>
@@ -99,6 +137,7 @@ export function ComplianceRun({ view, jig }: { view: ComplianceView; jig: Instan
 
 export function ComplianceSummary({ view, jig }: { view: ComplianceView; jig: InstanceState }) {
   const result = view.read.kind === 'ok' ? view.read.result : null;
+  const check = useCheck(view, jig);
   const head = result ? headline(result) : null;
   return (
     <div className="cmp-summary" data-stale={view.stale ? 'true' : undefined}>
@@ -120,13 +159,18 @@ export function ComplianceSummary({ view, jig }: { view: ComplianceView; jig: In
             <button
               type="button"
               className="kit-button"
-              disabled={jig.busy || jig.computing}
-              onClick={() => void jig.runStep(view.step)}
+              disabled={check.busy}
+              onClick={() => void check.run()}
             >
               법규 체크
             </button>
           )}
         </div>
+      ) : null}
+      {!result && (view.failure || check.problem) ? (
+        <p className="cmp-warn" role="alert" data-check-failed="">
+          {check.problem ?? view.failure}
+        </p>
       ) : null}
       <div className="kit-kpis cmp-kpis" role="group" aria-label="상태별 수">
         {COMPLIANCE_STATES.map((state) => {
@@ -288,6 +332,13 @@ function RowDetail({
                 onClick={(event) => {
                   event.stopPropagation();
                   onPiece(piece.no);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onPiece(piece.no);
+                  }
                 }}
               >
                 <td data-num className="cmp-mono">

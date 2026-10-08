@@ -39,6 +39,11 @@ import {
   siteModel,
   statusOf,
 } from '../fixtures/site-massing-chain.mjs';
+import {
+  reportRestore,
+  restoreInstalledPlugin,
+  warnIfRhinoRunning,
+} from './installed-connector.mjs';
 
 const live = process.argv.includes('--live');
 const probe = sdkOptions('.');
@@ -95,33 +100,6 @@ const wait = async (fn, ms = 180000) => {
   throw Error('Timed out');
 };
 
-/** After the test: put the installed VIDE's Rhino plugin registration back (launch.json token). */
-async function restoreInstalledPlugin() {
-  try {
-    const launch = JSON.parse(
-      await readFile(join(process.env.LOCALAPPDATA ?? '', 'VIDE', 'launch.json'), 'utf8'),
-    );
-    const url = new URL(launch.url);
-    const origin = url.origin;
-    const session = await fetch(new URL('/api/v1/session', origin), {
-      method: 'POST',
-      headers: { Origin: origin, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: url.hash.slice(1) }),
-      signal: AbortSignal.timeout(5000),
-    });
-    const cookie = session.headers.get('set-cookie')?.split(';')[0];
-    if (!session.ok || !cookie) return { restored: false, status: session.status };
-    const install = await fetch(new URL('/api/v1/connectors/rhino8/install', origin), {
-      method: 'POST',
-      headers: { Origin: origin, Cookie: cookie },
-      signal: AbortSignal.timeout(60000),
-    });
-    return { restored: install.ok, status: install.status };
-  } catch (error) {
-    return { restored: false, error: String(error) };
-  }
-}
-
 const decode = (value) => Buffer.from(value, 'base64').toString('utf8');
 const attrsOf = (row) =>
   Object.fromEntries((row.attributes64 ?? []).map(([k, v]) => [decode(k), decode(v)]));
@@ -138,6 +116,7 @@ let worker, host, f, clawde;
 const result = { directory, live, timings: {} };
 const T = result.timings;
 try {
+  await warnIfRhinoRunning();
   // 1. A synthetic document, saved by a work copy, then open in a VIDE-owned hidden Rhino.
   await timed(T, 'rhinoStartMs', async () => {
     worker = await launchRhinoWorker({ ...options, directory: join(directory, 'create') });
@@ -497,7 +476,6 @@ result=out`,
   await worker?.stop();
   await host?.stop();
   if (process.env.VIDE_TEST_KEEP_REGISTRATION !== '1') {
-    const restored = await restoreInstalledPlugin();
-    console.log('installed plugin registration: ' + JSON.stringify(restored));
+    reportRestore(await restoreInstalledPlugin());
   }
 }

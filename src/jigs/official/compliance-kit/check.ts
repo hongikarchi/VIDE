@@ -172,6 +172,12 @@ export function runCheck(
     counts,
     unconfirmedCount: items.filter((i) => i.unconfirmed.length > 0).length,
     notice: NOTICE,
+    // What the screen draws (SPEC-15.11): local + origin = document metres, the viewport's world;
+    // the base variant's 최대 외피 as the light outline.
+    display: {
+      origin: l?.frame.origin ?? [0, 0, 0],
+      envelope: (l?.variants.find((v) => v.id === 'base') ?? l?.variants[0])?.envelope ?? null,
+    },
   };
   return complianceResultSchema.parse(result);
 }

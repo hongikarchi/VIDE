@@ -25,7 +25,13 @@ import {
   type UNUSED_SHAPES,
 } from '../../../contracts/compliance.ts';
 import { signedArea, type Vec2, type Vec3 } from '../geometry-kit/plan.ts';
-import { checkSolid, solidPolygon, weldSolid, type Solid } from '../geometry-kit/solid.ts';
+import {
+  checkSolid,
+  closedVolumeCheck,
+  solidPolygon,
+  weldSolid,
+  type Solid,
+} from '../geometry-kit/solid.ts';
 import { alternativeReading, indexRecords, roleOf, type RoleRow } from './conventions.ts';
 
 /** Level and closing tolerance (m): 1 mm (SPEC-15.3, PLAN-48 T-237). */
@@ -290,9 +296,11 @@ function meshShape(v: readonly number[], f: readonly number[]): AnalyzedShape {
   }
   const mesh: Mesh = { v: [...v], f: tris };
   if (!polys.length) return { kind: 'bad', shape: 'open-solid', reason: '닫히지 않음' };
+  // Closed means closed: several shells and a courtyard (genus > 0) are a closed mass too; the
+  // engine turns an inside-out mesh the right way (compliance-kit `prepareMesh`).
   const check = checkSolid(weldSolid(polys));
-  return check.ok
-    ? { kind: 'solid', mesh, closed: true, volume: check.volume }
+  return closedVolumeCheck(check, 'any').ok
+    ? { kind: 'solid', mesh, closed: true, volume: Math.abs(check.volume) }
     : { kind: 'open-solid', mesh };
 }
 

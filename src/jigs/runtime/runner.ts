@@ -350,6 +350,16 @@ export async function executeSteps(input: ExecutionInput): Promise<ExecutionRepo
       stopped.add(id);
       continue;
     }
+    // A step that runs only when asked by name (`manual`): any other run leaves it as it is and
+    // shows its last result; its kept run row (and '다시 계산 필요') is not touched.
+    if (step.manual && mode !== 'selftest' && !(mode === 'confirmed' && input.until === id)) {
+      report.status = 'skipped';
+      const previous = (await cache.previous?.(id)) ?? null;
+      if (previous) outputs[id] = previous.output;
+      stopped.add(id);
+      if (id === input.until) break;
+      continue;
+    }
     // Human steps: confirmed with this fingerprint, confirmed with another, or waiting.
     if (step.kind === 'human') {
       const gates = runGates(

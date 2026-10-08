@@ -770,3 +770,331 @@ test('미반영 조건 of the envelope: the rule needs a person; the 최대 외�
   assert.equal(row(r, 'envelope').state, '적합');
   assert.ok(row(r, 'envelope').unconfirmed.includes('미반영 조건 1개'));
 });
+
+// ── 2026-10-08 적대적 검토 뒤 보강 (검토 발견 → 시험) ──────────────────────────────────────────
+
+test('a mass covering only the basement never hides the floors drawn above it', () => {
+  const basement = solid(1, box(2, 4, -7.2, 18, 24, 0));
+  const below = ['B1', 'B2'].map((f, i) =>
+    region(30 + i, 'floor', rect(2, 4, 18, 24), -3.6 * (i + 1), { floor: f }),
+  );
+  const above = Array.from({ length: 7 }, (_, i) =>
+    region(10 + i, 'floor', rect(2, 4, 18, 29), i * 3.6, { floor: `${i + 1}F` }),
+  );
+  const r = check({ objects: [basement, ...below, ...above, ...STALLS, LANDSCAPE, OPEN] });
+  const h = row(r, 'height:heightMax');
+  assert.equal(h.state, '위반', h.reason);
+  close(h.planned.value, 25.2, 1e-9, 'top of the 7F prism');
+  assert.ok(h.unconfirmed.some((u) => /매스가 덮지 않은 지상 층 윤곽 7개/.test(u)));
+  assert.equal(row(r, 'sun').state, '위반');
+  close(row(r, 'sun').planned.value, 777.6, 1e-6, 'sun');
+  assert.equal(row(r, 'envelope').state, '위반');
+  // A mass that covers every floor adds no prism (no double count).
+  const covered = check();
+  assert.equal(row(covered, 'height:heightMax').unconfirmed.length, 0);
+  assert.equal(row(covered, 'sun').state, '적합');
+  // The top floor's assumed height never raises a mass that stands on it.
+  const low = check({
+    objects: [solid(1, box(2, 4, 0, 18, 24, 9.9)), ...FLOORS, ...STALLS, LANDSCAPE, OPEN],
+  });
+  close(row(low, 'height:heightMax').planned.value, 9.9, 1e-9, 'the mass top, not 7.2 + 3.6');
+  assert.equal(row(low, 'height:heightMax').unconfirmed.length, 0);
+});
+
+test('an unnamed outline above the named floors is a new floor, never merged into 1F', () => {
+  const r = check({
+    objects: [
+      solid(1, box(2, 4, 0, 18, 24, 14.4)),
+      ...FLOORS,
+      region(13, 'floor', rect(2, 4, 18, 24), 10.8),
+      ...STALLS,
+      LANDSCAPE,
+      OPEN,
+    ],
+    regOver: { floorsMax: reg('floorsMax', 3) },
+  });
+  const f = row(r, 'floors');
+  assert.equal(f.state, '위반');
+  assert.equal(f.planned.value, 4);
+  assert.ok(f.unconfirmed.some((u) => /높이 순서로 층 이름/.test(u)));
+  close(row(r, 'far').planned.value, 1280 / 600, 1e-9, 'four floors of 320 ㎡');
+  // An outline at a named floor's height takes that name.
+  const same = check({
+    objects: [
+      MASS,
+      ...FLOORS,
+      region(14, 'floor', rect(2, 4, 18, 24), 3.6),
+      ...STALLS,
+      LANDSCAPE,
+      OPEN,
+    ],
+  });
+  assert.equal(row(same, 'floors').planned.value, 3);
+  // A mezzanine between named floors would take a name a named floor has: 판단 필요, not merged.
+  const mezzanine = check({
+    objects: [
+      MASS,
+      ...FLOORS,
+      region(15, 'floor', rect(2, 4, 10, 24), 5),
+      ...STALLS,
+      LANDSCAPE,
+      OPEN,
+    ],
+  });
+  assert.equal(row(mezzanine, 'floors').state, '판단 필요');
+  assert.match(row(mezzanine, 'floors').reason, /층 이름 없는 윤곽 1개/);
+  assert.ok(row(mezzanine, 'floors').objectIds.includes(uuid(15)));
+});
+
+test('one floor name at two heights never reads 적합 on the floor count', () => {
+  const copied = region(16, 'floor', rect(2, 4, 18, 24), 10.8, { floor: '3F' });
+  const r = check({
+    objects: [solid(1, box(2, 4, 0, 18, 24, 14.4)), ...FLOORS, copied, ...STALLS, LANDSCAPE, OPEN],
+  });
+  const f = row(r, 'floors');
+  assert.equal(f.state, '판단 필요');
+  assert.match(f.reason, /같은 층 이름의 바닥이 다른 층 높이에 있음\(3F/);
+});
+
+test('a plan exactly at the limit stays 적합 through mm scaling and offsets', () => {
+  for (const gmm of [13230, 33550]) {
+    const g = gmm / 1000;
+    const mass = solid(1, box(2, 4, gmm * 0.001, 18, 24, (gmm + 20000) * 0.001));
+    const r = check({
+      objects: [mass, ...FLOORS, ...STALLS, LANDSCAPE, OPEN],
+      settings: { groundLevel: g },
+    });
+    const h = row(r, 'height:heightMax');
+    assert.equal(h.state, '적합', `${gmm}: ${h.planned.value}`);
+    assert.equal(h.margin, 0);
+  }
+  const [a, b] = [1240, 3130];
+  const outline = region(
+    50,
+    'building-area',
+    rect(a * 0.001, b * 0.001, (a + 18000) * 0.001, (b + 20000) * 0.001),
+    0,
+  );
+  const c = row(check({ objects: [...baseObjects(), outline] }), 'coverage');
+  assert.equal(c.state, '적합', String(c.planned.value));
+  assert.equal(c.margin, 0);
+});
+
+test('a mass with a courtyard is checked, not 형상 연산 실패', () => {
+  const O = [
+    [2, 10],
+    [18, 10],
+    [18, 29],
+    [2, 29],
+  ];
+  const I = [
+    [6, 14],
+    [14, 14],
+    [14, 27],
+    [6, 27],
+  ];
+  const v = [];
+  for (const z of [0, 12]) for (const p of [...O, ...I]) v.push(p[0], p[1], z);
+  const f = [];
+  for (let k = 0; k < 4; k++) {
+    const j = (k + 1) % 4;
+    f.push(8 + k, 8 + j, 12 + j, 8 + k, 12 + j, 12 + k);
+    f.push(k, 4 + j, j, k, 4 + k, 4 + j);
+    f.push(k, j, 8 + j, k, 8 + j, 8 + k);
+    f.push(4 + k, 12 + j, 4 + j, 4 + k, 12 + k, 12 + j);
+  }
+  const ring = { outer: rect(2, 10, 18, 29), holes: [rect(6, 14, 14, 27).reverse()] };
+  const floors = ['1F', '2F', '3F'].map((name, k) => ({
+    ...region(10 + k, 'floor', rect(0, 0, 1, 1), k * 3.6, { floor: name }),
+    shape: { kind: 'region', z: k * 3.6, region: ring },
+  }));
+  const r = check({ objects: [solid(1, { v, f }), ...floors, ...STALLS, LANDSCAPE, OPEN] });
+  const sun = row(r, 'sun');
+  assert.equal(sun.state, '위반', sun.reason);
+  close(sun.planned.value, (16 * 3 - 8 * 1) * 3, 1e-6, 'sun over the courtyard ring');
+});
+
+const twoRoads = (regionSegments) => ({
+  zones: [
+    {
+      rule: 'roadSetback',
+      items: ['roadSetback'],
+      regions: [
+        { outer: rect(0, 0, 20, 2), holes: [] },
+        { outer: rect(0, 0, 3, 30), holes: [] },
+      ],
+      segments: ['도로 1', '도로 2'],
+      ...(regionSegments ? { regionSegments } : {}),
+    },
+  ],
+});
+const twoRoadItems = () => ({
+  roadSetback: [
+    reg('roadSetback', 2, { target: '도로 1' }),
+    reg('roadSetback', 3, { target: '도로 2' }),
+  ],
+});
+
+test('road setback per road: each road its own band; without the link, no per-road 위반', () => {
+  // Floors drawn inside the mass (an outline outside it would be tested as a floor prism too).
+  const inside = FLOORS.map((f) => ({
+    ...f,
+    shape: { ...f.shape, region: { outer: rect(4, 1, 18, 24), holes: [] } },
+  }));
+  const objects = [solid(1, box(4, 1, 0, 18, 24, 10.8)), ...inside, ...STALLS, LANDSCAPE, OPEN];
+  const own = row(
+    check({ objects, regOver: twoRoadItems(), lim: twoRoads(['도로 1', '도로 2']) }),
+    'zone:roadSetback',
+  );
+  assert.equal(own.state, '위반');
+  assert.deepEqual(
+    own.parts.map((p) => [p.target, p.state]),
+    [
+      ['도로 1', '위반'],
+      ['도로 2', '적합'],
+    ],
+  );
+  close(own.parts[0].planned, 14 * 1 * 10.8, 1e-6, '도로 1 band');
+  assert.equal(own.parts[1].planned, 0);
+  assert.ok(own.exceedances.every((e) => e.segments.join() === '도로 1'));
+  const joined = row(
+    check({ objects, regOver: twoRoadItems(), lim: twoRoads() }),
+    'zone:roadSetback',
+  );
+  assert.equal(joined.state, '위반');
+  assert.ok(
+    joined.parts.every((p) => p.state === '판단 필요'),
+    JSON.stringify(joined.parts),
+  );
+  // A road the rule was not applied to needs a person; the other road's 위반 stays 위반.
+  const left = check({
+    objects,
+    regOver: twoRoadItems(),
+    lim: {
+      ...twoRoads(['도로 1', '도로 2']),
+      unapplied: [
+        {
+          id: 'road-setback',
+          title: '건축선 후퇴',
+          reason: '시험: 도로 2 너비 모름',
+          segments: ['도로 2'],
+        },
+      ],
+    },
+  });
+  const z = row(left, 'zone:roadSetback');
+  assert.equal(z.state, '위반');
+  assert.deepEqual(
+    z.parts.map((p) => [p.target, p.state]),
+    [
+      ['도로 1', '위반'],
+      ['도로 2', '사람 입력 필요'],
+    ],
+  );
+  complianceResultSchema.parse(left);
+});
+
+test('미반영 일조 구간 with a 위반 in the computed part: 위반, the 미반영 조건 kept', () => {
+  const ext = solid(2, box(2, 24, 7.2, 18, 28, 10.8));
+  const unapplied = [
+    {
+      id: 'sun-ground',
+      title: '정북 일조(지면)',
+      reason: '시험: 구간 확인 필요',
+      segments: ['인접 2'],
+    },
+  ];
+  const sun = row(check({ objects: [...baseObjects(), ext], lim: { unapplied } }), 'sun');
+  assert.equal(sun.state, '위반');
+  assert.ok(sun.unconfirmed.some((u) => /미반영 조건: 정북 일조/.test(u)));
+  assert.equal(row(check({ lim: { unapplied } }), 'sun').state, '사람 입력 필요');
+});
+
+test('hidden or unusable stalls never make a definite 주차 위반', () => {
+  const stalls = Array.from({ length: 10 }, (_, i) =>
+    stall(100 + i, 1 + i, i >= 8 ? { hidden: true } : {}),
+  );
+  const objects = [MASS, ...FLOORS, ...stalls, LANDSCAPE, OPEN];
+  const p = row(check({ objects }), 'parking');
+  assert.equal(p.state, '검사 불가');
+  assert.match(p.reason, /숨긴 주차 구획 객체 2개/);
+  assert.equal(row(check({ objects, settings: { includeHidden: true } }), 'parking').state, '적합');
+});
+
+test('a relief or upper step that is there but open keeps the plan from 위반', () => {
+  const ai = { origin: 'AI가 추정함' };
+  const empty = { applies: null, status: '사람 입력 필요', origin: '없음' };
+  const far = (regOver) => farRow(1280, { farMax: undefined, ...regOver });
+  const both = far({ farMax: reg('farMax', 2.5, ai), incentiveFar: reg('incentiveFar', 0.3, ai) });
+  assert.equal(both.state, '사람 입력 필요');
+  assert.match(both.reason, /AI 추정 값은 사람이 확정해야 함/);
+  const asked = far({
+    farMax: reg('farMax', null, empty),
+    incentiveFar: reg('incentiveFar', null, empty),
+  });
+  assert.equal(asked.state, '사람 입력 필요');
+  const capped = far({
+    farMax: reg('farMax', 2.5),
+    incentiveFar: reg('incentiveFar', null, empty),
+  });
+  assert.equal(capped.state, '사람 입력 필요');
+  // Beyond what the open item could allow: still 위반.
+  assert.equal(far({ incentiveFar: reg('incentiveFar', 0.1, ai) }).state, '위반');
+  const h = row(
+    check({
+      objects: [solid(1, box(2, 4, 0, 18, 24, 22)), ...FLOORS, ...STALLS, LANDSCAPE, OPEN],
+      regOver: { incentiveHeight: reg('incentiveHeight', 5, ai) },
+    }),
+    'height:heightMax',
+  );
+  assert.equal(h.state, '사람 입력 필요');
+  // 기준 용적률 미적용 with a confirmed 상한: 판단 필요 with the reason, not a question again.
+  const na = farRow(960, { farBase: reg('farBase', null, { applies: '미적용' }) });
+  assert.equal(na.state, '판단 필요');
+  assert.match(na.reason, /기준 용적률 미적용/);
+});
+
+test('주차 choices with 적용 여부 판단 필요 never decide; a missing rule asks before a reading', () => {
+  const undecided = { applies: '판단 필요', status: '판단 필요' };
+  const p = row(
+    check({
+      regOver: {
+        parkingRounding: reg('parkingRounding', 'ceil', undecided),
+        parkingRoundScope: reg('parkingRoundScope', 'sum', undecided),
+        parkingAreaBasis: reg('parkingAreaBasis', 'gross', undecided),
+      },
+    }),
+    'parking',
+  );
+  assert.equal(p.state, '판단 필요');
+  const uses = FLOORS.map((f, i) => ({ ...f, use: i ? '판매시설' : '업무시설' }));
+  const mixed = check({
+    objects: [MASS, ...uses, ...STALLS, LANDSCAPE, OPEN],
+    regOver: {
+      parkingRule: [
+        reg('parkingRule', 100, { target: '업무시설', ...undecided }),
+        reg('parkingRule', null, {
+          target: '판매시설',
+          applies: null,
+          status: '사람 입력 필요',
+          origin: '없음',
+        }),
+      ],
+    },
+  });
+  assert.equal(row(mixed, 'parking').state, '사람 입력 필요');
+});
+
+test('CSV cells never start a formula; the result carries the display origin and envelope', () => {
+  const r = check({
+    regOver: {
+      coverage: reg('coverage', 0.6, { basis: { clause: '=HYPERLINK("http://x","조항")' } }),
+    },
+    lim: { frame: { linkId: 'link-1', documentKey: 'doc-1', origin: [100, 200, 5], groundZ: 0 } },
+  });
+  const csv = reportCsv(r);
+  assert.ok(csv.includes(`"'=HYPERLINK(""http://x"",""조항"")"`), csv.split('\r\n')[1]);
+  assert.ok(!/(^|,)=HYPERLINK/m.test(csv));
+  assert.deepEqual(r.display.origin, [100, 200, 5]);
+  assert.equal(r.display.envelope.f.length, ENVELOPE.f.length);
+});

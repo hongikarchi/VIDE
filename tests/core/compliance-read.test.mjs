@@ -438,3 +438,91 @@ test('AI proposal: group summaries without coordinates, answer gate drops what i
   );
   assert.deepEqual(checkComplianceRoles('잘 모르겠습니다', groups).rejected[0].why, 'NOT_JSON');
 });
+
+test('an AI-accepted layer record never reaches jig objects or a deeper layer name (L1)', () => {
+  const tower = box('Default', [0, 0, 0], [10, 10, 30]);
+  const neighbour = box('Default', [20, 0, 0], [30, 10, 30], {
+    attrs: { 'vide-jig': 'vide/site-model', 'vide-key': 'bldg:2' },
+  });
+  const garden = curve('Default::조경', rect(0, 20, 10, 30, 0));
+  const record = (by) => ({
+    documentKey: 'link-1',
+    scope: 'layer',
+    key: 'Default',
+    role: 'mass',
+    floor: null,
+    use: null,
+    by,
+    at: SOURCE.readAt,
+    geometryHash: null,
+  });
+  const ai = read([tower, neighbour, garden], { records: [record('ai-accepted')] });
+  assert.deepEqual(
+    [objectOf(ai, tower.nativeId).role, objectOf(ai, tower.nativeId).roleSource],
+    ['mass', 'ai-accepted'],
+  );
+  assert.equal(unusedOf(ai, neighbour.nativeId).reason, '다른 jig의 결과');
+  assert.deepEqual(
+    [objectOf(ai, garden.nativeId).role, objectOf(ai, garden.nativeId).roleSource],
+    ['landscape', 'layer-rule'],
+  );
+  // A person's layer record is the person's decision and stands above both.
+  const person = read([tower, neighbour, garden], { records: [record('person')] });
+  assert.equal(objectOf(person, neighbour.nativeId).roleSource, 'person-layer');
+  assert.deepEqual(
+    [unusedOf(person, garden.nativeId).role, unusedOf(person, garden.nativeId).reason],
+    ['mass', '역할과 모양이 맞지 않음'],
+  );
+});
+
+/** A rectangular ring prism with a rectangular courtyard (genus 1), outward. */
+function courtyard(o, i, z0, z1) {
+  const O = [
+    [o[0], o[1]],
+    [o[2], o[1]],
+    [o[2], o[3]],
+    [o[0], o[3]],
+  ];
+  const I = [
+    [i[0], i[1]],
+    [i[2], i[1]],
+    [i[2], i[3]],
+    [i[0], i[3]],
+  ];
+  const vertices = [];
+  for (const z of [z0, z1]) {
+    for (const p of O) vertices.push(p[0], p[1], z);
+    for (const p of I) vertices.push(p[0], p[1], z);
+  }
+  const ob = (k) => k,
+    ib = (k) => 4 + k,
+    ot = (k) => 8 + k,
+    it = (k) => 12 + k;
+  const indices = [];
+  for (let k = 0; k < 4; k++) {
+    const j = (k + 1) % 4;
+    indices.push(ot(k), ot(j), it(j), ot(k), it(j), it(k));
+    indices.push(ob(k), ib(j), ob(j), ob(k), ib(k), ib(j));
+    indices.push(ob(k), ob(j), ot(j), ob(k), ot(j), ot(k));
+    indices.push(ib(k), it(j), ib(j), ib(k), it(k), it(j));
+  }
+  return { vertices, indices };
+}
+
+test('a mass with a courtyard and a mass of two shells read as closed solids', () => {
+  const ring = row('건물', courtyard([2, 10, 18, 29], [6, 14, 14, 27], 0, 12));
+  const a = boxMesh([0, 0, 0], [5, 5, 5]);
+  const b = boxMesh([10, 0, 0], [15, 5, 5]);
+  const twin = row('건물', {
+    vertices: [...a.vertices, ...b.vertices],
+    indices: [...a.indices, ...b.indices.map((i) => i + a.vertices.length / 3)],
+  });
+  const out = read([ring, twin]);
+  const r = objectOf(out, ring.nativeId);
+  assert.equal(r?.role, 'mass', JSON.stringify(unusedOf(out, ring.nativeId)));
+  assert.equal(r.shape.closed, true);
+  assert.ok(Math.abs(r.shape.volume - (16 * 19 - 8 * 13) * 12) < 1e-6);
+  const t = objectOf(out, twin.nativeId);
+  assert.equal(t?.role, 'mass', JSON.stringify(unusedOf(out, twin.nativeId)));
+  assert.ok(Math.abs(t.shape.volume - 250) < 1e-6);
+});

@@ -426,3 +426,17 @@ Object.assign(errors, {
   NO_ACTIVE_SESSION: '이어 갈 대화가 없습니다. 새 대화에서 보내세요.',
   BAKE_UNDO_FAILED: 'Rhino에 만든 결과를 모두 되돌리지 못했습니다. Rhino에서 Ctrl+Z로 확인하세요.',
 });
+
+// 법규 체크 (SPEC-15.14, ARCH-03 §8.6): what the read, the role proposal and the check refused.
+Object.assign(errors, {
+  HOST_NOT_CONNECTED:
+    '연결된 Rhino 문서가 없거나 Rhino가 연결되어 있지 않습니다. 문서를 열어 연결한 뒤 다시 누르세요.',
+  COMPLIANCE_NOT_READ: '모델을 아직 읽지 않았습니다. 잠시 뒤 다시 누르거나 [법규 체크]를 누르세요.',
+  COMPLIANCE_UNITS_UNKNOWN:
+    '문서 단위를 알 수 없어 크기 구간을 만들 수 없습니다. Rhino 문서 단위를 정한 뒤 다시 읽으세요.',
+  COMPLIANCE_AI_UNAVAILABLE:
+    '이 PC에서 쓸 수 있는 AI가 없어 역할을 제안받을 수 없습니다. 역할은 직접 정할 수 있습니다.',
+  AI_SEND_OFF:
+    '이 프로젝트에서 AI 전송을 꺼 두어 역할 제안을 받을 수 없습니다. 역할은 직접 정할 수 있습니다.',
+  COMPLIANCE_INPUT_INVALID: '법규 체크 입력 형식이 맞지 않습니다. 모델을 다시 읽고 체크하세요.',
+});

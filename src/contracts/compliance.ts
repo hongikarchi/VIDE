@@ -315,6 +315,11 @@ export const complianceLimitsSchema = z
             id: z.string().max(60),
             title: z.string().max(200),
             reason: z.string().max(300),
+            /**
+             * The boundary 구간 (or corner, drawn line) the rule was left out on; absent = the
+             * whole rule. A 구간 left out needs a person while a 위반 in another 구간 stays 위반.
+             */
+            segments: z.array(z.string().max(60)).max(400).optional(),
           })
           .strict(),
       )
@@ -329,8 +334,18 @@ export const complianceLimitsSchema = z
             regions: z.array(planRegionSchema).max(2000),
             /** Boundary segments the band is measured from (`도로 2`, `인접 3`). */
             segments: z.array(z.string().max(60)).max(400),
+            /**
+             * By index of `regions`: the 구간 (segment, corner or drawn line) that region is measured
+             * from, null = not known. With it each target of the rule is intersected with its own
+             * band (one row part per target); without it targets cannot be told apart.
+             */
+            regionSegments: z.array(z.string().max(60).nullable()).max(2000).optional(),
           })
-          .strict(),
+          .strict()
+          .refine(
+            (zone) => !zone.regionSegments || zone.regionSegments.length === zone.regions.length,
+            'regionSegments has one entry per region',
+          ),
       )
       .max(40),
     variants: z

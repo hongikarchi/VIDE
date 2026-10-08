@@ -4,7 +4,7 @@
 // without node: imports. No legal value is written here: every limit the check uses is a 규제 조건
 // item with its source (SPEC-15.5).
 
-export const library = { id: 'vide/compliance-kit', version: '0.1.0' } as const;
+export const library = { id: 'vide/compliance-kit', version: '0.2.0' } as const;
 
 export {
   CHECK_ATTRS,
@@ -35,5 +35,6 @@ export { checkComplianceRoles, complianceRolesRequest, unroledGroups } from './p
 export type { CheckedProposal, ProposalRejection, UnroledGroup } from './proposals.ts';
 export { ComplianceInputError, NOTICE, canonical, fingerprint, runCheck } from './check.ts';
 export type { CheckRefs } from './check.ts';
-export { REPORT_COLUMNS, reportCsv, reportRows } from './report-rows.ts';
+export { GROUND_BASIS, checkStep, complianceOverrides } from './check-step.ts';
+export { REPORT_COLUMNS, cell, reportCsv, reportRows } from './report-rows.ts';
 export type { ReportRow } from './report-rows.ts';

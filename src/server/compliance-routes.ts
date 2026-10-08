@@ -8,6 +8,7 @@
 //   POST …/compliance/read {instanceId, linkId?, key?, includeHidden?} → what the read classified
 //   POST …/compliance/proposals {instanceId, key?}               → {proposals, rejected}
 //   POST …/compliance/proposals/:pid {action, role?, floor?, use?, exclude?} → {proposal, …view}
+//   GET  …/compliance/revision?linkId=                           → {linkId, revisionKey|null, reason?}
 
 import { z } from 'zod';
 import {
@@ -31,7 +32,12 @@ import {
   unroledGroups,
 } from '../jigs/official/compliance-kit/proposals.ts';
 import type { ComplianceRoles } from '../services/compliance-roles.ts';
-import { jigRuntimeFor, readForJig, type JigRouteContext } from './jig-routes.ts';
+import {
+  currentRevisionKey,
+  jigRuntimeFor,
+  readForJig,
+  type JigRouteContext,
+} from './jig-routes.ts';
 
 export const complianceStatuses: Record<string, number> = {
   HOST_NOT_CONNECTED: 409,
@@ -49,7 +55,10 @@ export interface ComplianceRouteContext {
   remote: boolean;
   roles: ComplianceRoles;
   links?: DocumentLinks;
-  sdk?: JigRouteContext['sdk'];
+  sdk?: JigRouteContext['sdk'] & {
+    /** The attached connection's change token and revision (no document read). */
+    fingerprint?: (target: { instance: string; documentId: number }) => Promise<unknown>;
+  };
   /**
    * Runs one AI prompt (the request body and its attached JSON) and returns the reply text; absent
    * when no AI is available on this PC. Never given coordinates (SPEC-15.4 1).
@@ -150,7 +159,7 @@ export async function complianceRoutes(
   ctx: ComplianceRouteContext,
 ) {
   const match =
-    /^\/api\/v1\/projects\/([^/]+)\/compliance\/(roles|read|proposals)(?:\/([^/]+))?$/.exec(
+    /^\/api\/v1\/projects\/([^/]+)\/compliance\/(roles|read|proposals|revision)(?:\/([^/]+))?$/.exec(
       url.pathname,
     );
   if (!match) return false;
@@ -161,6 +170,14 @@ export async function complianceRoutes(
     const documentKey = url.searchParams.get('documentKey');
     if (!documentKey) throw new DomainError('INVALID_INPUT');
     send(200, roles.view(projectId, documentKey));
+    return true;
+  }
+  // The linked document's revision now, for '다시 체크 필요 · Rhino 모델이 바뀜' (SPEC-15.13): a
+  // cheap fingerprint of the connection, never a read of the document. Remote screens may ask.
+  if (area === 'revision' && !sub && method === 'GET') {
+    const linkId = url.searchParams.get('linkId');
+    if (!linkId) throw new DomainError('INVALID_INPUT');
+    send(200, { linkId, ...(await currentRevisionKey(ctx, projectId, linkId)) });
     return true;
   }
   // Every other route changes the classification or reads the host: this PC only (SPEC-15.16).
@@ -377,9 +394,14 @@ async function propose(
   const groups = unroledGroups(model, facts);
   if (!groups.length) return { proposals: [], rejected: [] };
   if (!ctx.propose) throw new DomainError('COMPLIANCE_AI_UNAVAILABLE');
+  // Only the layers that hold role-less groups go out (layer names may carry project or client
+  // names; SPEC-15.4 1, FR-18): the screen says so before [역할 제안 받기] sends.
+  const withGroups = new Set(groups.map((g) => g.layer));
   const request = complianceRolesRequest({
     groups,
-    layers: layersOf(raw).map((l) => ({ name: l.fullPath, count: l.objectCount })),
+    layers: layersOf(raw)
+      .filter((l) => withGroups.has(l.fullPath))
+      .map((l) => ({ name: l.fullPath, count: l.objectCount })),
   });
   let text: string;
   try {

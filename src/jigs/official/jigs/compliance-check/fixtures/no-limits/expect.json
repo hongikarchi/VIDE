@@ -1,0 +1,98 @@
+{
+  "tolerance": {
+    "length": 0.000001,
+    "ratio": 1e-9
+  },
+  "steps": {
+    "check": {
+      "schema": "vide.compliance.result@1",
+      "counts": {
+        "적합": 0,
+        "위반": 0,
+        "판단 필요": 0,
+        "사람 입력 필요": 9,
+        "검사 불가": 10
+      },
+      "unconfirmedCount": 0,
+      "items": [
+        {
+          "id": "coverage",
+          "state": "사람 입력 필요"
+        },
+        {
+          "id": "far",
+          "state": "사람 입력 필요"
+        },
+        {
+          "id": "height:heightMax",
+          "state": "사람 입력 필요"
+        },
+        {
+          "id": "height:streetHeight",
+          "state": "사람 입력 필요"
+        },
+        {
+          "id": "height:altitudeHeight",
+          "state": "사람 입력 필요"
+        },
+        {
+          "id": "floors",
+          "state": "사람 입력 필요"
+        },
+        {
+          "id": "zone:roadSetback",
+          "state": "검사 불가"
+        },
+        {
+          "id": "zone:chamfer",
+          "state": "검사 불가"
+        },
+        {
+          "id": "zone:limitLine",
+          "state": "검사 불가"
+        },
+        {
+          "id": "zone:openSpaceRoad",
+          "state": "검사 불가"
+        },
+        {
+          "id": "zone:openSpaceAdjacent",
+          "state": "검사 불가"
+        },
+        {
+          "id": "zone:civilSetback",
+          "state": "검사 불가"
+        },
+        {
+          "id": "zone:otherSetback",
+          "state": "검사 불가"
+        },
+        {
+          "id": "sun",
+          "state": "검사 불가"
+        },
+        {
+          "id": "envelope",
+          "state": "검사 불가"
+        },
+        {
+          "id": "outside-site",
+          "state": "검사 불가"
+        },
+        {
+          "id": "parking",
+          "state": "사람 입력 필요"
+        },
+        {
+          "id": "landscape",
+          "state": "사람 입력 필요"
+        },
+        {
+          "id": "open-space",
+          "state": "사람 입력 필요"
+        }
+      ],
+      "notApplicable": []
+    }
+  }
+}

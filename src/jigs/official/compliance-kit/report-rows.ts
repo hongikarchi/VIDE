@@ -54,7 +54,16 @@ export function reportRows(result: ComplianceResult): ReportRow[] {
   return rows;
 }
 
-const cell = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+/**
+ * One CSV cell. Text a spreadsheet would run as a formula (=, +, -, @, tab or CR first — a 근거 조항
+ * or a use name comes from cLAWde or a person) is kept as words with a leading '; a plain number
+ * with its unit (`-1.00 대`) stays as it is.
+ */
+export function cell(v: string): string {
+  const number = /^-?\d[\d.,]*(?: [^\s=+\-@]+)?$/.test(v);
+  const safe = !number && /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
+  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+}
 
 /** CSV text (UTF-8 BOM so spreadsheet programs read the Korean). */
 export function reportCsv(result: ComplianceResult): string {
