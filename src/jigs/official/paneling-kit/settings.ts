@@ -143,6 +143,47 @@ export function previewSettingsFromParams(
   return resolvePreviewSettings(given, sources);
 }
 
+const nonNegative = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+
+/**
+ * Stage-2 settings from the jig's flat setting values (thickness, thicknessSide, joint,
+ * boundaryJoint, stockWidth, stockHeight; lengths in metres). A stock of 0 × 0 is 'no limit'
+ * (null); only one side 0 counts as empty. Missing or invalid values take the recommendation as
+ * 'assumed', as do the keys listed in `assumed` (still on their default).
+ */
+export function memberSettingsFromParams(
+  params: Record<string, unknown>,
+  assumed: readonly string[] = [],
+): MemberSettings {
+  const given: Partial<Values<MemberSettings>> = {};
+  const sources: Partial<Record<keyof MemberSettings, SettingSource>> = {};
+  const thickness = positive(params.thickness);
+  if (thickness) given.thickness = thickness;
+  const side = pick(params.thicknessSide, ['outside', 'inside'] as const);
+  if (side) given.thicknessSide = side;
+  const joint = nonNegative(params.joint);
+  if (joint !== undefined) given.joint = joint;
+  const boundaryJoint = pick(params.boundaryJoint, ['flush', 'half'] as const);
+  if (boundaryJoint) given.boundaryJoint = boundaryJoint;
+  const sw = nonNegative(params.stockWidth),
+    sh = nonNegative(params.stockHeight);
+  if (sw !== undefined && sh !== undefined) {
+    if (sw > 0 && sh > 0) given.stock = [sw, sh];
+    else if (sw === 0 && sh === 0) given.stock = null;
+  }
+  const groups: Record<string, keyof MemberSettings> = {
+    thickness: 'thickness',
+    thicknessSide: 'thicknessSide',
+    joint: 'joint',
+    boundaryJoint: 'boundaryJoint',
+    stockWidth: 'stock',
+    stockHeight: 'stock',
+  };
+  for (const key of assumed) if (groups[key]) sources[groups[key]] = 'assumed';
+  return resolveMemberSettings(given, sources);
+}
+
 /** The values of settings without their sources (what the computation reads; `settingsHash`). */
 export function settingValues<T extends Record<string, { value: unknown }>>(settings: T) {
   return Object.fromEntries(Object.entries(settings).map(([k, v]) => [k, v.value]));

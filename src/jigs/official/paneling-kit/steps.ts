@@ -4,11 +4,13 @@
 
 import {
   surfaceSampleSchema,
+  type MemberSet,
   type PanelLayout,
   type SurfaceSample,
 } from '../../../contracts/paneling.ts';
 import { layoutPanels } from './layout.ts';
-import { previewSettingsFromParams } from './settings.ts';
+import { buildMembers } from './members.ts';
+import { memberSettingsFromParams, previewSettingsFromParams } from './settings.ts';
 
 /** The 기준 면 input: the sample itself, or a pinned value `{ value }` around it. */
 function sampleOf(input: unknown): SurfaceSample {
@@ -42,4 +44,25 @@ export function previewStep(
   const result = layoutPanels(sample, previewSettingsFromParams(params));
   if (!result.ok) throw new Error(result.message);
   return result.layout;
+}
+
+/** Stage 2 '부재': joint-reduced plates, closed solids, sizes and joints (SPEC-16.6). Reads the
+ *  stage-1 layout (`step.preview`) and the stage-1 settings it was laid with (flip, axis). */
+export function membersStep(
+  inputs: Record<string, unknown>,
+  params: Record<string, unknown>,
+): MemberSet {
+  const sample = sampleOf(inputs.surface);
+  const layout = (inputs.steps as Record<string, unknown> | undefined)?.preview as
+    | PanelLayout
+    | null
+    | undefined;
+  if (!layout || layout.schema !== 'vide.paneling.layout@1' || !Array.isArray(layout.panels))
+    throw new Error('1단계 미리보기 결과가 없습니다 · 미리보기를 먼저 계산하세요');
+  return buildMembers(
+    sample,
+    layout,
+    previewSettingsFromParams(params),
+    memberSettingsFromParams(params),
+  ).members;
 }

@@ -227,7 +227,7 @@
         "note": "SPEC-16.4 추천값 50 mm",
         "question": "패널 두께는 얼마인가요?"
       },
-      "affects": []
+      "affects": ["members"]
     },
     {
       "key": "thicknessSide",
@@ -244,7 +244,7 @@
         "note": "SPEC-16.4 추천값 바깥",
         "question": "두께를 면의 어느 쪽으로 줄까요?"
       },
-      "affects": []
+      "affects": ["members"]
     },
     {
       "key": "joint",
@@ -261,7 +261,7 @@
         "note": "SPEC-16.4 추천값 10 mm",
         "question": "줄눈 폭은 얼마인가요?"
       },
-      "affects": []
+      "affects": ["members"]
     },
     {
       "key": "boundaryJoint",
@@ -278,7 +278,7 @@
         "note": "SPEC-16.4 추천값 경계에 맞춤",
         "question": "기준 면 경계에 닿은 모서리에도 줄눈을 둘까요?"
       },
-      "affects": []
+      "affects": ["members"]
     },
     {
       "key": "stockWidth",
@@ -295,7 +295,7 @@
         "note": "SPEC-16.4 추천값 없음(0)",
         "question": "판재 크기 한도가 있나요?"
       },
-      "affects": []
+      "affects": ["members"]
     },
     {
       "key": "stockHeight",
@@ -312,7 +312,7 @@
         "note": "SPEC-16.4 추천값 없음(0)",
         "question": "판재 크기 한도가 있나요?"
       },
-      "affects": []
+      "affects": ["members"]
     },
     {
       "key": "flatnessTol",
@@ -435,6 +435,35 @@
       "writes": "preview",
       "speed": "live",
       "gates": [{ "use": "inputs-present" }, { "use": "no-nan" }]
+    },
+    {
+      "id": "members",
+      "title": "2단계 부재",
+      "kind": "library",
+      "use": "vide/paneling-kit#membersStep",
+      "reads": [
+        "input.surface",
+        "step.preview",
+        "param.pattern",
+        "param.width",
+        "param.height",
+        "param.measure",
+        "param.projection",
+        "param.axis",
+        "param.startCorner",
+        "param.flip",
+        "param.boundaryRule",
+        "param.mergeBelow",
+        "param.thickness",
+        "param.thicknessSide",
+        "param.joint",
+        "param.boundaryJoint",
+        "param.stockWidth",
+        "param.stockHeight"
+      ],
+      "writes": "members",
+      "speed": "release",
+      "gates": [{ "use": "inputs-present" }, { "use": "no-nan" }]
     }
   ],
   "panel": "panel.json",
@@ -445,7 +474,7 @@
     },
     {
       "name": "library.call",
-      "reason": "공식 라이브러리 vide/paneling-kit으로 패널 배치를 계산합니다"
+      "reason": "공식 라이브러리 vide/paneling-kit으로 패널 배치와 부재를 계산합니다"
     }
   ],
   "selftest": { "fixtures": "fixtures", "requiresHost": false },

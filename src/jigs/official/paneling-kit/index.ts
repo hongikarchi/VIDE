@@ -2,8 +2,9 @@
 // a sampled Rhino face. Stage 1 (T-252): bicubic sample interpolation and arc-length tables
 // (sample.ts), the 2D domain by the three ways to measure (domain.ts), the four first patterns
 // (patterns.ts), cutting by the face and its trim loops with lattice vertex keys (clip.ts) and the
-// layout with boundary rules, numbering and sizes (layout.ts) → `PanelLayout`. Stages 2·3 join in
-// T-254·T-256. Pure TypeScript without node: imports; shapes from `src/contracts/paneling.ts`.
+// layout with boundary rules, numbering and sizes (layout.ts) → `PanelLayout`. Stage 2 (T-254):
+// joint reduction on the surface, closed plates, sizes, stock and joint lines (members.ts) →
+// `MemberSet`. Stage 3 joins in T-256. Pure TypeScript without node: imports; shapes from `src/contracts/paneling.ts`.
 
 export const library = { id: 'vide/paneling-kit', version: '0.1.0' } as const;
 
@@ -19,6 +20,7 @@ export {
   RECOMMENDED_MEMBERS,
   RECOMMENDED_OPTIMIZE,
   RECOMMENDED_PREVIEW,
+  memberSettingsFromParams,
   previewSettingsFromParams,
   resolveMemberSettings,
   resolveOptimizeSettings,
@@ -28,4 +30,12 @@ export {
 export { bestFitPlane } from './vec.ts';
 export type { Plane, Vec2, Vec3 } from './vec.ts';
 export { canonical, fingerprint, sha256Hex } from './hash.ts';
-export { previewStep } from './steps.ts';
+export {
+  JOINT_UNEVEN_MIN,
+  THICKNESS_CURVATURE_LIMIT,
+  buildMembers,
+  layoutFingerprint,
+  overStockOf,
+} from './members.ts';
+export type { MembersOptions, MembersOutcome } from './members.ts';
+export { membersStep, previewStep } from './steps.ts';
