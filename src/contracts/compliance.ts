@@ -2,13 +2,19 @@
 // these shapes in parallel:
 //
 //   reader (T-237)  — the Rhino model as read + the confirmed classification → `ClassifiedModel`
-//   engine (T-238)  — `ClassifiedModel` + `ComplianceLimits` + settings     → `ComplianceResult`
+//   engine (T-238)  — `ClassifiedModel` + `ComplianceLimits` + `GroundDatum` + `ComplianceSettings`
+//                     + `ComplianceOverride[]`                                → `ComplianceResult`
 //   screen (T-239)  — `ComplianceResult` → result table, viewport highlight, report and CSV
 //
 // The project's classification store (`ComplianceRole`) and the AI proposal (`RoleProposal`) are
 // here too. No legal number lives in this file or in code that uses it: every limit is a 규제 조건
-// item carried in `ComplianceLimits.regulations` with its 근거 and 확정 상태 (SPEC-12.7).
-// Coordinates are local metres of the massing frame (`ComplianceLimits.frame`).
+// item carried in `ComplianceLimits.regulations` with its 근거 and 확정 상태 (SPEC-12.7). The only
+// numeric constants allowed in the engine are the geometric tolerances of SPEC-15.7 4 and 15.3 4.
+//
+// Coordinates (SPEC-15.5 5): every `ClassifiedModel` and `ComplianceLimits` coordinate is the local
+// metre frame of the massing work copy = document coordinate × `toMeters` − `frame.origin`. The
+// forbidden volumes of `ComplianceLimits` stand on local z = `frame.groundZ`; the engine moves them
+// vertically to each 기준 지반 case (`GroundDatum`, given in document metres) before intersecting.
 
 import { z } from 'zod';
 
@@ -145,8 +151,15 @@ export const classifiedObjectSchema = z
     use: z.string().min(1).max(60).nullable(),
     /** `vide-count` (parking): stalls this object stands for, default 1. */
     count: z.number().int().min(1).max(1000).default(1),
+    /**
+     * Hidden or on an off layer. With the setting `includeHidden` off the reader still lists a
+     * hidden object that has a role (shape included) and the engine leaves it out of the numbers
+     * but never lets a row that would use it read 적합 (SPEC-15.3 3, 15.9 7).
+     */
     hidden: z.boolean(),
     geometryHash: hash.nullable(),
+    /** Object record whose stored `geometryHash` differs from the current one (SPEC-15.4 4). */
+    geometryChanged: z.boolean().default(false),
     shape: objectShapeSchema,
   })
   .strict();
@@ -159,6 +172,20 @@ export const UNCLASSIFIED_REASONS = [
   '평면이 아님',
   '숨김',
   '다른 jig의 결과',
+  '고르지 않은 대안',
+] as const;
+
+/**
+ * What an unused object could stand for (SPEC-15.9 7): an unused `closed-solid`, `region` or
+ * `point` (or any object that carries a role but could not be used) keeps rows from reading 적합.
+ */
+export const UNUSED_SHAPES = [
+  'closed-solid',
+  'open-solid',
+  'region',
+  'curve',
+  'point',
+  'other',
 ] as const;
 
 export const classifiedModelSchema = z
@@ -172,8 +199,11 @@ export const classifiedModelSchema = z
         /** `<instance>|<documentId>|<revision>` (ARCH-03 §8). */
         revisionKey: z.string().min(1).max(400),
         readAt: iso,
-        /** Document unit → metre factor applied to every coordinate. */
-        toMeters: z.number().positive(),
+        /**
+         * Document unit → metre factor applied to every coordinate; null = the unit is unknown
+         * (coordinates are then raw and every geometric row is 검사 불가, SPEC-15.3 1).
+         */
+        toMeters: z.number().positive().nullable(),
       })
       .strict(),
     objects: z.array(classifiedObjectSchema).max(200000),
@@ -185,6 +215,9 @@ export const classifiedModelSchema = z
             layer: z.string().max(800),
             nativeType: z.string().max(80),
             reason: z.enum(UNCLASSIFIED_REASONS),
+            /** The role the object had when it could not be used (wrong shape, open, hidden). */
+            role: complianceRoleSchema.nullable().default(null),
+            shape: z.enum(UNUSED_SHAPES),
           })
           .strict(),
       )
@@ -248,12 +281,17 @@ const variantSchema = z.enum(['base', 'without']);
 export const complianceLimitsSchema = z
   .object({
     schema: z.literal('vide.compliance.limits@1'),
-    /** The massing frame: local = document metres − `origin`. */
+    /**
+     * The massing frame: local = document metres − `origin`. `linkId`/`documentKey` null = the site
+     * did not come from a linked document (shape rows 검사 불가, SPEC-15.5 5). `groundZ` is the local
+     * z the massing envelope, 일조 volume and height cap were built on (SPEC-15.5 5).
+     */
     frame: z
       .object({
         linkId: z.string().max(200).nullable(),
         documentKey: z.string().max(200).nullable(),
         origin: vec3,
+        groundZ: finite,
       })
       .strict(),
     site: z
@@ -316,19 +354,27 @@ export const complianceLimitsSchema = z
       )
       .min(1)
       .max(2),
-    /** Default use and floor heights of the massing plan (parking needs a use). */
+    /**
+     * Default use and floor heights of the massing plan (parking needs a use). `chosenOption` = the
+     * `vide-option` title of the chosen alternative (null = none chosen): only that alternative's
+     * baked floor masses read as `floor` by jig tag (SPEC-15.3 3).
+     */
     plan: z
       .object({
         mainUse: z.string().max(60).nullable(),
         floorHeightGround: z.number().positive(),
         floorHeightTypical: z.number().positive(),
+        chosenOption: z.string().min(1).max(120).nullable(),
       })
       .strict(),
   })
   .strict();
 export type ComplianceLimits = z.infer<typeof complianceLimitsSchema>;
 
-/** 기준 지반 (SPEC-15.6 3): the person's value, else the site model's candidate range. */
+/**
+ * 기준 지반 (SPEC-15.6 3): the person's value, else the site model's candidate range. All heights
+ * are document z in metres (Rhino z × `toMeters`); the engine subtracts `frame.origin[2]`.
+ */
 export const groundDatumSchema = z
   .object({
     value: finite.nullable(),
@@ -336,10 +382,61 @@ export const groundDatumSchema = z
     candidate: z
       .object({ min: finite, max: finite, mean: finite, source: z.string().max(200) })
       .strict()
+      .refine((c) => c.min <= c.mean && c.mean <= c.max, 'min ≤ mean ≤ max')
       .nullable(),
   })
   .strict();
 export type GroundDatum = z.infer<typeof groundDatumSchema>;
+
+// ── 설정값과 수정 사항 (panel → engine, SPEC-15.6·15.8) ────────────────────────────────────────
+
+/** Settings of `vide/compliance-check` (jig.json `params`); their hash is `inputs.settingsHash`. */
+export const complianceSettingsSchema = z
+  .object({
+    /** 기준 지반 높이 (document z, m) a person entered; null = use the site model candidates. */
+    groundLevel: finite.nullable(),
+    /** 근거 of `groundLevel` (free text); null = '근거 없음'. */
+    groundBasis: z.string().max(300).nullable(),
+    /** 산정 제외 입력 끝남 (SPEC-15.6 5). */
+    exclusionsComplete: z.boolean(),
+    /** 없음 확정 for parking · landscape · open space (SPEC-15.8 4). */
+    noneParking: z.boolean(),
+    noneLandscape: z.boolean(),
+    noneOpenSpace: z.boolean(),
+    /** 숨긴 객체 포함 (SPEC-15.3 3). */
+    includeHidden: z.boolean(),
+  })
+  .strict();
+export type ComplianceSettings = z.infer<typeof complianceSettingsSchema>;
+
+/**
+ * 수정 사항 the engine reads; only a person's entries (`by: 'person'`) — an AI value is refused at
+ * the contract (SPEC-15.6 5, 15.15). Their hash is `inputs.overridesHash`.
+ */
+export const complianceOverrideSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('floor-exclusion'),
+      id: z.string().min(1).max(80),
+      floor: floorLabelSchema,
+      area_m2: z.number().nonnegative(),
+      basis: z.string().min(1).max(300),
+      by: z.literal('person'),
+      at: iso,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('use-floor'),
+      id: z.string().min(1).max(80),
+      floor: floorLabelSchema,
+      use: z.string().min(1).max(60),
+      by: z.literal('person'),
+      at: iso,
+    })
+    .strict(),
+]);
+export type ComplianceOverride = z.infer<typeof complianceOverrideSchema>;
 
 // ── 결과 (engine → screen, SPEC-15.9) ──────────────────────────────────────────────────
 
@@ -378,6 +475,25 @@ export const COMPLIANCE_CHECKS = [
 export const complianceCheckIdSchema = z.enum(COMPLIANCE_CHECKS);
 export type ComplianceCheckId = z.infer<typeof complianceCheckIdSchema>;
 
+export const COMPLIANCE_GROUPS = ['규모', '형상 제한', '주차·조경·공개공지'] as const;
+export type ComplianceGroup = (typeof COMPLIANCE_GROUPS)[number];
+
+/** The group each check belongs to (SPEC-15.2). */
+export function checkGroup(id: ComplianceCheckId): ComplianceGroup {
+  if (id === 'coverage' || id === 'far' || id === 'floors' || id.startsWith('height:'))
+    return '규모';
+  if (id === 'parking' || id === 'landscape' || id === 'open-space') return '주차·조경·공개공지';
+  return '형상 제한';
+}
+
+/**
+ * Rows whose 적합 needs no single limit value: the plan value is an exceedance volume against the
+ * forbidden volumes (`limit` may be null, the 규제 조건 items are in `numbers`/`basis`).
+ */
+export const VOLUME_CHECKS: readonly ComplianceCheckId[] = COMPLIANCE_CHECKS.filter(
+  (c) => c.startsWith('zone:') || c === 'sun' || c === 'envelope' || c === 'outside-site',
+);
+
 /** Where one number came from (SPEC-15.9 3). */
 export const numberSourceSchema = z
   .object({
@@ -385,7 +501,7 @@ export const numberSourceSchema = z
     value: finite.nullable(),
     unit: z.string().max(20),
     kind: z.enum(['모델', '규제 조건', '대지', '사람 입력', '계산']),
-    /** `model:<role>` · `regulation:<itemId>` · `site:area` · `setting:<key>` · `override:<id>`. */
+    /** `model:<role>` · `regulation:<itemId>[@<target>]` · `site:area` · `site:otherArea` · `ground:<case>` · `setting:<key>` · `override:<id>`. */
     ref: z.string().min(1).max(200),
     note: z.string().max(300).optional(),
   })
@@ -396,37 +512,50 @@ export type NumberSource = z.infer<typeof numberSourceSchema>;
 export const exceedanceSchema = z
   .object({
     id: z.string().min(1).max(80),
+    /** The marker number the viewport overlay and the result table share (SPEC-15.11), 1-based. */
+    no: z.number().int().min(1),
     rule: z.string().min(1).max(60),
     variant: variantSchema,
+    /** The 기준 지반 case the volume was moved to (`ground:min` · `ground:max` · `ground:value`). */
+    groundCase: z.string().max(40),
     volume: z.number().nonnegative(),
     min: vec3,
     max: vec3,
     segments: z.array(z.string().max(60)).max(40),
     objectIds: z.array(z.string().uuid()).max(2000),
+    /** True when every overlapping object is a `rooftop` (SPEC-15.7 1: 판단 필요). */
+    rooftopOnly: z.boolean().default(false),
     mesh: meshSchema,
   })
   .strict();
 export type Exceedance = z.infer<typeof exceedanceSchema>;
 
+const limitStatusSchema = z.enum(['확정', '가정', '판단 필요', '사람 입력 필요']);
+
 export const complianceItemSchema = z
   .object({
     id: complianceCheckIdSchema,
-    group: z.enum(['규모', '형상 제한', '주차·조경·공개공지']),
+    group: z.enum(COMPLIANCE_GROUPS),
     title: z.string().min(1).max(120),
     state: complianceStateSchema,
-    /** Why the state (always set unless 적합 with nothing to add). */
+    /** Why the state; required (non-empty) for every state other than 적합 (SPEC-15.9 1). */
     reason: z.string().max(400),
+    /** Ratios are fractions (`unit: '비율'`, 0.6 = 60%); `text` is the display form. */
     planned: z
       .object({ value: finite, unit: z.string().max(20), text: z.string().max(120) })
       .strict()
       .nullable(),
+    /**
+     * The limit the decisive comparison used. A ladder (용적률 기준·허용·상한·완화, 높이 + 완화)
+     * keeps every step in `numbers` with `ref: 'regulation:<id>'` (SPEC-15.6 5).
+     */
     limit: z
       .object({
         value: finite,
         unit: z.string().max(20),
         text: z.string().max(120),
         itemId: z.string().max(60),
-        status: z.enum(['확정', '가정', '판단 필요', '사람 입력 필요']),
+        status: limitStatusSchema,
         origin: z.string().max(40),
       })
       .strict()
@@ -445,30 +574,84 @@ export const complianceItemSchema = z
           .strict(),
       )
       .max(20),
-    numbers: z.array(numberSourceSchema).max(40),
-    /** Per-variant / per-candidate outcomes when the state depends on them (SPEC-15.9 2). */
+    numbers: z.array(numberSourceSchema).max(60),
+    /**
+     * 경우 (SPEC-15.9 2): alternative readings of one uncertain input (외피 변형, 기준 지반 후보,
+     * 대지면적, 옥탑·옥상 조경 산입, 완화 적용). Every case is fully decided, so 적합 or 위반 only;
+     * all 적합 → 적합, all 위반 → 위반, else 판단 필요.
+     */
     cases: z
       .array(
         z
           .object({
-            label: z.string().max(120),
+            label: z.string().max(160),
             state: z.enum(['적합', '위반']),
             planned: finite.nullable(),
             limit: finite.nullable(),
           })
           .strict(),
       )
-      .max(8),
+      .max(32),
+    /**
+     * 구간 (SPEC-15.9 2): parts that must all hold (규제 조건 `target` per boundary segment or use,
+     * one row per rule). Each part has its own state; the row takes the worst (SPEC-15.9 2).
+     */
+    parts: z
+      .array(
+        z
+          .object({
+            label: z.string().max(120),
+            target: z.string().max(80).nullable(),
+            state: complianceStateSchema,
+            planned: finite.nullable(),
+            limit: finite.nullable(),
+            reason: z.string().max(300),
+          })
+          .strict(),
+      )
+      .max(64)
+      .default([]),
     objectIds: z.array(z.string().uuid()).max(20000),
     exceedances: z.array(exceedanceSchema).max(500),
     /** 가정 · 판단 필요 inputs the state rests on (counted in the 미확정 count). */
     unconfirmed: z.array(z.string().max(200)).max(40),
   })
-  .strict();
+  .strict()
+  .superRefine((row, ctx) => {
+    if (row.group !== checkGroup(row.id))
+      ctx.addIssue({ code: 'custom', message: `${row.id} belongs to ${checkGroup(row.id)}` });
+    if (row.state !== '적합' && !row.reason.trim())
+      ctx.addIssue({ code: 'custom', message: 'a row that is not 적합 states why' });
+    if (row.state === '적합' && row.planned === null && !VOLUME_CHECKS.includes(row.id))
+      ctx.addIssue({ code: 'custom', message: '적합 needs a planned value' });
+    if (row.state === '적합' && row.limit === null && !VOLUME_CHECKS.includes(row.id))
+      ctx.addIssue({ code: 'custom', message: '적합 needs a limit value' });
+    if (row.state === '적합' && row.limit && row.limit.status === '사람 입력 필요')
+      ctx.addIssue({ code: 'custom', message: '적합 cannot rest on a limit nobody entered' });
+    if (row.state === '적합' && row.parts.some((p) => p.state !== '적합'))
+      ctx.addIssue({ code: 'custom', message: '적합 needs every part 적합' });
+    if (row.state === '적합' && row.cases.some((c) => c.state !== '적합'))
+      ctx.addIssue({ code: 'custom', message: '적합 needs every case 적합' });
+    if (
+      row.state === '위반' &&
+      row.cases.some((c) => c.state !== '위반') &&
+      !row.parts.some((p) => p.state === '위반')
+    )
+      ctx.addIssue({ code: 'custom', message: '위반 needs every case 위반 or a part 위반' });
+    const nos = row.exceedances.map((e) => e.no);
+    if (new Set(nos).size !== nos.length)
+      ctx.addIssue({ code: 'custom', message: 'exceedance numbers are unique' });
+  });
 export type ComplianceItem = z.infer<typeof complianceItemSchema>;
 
 const inputRef = z
-  .object({ instanceId: z.string().max(200), hash: z.string().max(200), at: iso })
+  .object({
+    instanceId: z.string().max(200),
+    /** Work copy name and when it was computed (the result header, SPEC-15.9 6). */
+    title: z.string().max(200),
+    hash: z.string().max(200),
+    at: iso,
+  })
   .strict()
   .nullable();
 
@@ -481,8 +664,11 @@ export const complianceResultSchema = z
       .object({
         model: z
           .object({
+            linkId: z.string().max(200),
+            documentKey: z.string().max(200),
             readId: z.string().max(200),
             revisionKey: z.string().max(400),
+            readAt: iso,
             objects: z.number().int().nonnegative(),
             unclassified: z.number().int().nonnegative(),
             rolesVersion: z.number().int().nonnegative(),
@@ -492,24 +678,54 @@ export const complianceResultSchema = z
         limits: inputRef,
         siteModel: inputRef,
         settingsHash: z.string().max(100),
+        overridesHash: z.string().max(100),
       })
       .strict(),
     items: z.array(complianceItemSchema).max(COMPLIANCE_CHECKS.length),
-    /** 규제 조건 items '미적용' — listed, not checked. */
+    /** Checks not run because their 규제 조건 is '미적용' — listed, never counted as 적합. */
     notApplicable: z
       .array(
         z
           .object({
+            check: complianceCheckIdSchema,
             id: z.string().max(60),
             title: z.string().max(120),
             basis: z.string().max(400),
           })
           .strict(),
       )
-      .max(60),
+      .max(COMPLIANCE_CHECKS.length),
+    /** 분류 요약 for the report and the 분류 tab (SPEC-15.12). */
+    classification: z
+      .object({
+        byRole: z.record(complianceRoleSchema, z.number().int().nonnegative()),
+        unusedByReason: z.record(z.enum(UNCLASSIFIED_REASONS), z.number().int().nonnegative()),
+        aiAccepted: z.number().int().nonnegative(),
+        hiddenWithRole: z.number().int().nonnegative(),
+        geometryChanged: z.number().int().nonnegative(),
+      })
+      .strict(),
     counts: z.record(complianceStateSchema, z.number().int().nonnegative()),
     unconfirmedCount: z.number().int().nonnegative(),
     notice: z.literal('탐색용 법규 체크 — 인허가 검토·법규 검토를 대체하지 않음'),
   })
-  .strict();
+  .strict()
+  .superRefine((r, ctx) => {
+    const seen = [...r.items.map((i) => i.id), ...r.notApplicable.map((n) => n.check)];
+    for (const c of COMPLIANCE_CHECKS) {
+      const n = seen.filter((s) => s === c).length;
+      if (n !== 1)
+        ctx.addIssue({
+          code: 'custom',
+          message: `${c} must appear exactly once in items or notApplicable (found ${n})`,
+        });
+    }
+    for (const s of COMPLIANCE_STATES) {
+      const n = r.items.filter((i) => i.state === s).length;
+      if (r.counts[s] !== n) ctx.addIssue({ code: 'custom', message: `counts.${s} must be ${n}` });
+    }
+    const unconfirmed = r.items.filter((i) => i.unconfirmed.length > 0).length;
+    if (r.unconfirmedCount !== unconfirmed)
+      ctx.addIssue({ code: 'custom', message: `unconfirmedCount must be ${unconfirmed}` });
+  });
 export type ComplianceResult = z.infer<typeof complianceResultSchema>;
