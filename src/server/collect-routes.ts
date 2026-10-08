@@ -15,6 +15,8 @@ import type { KnowledgeCollector } from '../knowledge/collect/collector.ts';
  * 자료 정리 (SPEC-08.9, ARCH-01 §3 「자료 정리」) and 자료에서 찾은 할 일·일정 (SPEC-01.14 11):
  * `GET …/knowledge/collect` (state), `POST …/knowledge/collect` (start: the first collection or an
  * update) and `POST …/knowledge/collect/stop` — starting and stopping only at this PC; `GET
+ * …/knowledge/collect/survey` (what a run reads and skips, T-261) and `POST
+ * …/knowledge/collect/exclude {exclude}` (folders left out), also only at this PC; `GET
  * …/agenda-proposals`, `POST …/agenda-proposals/add {items}` (the picked ones, possibly edited, go
  * through the normal agenda add with `source: 'ai'`) and `POST …/agenda-proposals/dismiss {ids}`.
  */
@@ -38,6 +40,7 @@ const edited = z
   })
   .strict();
 const addSchema = z.object({ items: z.array(edited).min(1).max(100) }).strict();
+const excludeSchema = z.object({ exclude: z.array(z.string().min(1).max(1024)).max(200) }).strict();
 const dismissSchema = z
   .object({ ids: z.array(z.number().int().positive()).min(1).max(500) })
   .strict();
@@ -62,13 +65,27 @@ export async function collectRoutes(
   },
 ) {
   const match =
-    /^\/api\/v1\/projects\/([^/]+)\/(?:knowledge\/collect(\/stop)?|agenda-proposals(?:\/(add|dismiss))?)$/.exec(
+    /^\/api\/v1\/projects\/([^/]+)\/(?:knowledge\/collect(?:\/(stop|survey|exclude))?|agenda-proposals(?:\/(add|dismiss))?)$/.exec(
       url.pathname,
     );
   if (!match) return false;
-  const [, projectId, stop, action] = match;
+  const [, projectId, sub, action] = match;
+  const stop = sub === 'stop';
   project(projectId);
   const collect = url.pathname.includes('/knowledge/collect');
+  if (collect && (sub === 'survey' || sub === 'exclude')) {
+    // What a run would read and skip (T-261), and the folders left out: this PC's folders only.
+    if (remote) throw new DomainError('FORBIDDEN');
+    if (sub === 'survey' && method === 'GET') {
+      send(200, await collector.survey(projectId));
+      return true;
+    }
+    if (sub !== 'exclude' || method !== 'POST') return false;
+    const { exclude } = excludeSchema.parse(await body());
+    collector.setExclusions(projectId, exclude);
+    send(200, await collector.survey(projectId));
+    return true;
+  }
   if (collect) {
     if (method === 'GET' && !stop) {
       send(200, collector.status(projectId));

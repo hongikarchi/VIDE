@@ -3,16 +3,18 @@
 // (2026-10-07 user decision: no automatic runs while modelling). One run per project at a time:
 // list → read documents → read drawings → filter (Haiku) → statements (Sonnet) → issues (Opus)
 // → 할 일·일정 proposals (Opus). Only new or changed files reach the AI; removed files' statements
-// are hidden. Originals are only read; the DB is the one the 자료 tab reads.
-import { join } from 'node:path';
-import { existsSync, statSync } from 'node:fs';
+// are hidden. Originals are only read; the DB is the one the 자료 tab reads. Before and during a
+// run the survey (survey.ts, T-261) says what is read and skipped; folders can be left out.
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { localDate } from '../../core/agenda.ts';
 import type { AgendaItem } from '../../contracts/agenda.ts';
 import { knowledgeFile } from '../../jigs/knowledge.ts';
 import { copyRevision } from '../../jigs/knowledge-copy.ts';
 import { DomainError } from '../../contracts/errors.ts';
 import { getMeta, logRun, openKnowledgeDb, setMeta, VISIBLE, type KnowledgeDb } from './schema.ts';
-import { inventory, moveRoot, rootsOf } from './inventory.ts';
+import { excludedBy, inventory, moveRoot, rootsOf, type Roots } from './inventory.ts';
+import { surveyFolders, type CollectSurvey } from './survey.ts';
 import { extractDocuments } from './extract.ts';
 import { extractDrawings, type DwgReader } from './dwg.ts';
 import { extractStatements, selectExcerpts, updateIssues, type StageContext } from './stages.ts';
@@ -45,13 +47,20 @@ export interface CollectState {
   collected: boolean;
   error: string | null;
   counts: {
+    /** Readable documents (data files not counted). */
     files: number;
     read: number;
     unread: Record<string, number>;
+    /** .txt/.csv number dumps kept as their first lines only (T-261). */
+    data: number;
+    /** Files past the per-file excerpt cap and the excerpts left out. */
+    capped: { files: number; excerpts: number };
     statements: number;
     issues: number;
     proposals: number;
   } | null;
+  /** What this run reads and skips, surveyed when it started (T-261); null before a run. */
+  survey: CollectSurvey | null;
   /** The model family used: 'claude' or 'codex'. */
   models: 'claude' | 'codex' | null;
 }
@@ -105,13 +114,22 @@ export class KnowledgeCollector {
           from source where skip is null and kind <> 'binary' and extracted_sha is not null group by 1`,
       )
       .all() as { status: string; n: number }[])
-      if (row.status !== 'done') unread[row.status] = Number(row.n);
+      if (row.status !== 'done' && row.status !== 'data') unread[row.status] = Number(row.n);
+    const capped = db
+      .prepare(
+        'select count(*) as files, coalesce(sum(excerpt_overflow), 0) as excerpts from source where skip is null and excerpt_overflow > 0',
+      )
+      .get() as { files: number; excerpts: number };
     return {
-      files: n("select count(*) as n from source where skip is null and kind <> 'binary'"),
+      files: n(
+        "select count(*) as n from source where skip is null and kind <> 'binary' and coalesce(status, '') <> 'data'",
+      ),
       read: n(
         "select count(*) as n from source where skip is null and kind <> 'binary' and coalesce(status, 'done') = 'done' and extracted_sha is not null",
       ),
       unread,
+      data: n("select count(*) as n from source where skip is null and status = 'data'"),
+      capped: { files: Number(capped.files), excerpts: Number(capped.excerpts) },
       statements: n(`select count(*) as n from statement st where ${VISIBLE}`),
       issues: n('select count(*) as n from issue'),
       proposals: n(
@@ -136,6 +154,7 @@ export class KnowledgeCollector {
       error: null,
       counts: null,
       models: null,
+      survey: null,
     };
     if (!existsSync(file)) return { ...base, collected: false, counts: null };
     try {
@@ -155,9 +174,8 @@ export class KnowledgeCollector {
     }
   }
 
-  /** Starts a run (the first one or an update). A running one is returned as it is. */
-  async start(projectId: string): Promise<CollectState> {
-    if (this.jobs.has(projectId)) return this.status(projectId);
+  /** The project folders that exist here and their common root; NO_PROJECT_FOLDER without one. */
+  private roots(projectId: string) {
     const folders = this.options.folders(projectId).filter((folder) => {
       try {
         return statSync(folder).isDirectory() && !this.options.denied(folder);
@@ -167,6 +185,73 @@ export class KnowledgeCollector {
     });
     const roots = rootsOf(folders);
     if (!roots) throw error('NO_PROJECT_FOLDER');
+    return roots;
+  }
+
+  // --- Folders left out of 자료 정리 (T-261): kept beside the DB, per project; the project folder
+  // list itself is not changed. Stored as absolute paths so a moved root keeps them.
+  private settingsFile(projectId: string) {
+    return this.file(projectId).replace(/\.sqlite$/, '') + '.collect.json';
+  }
+  /** The folders left out (absolute paths). */
+  exclusions(projectId: string): string[] {
+    try {
+      const value = JSON.parse(readFileSync(this.settingsFile(projectId), 'utf8')) as {
+        exclude?: unknown;
+      };
+      return Array.isArray(value.exclude)
+        ? value.exclude.filter((p): p is string => typeof p === 'string')
+        : [];
+    } catch {
+      return [];
+    }
+  }
+  /** A folder that can be left out now: inside a project folder, below it. */
+  private excludable(roots: Roots) {
+    const inside = excludedBy(roots.folders);
+    return (path: string) =>
+      inside(path) && !roots.folders.some((folder) => excludedBy([path])(folder));
+  }
+  /**
+   * Sets the folders left out, given relative to the survey root (or absolute). Each must lie
+   * inside a project folder, below it; otherwise INVALID_INPUT. A folder left out earlier that is
+   * no longer inside a project folder (that project folder was removed) is dropped, not refused.
+   */
+  setExclusions(projectId: string, paths: readonly string[]) {
+    const roots = this.roots(projectId);
+    const valid = this.excludable(roots);
+    const fold = (p: string) => (process.platform === 'win32' ? p.toLowerCase() : p);
+    const earlier = new Set(this.exclusions(projectId).map((p) => fold(resolve(p))));
+    const list = [...new Set(paths.map((p) => resolve(roots.root, p)))].filter(
+      (path) => valid(path) || !earlier.has(fold(path)),
+    );
+    for (const path of list) if (!valid(path)) throw error('INVALID_INPUT');
+    const file = this.settingsFile(projectId);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify({ exclude: list }, null, 2));
+    return list;
+  }
+  /** The left-out folders as the person sees them: relative to the root, else absolute. */
+  private shown(root: string, folders: readonly string[]) {
+    return folders.map((folder) => {
+      const rel = relative(root, folder);
+      return rel && !rel.startsWith('..') && !isAbsolute(rel) ? rel.split(sep).join('/') : folder;
+    });
+  }
+  /** What a run would read and skip now, with rough excerpt and AI-call counts (read only). */
+  async survey(projectId: string, signal?: AbortSignal): Promise<CollectSurvey> {
+    const roots = this.roots(projectId);
+    // Folders outside the project folders now (one was removed from the list) are not shown.
+    const exclude = this.exclusions(projectId).filter(this.excludable(roots));
+    const file = this.file(projectId);
+    const result = await surveyFolders(roots, this.options.denied, exclude, file, signal);
+    return { ...result, exclude: this.shown(roots.root, exclude) };
+  }
+
+  /** Starts a run (the first one or an update). A running one is returned as it is. */
+  async start(projectId: string): Promise<CollectState> {
+    if (this.jobs.has(projectId)) return this.status(projectId);
+    const roots = this.roots(projectId);
     const file = this.file(projectId);
     if (copyRevision(file) !== undefined) throw error('KNOWLEDGE_IS_COPY');
     const plan = await this.options.plan();
@@ -181,6 +266,7 @@ export class KnowledgeCollector {
       startedAt: new Date().toISOString(),
       error: null,
       models: plan.extract.provider === 'claude-cli' ? 'claude' : 'codex',
+      survey: null,
     };
     const job: Job = { controller, state, done: Promise.resolve() };
     this.jobs.set(projectId, job);
@@ -253,7 +339,13 @@ export class KnowledgeCollector {
       );
 
       let t = stage('list');
-      const listed = await inventory(db, roots, this.options.denied, signal);
+      // What this run reads and skips, shown while it runs (T-261).
+      const exclude = this.exclusions(projectId);
+      job.state.survey = {
+        ...(await surveyFolders(roots, this.options.denied, exclude, file, signal)),
+        exclude: this.shown(roots.root, exclude),
+      };
+      const listed = await inventory(db, roots, this.options.denied, signal, exclude);
       logRun(db, 'inventory', t, { items: listed.files, note: listed });
 
       t = stage('read');

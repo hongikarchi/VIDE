@@ -8,6 +8,7 @@ import { tx, type KnowledgeDb } from './schema.ts';
 import { extractAll } from './extract-pool.ts';
 import type { Excerpt, Extracted, FileStatus } from './documents.ts';
 import type { Mail } from './mail.ts';
+import { DATA_FILE_EXTENSIONS, TEXT_READER_VERSION } from './filters.ts';
 
 export const textSha = (text: string) =>
   createHash('sha256').update(text.replace(/\s+/g, ' ').trim()).digest('hex');
@@ -48,6 +49,7 @@ export function saveExcerpts(
   excerpts: readonly Excerpt[],
   status: FileStatus,
   error: string | null,
+  overflow = 0,
 ) {
   const existing = db
     .prepare('select id, text_sha from excerpt where source_id = ? order by id')
@@ -70,8 +72,8 @@ export function saveExcerpts(
   }
   removeExcerpts(db, [...free.values()].flat());
   db.prepare(
-    'update source set extracted_sha = sha256, extract_error = ?, status = ? where id = ?',
-  ).run(error, status, sourceId);
+    'update source set extracted_sha = sha256, extract_error = ?, status = ?, excerpt_overflow = ?, reader = ? where id = ?',
+  ).run(error, status, overflow || null, TEXT_READER_VERSION, sourceId);
   return added;
 }
 
@@ -108,13 +110,19 @@ export interface SourceRow {
   size: number;
   sha256: string;
 }
-/** Readable sources whose content changed since they were last read. */
+/** The .txt/.csv files read again once by a newer reader (as SQL over `source`). */
+export const STALE_READER = `(ext in (${[...DATA_FILE_EXTENSIONS].map((e) => `'${e}'`).join(',')})
+  and coalesce(reader, 0) < ${TEXT_READER_VERSION})`;
+/**
+ * Readable sources whose content changed since they were last read, and .txt/.csv files read by an
+ * older reader (a number dump read before data files were known is read again, T-261).
+ */
 export function changedSources(db: KnowledgeDb, kinds: readonly string[]) {
   return db
     .prepare(
       `select id, rel_path, ext, kind, size, sha256 from source
         where skip is null and sha256 is not null and kind in (${kinds.map(() => '?').join(',')})
-        and (extracted_sha is null or extracted_sha <> sha256) order by id`,
+        and (extracted_sha is null or extracted_sha <> sha256 or ${STALE_READER}) order by id`,
     )
     .all(...kinds) as unknown as SourceRow[];
 }
@@ -123,7 +131,14 @@ export function changedSources(db: KnowledgeDb, kinds: readonly string[]) {
 export function saveResult(db: KnowledgeDb, row: SourceRow, result: Extracted) {
   return tx(db, () => {
     if (result.mail) saveMail(db, row.id, result.mail);
-    return saveExcerpts(db, row.id, result.excerpts, result.status, result.error ?? null);
+    return saveExcerpts(
+      db,
+      row.id,
+      result.excerpts,
+      result.status,
+      result.error ?? null,
+      result.overflow ?? 0,
+    );
   });
 }
 

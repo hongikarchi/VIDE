@@ -60,7 +60,14 @@ export function openKnowledgeDb(path: string): KnowledgeDb {
     new Set(
       (db.prepare(`pragma table_info(${table})`).all() as { name: string }[]).map((c) => c.name),
     );
-  if (!columns('source').has('status')) db.exec('alter table source add column status text');
+  const source = columns('source');
+  if (!source.has('status')) db.exec('alter table source add column status text');
+  // T-261: excerpts past the per-file cap, and why a text was judged without AI.
+  if (!source.has('excerpt_overflow'))
+    db.exec('alter table source add column excerpt_overflow integer');
+  // The .txt/.csv reader version a file was read with (filters.ts TEXT_READER_VERSION).
+  if (!source.has('reader')) db.exec('alter table source add column reader integer');
+  if (!columns('selection').has('reason')) db.exec('alter table selection add column reason text');
   const statement = columns('statement');
   if (!statement.has('status'))
     db.exec("alter table statement add column status text default 'ai'");

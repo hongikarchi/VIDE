@@ -5,7 +5,9 @@
 // read again (`vide:knowledge-collected`). The row never hides itself (2026-10-08 user report "DB 정리도
 // 지금 vide에서는 안 보이는데"): without a project folder it says how to start, and a failed state
 // read shows the reason with [다시 읽기]. The 자료 tab shows the same row while it has no DB
-// (`KnowledgeStart`).
+// (`KnowledgeStart`). The button first shows what the run reads and skips (데이터 파일, 환경·캐시
+// 폴더, 이미지·모델 …), a rough excerpt and AI-call count, the heaviest folders with [빼기] and the
+// folders left out with [다시 넣기]; [시작] starts it (T-261). While running, the same summary stays.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './gateway.ts';
 import { remoteSession } from './remote-panel.ts';
@@ -25,11 +27,64 @@ interface CollectState {
     files: number;
     read: number;
     unread: Record<string, number>;
+    data?: number;
+    capped?: { files: number; excerpts: number };
     statements: number;
     issues: number;
     proposals: number;
   } | null;
+  survey?: Survey | null;
 }
+
+/** What a run reads and skips (src/knowledge/collect/survey.ts, T-261). */
+interface Survey {
+  read: { files: number; byKind: Record<string, number> };
+  unchanged: number;
+  /** Excerpts read before but not filtered yet (a stopped run); the next run sends them. */
+  pending?: number;
+  skipped: {
+    data: number;
+    env: number;
+    generatedDirs: number;
+    generatedFiles: number;
+    media: number;
+    other: number;
+    excluded: number;
+  };
+  estimate: { excerpts: number; filterCalls: number; minutes: number };
+  heavy: { path: string; files: number; excerpts: number }[];
+  exclude: string[];
+}
+const KINDS: [string, string][] = [
+  ['text', '글'],
+  ['mail', '메일'],
+  ['pdf', 'PDF'],
+  ['office', '오피스'],
+  ['hwp', '한글'],
+  ['dwg', '도면'],
+  ['legacy', '옛 형식'],
+];
+const SKIPPED: [keyof Survey['skipped'], string][] = [
+  ['data', '데이터 파일'],
+  ['env', '환경·캐시 폴더'],
+  ['media', '이미지·모델'],
+  ['generatedFiles', '생성·숨은 파일'],
+  ['generatedDirs', '생성 폴더'],
+  ['excluded', '뺀 폴더'],
+];
+const num = (n: number) => n.toLocaleString('ko-KR');
+const joined = (parts: [string, number][]) =>
+  parts
+    .filter(([, n]) => n > 0)
+    .map(([label, n]) => `${label} ${num(n)}`)
+    .join(' · ');
+const kindsOf = (survey: Survey) =>
+  joined(KINDS.map(([kind, label]) => [label, survey.read.byKind[kind] ?? 0]));
+const skippedOf = (survey: Survey) =>
+  joined(SKIPPED.map(([key, label]) => [label, survey.skipped[key]]));
+const estimateOf = (survey: Survey) =>
+  `발췌 약 ${num(survey.estimate.excerpts)}개 · 걸러내기 AI 호출 약 ${num(survey.estimate.filterCalls)}번` +
+  (survey.estimate.filterCalls ? ` · 약 ${num(Math.max(1, survey.estimate.minutes))}분` : '');
 
 const STAGES: Record<string, string> = {
   list: '파일 목록 확인',
@@ -125,12 +180,34 @@ export function KnowledgeCollect({
     setReason('');
     try {
       take((await api(path, 'POST', {})) as CollectState);
+      setSurveyOpen(false);
     } catch (error) {
       setReason(reasonOf((error as { code?: string }).code ?? (error as Error).message));
     } finally {
       setBusy(false);
     }
   };
+  // Before a run: what it reads and skips, and folders to leave out (T-261).
+  const [surveyOpen, setSurveyOpen] = useState(false);
+  const [survey, setSurvey] = useState<Survey | undefined>();
+  const look = async (request: () => Promise<unknown>) => {
+    setBusy(true);
+    setReason('');
+    try {
+      setSurvey((await request()) as Survey);
+    } catch (error) {
+      setReason(reasonOf((error as { code?: string }).code ?? (error as Error).message));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const openSurvey = () => {
+    setSurveyOpen(true);
+    setSurvey(undefined);
+    void look(() => api(`${base}/survey`));
+  };
+  const setExclude = (exclude: string[]) =>
+    void look(() => api(`${base}/exclude`, 'POST', { exclude }));
   if (!hasFolder)
     return (
       <div className="dash-collect" role="group" aria-label="자료 정리">
@@ -190,17 +267,104 @@ export function KnowledgeCollect({
           <button type="button" disabled={busy} onClick={() => void act(`${base}/stop`)}>
             중단
           </button>
-        ) : (
-          <button type="button" disabled={busy} onClick={() => void act(base)}>
+        ) : surveyOpen ? null : (
+          <button type="button" disabled={busy} onClick={openSurvey}>
             {state.collected ? '자료 업데이트' : '자료 정리하기'}
           </button>
         )}
       </div>
+      {surveyOpen && !isRunning && !remote ? (
+        <div className="dash-collect-survey" role="group" aria-label="정리할 자료">
+          {!survey ? (
+            <p className="dash-collect-counts">폴더를 살펴보는 중…</p>
+          ) : (
+            <>
+              <p className="dash-collect-line">
+                {survey.read.files
+                  ? `이번에 읽을 파일 ${num(survey.read.files)}개 — ${kindsOf(survey)}`
+                  : '새로 읽을 파일이 없습니다.'}
+                {survey.unchanged ? ` (그대로 ${num(survey.unchanged)}개)` : ''}
+              </p>
+              {survey.pending ? (
+                <p className="dash-collect-counts">
+                  지난 정리에서 읽고 아직 걸러내지 않은 발췌 {num(survey.pending)}개
+                </p>
+              ) : null}
+              {skippedOf(survey) ? (
+                <p className="dash-collect-counts">건너뜀: {skippedOf(survey)}</p>
+              ) : null}
+              <p className="dash-collect-counts">{estimateOf(survey)}</p>
+              {survey.heavy.length ? (
+                <ul className="dash-collect-folders" aria-label="발췌가 많은 폴더">
+                  {survey.heavy.map((folder) => (
+                    <li key={folder.path}>
+                      <span className="dash-collect-path" title={folder.path}>
+                        {folder.path}
+                      </span>
+                      <span className="dash-collect-meta">
+                        파일 {num(folder.files)} · 발췌 약 {num(folder.excerpts)}
+                      </span>
+                      <button
+                        type="button"
+                        className="link-button"
+                        disabled={busy}
+                        aria-label={`${folder.path} 빼기`}
+                        onClick={() => setExclude([...survey.exclude, folder.path])}
+                      >
+                        빼기
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {survey.exclude.length ? (
+                <ul className="dash-collect-folders" aria-label="뺀 폴더">
+                  {survey.exclude.map((path) => (
+                    <li key={path}>
+                      <span className="dash-collect-path" title={path}>
+                        {path}
+                      </span>
+                      <span className="dash-collect-meta">뺌</span>
+                      <button
+                        type="button"
+                        className="link-button"
+                        disabled={busy}
+                        aria-label={`${path} 다시 넣기`}
+                        onClick={() => setExclude(survey.exclude.filter((p) => p !== path))}
+                      >
+                        다시 넣기
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </>
+          )}
+          <div className="dash-collect-actions">
+            <button type="button" onClick={() => setSurveyOpen(false)}>
+              닫기
+            </button>
+            <button type="button" disabled={busy || !survey} onClick={() => void act(base)}>
+              시작
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {isRunning && state.survey ? (
+        <p className="dash-collect-counts">
+          읽을 파일 {num(state.survey.read.files)} · {estimateOf(state.survey)}
+          {skippedOf(state.survey) ? ` · 건너뜀: ${skippedOf(state.survey)}` : ''}
+        </p>
+      ) : null}
       {state.counts && !isRunning ? (
         <p className="dash-collect-counts">
           문서 {state.counts.read}/{state.counts.files} · 진술 {state.counts.statements} · 이슈{' '}
           {state.counts.issues}
           {unread ? ` · 읽지 못함: ${unread}` : ''}
+          {state.counts.data ? ` · 데이터 파일 ${num(state.counts.data)}` : ''}
+          {state.counts.capped?.files
+            ? ` · 상한으로 뺀 발췌 ${num(state.counts.capped.excerpts)}(파일 ${num(state.counts.capped.files)})`
+            : ''}
         </p>
       ) : null}
       {state.state === 'stopped' ? <p className="dash-collect-counts">중단했습니다.</p> : null}

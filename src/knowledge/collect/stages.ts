@@ -5,6 +5,7 @@
 import { tx, VISIBLE, type KnowledgeDb } from './schema.ts';
 import { Meter, batches, pool, type CollectRunner, type ModelPlan } from './ai.ts';
 import { DATED } from './proposals.ts';
+import { RULE_DATA, RULE_SHORT, ruleOf } from './filters.ts';
 
 export interface StageContext {
   db: KnowledgeDb;
@@ -39,25 +40,36 @@ export const DISCIPLINES: Record<string, string> = {
   other: '기타',
 };
 
-const live = "s.skip is null and coalesce(s.status, 'done') = 'done'";
+// A data file (T-261) counts for the parts with a sentence in it; its first lines (excerpt kind
+// 'data') are never sent.
+const live = "s.skip is null and coalesce(s.status, 'done') in ('done', 'data')";
 
-/** Haiku labels each new unique text; very short texts (under 8 letters) are dropped without a call. */
+/**
+ * Haiku labels each new unique text. Very short texts (under 8 letters) and number or data
+ * fragments (filters.ts `isDataFragment`) are 'none' by rule without a call, their reason on
+ * `selection.reason`.
+ */
 export async function selectExcerpts({ db, runner, plan, signal, progress }: StageContext) {
   const rows = db
     .prepare(
       `select e.id, e.text, e.text_sha, e.locator, s.rel_path from excerpt e join source s on s.id = e.source_id
-        where e.id in (select min(e2.id) from excerpt e2 join source s on s.id = e2.source_id where ${live} group by e2.text_sha)
+        where e.id in (select min(e2.id) from excerpt e2 join source s on s.id = e2.source_id where ${live} and e2.kind <> 'data' group by e2.text_sha)
         and e.text_sha not in (select text_sha from selection) order by e.id`,
     )
     .all() as { id: number; text: string; text_sha: string; locator: string; rel_path: string }[];
   const put =
     db.prepare(`insert or replace into selection(text_sha, excerpt_id, route, llm_label, final_label)
     values(?, ?, ?, ?, ?)`);
-  const short = rows.filter((r) => r.text.replace(/\s/g, '').length < 8);
+  const ruled = rows.map((r) => ({ row: r, reason: ruleOf(r.text) }));
+  const byRule =
+    db.prepare(`insert or replace into selection(text_sha, excerpt_id, route, llm_label, final_label, reason)
+    values(?, ?, 'rule', null, 'none', ?)`);
   tx(db, () => {
-    for (const r of short) put.run(r.text_sha, r.id, 'rule', null, 'none');
+    for (const { row, reason } of ruled) if (reason) byRule.run(row.text_sha, row.id, reason);
   });
-  const ask = rows.filter((r) => r.text.replace(/\s/g, '').length >= 8);
+  const short = ruled.filter((r) => r.reason === RULE_SHORT).length;
+  const data = ruled.filter((r) => r.reason === RULE_DATA).length;
+  const ask = ruled.filter((r) => !r.reason).map((r) => r.row);
   const meter = new Meter();
   let done = 0;
   progress(0, ask.length);
@@ -105,7 +117,8 @@ export async function selectExcerpts({ db, runner, plan, signal, progress }: Sta
   );
   return {
     texts: rows.length,
-    short: short.length,
+    short,
+    data,
     asked: ask.length,
     ...meter.usage(),
     failed: meter.failed,

@@ -7,6 +7,13 @@ import { CFB_SIGNATURE } from './cfb.ts';
 import { HwpError, hwpSections } from './hwp.ts';
 import { PdfError, pdfPages } from './pdf.ts';
 import { readMail, type Mail } from './mail.ts';
+import {
+  DATA_FILE_EXTENSIONS,
+  capExcerpts,
+  dataFile,
+  dataHead,
+  isDataFragment,
+} from './filters.ts';
 
 export interface Excerpt {
   locator: string;
@@ -14,12 +21,14 @@ export interface Excerpt {
   kind: string;
 }
 /**
- * The result of one file: `done` (read; may have no excerpts), `size` (over the size limit),
+ * The result of one file: `done` (read; may have no excerpts), `data` (a .txt/.csv number dump:
+ * only its first lines are kept and never sent to the AI), `size` (over the size limit),
  * `encrypted`, `distribution` (HWP 배포용), `no-text` (a scan), `unsupported` (old or unknown
  * format), `no-reader` (the reader is not installed), `error`.
  */
 export type FileStatus =
   | 'done'
+  | 'data'
   | 'size'
   | 'encrypted'
   | 'distribution'
@@ -34,23 +43,37 @@ export interface Extracted {
   excerpts: Excerpt[];
   mail?: Mail;
   error?: string;
+  /** Excerpts past the per-file cap (filters.ts `excerptCap`), counted and left out. */
+  overflow?: number;
 }
 
 /** Files larger than this are not read (status `size`). */
 export const DOCUMENT_MAX_BYTES = 100 * 1024 * 1024;
 const MAX = 1200;
+/** A sheet's first row repeated on each of its excerpts is cut to this many characters. */
+export const CHUNK_HEAD_MAX = 300;
 
-/** Splits on blank lines and packs paragraphs up to 1,200 characters (the spike's chunks). */
+/**
+ * Splits on blank lines and packs paragraphs up to 1,200 characters (the spike's chunks). A long
+ * paragraph is cut at its last sentence end or line break in the second half; without one, at its
+ * last space there, else at the full length (no half-length slices of break-less data, T-261).
+ */
 export function chunk(text: string, locator: string, kind = 'text', head = ''): Excerpt[] {
   const out: string[] = [];
   let buf = '';
+  // A very wide first row (hundreds of columns) is cut, so every excerpt has room (and a cut
+  // always moves forward).
+  if (head.length > CHUNK_HEAD_MAX) head = head.slice(0, CHUNK_HEAD_MAX) + '…';
   const max = MAX - head.length;
+  const half = max >> 1;
   for (let p of text
     .split(/\n\s*\n/)
     .map((s) => s.trim())
     .filter(Boolean)) {
     while (p.length > max) {
-      const cut = Math.max(p.lastIndexOf('. ', max), p.lastIndexOf('\n', max), max >> 1);
+      let cut = Math.max(p.lastIndexOf('. ', max), p.lastIndexOf('\n', max));
+      if (cut < half) cut = p.lastIndexOf(' ', max);
+      if (cut < half) cut = max - 1;
       out.push(p.slice(0, cut + 1).trim());
       p = p.slice(cut + 1).trim();
     }
@@ -249,14 +272,35 @@ export async function extractFile(path: string, ext: string): Promise<Extracted>
   }
 }
 
-/** Reads one document's bytes; the status says what happened. Never throws. */
+/**
+ * Reads one document's bytes; the status says what happened. A .txt/.csv number dump keeps only
+ * its first lines (status `data`), and a file gives at most its cap of excerpts. Never throws.
+ */
 export async function extractBytes(bytes: Buffer, ext: string): Promise<Extracted> {
+  const result = await readBytes(bytes, ext);
+  const { excerpts, overflow } = capExcerpts(result.excerpts, ext);
+  return overflow ? { ...result, excerpts, overflow } : result;
+}
+
+async function readBytes(bytes: Buffer, ext: string): Promise<Extracted> {
   try {
     switch (ext) {
       case 'txt':
       case 'md':
-      case 'csv':
-        return { status: 'done', excerpts: chunk(plainText(bytes), 'body') };
+      case 'csv': {
+        const text = plainText(bytes);
+        // A number dump keeps its first lines and any part with a sentence in it (a conclusion
+        // written under the numbers); the rest of its numbers are not kept.
+        if (DATA_FILE_EXTENSIONS.has(ext) && dataFile(text))
+          return {
+            status: 'data',
+            excerpts: [
+              dataHead(text),
+              ...chunk(text, 'body').filter((e) => !isDataFragment(e.text)),
+            ],
+          };
+        return { status: 'done', excerpts: chunk(text, 'body') };
+      }
       case 'eml': {
         const mail = readMail(bytes);
         return { status: 'done', excerpts: chunk(mail.body, 'body', 'mail'), mail };

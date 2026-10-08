@@ -37,6 +37,59 @@
   margin: 4px 0 0;
   color: var(--text-3);
 }
+/* Before a run (T-261): what it reads and skips, the heaviest folders and those left out. */
+.dash-collect-survey {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.dash-collect-line {
+  margin: 0;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+.dash-collect-survey .dash-collect-counts {
+  font-variant-numeric: tabular-nums;
+}
+.dash-collect-folders {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  border-top: var(--hairline) solid var(--border-subtle);
+}
+.dash-collect-folders li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: var(--hairline) solid var(--border-subtle);
+}
+.dash-collect-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+}
+.dash-collect-meta {
+  flex-shrink: 0;
+  color: var(--text-3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.dash-collect-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+.dash-collect-actions button {
+  padding: 3px 10px;
+  font-size: 12px;
+}
 .dash-proposals {
   margin-top: 8px;
   font-size: 12px;

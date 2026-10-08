@@ -129,3 +129,83 @@ test('collect from the project folder, then add one proposal and dismiss the oth
   assert.equal((await api(`${base}/agenda`)).json.items.length, 1);
   assert.equal((await api(`${base}/agenda-proposals/add`, 'POST', { items: [] })).status, 400);
 });
+
+test('survey before a run and folders left out (T-261)', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'vide-collect-survey-http-'));
+  const folder = join(directory, '합성 프로젝트');
+  await mkdir(join(folder, '도구', '.venv'), { recursive: true });
+  await mkdir(join(folder, '측량'), { recursive: true });
+  await mkdir(join(folder, '참고'), { recursive: true });
+  await writeFile(join(folder, '회의록.md'), '기둥 간격은 9m로 확정한다.');
+  await writeFile(join(folder, '참고', '메모.md'), '외장재는 석재로 바꾼다.');
+  await writeFile(join(folder, '도구', '.venv', 'pyvenv.cfg'), 'home = C:\\Python');
+  await writeFile(
+    join(folder, '측량', '좌표.csv'),
+    ['x,y'].concat(Array.from({ length: 800 }, (_, i) => `${i}.5,${i * 2}.25`)).join('\n'),
+  );
+  const app = await startServer({
+    filename: join(directory, 'data', 'store.sqlite'),
+    collectOptions: {
+      runner: fakeRunner(),
+      plan: async () => modelPlan(['claude-cli'], []),
+      dwgReader: null,
+    },
+  });
+  t.after(async () => {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  });
+  const login = await fetch(app.origin + '/api/v1/session', {
+    method: 'POST',
+    headers: { Origin: app.origin, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: new URL(app.launchUrl).hash.slice(1) }),
+  });
+  const headers = {
+    Origin: app.origin,
+    'Content-Type': 'application/json',
+    Cookie: login.headers.get('set-cookie').split(';')[0],
+  };
+  const api = async (path, method = 'GET', data) => {
+    const response = await fetch(app.origin + '/api/v1' + path, {
+      method,
+      headers,
+      body: data ? JSON.stringify(data) : undefined,
+    });
+    return { status: response.status, json: await response.json().catch(() => null) };
+  };
+  const project = (await api('/projects', 'POST', { name: '자료 살펴보기' })).json;
+  const base = `/projects/${project.id}/knowledge/collect`;
+  assert.equal((await api(`${base}/survey`)).json.code, 'NO_PROJECT_FOLDER');
+  assert.equal(
+    (await api(`/projects/${project.id}/folders`, 'POST', { path: folder })).status,
+    200,
+  );
+  const survey = (await api(`${base}/survey`)).json;
+  assert.deepEqual(survey.read, { files: 2, byKind: { text: 2 } });
+  assert.equal(survey.skipped.data, 1);
+  assert.equal(survey.skipped.env, 1);
+  assert.equal(survey.estimate.filterCalls, 1);
+  const left = await api(`${base}/exclude`, 'POST', { exclude: ['참고'] });
+  assert.equal(left.status, 200);
+  assert.deepEqual(
+    [left.json.exclude, left.json.read.files, left.json.skipped.excluded],
+    [['참고'], 1, 1],
+  );
+  // Outside the project folder, or not a list: refused.
+  assert.equal((await api(`${base}/exclude`, 'POST', { exclude: ['..'] })).status, 400);
+  assert.equal((await api(`${base}/exclude`, 'POST', { exclude: 'x' })).status, 400);
+  // The setting is kept: a run reads what the survey said.
+  await api(base, 'POST', {});
+  let state;
+  for (let i = 0; i < 100; i++) {
+    state = (await api(base)).json;
+    if (state.state !== 'running') break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.equal(state.state, 'done', state.error ?? '');
+  assert.deepEqual([state.counts.read, state.counts.data], [1, 1]);
+  assert.deepEqual(state.survey.exclude, ['참고']);
+  // Back in: the next survey reads it.
+  const back = (await api(`${base}/exclude`, 'POST', { exclude: [] })).json;
+  assert.deepEqual([back.exclude, back.read.files], [[], 1]);
+});

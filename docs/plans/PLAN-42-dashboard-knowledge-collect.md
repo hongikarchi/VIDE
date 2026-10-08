@@ -1,8 +1,8 @@
 ---
 id: PLAN-42
-title: 대시보드 배치 조정·기본 모델 Jev·프로젝트 폴더 자료 정리와 일정 제안 (T-192~T-196)
+title: 대시보드 배치 조정·기본 모델 Jev·프로젝트 폴더 자료 정리와 일정 제안 (T-192~T-196, T-261)
 status: review
-version: 0.3
+version: 0.5
 updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-01, SPEC-08, SPEC-02, ARCH-01, DESIGN, PLAN-08, PLAN-39, SPIKE-2026-09-29-knowledge-crawl, RESEARCH-06, FR-01, FR-09, FR-16, C-02]
@@ -11,6 +11,8 @@ related: [SPEC-01, SPEC-08, SPEC-02, ARCH-01, DESIGN, PLAN-08, PLAN-39, SPIKE-20
 # 대시보드 배치 조정·기본 모델 Jev·자료 정리와 일정 제안
 
 2026-10-07 사용자 요청이다.
+
+**상태(2026-10-08):** T-192~T-196 구현함. T-261(걸러내기 전 규칙·데이터 파일·환경 폴더·정리 전 확인과 빼는 폴더) 구현·시험 완료 — 아래 「T-261」.
 
 - **대시보드:** "캘린더가 왼쪽으로 오고, 할일이 오른쪽으로". "캘린더 폭을 좀 줄이고, 할일이 좀 더 넓게 … 할일 아래에 연결 파일/프로젝트 폴더 설정 가능하도록. 섹션을 좀 나누면 좋을 듯". "일정에 시간 입력할 때 15분 단위로 선택하도록". "할일에 AI 표기 필요없음". "이 페이지에서도 섹션 넓이 조절 가능하도록(AI 채팅창, 달력, 할일 탭 넓이)".
 - **AI 채팅:** "기본 모델(default)는 jev로 설정".
@@ -99,6 +101,30 @@ related: [SPEC-01, SPEC-08, SPEC-02, ARCH-01, DESIGN, PLAN-08, PLAN-39, SPIKE-20
 **검증:** 단위: 후보 중복 제거·버린 후보 재제안 없음·지난 날짜 제외. 브라우저: 후보 두 건 중 하나만 추가 → 할 일·달력에 그 하나만, 다시 정리해도 버린 것은 안 뜸.
 
 **결과(2026-10-07):** 구현함. 제안 표는 자료 DB의 `agenda_proposal`이다(정리 결과와 함께 생기고 지워지며, 엔진 DB 마이그레이션이 필요 없음). 같은 날짜에 한쪽 내용이 다른 쪽을 품으면 같은 항목으로 보고, 근거 진술이 없는 후보와 지난 날짜는 버린다. 카드는 할 일 구역의 [글·파일에서 할 일 만들기] 아래에 있고, 항목마다 고르기·[고치기](내용·종류·날짜·시각)·근거(진술 창)가 있다. 경로: `GET …/agenda-proposals`, `POST …/agenda-proposals/add {items}`(보통의 할 일 더하기, `source: 'ai'`), `POST …/agenda-proposals/dismiss {ids}`. 단위·HTTP·브라우저 시험 통과.
+
+## T-261 걸러내기 전 규칙·데이터 파일·환경 폴더·정리 전 확인
+
+2026-10-08 실제 정리 점검(읽기 전용): '걸러내기 n/N'의 N은 Haiku에 40개씩·4개 동시로 보내는 고유 발췌 수이고 26,680개(호출 약 667번, 1~2시간)였다. 94%가 몇 MB짜리 한 줄 수치 .txt(숫자·기호 94~97%; 마침표·줄바꿈이 없어 `chunk()`가 600자마다 자름)와 큰 수치 .csv에서 나왔고, 약 3,300개는 도구 폴더 아래 파이썬 환경(`.venv`·`site-packages`·`Lib`)의 라이선스·메타데이터 글이었다. Haiku는 약 96%를 'none'으로 판정했다. 실제 문서(PDF·md·DWG·회의록)는 약 450개였다. 기준은 [SPEC-08.9](../specs/SPEC-08-project-facts.md) 2·3·5·6, 화면은 Design SCR-20 「정리 전 확인」이다.
+
+| 변경 | 위치 |
+|---|---|
+| 규칙 판정: 공백 빼고 8자 미만은 '짧은 글(규칙)', 숫자·기호가 대부분인 발췌는 '숫자·데이터 조각(규칙)'으로 AI 없이 `none`. 이유는 `selection.reason`(새 열) | 새 `src/knowledge/collect/filters.ts`, `stages.ts`(`selectExcerpts`), `schema.ts` |
+| 데이터 파일: 4K자(`DATA_FILE_MIN_CHARS`) 이상인 txt·csv의 앞 64K자가 수치 덤프이거나, 32K자 넘는 한 줄이 있고 글자 비율이 낮으면 상태 `data`로 첫 5줄(줄마다 200자)을 발췌 하나(`kind = 'data'`)로 남기고, 파일 전체를 자른 발췌 가운데 데이터 조각이 아닌 것(문장이 든 것)도 남김. `data` 파일의 첫 줄 발췌는 AI에 가지 않고 문장 발췌는 감(`stages.ts` `live`) | `filters.ts`, `documents.ts`, `stages.ts` |
+| 다시 읽기: `source.reader`(새 열)에 txt·csv 읽기 판 `TEXT_READER_VERSION`(2)을 남기고, 그보다 낮거나 없으면 바뀌지 않았어도 다음 정리에서 다시 읽음(`extract.ts` `STALE_READER`). 확인도 그 파일을 새로 읽을 파일로 셈 | `filters.ts`, `extract.ts`, `schema.ts`, `survey.ts` |
+| 파일당 발췌 상한: 글(txt·md·csv·eml) 200개, 그 밖 문서 1,000개. 넘친 수는 `source.excerpt_overflow`(새 열). 남기는 쪽은 발췌의 첫 날짜 순서로 정함: 오름차순이 내림차순의 2배 이상이면 뒤쪽, 반대면 앞쪽, 날짜 쌍이 3개 미만이거나 섞이면 앞·뒤 절반씩(`dateOrder`) | `filters.ts`, `documents.ts`, `extract.ts` |
+| 자르기: 긴 문단은 뒤 절반의 마지막 '. '·줄바꿈, 없으면 뒤 절반의 마지막 공백, 그것도 없으면 1,200자에서 자름(전에는 600자). 문장이 있는 글은 그대로. 시트 첫 행(발췌마다 붙는 머리)은 300자(`CHUNK_HEAD_MAX`)까지만 붙여 머리가 1,200자 이상인 시트에서도 멈추지 않음 | `documents.ts` `chunk` |
+| 걷지 않는 폴더: 생성(`.git`·`.svn`·`.hg`·`node_modules`·`bower_components`·`.vide`·`$recycle.bin`·`system volume information`·`__macosx`·`.gradle`·`.next`·`.nuxt`·`.parcel-cache`·`.turbo`), 환경·캐시(`.venv`·`__pycache__`·`site-packages`·`dist-packages`·`.tox`·`.nox`·`.mypy_cache`·`.pytest_cache`·`.ruff_cache`·`.ipynb_checkpoints`·`.conda`·`*.dist-info`·`*.egg-info`), 그리고 안에 `pyvenv.cfg`·`conda-meta`·(`python.exe`와 `Lib`)가 있는 폴더 | `inventory.ts` (`skipDir`·`isEnvironment`·`listFiles`) |
+| 정리 전 확인: 읽을 파일(종류별)·그대로인 파일·지난 정리에서 읽고 아직 걸러내지 않은 발췌(`pending`, 규칙으로 정해질 것은 빼고 셈)·건너뛰는 것(이유별)·발췌와 걸러내기 호출·시간의 대략값(`pending` 포함)·발췌가 많은 폴더 8개. 대략값은 크기 기준(글 2KB·PDF 40KB·오피스·한글 10KB당 발췌 하나, 메일 2개, 도면 5개, 상한 적용), 호출 = 발췌/40, 시간 = 호출/4×25초. 정리 중 상태(`survey`)에도 같은 값 | 새 `src/knowledge/collect/survey.ts`, `collector.ts` |
+| 빼는 폴더: 프로젝트마다 자료 DB 옆 `<DB 이름>.collect.json`에 절대 경로로 기억, 프로젝트 폴더 안 하위 폴더만. 이미 기억한 경로가 프로젝트 폴더 밖이 되면 확인에 보이지 않고 다음 저장 때 지움(새로 보낸 밖 경로만 400). 경로: `GET …/knowledge/collect/survey`, `POST …/knowledge/collect/exclude {exclude}`(둘 다 이 PC에서만) | `collector.ts`, `src/server/collect-routes.ts` |
+| 화면: 단추 → 확인 상자([빼기]·[다시 넣기]·[닫기]·[시작]), 정리 중 요약 줄, 끝난 줄의 데이터 파일·상한 수 | `src/ui/knowledge-collect.tsx`·`.css` |
+
+**규칙 값(이름 있는 상수, `filters.ts`):** 이름표(`isLabel`)는 글자가 든, 숫자가 아닌 토큰(`1층`·`B1`·`RF`·`D10`·`101호`, 한 글자도 됨)이거나 날짜·시각(`10/15`·`2026-03-02`·`14:00`)이다. 문장 줄(`proseLine`)은 표 행(`|`·탭, 공백 없는 쉼표 2개 이상)이 아니고 글자 `DATA_PROSE_MIN_LETTERS` 10자 이상, 글자 비율 `DATA_PROSE_MIN_LETTER_RATIO` 0.5 이상인 줄이다. 문장 줄이 하나라도 있으면 데이터 조각이 아니다. 그 밖에 발췌의 글자(`\p{L}`) 비율 < `DATA_MIN_LETTER_RATIO` 0.12 이고 이름표가 있는 행의 비율 < `DATA_MIN_LABELLED_LINES` 0.5 이면 데이터 조각. 또 토큰 12개 이상(`DATA_REPEAT_MIN_TOKENS`), 서로 다른 이름표 2개 이하(`DATA_REPEAT_MAX_WORDS`), 숫자 토큰 70% 이상(`DATA_REPEAT_MIN_NUMERIC`)이면('POINT 1 2 3' 반복) 데이터 조각. 데이터 파일은 앞 `DATA_FILE_SAMPLE_CHARS` 64K자에 같은 판정을 하거나, `DATA_FILE_LONG_LINE` 32K자 넘는 줄이 있고 표본의 글자 비율이 `DATA_FILE_LONG_LINE_MAX_LETTERS` 0.5 미만일 때다. 행마다 '지하1층 | 기계실 | 987.65 …'처럼 이름표가 붙은 면적표는 숫자가 많아도 통과한다.
+
+**검증:** `tests/core/knowledge-collect-filters.test.mjs`(회의록·한글 이름표 면적표·좌표 덤프·머리만 글인 숫자 csv 판정과 상수, 데이터 파일 첫 줄, 상한, 자르기, 환경·생성·뺀 폴더, 확인 대략값, 정리에서 AI로 가는 글과 `selection.reason`), `tests/server/knowledge-collect.test.mjs`(확인·빼기 경로, 잘못된 경로 400, 빼기 유지·되돌리기), `tests/integration/browser-knowledge-collect.mjs`(확인 상자·[빼기]·[시작]·정리 중 요약·끝난 줄의 데이터 파일). 회귀: `tests/core/knowledge-collect.test.mjs`.
+
+**검토 뒤 보완(2026-10-08):** 커밋 09926d25 검토에서 확인된 결함을 고쳤다. ① 이름표를 글자 2개 이상 낱말로만 봐서 `1층`·`B1`·`RF`·`PH`·`D10`·`101호`와 날짜 행의 면적표·레벨표·견적서·일정 메모가 규칙으로 버려짐 → 이름표 기준 변경. ② 작은 csv·txt 표도 `data`가 되어 첫 5줄 뒤 행이 저장되지 않음 → 4K자 미만은 데이터 파일 아님. ③ 상한이 앞 200개만 남겨 아래로 덧붙인 회의록의 최신 회의가 빠짐 → 날짜 순서로 남길 쪽 결정. ④ 결정 문장과 좌표가 한 발췌에 묶이면 문장도 버려지고, 64K자 넘는 덤프 txt 끝의 결론 문장이 사라짐 → 문장 줄 규칙과 데이터 파일의 문장 발췌 유지. ⑤ 확인이 중단된 정리의 미판정 발췌를 세지 않아 '호출 약 0번'과 빈 폴더 목록을 보임 → `pending`. ⑥ 전에 읽은 수치 덤프가 `done`으로 남음 → `reader` 판. ⑦ 프로젝트 폴더 밖이 된 뺀 폴더가 모든 [빼기]를 400으로 막음 → 무시·삭제. ⑧ 머리가 1,200자 이상인 시트에서 `chunk()`가 멈춤 → 머리 300자. 같은 날 다른 드라이브·공유 폴더도 정리하는 변경(fe2cdba7)과 합치며, 걷기 결과는 기록 경로(`rel`)와 폴더 아래 경로(`local`)를 함께 갖고 확인의 폴더 묶음·[빼기] 경로도 다른 드라이브 폴더에서는 절대 경로를 쓴다. 시험: `tests/core/knowledge-collect-labels.test.mjs`.
+
+**결과(2026-10-08):** 구현·시험 완료. 점검 결과를 닮은 합성 폴더(3 MB 한 줄 좌표 덤프 5개, 4 MB 수치 csv, 도구 `.venv` 패키지 400개의 라이선스·안내 글, 회의록 md 40개, 면적표 csv 6개)에서 바꾸기 전 코드는 AI로 가는 고유 발췌 30,407개(걸러내기 호출 약 761번: 덤프 24,950·csv 3,411·환경 2,000·회의록 40·면적표 6), 바꾼 뒤에는 46개(호출 2번; 데이터 파일 6·환경 폴더 1 건너뜀)다. 확인의 대략값도 발췌 약 46개·호출 약 2번이었다. 사용자의 진행 중 정리·설치본·DB·프로젝트 폴더는 건드리지 않았다. 실제 프로젝트 폴더에서의 효과는 다음 [자료 업데이트] 때 확인한다.
 
 ## 문서
 

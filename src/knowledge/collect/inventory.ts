@@ -20,7 +20,7 @@ import { tx, type KnowledgeDb } from './schema.ts';
 import { pool } from './ai.ts';
 
 /** Text-bearing kinds by extension; everything else is `binary` (listed, not read). */
-const KINDS: Record<string, string> = {
+export const KINDS: Record<string, string> = {
   eml: 'mail',
   msg: 'mail',
   pdf: 'pdf',
@@ -41,8 +41,62 @@ const KINDS: Record<string, string> = {
 };
 /** Generated or lock files: never evidence of what someone said. */
 const NOISE = new Set(['bak', '3dmbak', 'dwl', 'dwl2', 'tmp', 'save', 'db', 'ini', 'lnk', 'log']);
-/** Folders never walked. */
-const SKIP_DIRS = new Set(['.git', 'node_modules', '.vide', '$recycle.bin']);
+/** Generated, lock and hidden files by name (listed with `skip = 'generated'`, never read). */
+export const generatedFile = (name: string) =>
+  NOISE.has(extname(name).slice(1).toLowerCase()) || name.startsWith('~$') || name.startsWith('.');
+
+/** Folders never walked: version control, packages, build caches and the engine's own data. */
+export const GENERATED_DIRS = new Set([
+  '.git',
+  '.svn',
+  '.hg',
+  'node_modules',
+  'bower_components',
+  '.vide',
+  '$recycle.bin',
+  'system volume information',
+  '__macosx',
+  '.gradle',
+  '.next',
+  '.nuxt',
+  '.parcel-cache',
+  '.turbo',
+]);
+/**
+ * Python and tool environments and caches (T-261: a tool folder's `.venv` gave ~3,300 license and
+ * metadata excerpts). `venv`/`env` by name alone could be a person's folder, so those count only
+ * with a `pyvenv.cfg` inside (`isEnvironment`).
+ */
+export const ENV_DIRS = new Set([
+  '.venv',
+  '__pycache__',
+  'site-packages',
+  'dist-packages',
+  '.tox',
+  '.nox',
+  '.mypy_cache',
+  '.pytest_cache',
+  '.ruff_cache',
+  '.ipynb_checkpoints',
+  '.conda',
+]);
+const ENV_SUFFIX = /\.(dist-info|egg-info)$/i;
+/** Why a folder is not walked by its name: 'generated', 'env', or null. */
+export function skipDir(name: string): 'generated' | 'env' | null {
+  const lower = name.toLowerCase();
+  if (GENERATED_DIRS.has(lower)) return 'generated';
+  return ENV_DIRS.has(lower) || ENV_SUFFIX.test(lower) ? 'env' : null;
+}
+/**
+ * A folder that is a Python environment or installation by its contents: a virtual environment
+ * (`pyvenv.cfg`), a conda environment (`conda-meta`) or an embedded Python (`python.exe` + `Lib`).
+ */
+export function isEnvironment(names: readonly string[]) {
+  const set = new Set(names.map((n) => n.toLowerCase()));
+  return (
+    set.has('pyvenv.cfg') || set.has('conda-meta') || (set.has('python.exe') && set.has('lib'))
+  );
+}
 
 export interface Roots {
   /**
@@ -121,18 +175,32 @@ export function parsePath(rel: string) {
   return out;
 }
 
-interface Listed {
-  /** The recorded path (`source.rel_path`). */
+/** A listed file: its recorded path and the path below the folder it is named from. */
+export interface Listed {
+  /** The recorded path (`source.rel_path`): relative to the root, or absolute outside it. */
   rel: string;
   /** The path below the folder it is named from, for dates, document types and the top folder. */
   local: string;
 }
+/** Files found and folders not walked, by reason (recorded paths, '/'-separated). */
+export interface Walked {
+  files: Listed[];
+  skipped: { generated: string[]; env: string[]; excluded: string[] };
+}
+/** True for a path inside (or equal to) one of the folders the person left out of 자료 정리. */
+export const excludedBy = (folders: readonly string[]) => {
+  const list = folders.map((f) => resolve(f));
+  return (path: string) => list.some((folder) => isInside(folder, path));
+};
+
 async function walk(
   root: string,
   base: string,
   folder: string,
   denied: (path: string) => boolean,
-  out: Listed[],
+  excluded: (path: string) => boolean,
+  out: Walked,
+  top: boolean,
   signal?: AbortSignal,
 ) {
   if (signal?.aborted) return;
@@ -142,19 +210,49 @@ async function walk(
   } catch {
     return; // An unreadable folder is skipped.
   }
+  if (!top && isEnvironment(entries.map((e) => e.name))) {
+    out.skipped.env.push(recordedPath(root, folder));
+    return;
+  }
   for (const entry of entries) {
     const path = join(folder, entry.name);
     if (denied(path)) continue;
     // Links and junctions are not followed (they may lead outside the project folder).
     if (entry.isDirectory()) {
-      if (!SKIP_DIRS.has(entry.name.toLowerCase()))
-        await walk(root, base, path, denied, out, signal);
+      const reason = excluded(path) ? 'excluded' : skipDir(entry.name);
+      if (reason) out.skipped[reason].push(recordedPath(root, path));
+      else await walk(root, base, path, denied, excluded, out, false, signal);
     } else if (entry.isFile())
-      out.push({
+      out.files.push({
         rel: recordedPath(root, path),
         local: relative(base, path).split(sep).join('/'),
       });
   }
+}
+
+/** Walks the project folders (read only): files, and folders left out with their reason. */
+export async function listFiles(
+  roots: Roots,
+  denied: (path: string) => boolean,
+  exclude: readonly string[] = [],
+  signal?: AbortSignal,
+): Promise<Walked> {
+  const out: Walked = { files: [], skipped: { generated: [], env: [], excluded: [] } };
+  const excluded = excludedBy(exclude);
+  const seen = new Set<string>();
+  for (const folder of roots.folders) {
+    // A folder under the root is named from the root; one outside it from itself.
+    const base = isInside(roots.root, folder) ? roots.root : folder;
+    const one: Walked = { files: [], skipped: out.skipped };
+    await walk(roots.root, base, folder, denied, excluded, one, true, signal);
+    for (const item of one.files)
+      if (!seen.has(fold(item.rel))) {
+        seen.add(fold(item.rel));
+        out.files.push(item);
+      }
+  }
+  if (signal?.aborted) throw new Error('STOPPED');
+  return out;
 }
 
 const hashFile = (path: string) =>
@@ -171,6 +269,8 @@ export interface InventoryResult {
   changed: number;
   removed: number;
   returned: number;
+  /** Folders not walked, by reason. */
+  skipped: { generated: number; env: number; excluded: number };
 }
 
 /**
@@ -184,20 +284,13 @@ export async function inventory(
   roots: Roots,
   denied: (path: string) => boolean,
   signal?: AbortSignal,
+  exclude: readonly string[] = [],
 ): Promise<InventoryResult> {
   const runId = Number(
     (db.prepare('select coalesce(max(seen_run), 0) + 1 as n from source').get() as { n: number }).n,
   );
-  const listed = new Map<string, Listed>();
-  for (const folder of roots.folders) {
-    // A folder under the root is named from the root; one outside it from itself.
-    const base = isInside(roots.root, folder) ? roots.root : folder;
-    const out: Listed[] = [];
-    await walk(roots.root, base, folder, denied, out, signal);
-    for (const item of out) if (!listed.has(fold(item.rel))) listed.set(fold(item.rel), item);
-  }
-  const files = [...listed.values()];
-  if (signal?.aborted) throw new Error('STOPPED');
+  const walked = await listFiles(roots, denied, exclude, signal);
+  const files = walked.files;
   const known = new Map(
     (
       db.prepare('select rel_path, size, mtime, sha256, skip from source').all() as {
@@ -227,10 +320,8 @@ export async function inventory(
       const info = await stat(sourceFile(roots.root, rel)).catch(() => undefined);
       if (!info) return;
       const ext = extname(rel).slice(1).toLowerCase();
-      const name = basename(rel);
       const kind = KINDS[ext] ?? 'binary';
-      const skip =
-        NOISE.has(ext) || name.startsWith('~$') || name.startsWith('.') ? 'generated' : null;
+      const skip = generatedFile(basename(rel)) ? 'generated' : null;
       rows.push({ rel, local, ext, size: info.size, mtime: info.mtime.toISOString(), kind, skip });
     },
     signal,
@@ -308,7 +399,17 @@ export async function inventory(
       where status = 'removed' and excerpt_id in
         (select e.id from excerpt e join source s on s.id = e.source_id where s.skip is null)`);
   });
-  return { files: rows.length, changed, removed, returned };
+  return {
+    files: rows.length,
+    changed,
+    removed,
+    returned,
+    skipped: {
+      generated: walked.skipped.generated.length,
+      env: walked.skipped.env.length,
+      excluded: walked.skipped.excluded.length,
+    },
+  };
 }
 
 /**
