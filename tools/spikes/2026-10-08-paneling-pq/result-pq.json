@@ -1,0 +1,416 @@
+{
+  "node": "v24.21.0",
+  "tolMm": 1,
+  "faces": {
+    "aligned": {
+      "panels": 6318,
+      "layoutMs": 123,
+      "bestFit": {
+        "ms": 268,
+        "flatnessMaxMm": 3.27,
+        "flatnessOver3mm": 7,
+        "planarGapMaxMm": 2.51,
+        "offSurfaceMaxMm": 2.2,
+        "types": 208
+      },
+      "pq": {
+        "points-0.1": {
+          "converged": true,
+          "stalled": false,
+          "iterations": 10,
+          "ms": 167,
+          "msPerIteration": 16.67,
+          "vertices": 6578,
+          "planarityStartMm": 2.1,
+          "planarityEndMm": 0.35,
+          "planarityMeanMm": 0,
+          "panelsOverTol": 0,
+          "planarGapMm": 0.5,
+          "offSurfaceMaxMm": 2.4,
+          "offSurfaceMeanMm": 0.06,
+          "offSurfaceOverTol": 0.009,
+          "moveMaxMm": 11.83,
+          "history": [[10, 0.35]]
+        },
+        "planes-1": {
+          "converged": false,
+          "stalled": true,
+          "iterations": 200,
+          "ms": 3114,
+          "msPerIteration": 15.57,
+          "vertices": 6578,
+          "planarityStartMm": 2.1,
+          "planarityEndMm": 2.35,
+          "planarityMeanMm": 0.01,
+          "panelsOverTol": 0.004,
+          "planarGapMm": 4.28,
+          "offSurfaceMaxMm": 2.03,
+          "offSurfaceMeanMm": 0.03,
+          "offSurfaceOverTol": 0.005,
+          "moveMaxMm": 370.66,
+          "history": [
+            [10, 1.24],
+            [50, 1.45],
+            [100, 1.94],
+            [200, 2.35]
+          ]
+        },
+        "planes-0.1": {
+          "converged": true,
+          "stalled": false,
+          "iterations": 10,
+          "ms": 206,
+          "msPerIteration": 20.61,
+          "vertices": 6578,
+          "planarityStartMm": 2.1,
+          "planarityEndMm": 1,
+          "planarityMeanMm": 0.01,
+          "panelsOverTol": 0,
+          "planarGapMm": 1.68,
+          "offSurfaceMaxMm": 3.8,
+          "offSurfaceMeanMm": 0.08,
+          "offSurfaceOverTol": 0.011,
+          "moveMaxMm": 267.47,
+          "history": [[10, 1]]
+        },
+        "planes-0.01": {
+          "converged": true,
+          "stalled": false,
+          "iterations": 10,
+          "ms": 167,
+          "msPerIteration": 16.66,
+          "vertices": 6578,
+          "planarityStartMm": 2.1,
+          "planarityEndMm": 0.61,
+          "planarityMeanMm": 0,
+          "panelsOverTol": 0,
+          "planarGapMm": 1.02,
+          "offSurfaceMaxMm": 4.1,
+          "offSurfaceMeanMm": 0.05,
+          "offSurfaceOverTol": 0.012,
+          "moveMaxMm": 252.74,
+          "history": [[10, 0.61]]
+        }
+      }
+    },
+    "rotated": {
+      "panels": 8216,
+      "layoutMs": 96,
+      "bestFit": {
+        "ms": 437,
+        "flatnessMaxMm": 3.57,
+        "flatnessOver3mm": 2705,
+        "planarGapMaxMm": 6.67,
+        "offSurfaceMaxMm": 3.57,
+        "types": 7451
+      },
+      "pq": {
+        "points-0.1": {
+          "converged": false,
+          "stalled": true,
+          "iterations": 200,
+          "ms": 4091,
+          "msPerIteration": 20.46,
+          "vertices": 8400,
+          "planarityStartMm": 3.34,
+          "planarityEndMm": 3.34,
+          "planarityMeanMm": 2.55,
+          "panelsOverTol": 0.982,
+          "planarGapMm": 6.68,
+          "offSurfaceMaxMm": 9.97,
+          "offSurfaceMeanMm": 0.1,
+          "offSurfaceOverTol": 0.003,
+          "moveMaxMm": 211.45,
+          "history": [
+            [10, 3.34],
+            [50, 3.34],
+            [100, 3.34],
+            [200, 3.34]
+          ]
+        },
+        "planes-1": {
+          "converged": false,
+          "stalled": true,
+          "iterations": 200,
+          "ms": 4085,
+          "msPerIteration": 20.42,
+          "vertices": 8400,
+          "planarityStartMm": 3.34,
+          "planarityEndMm": 3.34,
+          "planarityMeanMm": 2.55,
+          "panelsOverTol": 0.995,
+          "planarGapMm": 6.68,
+          "offSurfaceMaxMm": 1.45,
+          "offSurfaceMeanMm": 0.01,
+          "offSurfaceOverTol": 0,
+          "moveMaxMm": 484.83,
+          "history": [
+            [10, 3.34],
+            [50, 3.34],
+            [100, 3.34],
+            [200, 3.34]
+          ]
+        },
+        "planes-0.1": {
+          "converged": false,
+          "stalled": true,
+          "iterations": 200,
+          "ms": 3948,
+          "msPerIteration": 19.74,
+          "vertices": 8400,
+          "planarityStartMm": 3.34,
+          "planarityEndMm": 3.34,
+          "planarityMeanMm": 2.54,
+          "panelsOverTol": 0.999,
+          "planarGapMm": 6.68,
+          "offSurfaceMaxMm": 9.97,
+          "offSurfaceMeanMm": 0.11,
+          "offSurfaceOverTol": 0.007,
+          "moveMaxMm": 884.67,
+          "history": [
+            [10, 3.34],
+            [50, 3.34],
+            [100, 3.34],
+            [200, 3.34]
+          ]
+        },
+        "planes-0.01": {
+          "converged": false,
+          "stalled": true,
+          "iterations": 200,
+          "ms": 3953,
+          "msPerIteration": 19.77,
+          "vertices": 8400,
+          "planarityStartMm": 3.34,
+          "planarityEndMm": 3.33,
+          "planarityMeanMm": 2.52,
+          "panelsOverTol": 0.996,
+          "planarGapMm": 6.66,
+          "offSurfaceMaxMm": 44.88,
+          "offSurfaceMeanMm": 0.32,
+          "offSurfaceOverTol": 0.058,
+          "moveMaxMm": 920.84,
+          "history": [
+            [10, 3.34],
+            [50, 3.34],
+            [100, 3.34],
+            [200, 3.33]
+          ]
+        }
+      }
+    },
+    "wave": {
+      "panels": 5640,
+      "layoutMs": 54,
+      "bestFit": {
+        "ms": 236,
+        "flatnessMaxMm": 8.76,
+        "flatnessOver3mm": 4949,
+        "planarGapMaxMm": 17.52,
+        "offSurfaceMaxMm": 8.76,
+        "types": 279
+      },
+      "pq": {
+        "points-0.1": {
+          "converged": false,
+          "stalled": true,
+          "iterations": 200,
+          "ms": 2729,
+          "msPerIteration": 13.64,
+          "vertices": 5795,
+          "planarityStartMm": 8.76,
+          "planarityEndMm": 8.74,
+          "planarityMeanMm": 3.62,
+          "panelsOverTol": 0.796,
+          "planarGapMm": 17.48,
+          "offSurfaceMaxMm": 18.68,
+          "offSurfaceMeanMm": 1.15,
+          "offSurfaceOverTol": 0.476,
+          "moveMaxMm": 151.13,
+          "history": [
+            [10, 8.76],
+            [50, 8.75],
+            [100, 8.75],
+            [200, 8.74]
+          ]
+        },
+        "planes-1": {
+          "converged": false,
+          "stalled": true,
+          "iterations": 200,
+          "ms": 2725,
+          "msPerIteration": 13.63,
+          "vertices": 5795,
+          "planarityStartMm": 8.76,
+          "planarityEndMm": 8.73,
+          "planarityMeanMm": 3.62,
+          "panelsOverTol": 0.791,
+          "planarGapMm": 17.45,
+          "offSurfaceMaxMm": 2.43,
+          "offSurfaceMeanMm": 0.12,
+          "offSurfaceOverTol": 0.001,
+          "moveMaxMm": 403.88,
+          "history": [
+            [10, 8.76],
+            [50, 8.75],
+            [100, 8.74],
+            [200, 8.73]
+          ]
+        },
+        "planes-0.1": {
+          "converged": false,
+          "stalled": true,
+          "iterations": 600,
+          "ms": 8016,
+          "msPerIteration": 13.36,
+          "vertices": 5795,
+          "planarityStartMm": 8.76,
+          "planarityEndMm": 9.63,
+          "planarityMeanMm": 3.55,
+          "panelsOverTol": 0.792,
+          "planarGapMm": 18.78,
+          "offSurfaceMaxMm": 22.2,
+          "offSurfaceMeanMm": 1.31,
+          "offSurfaceOverTol": 0.491,
+          "moveMaxMm": 872.11,
+          "history": [
+            [10, 8.74],
+            [50, 8.69],
+            [100, 8.64],
+            [200, 8.56],
+            [500, 9.83]
+          ]
+        },
+        "planes-0.01": {
+          "converged": false,
+          "stalled": true,
+          "iterations": 200,
+          "ms": 2659,
+          "msPerIteration": 13.3,
+          "vertices": 5795,
+          "planarityStartMm": 8.76,
+          "planarityEndMm": 8.9,
+          "planarityMeanMm": 2.81,
+          "panelsOverTol": 0.712,
+          "planarGapMm": 15.91,
+          "offSurfaceMaxMm": 59.3,
+          "offSurfaceMeanMm": 5.16,
+          "offSurfaceOverTol": 0.847,
+          "moveMaxMm": 950.3,
+          "history": [
+            [10, 8.6],
+            [50, 8.14],
+            [100, 8.82],
+            [200, 8.9]
+          ]
+        }
+      }
+    },
+    "twisted": {
+      "panels": 7575,
+      "layoutMs": 75,
+      "bestFit": {
+        "ms": 320,
+        "flatnessMaxMm": 2.98,
+        "flatnessOver3mm": 0,
+        "planarGapMaxMm": 5.96,
+        "offSurfaceMaxMm": 2.98,
+        "types": 3099
+      },
+      "pq": {
+        "points-0.1": {
+          "converged": false,
+          "stalled": true,
+          "iterations": 200,
+          "ms": 3526,
+          "msPerIteration": 17.63,
+          "vertices": 7752,
+          "planarityStartMm": 2.98,
+          "planarityEndMm": 2.98,
+          "planarityMeanMm": 2.66,
+          "panelsOverTol": 1,
+          "planarGapMm": 5.96,
+          "offSurfaceMaxMm": 13.02,
+          "offSurfaceMeanMm": 0.03,
+          "offSurfaceOverTol": 0.003,
+          "moveMaxMm": 57.57,
+          "history": [
+            [10, 2.98],
+            [50, 2.98],
+            [100, 2.98],
+            [200, 2.98]
+          ]
+        },
+        "planes-1": {
+          "converged": false,
+          "stalled": true,
+          "iterations": 200,
+          "ms": 3551,
+          "msPerIteration": 17.75,
+          "vertices": 7752,
+          "planarityStartMm": 2.98,
+          "planarityEndMm": 2.98,
+          "planarityMeanMm": 2.66,
+          "panelsOverTol": 1,
+          "planarGapMm": 5.96,
+          "offSurfaceMaxMm": 1.9,
+          "offSurfaceMeanMm": 0,
+          "offSurfaceOverTol": 0.001,
+          "moveMaxMm": 152.8,
+          "history": [
+            [10, 2.98],
+            [50, 2.98],
+            [100, 2.98],
+            [200, 2.98]
+          ]
+        },
+        "planes-0.1": {
+          "converged": false,
+          "stalled": true,
+          "iterations": 200,
+          "ms": 3538,
+          "msPerIteration": 17.69,
+          "vertices": 7752,
+          "planarityStartMm": 2.98,
+          "planarityEndMm": 2.98,
+          "planarityMeanMm": 2.66,
+          "panelsOverTol": 1,
+          "planarGapMm": 5.96,
+          "offSurfaceMaxMm": 12.95,
+          "offSurfaceMeanMm": 0.04,
+          "offSurfaceOverTol": 0.005,
+          "moveMaxMm": 284.8,
+          "history": [
+            [10, 2.98],
+            [50, 2.98],
+            [100, 2.98],
+            [200, 2.98]
+          ]
+        },
+        "planes-0.01": {
+          "converged": false,
+          "stalled": true,
+          "iterations": 200,
+          "ms": 3551,
+          "msPerIteration": 17.75,
+          "vertices": 7752,
+          "planarityStartMm": 2.98,
+          "planarityEndMm": 2.98,
+          "planarityMeanMm": 2.65,
+          "panelsOverTol": 0.998,
+          "planarGapMm": 5.96,
+          "offSurfaceMaxMm": 54.55,
+          "offSurfaceMeanMm": 0.33,
+          "offSurfaceOverTol": 0.064,
+          "moveMaxMm": 471.36,
+          "history": [
+            [10, 2.98],
+            [50, 2.98],
+            [100, 2.98],
+            [200, 2.98]
+          ]
+        }
+      }
+    }
+  }
+}
