@@ -2,8 +2,8 @@
 id: HOST-RHINO
 title: Rhino 호스트 계약과 검증 범위
 status: review
-version: 0.38
-updated: 2026-10-06
+version: 0.39
+updated: 2026-10-08
 owner: agent:codex
 related: [SPEC-01, SPEC-02, FR-03, FR-04, AC-24, AC-38, OQ-03, OQ-10, ADR-022, ADR-027, ADR-029, ADR-033]
 ---
@@ -34,6 +34,7 @@ SDK의 AI query는 기본 50개·최대 100개/64 KiB 페이지와 ID 필터를 
 | H-RHINO-10 | 연결 문서의 Rhino에 있는 Grasshopper 캔버스 읽기·편집(2026-10-06, [ADR-033](../../decisions/ADR-033-grasshopper-thin-tools.md)): `gh-state`(문서·객체·소켓·연결·값·메시지·그룹, `ids`·`area`·`since`, 페이지), `gh-components`(설치 컴포넌트 검색), `gh-apply`(작업 묶음 = `GH_UndoRecord` 하나, 작업별 실패, 계산 한 번), `gh-solve`, `gh-outputs`, `gh-capture`; VIDE [되돌리기]는 그 문서의 가장 새 Grasshopper 기록일 때만(`gh-not-latest`). 잠금 없음: 여러 대화·사용자가 같은 캔버스를 동시에 고치고 나중 쓰기가 이김, 문서별 변경 번호로 `since` 읽기·다른 사람 편집 알림 | 구현: `hosts/rhino/worker/Grasshopper/*`(플러그인 빌드 통과, Grasshopper 없이도 로드), 엔진 도구·가짜 호스트 시험(PLAN-29 T-130·T-131). Grasshopper API 표면은 설치본 어셈블리의 리플렉션·IL로 확인 | 실제 Rhino 8·Grasshopper에서 PLAN-29 T-133의 1~3·5~7·10·11 |
 | H-RHINO-11 | Grasshopper 스크립트 컴포넌트(Python 3·C#, IronPython 2는 소스만) 소스 쓰기와 소켓 이름·순서·형식 힌트·접근(2026-10-06, ADR-033) | 구현: `GhScript.cs`(Vino 이식, RhinoCode 표면을 리플렉션으로), 연결된 소켓 삭제 거절(`GH_SOCKET_WIRED`), 콘솔 출력 `out` 유지 | 실제 Rhino 8에서 T-133의 4. Rhino 서비스 릴리스마다 RhinoCode 표면(`SetSource`·`ReBuild`·`IScriptParameter`) 확인 |
 | H-RHINO-12 | Grasshopper 출력 굽기·정의 열기/저장(2026-10-06, ADR-033): `gh_bake`는 `direct-execute`(`language: gh-bake`)로 Rhino 되돌리기 기록 하나, 사용자 문자열 `vide-gh-source`; `gh-open`·`gh-save`는 엔진이 프로젝트 작업 폴더 안 경로나 사용자가 승인한 밖 경로만 보냄 | 구현: `GhBake.cs`, `GhTools.cs`, 엔진 작업 폴더 검사 시험 | 실제 Rhino 8에서 T-133의 8·9, 누락 컴포넌트가 있는 정의를 열 때 대화상자 여부 |
+| H-RHINO-13 | 중첩 블록(블록 안의 블록)의 표시 Sync·Live 변경·작업 사본 읽기(2026-10-08, [ARCH-01](../../architecture/ARCH-01-system.md) 「Rhino 네이티브 취득의 블록 보존」): 정의마다 한 번, 중첩은 `children` 참조로 보내고 엔진이 펼침. 안쪽 정의 수정이 바깥 정의 해시를 바꿈. 남는 상자 대체는 윤곽선과 「경계 상자로 대신 표시」로 구분 | 실증(합성 문서, 숨은 Rhino 8, `tests/integration/rhino-nested-blocks.mjs`): 2·3단 중첩(회전·확대·대칭·비균일 축척·기울임), 정점 약 1만 메시 8×8=64 사본의 2단 중첩(전에는 상자)이 정점 633,728개 블록으로 오고 같은 정의의 두 인스턴스가 공유, 표시 Sync·작업 사본 읽기가 같은 형상, 안쪽 정의 수정 뒤 Live 변경과 다시 읽은 Sync가 새 형상. 엔진 펼치기·뷰포트 윤곽선은 단위·브라우저 시험 | 사용자 실제 모델, 확대된 사본의 메시 밀도(정의 공간에서 한 번 메시), 정의 수정 직후 Rhino가 주는 인스턴스 경계 상자 일부가 이전 값으로 남는 현상(표시 형상은 맞음) |
 
 그룹 보존 적용: 그룹 표(ID·이름·인덱스·사용자 문자열)와 각 객체의 그룹 소속을 유지하면 그룹 안 기존 객체의 형상·일반 속성 수정도 허용한다. 그룹 생성/이름 변경/해제/구성원 추가·삭제는 적용 전에 거절한다. 잠김·참조·이력·재질 등 다른 적용 제한은 유지한다. 실제 검증 상태는 [로컬 검수](../../tdd/VERIFY-2026-09-24-local-product-completion.md)를 따른다.
 

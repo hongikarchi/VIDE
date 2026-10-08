@@ -2,7 +2,7 @@
 id: SPIKE-2026-10-08-nested-blocks
 title: 중첩 블록이 Sync에서 상자로 오는 문제 재현
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-10-08
 owner: agent:claude
 related: [H-RHINO-09, ARCH-01]
@@ -53,3 +53,5 @@ related: [H-RHINO-09, ARCH-01]
 ## 다음 행동
 
 수정 방향(결정 필요): 정의를 펼치지 않고 중첩 참조를 정의별로 한 번씩 보내 공유하거나, 큰 정의만 하위 정의 단위로 나누는 방안. 표시 계약 변경이므로 ARCH-01과 해당 PLAN에서 먼저 정한다.
+
+2026-10-08 반영: 첫 방안(정의마다 한 번, 중첩은 `children` 참조, 엔진이 펼침)으로 고쳤다. 계약은 ARCH-01 「Rhino 네이티브 취득의 블록 보존」, 실호스트 검증은 `tests/integration/rhino-nested-blocks.mjs`와 [Rhino 지원표](../specs/hosts/rhino.md) H-RHINO-13이다.

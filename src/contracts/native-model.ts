@@ -140,6 +140,11 @@ function displaySchemas<P extends z.ZodTypeAny, I extends z.ZodTypeAny>(position
     indices,
     segments: positions,
     texts: z.array(displayTextSchema).max(2000),
+    /**
+     * Nested blocks expanded only in part (ARCH-01 「Rhino 네이티브 취득의 블록 보존」): a nested
+     * definition was missing or the expansion passed its size limit. Counted as not shown in full.
+     */
+    partial: z.literal(true).optional(),
   });
   const native = z.object({
     id: z.string(),

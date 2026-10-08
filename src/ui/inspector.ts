@@ -41,6 +41,10 @@ interface InspectorScene {
   nativeId?: string;
   attributes64?: unknown;
   attributesComplete?: unknown;
+  /** Rhino block instance: drawn from its definition, not from its own arrays. */
+  block?: unknown;
+  /** Larger than one host reply: shown as its bounding box (ADR-031 7). */
+  oversized?: boolean;
 }
 interface InspectorResult {
   targetResults?: { requestId: string; candidate?: boolean }[];
@@ -193,10 +197,13 @@ export function buildInspectorView(
       ['상태', '저장된 후보'],
     ];
   }
-  if (
+  if ((tab === 'properties' || tab === 'geometry') && native?.oversized)
+    properties.push(['화면 표현', '경계 상자로 대신 표시 · 한 번에 받을 수 있는 크기(16 MB) 초과']);
+  else if (
     (tab === 'properties' || tab === 'geometry') &&
     native?.nativeType &&
     native.nativeType !== 'Point' &&
+    !native.block &&
     !native.vertices?.length &&
     !native.line?.length
   )

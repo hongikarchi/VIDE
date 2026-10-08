@@ -3,6 +3,7 @@ import { resolve, isAbsolute } from 'node:path';
 import { inspectWindowsProcess } from '../common/owned-process.ts';
 import { HOST_CALL_MS, sendHostCommand } from '../common/transport.ts';
 import { plainPage, readScenePages } from './scene-pages.ts';
+import { expandNestedDefinitions } from './block-nesting.ts';
 import { viewMethods } from './view-tools.ts';
 import {
   directExecuteInputSchema,
@@ -175,13 +176,15 @@ export function editorMethods(
         // queries and coverage as well as storage.
         const page = editorReply(
           changesPageSchema,
-          plainPage(
-            await call('displayChanges', {
-              since,
-              cursor,
-              geometry: 'vgt1',
-              ...(revision === undefined ? {} : { revision }),
-            }),
+          expandNestedDefinitions(
+            plainPage(
+              await call('displayChanges', {
+                since,
+                cursor,
+                geometry: 'vgt1',
+                ...(revision === undefined ? {} : { revision }),
+              }),
+            ),
           ),
         );
         if (

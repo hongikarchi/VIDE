@@ -88,10 +88,38 @@ try {
     const wire = container.querySelector('canvas').dataset.display;
     view.display({ ...base, colorSource: 'layer', background: 'dark' });
     const background = container.querySelector('canvas').dataset.background;
+    // A Rhino object larger than one host reply comes as its bounding box (`oversized`): drawn as
+    // an outline, not as a solid that reads like real geometry. A nested block arrives expanded.
+    view.replace(
+      [
+        { ...cube, id: 'standin', oversized: true },
+        {
+          id: 'nested',
+          vertices: [],
+          indices: [],
+          block: {
+            definition: 'outer',
+            transform: [1, 0, 0, 5, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+          },
+        },
+      ],
+      {
+        outer: {
+          hash: 'f'.repeat(64),
+          vertices: [...cube.vertices, ...cube.vertices.map((v, i) => (i % 3 === 0 ? v + 2 : v))],
+          indices: [...cube.indices, ...cube.indices.map((v) => v + 8)],
+          segments: [],
+          texts: [],
+        },
+      },
+    );
+    const shapes = { standin: view.shapeOf('standin'), nested: view.shapeOf('nested') };
     view.dispose();
     container.remove();
-    return { colors, selected, restored, wire, background, cad, byLayer, plot, unplotted };
+    return { colors, selected, restored, wire, background, cad, byLayer, plot, unplotted, shapes };
   });
+  assert.deepEqual(result.shapes.standin, { kind: 'segments', standIn: true, points: 24 });
+  assert.deepEqual(result.shapes.nested, { kind: 'mesh', standIn: false, points: 16 });
   assert.deepEqual(result.colors.default, ['#d6d9d3', '#4c5650']);
   assert.equal(result.colors.layer[0], '#22aa33');
   assert.equal(result.colors.object[0], '#aa3322');

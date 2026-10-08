@@ -14,7 +14,8 @@ internal sealed class DisplayParts
     // Per shape caps keep one dense hatch or huge block from dominating a Sync.
     private const int MaxSegmentValues = 600000;
     private const int MaxTexts = 2000;
-    private const int MaxDepth = 8;
+    /** Nesting levels below a top-level instance that are sent; deeper references are left out (Truncated). */
+    internal const int MaxDepth = 32;
     internal readonly List<double> Vertices = [];
     internal readonly List<int> Indices = [];
     internal readonly List<double> Segments = [];
@@ -25,20 +26,25 @@ internal sealed class DisplayParts
     internal DisplayParts(RhinoDoc doc, double scale) { this.doc = doc; this.scale = scale; }
     internal bool Empty => Vertices.Count == 0 && Segments.Count == 0 && Texts.Count == 0;
 
-    /** Flattened block definition, nested references included, in definition space. */
-    internal void AddDefinition(InstanceDefinition definition, Transform xform, int depth, HashSet<Guid> path)
+    /**
+     * A block definition's own geometry in definition space. Nested block references are not copied in
+     * (that multiplied a nested definition by its copies until it no longer fit a reply and came as a
+     * box): they are returned with their transform, and the caller sends each nested definition once.
+     */
+    internal List<(InstanceDefinition Definition, Transform Xform)> AddDefinition(InstanceDefinition definition)
     {
+        var nestedReferences = new List<(InstanceDefinition, Transform)>();
         foreach (var member in definition.GetObjects())
         {
             if (member.Geometry is InstanceReferenceGeometry nested)
             {
                 var child = doc.InstanceDefinitions.FindId(nested.ParentIdefId);
-                if (child == null || child.IsDeleted || depth >= MaxDepth || !path.Add(child.Id)) { Truncated = true; continue; }
-                AddDefinition(child, xform * nested.Xform, depth + 1, path);
-                path.Remove(child.Id);
+                if (child == null || child.IsDeleted) { Truncated = true; continue; }
+                nestedReferences.Add((child, nested.Xform));
             }
-            else Add(member.Geometry, xform);
+            else Add(member.Geometry, Transform.Identity);
         }
+        return nestedReferences;
     }
 
     internal void Add(GeometryBase geometry, Transform xform)

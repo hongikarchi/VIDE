@@ -177,6 +177,11 @@ interface DisplayObject extends DisplayGeometry {
    * object's coordinates to the root's. Display only.
    */
   placement?: number[];
+  /**
+   * Rhino: the object alone was larger than one host reply (ADR-031 7) and came as its bounding box.
+   * The box is drawn as an outline so it does not read as the object's real geometry.
+   */
+  oversized?: boolean;
 }
 /** Moves an object by its xref placement, on top of its own position or block transform. */
 function place(mesh: THREE.Object3D, placement?: number[]) {
@@ -582,7 +587,13 @@ export function createViewport(
           geometry,
           new THREE.PointsMaterial({ color: 0x69766c, size: 9, sizeAttenuation: false }),
         );
-      else if (representation.type === 'mesh') {
+      else if (representation.type === 'mesh' && object.oversized) {
+        geometry.setIndex(indexAttribute(representation.indices));
+        const outline = new THREE.EdgesGeometry(geometry, 1);
+        geometry.dispose();
+        mesh = new THREE.LineSegments(outline, new THREE.LineBasicMaterial({ color: WIRE }));
+        mesh.userData.standIn = true;
+      } else if (representation.type === 'mesh') {
         geometry.setIndex(indexAttribute(representation.indices));
         geometry.computeVertexNormals();
         mesh = new THREE.Mesh(geometry, surfaceMaterial());
@@ -2532,6 +2543,23 @@ export function createViewport(
         ? (fat?.material.color ?? edges?.material.color ?? object.material.color)
         : object.material.color;
       return '#' + ink.getHexString();
+    },
+    /** Test/diagnostic hook: how an object is drawn (surface or lines) and whether it is a stand-in. */
+    shapeOf(id: string) {
+      const object = byId.get(id);
+      if (!object) return undefined;
+      return {
+        kind:
+          object instanceof THREE.Mesh
+            ? 'mesh'
+            : object instanceof THREE.LineSegments
+              ? 'segments'
+              : object instanceof THREE.Line
+                ? 'line'
+                : 'points',
+        standIn: object.userData.standIn === true,
+        points: object.geometry.getAttribute('position')?.count ?? 0,
+      };
     },
     /** Diagnostics for CAD styles: distinct vertex colours per part and plot batches. */
     cadInfo(id: string) {

@@ -37,7 +37,8 @@ internal static class WorkerScene
     }
 
     // Detailed meshes/measurements are exported once for the candidate, not on every AI query.
-    // Block instances carry their definition (flattened, in definition space) once per page and a
+    // Block instances carry their definition (its own geometry in definition space, with the definitions
+    // nested in it each once beside it as `children` references, like DisplayScene) once per page and a
     // row-major transform, the same shape as DisplayScene; `scope` limits the read to layers and
     // includes hidden objects when asked (files opened in VIDE, ARCH-03 §8).
     internal static object Export(RhinoDoc doc, Func<RhinoObject, string, Measurements?>? cached = null,
@@ -55,6 +56,7 @@ internal static class WorkerScene
         var objects = new List<object>();
         var scene = new List<object>();
         var definitions = new Dictionary<string, object>();
+        var definitionHashes = new Dictionary<string, string>();
         var remainingAttributes = 262144;
         var measuredObjects = 0;
         var reusedObjects = 0;
@@ -72,7 +74,7 @@ internal static class WorkerScene
             if (!boxOnly && geometry is InstanceReferenceGeometry reference && doc.InstanceDefinitions.FindId(reference.ParentIdefId) is { IsDeleted: false } definition)
             {
                 var key = definition.Id.ToString();
-                if (!definitions.ContainsKey(key)) definitions[key] = DefinitionJson(doc, definition, scale);
+                AddDefinitionJson(doc, definition, scale, definitions, definitionHashes, []);
                 block = new { definition = key, transform = DisplayScene.TransformOf(reference.Xform, scale) };
             }
             if (!boxOnly && brep != null && geometry.IsValid)
@@ -134,21 +136,44 @@ internal static class WorkerScene
             page = new { offset, nextOffset = offset + objects.Count, total = ordered.Length, revision } };
     }
 
-    /** Flattened block definition (nested references included) in definition space, hashed like DisplayScene's. */
-    private static object DefinitionJson(RhinoDoc doc, InstanceDefinition definition, double scale)
+    /**
+     * A block definition's own geometry in definition space and, before it, every definition nested in it
+     * (each once per page, as `children` references with their transform); hashed like DisplayScene's: the
+     * nested hashes are part of the outer hash. `path` guards against cycles and over-deep nesting.
+     */
+    private static void AddDefinitionJson(RhinoDoc doc, InstanceDefinition definition, double scale,
+        Dictionary<string, object> definitions, Dictionary<string, string> hashes, List<Guid> path)
     {
+        var key = definition.Id.ToString();
+        if (definitions.ContainsKey(key)) return;
+        path.Add(definition.Id);
         var parts = new DisplayParts(doc, scale);
-        parts.AddDefinition(definition, Transform.Identity, 0, [definition.Id]);
+        var children = new List<object>();
+        var childText = new StringBuilder();
+        foreach (var (child, xform) in parts.AddDefinition(definition))
+        {
+            if (path.Contains(child.Id) || path.Count >= DisplayParts.MaxDepth) continue;
+            AddDefinitionJson(doc, child, scale, definitions, hashes, path);
+            var transform = DisplayScene.TransformOf(xform, scale);
+            children.Add(new { definition = child.Id.ToString(), transform });
+            childText.Append(child.Id).Append(':').Append(hashes[child.Id.ToString()]).Append(':')
+                .Append(string.Join(",", transform.Select(v => v.ToString("R", System.Globalization.CultureInfo.InvariantCulture)))).Append(';');
+        }
+        path.RemoveAt(path.Count - 1);
         var texts = parts.Texts.Select(text => new { s = text.S, p = text.P, h = text.H, r = text.R, ax = text.Ax, ay = text.Ay }).ToArray();
         var options = new System.Text.Json.JsonSerializerOptions();
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        hash.AppendData(Encoding.UTF8.GetBytes(definition.Id.ToString()));
+        hash.AppendData(Encoding.UTF8.GetBytes(key));
         hash.AppendData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(parts.Vertices, options));
         hash.AppendData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(parts.Indices, options));
         hash.AppendData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(parts.Segments, options));
         hash.AppendData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(texts, options));
-        return new { hash = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant(),
-            vertices = parts.Vertices, indices = parts.Indices, segments = parts.Segments, texts };
+        if (children.Count > 0) hash.AppendData(Encoding.UTF8.GetBytes(childText.ToString()));
+        var value = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+        hashes[key] = value;
+        definitions[key] = children.Count == 0
+            ? new { hash = value, vertices = parts.Vertices, indices = parts.Indices, segments = parts.Segments, texts }
+            : new { hash = value, vertices = parts.Vertices, indices = parts.Indices, segments = parts.Segments, texts, children };
     }
 
     private static string Encode(string value) => Convert.ToBase64String(Encoding.UTF8.GetBytes(value));

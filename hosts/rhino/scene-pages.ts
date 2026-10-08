@@ -10,6 +10,7 @@ import {
 import { displayCoverage } from '../../src/core/display-delta.ts';
 import { jsonSafeGeometry, plainGeometry } from '../../src/contracts/geometry-transfer.ts';
 import { packedDisplayModelSchema } from '../../src/contracts/native-model.ts';
+import { expandNestedDefinitions } from './block-nesting.ts';
 
 /** The scene items and block definitions of a page or model (where geometry arrays live). */
 function geometryItems(value: unknown): unknown[] {
@@ -128,6 +129,8 @@ export async function readScenePages(
       throw failure(error.data.code);
     }
     for (const item of geometryItems(raw)) (typed ? jsonSafeGeometry : plainGeometry)(item);
+    // Nested blocks arrive as references between definitions; the model keeps them expanded.
+    expandNestedDefinitions(raw, { typed });
     // Only a read with a total cap measures its pages (writing them as JSON again costs time).
     if (maxBytes !== Infinity) {
       bytes += Buffer.byteLength(JSON.stringify(raw));

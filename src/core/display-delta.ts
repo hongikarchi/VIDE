@@ -10,11 +10,14 @@ type SceneItem = Keyed & DisplayGeometry & { block?: { definition: string }; ove
  * the coverage notice lists it with the types not shown in full (ADR-031 7).
  */
 export const OVERSIZED_TYPE_SUFFIX = ' (16 MB 초과 · 상자로 표시)';
+/** The omission type of a block whose nested blocks are shown only in part (`partial` definition). */
+export const PARTIAL_BLOCK_TYPE_SUFFIX = ' (중첩 블록 일부 생략)';
 /** Shared block definition display (definition space); only its content matters here. */
 interface DefinitionItem {
   vertices: ArrayLike<number>;
   segments: ArrayLike<number>;
   texts: unknown[];
+  partial?: boolean;
 }
 export interface DisplayDelta<O extends Keyed, S extends SceneItem, D = DefinitionItem> {
   objects: O[];
@@ -35,16 +38,20 @@ export function displayCoverage(scene: SceneItem[], definitions?: Record<string,
   const omittedTypes: Record<string, number> = {};
   let omitted = 0;
   for (const item of scene) {
+    const definition = item.block ? definitions?.[item.block.definition] : undefined;
     const visible = item.block
-      ? item.valid !== false && shown(definitions?.[item.block.definition])
+      ? item.valid !== false && shown(definition)
       : !!sceneRepresentation(item);
-    if (!visible || item.oversized) {
+    const partial = visible && definition?.partial === true;
+    if (!visible || item.oversized || partial) {
       omitted++;
       const type = item.oversized
         ? `${item.nativeType}${OVERSIZED_TYPE_SUFFIX}`
-        : item.valid === false
-          ? `${item.nativeType} (invalid)`
-          : String(item.nativeType);
+        : partial
+          ? `${item.nativeType}${PARTIAL_BLOCK_TYPE_SUFFIX}`
+          : item.valid === false
+            ? `${item.nativeType} (invalid)`
+            : String(item.nativeType);
       omittedTypes[type] = (omittedTypes[type] ?? 0) + 1;
     }
   }

@@ -119,10 +119,17 @@ internal sealed class DisplayScene
     private sealed record Shape(uint Serial, string NativeType, bool Valid, double[] Origin, double[] BoundsSize,
         double[] Vertices, int[] Indices, double[] Line, string Hash, double[]? Segments = null, byte[]? Texts = null,
         Guid? Definition = null, string? DefinitionHash = null, double[]? Transform = null);
-    /** Flattened block definition geometry in definition space (meters), shared by its instances. */
-    private sealed record Definition(string Hash, double[] Vertices, int[] Indices, double[] Segments, byte[] Texts)
+    /** A nested block reference inside a definition: the nested definition and its row-major transform (meters). */
+    private sealed record Child(Guid Definition, double[] Transform);
+    /**
+     * A block definition's own geometry in definition space (meters), shared by its instances, and its
+     * nested references. Each nested definition travels once per page beside it, so a nested block costs
+     * its own geometry once rather than once per copy. The hash covers the nested definitions' hashes.
+     */
+    private sealed record Definition(string Hash, double[] Vertices, int[] Indices, double[] Segments, byte[] Texts, Child[] Children)
     {
-        internal long Size(bool binary) => Bytes(Vertices, binary) + Bytes(Indices, binary) + Bytes(Segments, binary) + Texts.Length + 256;
+        internal long Size(bool binary) => Bytes(Vertices, binary) + Bytes(Indices, binary) + Bytes(Segments, binary) + Texts.Length + 256
+            + Children.Length * 420L;
     }
     private readonly Dictionary<Guid, Definition> definitions = new();
     private sealed class Item
@@ -278,16 +285,53 @@ internal sealed class DisplayScene
         return item;
     }
 
-    private Definition DefinitionOf(RhinoDoc doc, InstanceDefinition definition, double scale)
+    // `path`: the definitions being built above this one (a reference back to one of them is a cycle,
+    // which Rhino does not allow; it and references deeper than DisplayParts.MaxDepth are left out).
+    private Definition DefinitionOf(RhinoDoc doc, InstanceDefinition definition, double scale, List<Guid>? path = null)
     {
         lock (definitions) if (definitions.TryGetValue(definition.Id, out var cached)) return cached;
+        path ??= [];
+        path.Add(definition.Id);
         var parts = new DisplayParts(doc, scale);
-        parts.AddDefinition(definition, Transform.Identity, 0, [definition.Id]);
+        var children = new List<Child>();
+        var childHashes = new List<string>();
+        foreach (var (child, xform) in parts.AddDefinition(definition))
+        {
+            if (path.Contains(child.Id) || path.Count >= DisplayParts.MaxDepth) continue;
+            childHashes.Add(DefinitionOf(doc, child, scale, path).Hash);
+            children.Add(new Child(child.Id, TransformOf(xform, scale)));
+        }
+        path.RemoveAt(path.Count - 1);
         var vertices = Round(parts.Vertices, 1); var indices = parts.Indices.ToArray();
         var segments = Round(parts.Segments, 1); var texts = TextsJson(parts.Texts);
-        var result = new Definition(Hash(definition.Id.ToString(), Json(vertices), Json(indices), Json(segments), texts), vertices, indices, segments, texts);
+        // A definition without nested references hashes as before; with them, the nested hashes and
+        // transforms are part of it, so an edit inside a nested definition changes every outer hash.
+        var hash = children.Count == 0
+            ? Hash(definition.Id.ToString(), Json(vertices), Json(indices), Json(segments), texts)
+            : Hash(definition.Id.ToString(), Json(vertices), Json(indices), Json(segments), texts,
+                Encoding.UTF8.GetBytes(string.Join(";", children.Select((child, i) => child.Definition + ":" + childHashes[i] + ":"
+                    + string.Join(",", child.Transform.Select(v => v.ToString("R", System.Globalization.CultureInfo.InvariantCulture)))))));
+        var result = new Definition(hash, vertices, indices, segments, texts, children.ToArray());
         lock (definitions) definitions[definition.Id] = result;
         return result;
+    }
+
+    /** The definition and every definition nested in it, each once (already built by DefinitionOf). */
+    private List<Guid> Closure(Guid id)
+    {
+        var order = new List<Guid>();
+        var seen = new HashSet<Guid>();
+        var stack = new Stack<Guid>();
+        stack.Push(id);
+        lock (definitions)
+            while (stack.Count > 0)
+            {
+                var next = stack.Pop();
+                if (!seen.Add(next) || !definitions.TryGetValue(next, out var definition)) continue;
+                order.Add(next);
+                foreach (var child in definition.Children) stack.Push(child.Definition);
+            }
+        return order;
     }
 
     private static Shape Instance(RhinoObject obj, InstanceReferenceGeometry instance, InstanceDefinition? definition, string? definitionHash, double scale)
@@ -422,7 +466,7 @@ internal sealed class DisplayScene
             }
             var shape = item?.Shape;
             if (count > 0 && bytes + size > PageBytes) break;
-            if (shape?.Definition is { } used) included.Add(used);
+            if (shape?.Definition is { } used) included.UnionWith(Closure(used));
             bytes += size; count++;
         }
         return count;
@@ -438,9 +482,11 @@ internal sealed class DisplayScene
         long size = shape == null ? 64 : Bytes(shape.Vertices, binary) + Bytes(shape.Indices, binary) + Bytes(shape.Line, binary)
             + (shape.Segments == null ? 0 : Bytes(shape.Segments, binary)) + (shape.Texts?.Length ?? 0)
             + 2 * (item!.Name.Length + item.Layer.Length) + item.Attributes.Sum(pair => pair[0].Length + pair[1].Length + 8) + 1024;
-        // A definition travels once per page with the first instance that needs it.
-        if (shape?.Definition is { } id && !included.Contains(id))
-            lock (definitions) if (definitions.TryGetValue(id, out var definition)) size += definition.Size(binary);
+        // A definition and the definitions nested in it travel once per page with the first instance that needs them.
+        if (shape?.Definition is { } id)
+            foreach (var used in Closure(id))
+                if (!included.Contains(used))
+                    lock (definitions) if (definitions.TryGetValue(used, out var definition)) size += definition.Size(binary);
         return size;
     }
 
@@ -562,7 +608,7 @@ internal sealed class DisplayScene
             }
             writer.WriteEndArray();
             writer.WriteStartObject("definitions");
-            foreach (var id in list.Select(item => item.Shape!.Definition).OfType<Guid>().Distinct())
+            foreach (var id in list.Select(item => item.Shape!.Definition).OfType<Guid>().Distinct().SelectMany(Closure).Distinct())
             {
                 Definition? definition;
                 lock (definitions) definitions.TryGetValue(id, out definition);
@@ -573,6 +619,20 @@ internal sealed class DisplayScene
                 Indices(writer, "indices", definition.Indices, region);
                 Positions(writer, "segments", definition.Segments, region);
                 writer.WritePropertyName("texts"); writer.WriteRawValue(definition.Texts, true);
+                if (definition.Children.Length > 0)
+                {
+                    writer.WriteStartArray("children");
+                    foreach (var child in definition.Children)
+                    {
+                        writer.WriteStartObject();
+                        writer.WriteString("definition", child.Definition.ToString());
+                        writer.WriteStartArray("transform");
+                        foreach (var value in child.Transform) writer.WriteNumberValue(value);
+                        writer.WriteEndArray();
+                        writer.WriteEndObject();
+                    }
+                    writer.WriteEndArray();
+                }
                 writer.WriteEndObject();
             }
             writer.WriteEndObject();
