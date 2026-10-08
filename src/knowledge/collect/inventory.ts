@@ -45,42 +45,46 @@ const NOISE = new Set(['bak', '3dmbak', 'dwl', 'dwl2', 'tmp', 'save', 'db', 'ini
 const SKIP_DIRS = new Set(['.git', 'node_modules', '.vide', '$recycle.bin']);
 
 export interface Roots {
-  /** The common folder all source paths are relative to (`meta.root`). */
+  /**
+   * The deepest common folder of the first folder and the folders beside it (`meta.root`). Source
+   * paths under it are recorded relative to it.
+   */
   root: string;
-  /** The folders walked. */
+  /**
+   * Every folder walked, in order. A folder on another drive or share, or one whose only common
+   * folder with the first is a drive root, is walked too: its files are recorded by absolute path.
+   */
   folders: string[];
-  /** Folders left out: on another drive than the first one. */
-  left: string[];
 }
 const fold = (path: string) => (process.platform === 'win32' ? path.toLowerCase() : path);
 const isDriveRoot = (path: string) => resolve(path) === parse(resolve(path)).root;
 
 /**
- * The root of several project folders: their deepest common folder, unless that is a drive or
- * share root — then only the folders under the first folder's root count (the rest are `left`).
+ * The root of several project folders (SPEC-08.9 1): the deepest common folder of the first folder
+ * and the folders that share one with it below a drive or share root. No folder is left out.
  */
 export function rootsOf(folders: readonly string[]): Roots | null {
   const list = folders.map((f) => resolve(f));
   if (!list.length) return null;
   let root = list[0];
-  const left: string[] = [];
-  const kept = [list[0]];
   for (const folder of list.slice(1)) {
     let common = root;
     while (!isInside(common, folder) && dirname(common) !== common) common = dirname(common);
-    if (!isInside(common, folder) || isDriveRoot(common)) {
-      left.push(folder);
-      continue;
-    }
-    root = common;
-    kept.push(folder);
+    if (isInside(common, folder) && !isDriveRoot(common)) root = common;
   }
-  return { root, folders: kept, left };
+  return { root, folders: list };
 }
 function isInside(root: string, target: string) {
   const rel = relative(fold(root), fold(target));
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
 }
+/** A recorded source path: relative to `root` when under it, else absolute (both with `/`). */
+export function recordedPath(root: string, path: string) {
+  const full = resolve(path);
+  return (isInside(root, full) ? relative(root, full) : full).split(sep).join('/');
+}
+/** The file a recorded source path names (relative to `root`, or absolute). */
+export const sourceFile = (root: string, rel: string) => resolve(root, rel);
 
 /** Folder-name dates (`260917`), episodes and document types by rule. */
 const TYPES: [string, RegExp][] = [
@@ -117,11 +121,18 @@ export function parsePath(rel: string) {
   return out;
 }
 
+interface Listed {
+  /** The recorded path (`source.rel_path`). */
+  rel: string;
+  /** The path below the folder it is named from, for dates, document types and the top folder. */
+  local: string;
+}
 async function walk(
   root: string,
+  base: string,
   folder: string,
   denied: (path: string) => boolean,
-  out: string[],
+  out: Listed[],
   signal?: AbortSignal,
 ) {
   if (signal?.aborted) return;
@@ -136,8 +147,13 @@ async function walk(
     if (denied(path)) continue;
     // Links and junctions are not followed (they may lead outside the project folder).
     if (entry.isDirectory()) {
-      if (!SKIP_DIRS.has(entry.name.toLowerCase())) await walk(root, path, denied, out, signal);
-    } else if (entry.isFile()) out.push(relative(root, path).split(sep).join('/'));
+      if (!SKIP_DIRS.has(entry.name.toLowerCase()))
+        await walk(root, base, path, denied, out, signal);
+    } else if (entry.isFile())
+      out.push({
+        rel: recordedPath(root, path),
+        local: relative(base, path).split(sep).join('/'),
+      });
   }
 }
 
@@ -172,8 +188,15 @@ export async function inventory(
   const runId = Number(
     (db.prepare('select coalesce(max(seen_run), 0) + 1 as n from source').get() as { n: number }).n,
   );
-  const files: string[] = [];
-  for (const folder of roots.folders) await walk(roots.root, folder, denied, files, signal);
+  const listed = new Map<string, Listed>();
+  for (const folder of roots.folders) {
+    // A folder under the root is named from the root; one outside it from itself.
+    const base = isInside(roots.root, folder) ? roots.root : folder;
+    const out: Listed[] = [];
+    await walk(roots.root, base, folder, denied, out, signal);
+    for (const item of out) if (!listed.has(fold(item.rel))) listed.set(fold(item.rel), item);
+  }
+  const files = [...listed.values()];
   if (signal?.aborted) throw new Error('STOPPED');
   const known = new Map(
     (
@@ -188,6 +211,7 @@ export async function inventory(
   );
   interface Row {
     rel: string;
+    local: string;
     ext: string;
     size: number;
     mtime: string;
@@ -199,15 +223,15 @@ export async function inventory(
   await pool(
     files,
     16,
-    async (rel) => {
-      const info = await stat(join(roots.root, rel)).catch(() => undefined);
+    async ({ rel, local }) => {
+      const info = await stat(sourceFile(roots.root, rel)).catch(() => undefined);
       if (!info) return;
       const ext = extname(rel).slice(1).toLowerCase();
       const name = basename(rel);
       const kind = KINDS[ext] ?? 'binary';
       const skip =
         NOISE.has(ext) || name.startsWith('~$') || name.startsWith('.') ? 'generated' : null;
-      rows.push({ rel, ext, size: info.size, mtime: info.mtime.toISOString(), kind, skip });
+      rows.push({ rel, local, ext, size: info.size, mtime: info.mtime.toISOString(), kind, skip });
     },
     signal,
   );
@@ -226,7 +250,7 @@ export async function inventory(
     needHash,
     6,
     async (r) => {
-      r.sha256 = await hashFile(join(roots.root, r.rel)).catch(() => null);
+      r.sha256 = await hashFile(sourceFile(roots.root, r.rel)).catch(() => null);
     },
     signal,
   );
@@ -255,7 +279,7 @@ export async function inventory(
         r.size,
         r.mtime,
         r.sha256 ?? null,
-        r.rel.split('/')[0],
+        r.local.split('/')[0],
         r.kind,
         r.skip,
         dirname(r.rel) + '/' + stem,
@@ -263,7 +287,7 @@ export async function inventory(
       );
       if (r.skip || r.kind === 'binary' || known.has(r.rel)) continue;
       const id = Number((idOf.get(r.rel) as { id: number }).id);
-      const parsed = parsePath(r.rel);
+      const parsed = parsePath(r.local);
       for (const [key, value] of Object.entries(parsed)) meta.run(id, key, value);
       if (parsed.episode) episode.run(parsed.day, parsed.episode);
     }
@@ -288,8 +312,9 @@ export async function inventory(
 }
 
 /**
- * When the root moves (a folder was added above or beside the first one), recorded paths are
- * rewritten relative to the new root so their excerpts and statements stay.
+ * When the root moves (a folder was added above or beside the first one, or the first one
+ * changed), recorded paths are rewritten for the new root so their excerpts and statements stay:
+ * relative when under it, absolute when not (SPEC-08.9 1).
  */
 export function moveRoot(db: KnowledgeDb, oldRoot: string, newRoot: string) {
   if (fold(resolve(oldRoot)) === fold(resolve(newRoot))) return;
@@ -300,8 +325,8 @@ export function moveRoot(db: KnowledgeDb, oldRoot: string, newRoot: string) {
   const set = db.prepare('update or ignore source set rel_path = ? where id = ?');
   tx(db, () => {
     for (const row of rows) {
-      const rel = relative(newRoot, resolve(oldRoot, row.rel_path)).split(sep).join('/');
-      if (!rel.startsWith('..') && !isAbsolute(rel)) set.run(rel, row.id);
+      const rel = recordedPath(newRoot, sourceFile(oldRoot, row.rel_path));
+      if (rel !== row.rel_path) set.run(rel, row.id);
     }
   });
 }

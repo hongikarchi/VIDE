@@ -22,6 +22,7 @@ import type { XrefFileRow, XrefStore } from '../core/xref-store.ts';
 import type { DocumentLinks } from '../core/document-links.ts';
 import type { Workspace } from '../core/workspace.ts';
 import { linkRequests } from './link-removal.ts';
+import { realPath } from './project-path.ts';
 
 /** Folders never walked. */
 const SKIP_DIRS = new Set(['.git', 'node_modules', '.vide', '$recycle.bin']);
@@ -183,7 +184,7 @@ export class XrefService {
   private graphOf(projectId: string) {
     const rows = this.options.store.files(projectId);
     const reads = new Map<string, XrefFileRead>(rows.map((row) => [row.path, row.read]));
-    return { rows, graph: buildXrefGraph(reads, (path) => existsSync(path)) };
+    return { rows, graph: buildXrefGraph(reads, (path) => existsSync(path), realPath) };
   }
   status(projectId: string): XrefState {
     const { rows, graph } = this.graphOf(projectId);
@@ -324,11 +325,12 @@ export class XrefService {
         const graph = buildXrefGraph(
           new Map([...rows.values()].map((row) => [row.path, row.read])),
           (path) => existsSync(path),
+          realPath,
         );
         const outside = graph.edges
           .map((edge) => edge.child)
           .filter((child): child is string => !!child && !rows.has(pathKey(child)))
-          .filter((child) => !this.options.denied(child));
+          .filter((child) => !this.options.denied(child) && !this.options.denied(realPath(child)));
         if (!outside.length) break;
         await readInto([...new Set(outside)], false);
       }

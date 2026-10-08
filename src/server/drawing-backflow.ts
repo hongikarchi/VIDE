@@ -46,7 +46,7 @@ import {
 } from '../core/drawing-backflow-apply.ts';
 import { backflowName, dwgVersionOf, type OutputTokens } from '../core/drawing-output.ts';
 import { DIRECT_MAX_DELETES, type HostTarget } from '../contracts/host-documents.ts';
-import { within } from './drawing-layers.ts';
+import { projectPath, realPath } from './project-path.ts';
 import { sha256File, type BackflowWriter } from './drawing-backflow-host.ts';
 
 /** Reads what a backflow compares (hosts/zwcad and the Rhino link; a fake in tests). */
@@ -214,14 +214,14 @@ export class DrawingBackflowService {
       throw new DomainError('INVALID_INPUT');
     const folders = this.options.folders(projectId);
     if (!folders.length) throw new DomainError('NO_PROJECT_FOLDER');
-    if (!folders.some((folder) => within(folder, path)) || this.options.denied(path))
-      throw new DomainError('PATH_NOT_IN_PROJECT');
-    return win32.normalize(path);
+    // A mapped or subst drive letter counts as the folder it stands for (SPEC-01.13 1).
+    const inside = projectPath(folders, path, this.options.denied);
+    if (!inside) throw new DomainError('PATH_NOT_IN_PROJECT');
+    return inside;
   }
   private outside(projectId: string) {
     const folders = this.options.folders(projectId);
-    return (path: string) =>
-      !folders.some((folder) => within(folder, path)) || this.options.denied(path);
+    return (path: string) => !projectPath(folders, path, this.options.denied);
   }
 
   /** The root (read by T-227, mm, present) and the drawings it shows. */
@@ -234,7 +234,7 @@ export class DrawingBackflowService {
     if (!(await stat(root).catch(() => null))?.isFile()) throw new DomainError('FILE_MISSING');
     const files = this.options.xref.files(projectId);
     const graph = files.length
-      ? buildXrefGraph(new Map(files.map((file) => [file.path, file.read])), existsSync)
+      ? buildXrefGraph(new Map(files.map((file) => [file.path, file.read])), existsSync, realPath)
       : null;
     const outside = this.outside(projectId);
     const placed = graph ? placementsOf(graph, root).map((p) => p.path) : [];

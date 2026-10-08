@@ -8,6 +8,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { isAbsolute, join, win32 } from 'node:path';
 import { DomainError } from '../core/store.ts';
 import { pathKey } from '../core/xref-graph.ts';
+import { projectPath } from './project-path.ts';
 import { DWG_VERSIONS } from '../core/drawing-output.ts';
 import {
   copyLayerMap,
@@ -64,11 +65,7 @@ async function sha256(path: string) {
   for await (const bytes of createReadStream(path)) hash.update(bytes);
   return hash.digest('hex');
 }
-/** Whether `path` is inside `folder` (Windows path keys). */
-export const within = (folder: string, path: string) => {
-  const root = pathKey(folder).replace(/\\+$/, '') + '\\';
-  return pathKey(path).startsWith(root);
-};
+export { within } from './project-path.ts';
 
 export class DrawingLayerService {
   private readonly options: DrawingLayerServiceOptions;
@@ -84,9 +81,10 @@ export class DrawingLayerService {
       throw new DomainError('INVALID_INPUT');
     const folders = this.options.folders(projectId);
     if (!folders.length) throw new DomainError('NO_PROJECT_FOLDER');
-    if (!folders.some((folder) => within(folder, path)) || this.options.denied(path))
-      throw new DomainError('PATH_NOT_IN_PROJECT');
-    return win32.normalize(path);
+    // A mapped or subst drive letter counts as the folder it stands for (SPEC-01.13 1).
+    const inside = projectPath(folders, path, this.options.denied);
+    if (!inside) throw new DomainError('PATH_NOT_IN_PROJECT');
+    return inside;
   }
 
   private async summary(projectId: string, row: DrawingReadRow): Promise<DrawingSummary> {

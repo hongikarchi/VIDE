@@ -125,17 +125,27 @@ export function resolveXref(
 
 /**
  * The graph of the drawings read (`reads`, keyed by original path). `exists` answers for files
- * outside the read set (a reference to a drawing that was not listed).
+ * outside the read set (a reference to a drawing that was not listed). `real`, when given, names
+ * the real spelling of a path a reference writes another way (a mapped drive `Z:\…` for the
+ * `\\server\share\…` the folder listing used): such a child is the drawing read under it.
  */
 export function buildXrefGraph(
   reads: ReadonlyMap<string, XrefFileRead>,
   exists: (path: string) => boolean,
+  real?: (path: string) => string,
 ): XrefGraph {
   const known = new Map<string, string>();
   for (const path of reads.keys()) known.set(pathKey(path), path);
   const present = (path: string) => known.has(pathKey(path)) || exists(path);
+  /** The read set's spelling of `path` when it is one of them under another spelling. */
+  const spelling = (path: string) => {
+    if (!real || known.has(pathKey(path))) return path;
+    const other = known.get(pathKey(real(path)));
+    return other ?? path;
+  };
   const nodes = new Map<string, XrefNode>();
-  const node = (path: string) => {
+  const node = (written: string) => {
+    const path = spelling(written);
     const key = pathKey(path);
     let value = nodes.get(key);
     if (!value) {

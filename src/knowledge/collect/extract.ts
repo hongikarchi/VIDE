@@ -3,7 +3,7 @@
 // (dwg.ts). An excerpt whose text did not change keeps its row, its selection and statements, so a
 // changed file sends only its new text to the AI.
 import { createHash } from 'node:crypto';
-import { extname, join } from 'node:path';
+import { extname, resolve } from 'node:path';
 import { tx, type KnowledgeDb } from './schema.ts';
 import { extractAll } from './extract-pool.ts';
 import type { Excerpt, Extracted, FileStatus } from './documents.ts';
@@ -153,7 +153,7 @@ export async function extractDocuments(
   const jobs = todo.filter((r) => r.kind !== 'legacy' && r.ext !== 'msg');
   try {
     await extractAll(
-      jobs.map((row) => ({ path: join(root, row.rel_path), ext: row.ext, size: row.size })),
+      jobs.map((row) => ({ path: resolve(root, row.rel_path), ext: row.ext, size: row.size })),
       (index, result) => {
         excerpts += saveResult(db, jobs[index], result);
         tally(result.status);

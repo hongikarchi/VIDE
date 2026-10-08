@@ -29,6 +29,7 @@ import {
   type SheetsReader,
 } from '../core/drawing-sheets.ts';
 import { readCtb, type CtbTable } from '../core/ctb.ts';
+import { realPath } from './project-path.ts';
 
 /** .ctb files listed at most, and how deep the project folders are walked for them. */
 const MAX_CTB = 200;
@@ -183,7 +184,7 @@ export class DrawingSheetsService {
   private graph(projectId: string, fresh?: ReadonlyMap<string, SheetsFileRead>) {
     const reads = new Map(this.options.xref.files(projectId).map((row) => [row.path, row.read]));
     for (const [path, read] of fresh ?? []) if (!read.error) reads.set(path, read);
-    return buildXrefGraph(reads, (path) => existsSync(path));
+    return buildXrefGraph(reads, (path) => existsSync(path), realPath);
   }
   /** Drawings of the project folders that 도면 관계 read. */
   drawings(projectId: string) {
@@ -273,7 +274,11 @@ export class DrawingSheetsService {
   async read(projectId: string, root: string, wait = false) {
     const reader = this.options.reader;
     if (!reader || !(await reader.available())) throw new DomainError('NO_ZWCAD');
-    const known = this.drawings(projectId).find((d) => pathKey(d.path) === pathKey(root));
+    const drawings = this.drawings(projectId);
+    // A drive-letter spelling of a listed drawing (`Z:\…` for `\\server\share\…`) is the same one.
+    const known =
+      drawings.find((d) => pathKey(d.path) === pathKey(root)) ??
+      drawings.find((d) => pathKey(d.path) === pathKey(realPath(root)));
     if (!known) throw new DomainError('NOT_FOUND');
     if (this.jobs.has(projectId)) throw new DomainError('PROJECT_BUSY');
     const placements = placementsOf(this.graph(projectId), known.path);

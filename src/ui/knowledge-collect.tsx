@@ -29,7 +29,6 @@ interface CollectState {
     issues: number;
     proposals: number;
   } | null;
-  left: string[];
 }
 
 const STAGES: Record<string, string> = {
@@ -205,9 +204,6 @@ export function KnowledgeCollect({
         </p>
       ) : null}
       {state.state === 'stopped' ? <p className="dash-collect-counts">중단했습니다.</p> : null}
-      {state.left.length ? (
-        <p className="dash-collect-counts">다른 드라이브라 뺀 폴더: {state.left.join(', ')}</p>
-      ) : null}
       {reason || (state.state === 'failed' && state.error) ? (
         <p className="dash-collect-reason" role="alert">
           {reason || reasonOf(state.error ?? '')}

@@ -4,7 +4,7 @@
 // ZWCAD 2023 the drawings are recorded as not read. Texts are grouped by layout or block into
 // excerpts (the spike's dwg.mjs).
 import { copyFile, mkdir, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { tx, type KnowledgeDb } from './schema.ts';
 import { changedSources, rebuildSearch, saveExcerpts } from './extract.ts';
 import type { Excerpt } from './documents.ts';
@@ -92,7 +92,8 @@ export async function extractDrawings(
       if (signal?.aborted) throw new Error('STOPPED');
       const copy = join(work, row.sha256 + '.dwg');
       try {
-        await copyFile(join(root, row.rel_path), copy);
+        // Relative to the root, or absolute for a folder outside it (SPEC-08.9 1).
+        await copyFile(resolve(root, row.rel_path), copy);
         files.push({ id: row.id, path: copy });
       } catch {
         /* Unreadable original: recorded as an error below. */

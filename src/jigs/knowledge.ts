@@ -249,10 +249,13 @@ function candidates(db: DatabaseSync, words: string[], filter: SearchFilter, cap
   return { rows: rows.map((row) => ({ ...row })), plan };
 }
 
+const under = (base: string, path: string) =>
+  path.toLowerCase().startsWith(base.replace(/[\\/]+$/, '').toLowerCase() + sep);
 /**
- * The original of a recorded source (SPEC-08.4): only paths recorded in the DB, under its root.
- * A path that leaves the root, by `..` or through a link or junction, is refused; a missing
- * original is reported and nothing is created.
+ * The original of a recorded source (SPEC-08.4): only paths recorded in the DB, under its root or
+ * one of its collected folders (a folder on another drive or share is recorded by absolute path,
+ * SPEC-08.9 1). A path that leaves them, by `..` or through a link or junction, is refused; a
+ * missing original is reported and nothing is created.
  */
 function sourcePath(file: string, sourceId: number) {
   const { base, path } = read(file, (db) => {
@@ -261,14 +264,21 @@ function sourcePath(file: string, sourceId: number) {
       | { rel_path: string }
       | undefined;
     if (!root || !row) throw new DomainError('NOT_FOUND');
-    const base = resolve(root);
-    const path = resolve(base, row.rel_path);
-    if (!path.startsWith(base + sep)) throw new DomainError('INVALID_INPUT');
+    let folders: string[] = [];
+    try {
+      const value = JSON.parse(meta(db, 'folders') ?? '[]') as unknown;
+      if (Array.isArray(value)) folders = value.filter((f): f is string => typeof f === 'string');
+    } catch {
+      /* An unreadable list: the root alone. */
+    }
+    const path = resolve(root, row.rel_path);
+    const base = [root, ...folders].map((f) => resolve(f)).find((f) => under(f, path));
+    if (!base) throw new DomainError('INVALID_INPUT');
     return { base, path };
   });
   if (!existsSync(path)) throw new DomainError('SOURCE_UNAVAILABLE');
   const real = realpathSync(path);
-  if (!real.startsWith(realpathSync(base) + sep)) throw new DomainError('INVALID_INPUT');
+  if (!under(realpathSync(base), real)) throw new DomainError('INVALID_INPUT');
   return real;
 }
 

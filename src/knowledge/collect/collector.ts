@@ -52,8 +52,6 @@ export interface CollectState {
     issues: number;
     proposals: number;
   } | null;
-  /** Project folders left out (on another drive than the first). */
-  left: string[];
   /** The model family used: 'claude' or 'codex'. */
   models: 'claude' | 'codex' | null;
 }
@@ -137,7 +135,6 @@ export class KnowledgeCollector {
       collected: false,
       error: null,
       counts: null,
-      left: [],
       models: null,
     };
     if (!existsSync(file)) return { ...base, collected: false, counts: null };
@@ -183,7 +180,6 @@ export class KnowledgeCollector {
       total: 0,
       startedAt: new Date().toISOString(),
       error: null,
-      left: roots.left,
       models: plan.extract.provider === 'claude-cli' ? 'claude' : 'codex',
     };
     const job: Job = { controller, state, done: Promise.resolve() };
