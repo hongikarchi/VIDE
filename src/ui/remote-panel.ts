@@ -271,8 +271,15 @@ export function attachAccountPanel(
       });
     };
   }
-  // Refresh while the panel is open (heartbeat, tunnel start/exit); while it is closed, only while
-  // remote access is on (the button's dot follows the tunnel).
+  // Refresh every 3 s while the panel is open (heartbeat, tunnel start/exit). While it is closed,
+  // from the start of the page and not only after the panel was opened once, every 15 s: the
+  // button's dot follows the tunnel and its circle the account (a site sign-out) (SPEC-05.10 1).
+  // Nothing is asked before the first status (the page may not have its session yet).
+  const closedPoll = () =>
+    setInterval(() => {
+      if (status) void poll();
+    }, 15000);
+  timer = closedPoll();
   new MutationObserver(() => {
     clearInterval(timer);
     confirmUnlink = false;
@@ -281,9 +288,7 @@ export function attachAccountPanel(
       timer = setInterval(() => void poll(), 3000);
     } else {
       draw();
-      timer = setInterval(() => {
-        if (status?.remote) void poll();
-      }, 15000);
+      timer = closedPoll();
     }
   }).observe(dialog, { attributes: true, attributeFilter: ['open'] });
   draw();

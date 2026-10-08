@@ -14,6 +14,7 @@ import { Agenda, setAgendaActor } from '../../src/core/agenda.ts';
 import { agendaHandlers } from '../../src/server/agent-tools.ts';
 import { agendaShare, applyAgendaEdit } from '../../src/server/offline-summary.ts';
 import { startServer } from '../../src/server/server.ts';
+import { RemoteAccess } from '../../src/server/remote-access.ts';
 import { authorLine, avatarIndex, avatarInitial } from '../../src/contracts/account-avatar.ts';
 
 async function storeOf(t) {
@@ -288,4 +289,54 @@ test('over HTTP: a signed-in PC stamps its account, a body cannot name one, and 
     id: 'u-studio',
     name: 'studio',
   });
+});
+
+test('name-only records get the id again at the next start and heartbeat until every project is filled', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'vide-agenda-authors-fill-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  // This PC learnt the id at an earlier heartbeat, when one project could not be opened.
+  await writeFile(
+    join(directory, 'remote-host.json'),
+    JSON.stringify({
+      workerOrigin: 'https://sharing.example',
+      hostId: '356ff01d-b586-460c-8e2b-8c9f3c083e96',
+      secret: randomBytes(32).toString('hex'),
+      name: 'Studio PC',
+      username: 'studio',
+      userId: 'u-studio',
+      remote: false,
+    }),
+  );
+  const fills = [];
+  let opened = false;
+  const remote = new RemoteAccess({
+    directory,
+    port: () => 1234,
+    status: async () => ({}),
+    heartbeatMs: 3_600_000,
+    fetcher: async () =>
+      new Response(
+        JSON.stringify({ ok: true, projects: [], account: { id: 'u-studio', username: 'studio' } }),
+        { status: 200 },
+      ),
+    onAccountId: (account) => {
+      fills.push(account.id);
+      return opened;
+    },
+  });
+  t.after(() => remote.close());
+  // The start tries again although the saved id already matches the site's.
+  await remote.init();
+  assert.equal(fills[0], 'u-studio');
+  // …and so does the start's own first heartbeat.
+  while (fills.length < 2) await new Promise((resolve) => setTimeout(resolve, 5));
+  const started = fills.length;
+  // Still not filled: the next heartbeat tries again; once filled, later heartbeats do not.
+  await remote.heartbeat();
+  assert.equal(fills.length, started + 1);
+  opened = true;
+  await remote.heartbeat();
+  assert.equal(fills.length, started + 2);
+  await remote.heartbeat();
+  assert.equal(fills.length, started + 2);
 });

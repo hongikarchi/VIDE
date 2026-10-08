@@ -132,10 +132,11 @@ interface Options {
   /** Runs after each successful heartbeat (offline view uploads). */
   afterHeartbeat?: () => void;
   /**
-   * The site named this PC's account id for the first time: items recorded by the name alone get
-   * the id (SPEC-01.14 12).
+   * This PC's account id is known: items recorded by the name alone get the id (SPEC-01.14 12).
+   * Called once per start and again at the next heartbeats while it returns false (a project that
+   * could not be opened is filled at a later connection).
    */
-  onAccountId?: (account: { id: string; name: string }) => void;
+  onAccountId?: (account: { id: string; name: string }) => boolean | void;
   executable?: string;
   /** Fetches cloudflared to the given path (default: the official release, `cloudflared.ts`). */
   download?: (target: string) => Promise<unknown>;
@@ -215,6 +216,9 @@ export class RemoteAccess {
   async init() {
     await this.load();
     if (!this.device || this.closed) return;
+    // Records written by the name alone while an earlier fill could not reach their project.
+    if (this.device.userId && this.device.username)
+      this.fillAccount({ id: this.device.userId, name: this.device.username });
     // Keep the account list complete (projects made while offline or before this version).
     for (const project of this.options.projects?.() ?? []) await this.pushProject(project);
     this.beat();
@@ -248,19 +252,33 @@ export class RemoteAccess {
     if (!device?.username) return null;
     return { id: device.userId ?? null, name: device.username };
   }
-  /** Keeps the account id the site named, once; a different account's id is not taken. */
+  /**
+   * Keeps the account id the site named; a different account's id is not taken. Name-only records
+   * get the id once per start and at every later connection until all of them could be filled.
+   */
   private async learnAccount(value: unknown) {
     const account = siteAccountSchema.safeParse(value);
     const device = this.device;
-    if (!account.success || !device || device.userId === account.data.id) return;
-    const same = (name: string) => name.trim().toLowerCase();
-    if (device.username && same(device.username) !== same(account.data.username)) return;
-    await this.save({ ...device, userId: account.data.id, username: account.data.username });
-    try {
-      this.options.onAccountId?.({ id: account.data.id, name: account.data.username });
-    } catch {
-      /* Filling the id is best effort; the next start does it again. */
+    if (!account.success || !device) return;
+    if (device.userId !== account.data.id) {
+      const same = (name: string) => name.trim().toLowerCase();
+      if (device.username && same(device.username) !== same(account.data.username)) return;
+      await this.save({ ...device, userId: account.data.id, username: account.data.username });
+      this.filledAccount = undefined;
     }
+    this.fillAccount({ id: account.data.id, name: account.data.username });
+  }
+  /** Account id this start has already given to every name-only record. */
+  private filledAccount?: string;
+  private fillAccount(account: { id: string; name: string }) {
+    if (this.filledAccount === account.id) return;
+    let done: boolean | void = false;
+    try {
+      done = this.options.onAccountId?.(account);
+    } catch {
+      /* Filling the id is best effort; the next heartbeat tries again. */
+    }
+    if (done !== false) this.filledAccount = account.id;
   }
   /** Sign this PC in to the account; the password is used once and never stored. */
   async link(
@@ -304,7 +322,8 @@ export class RemoteAccess {
         ...reply,
       }),
     );
-    if (account) this.options.onAccountId?.({ id: account.id, name: account.username });
+    this.filledAccount = undefined;
+    if (account) this.fillAccount({ id: account.id, name: account.username });
     // Existing local projects join the account list with their ids.
     for (const project of this.options.projects?.() ?? []) await this.pushProject(project);
     this.beat();

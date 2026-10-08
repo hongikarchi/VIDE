@@ -9,7 +9,8 @@ import { api, errors } from './gateway.ts';
 import { remoteSession } from './remote-panel.ts';
 
 Object.assign(errors, {
-  ACCOUNT_NOT_LINKED: 'VIDE 계정에 로그인한 PC에서만 제출할 수 있습니다. 설정에서 로그인하세요.',
+  ACCOUNT_NOT_LINKED:
+    'VIDE 계정에 로그인한 PC에서만 제출할 수 있습니다. 왼쪽 아래 계정 단추에서 로그인하세요.',
   JIG_SUBMISSION_TOO_LARGE: 'jig 묶음이 8 MB를 넘어 보내지 않았습니다. 시험 자료를 줄여 보세요.',
   JIG_SUBMISSIONS_FULL:
     '관리자가 아직 보지 않은 제출이 많아 지금은 더 받지 않습니다. 잠시 뒤 다시 제출하세요.',

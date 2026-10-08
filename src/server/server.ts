@@ -475,13 +475,16 @@ export async function startServer({
     onQueue: (items) => offlineView.receive(items),
     onAgendaEdits: (edits) => offlineView.applyEdits(edits),
     // The site named this PC's account id: 할 일 recorded by the name alone get it (SPEC-01.14 12).
+    // False when a project could not be opened: RemoteAccess tries again at the next heartbeat.
     onAccountId: (account) => {
+      let all = true;
       for (const project of store.listProjects())
         try {
           agenda.fillAccountId(project.id, account);
         } catch {
-          /* A project that cannot be opened now is filled on a later sign-in. */
+          all = false;
         }
+      return all;
     },
     afterHeartbeat: () => {
       void offlineView.tick().catch(() => {});

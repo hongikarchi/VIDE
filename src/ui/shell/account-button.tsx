@@ -32,10 +32,15 @@ export const AccountButton = memo(function AccountButton() {
   );
 });
 
-/** The narrow-screen row (the rail is hidden below 850 px). */
+/**
+ * The narrow-screen row (the rail is hidden below 850 px): the 20px circle and the ID at the end of
+ * the top bar (SPEC-05.10 5). The fixed screens' menu there is a native list that cannot hold it.
+ */
 export const MobileAccountButton = memo(function MobileAccountButton() {
   const status = useStore(accountState, (s) => s.status);
+  const open = useStore(accountState, (s) => s.open);
   const title = accountTitle(status);
+  const username = status?.linked ? status.username : null;
   return (
     <button
       id="mobile-account-button"
@@ -44,9 +49,11 @@ export const MobileAccountButton = memo(function MobileAccountButton() {
       title={title}
       aria-label={`VIDE 계정 · ${title}`}
       aria-haspopup="dialog"
+      aria-expanded={open}
       onClick={(event) => accountState.actions.toggle(event.currentTarget)}
     >
-      <Avatar name={status?.linked ? status.username : null} size={20} />
+      <Avatar name={username} size={20} />
+      <span className="mobile-account-name">{username || '로그인 안 됨'}</span>
     </button>
   );
 });

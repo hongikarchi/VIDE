@@ -3,7 +3,8 @@
 // with the ID, PC name, site connection, remote access switch and the AI accounts (read only);
 // [이 PC 로그아웃] asks once more and then turns the button neutral on an engine without the sign-in
 // check. Settings has no account tab; its [계정 열기] opens the panel. On a narrow screen the bar's
-// account row opens the panel as a bottom sheet.
+// account row (circle and ID) opens the panel as a bottom sheet. Before the panel is ever opened, the
+// button follows the tunnel and a site sign-out by itself.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -20,7 +21,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  let status = {
+  const signedIn = {
     linked: true,
     username: 'kim',
     name: 'Studio PC',
@@ -30,6 +31,8 @@ try {
     url: 'https://tunnel.example',
     lastHeartbeat: new Date().toISOString(),
   };
+  // The engine starts with remote access on while the tunnel is still starting.
+  let status = { ...signedIn, running: false, starting: true, url: undefined };
   const remoteWrites = [];
   await page.route('**/api/v1/remote', (route) => route.fulfill({ json: status }));
   await page.route('**/api/v1/remote/remote', (route) => {
@@ -60,8 +63,30 @@ try {
       },
     }),
   );
+  await page.clock.install();
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => !document.querySelector('#body').disabled);
+
+  // Without opening the panel: the dot follows the tunnel, the circle a site sign-out.
+  const dotState = () =>
+    page.evaluate(() => document.querySelector('#account-button .account-dot')?.dataset.state);
+  const letter = () =>
+    page.evaluate(() => document.querySelector('#account-button .avatar')?.dataset.avatar);
+  await page.waitForFunction(
+    () => document.querySelector('#account-button .account-dot')?.dataset.state === 'warn',
+  );
+  const later = async (check, want) => {
+    for (let tries = 0; tries < 4 && (await check()) !== want; tries++)
+      await page.clock.runFor(16_000);
+    assert.equal(await check(), want);
+  };
+  status = signedIn;
+  await later(dotState, 'ok');
+  status = { linked: false, remote: false, running: false };
+  await later(letter, 'none');
+  assert.equal(await dotState(), undefined);
+  status = signedIn;
+  await later(async () => (await letter()) !== 'none', true);
 
   // The button: the account's letter and colour, its tooltip, the remote dot.
   const button = page.locator('#account-button');
@@ -139,8 +164,15 @@ try {
   assert.equal(await button.isVisible(), false);
   const mobile = page.locator('#mobile-account-button');
   assert.equal(await mobile.isVisible(), true);
+  assert.match(await mobile.textContent(), /로그인 안 됨/);
+  // Signed in again (seen by the closed panel's check): the row shows the circle and the ID.
+  status = signedIn;
+  await later(async () => (await mobile.textContent()).includes('kim'), true);
+  assert.equal(await mobile.locator('.avatar').textContent(), 'K');
+  assert.equal(await mobile.getAttribute('aria-expanded'), 'false');
   await mobile.click();
   await panel.waitFor();
+  assert.equal(await mobile.getAttribute('aria-expanded'), 'true');
   const sheet = await panel.boundingBox();
   assert.equal(Math.round(sheet.x), 16);
   assert.equal(Math.round(sheet.y + sheet.height), 800 - 16);

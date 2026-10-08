@@ -136,7 +136,7 @@ export function Home({
       const target = links.hostId === thisPc && links.local ? links.local : links.remote;
       if (!target) {
         setStatus(
-          '이 기기에서 열려면 작업 PC의 VIDE 설정에서 원격 접속을 켜세요. (같은 PC에서는 바로 열립니다)',
+          '이 기기에서 열려면 작업 PC의 VIDE 왼쪽 아래 계정 단추에서 원격 접속을 켜세요. (같은 PC에서는 바로 열립니다)',
         );
         setOpening('');
         return;

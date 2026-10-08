@@ -2623,11 +2623,22 @@ body.panel-mode .chat-heading h2 {
   background: var(--ng);
 }
 .mobile-tabs .mobile-account {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40%;
   display: flex;
   align-items: center;
+  gap: 6px;
   padding: 0 8px;
   background: transparent;
+}
+.mobile-account-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text-2);
 }
 .account-popover {
   position: fixed;

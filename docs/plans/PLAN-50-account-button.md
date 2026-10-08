@@ -2,7 +2,7 @@
 id: PLAN-50
 title: 계정 단추와 계정 창 — 설정에서 계정·원격 접속 분리 (T-263)
 status: review
-version: 0.1
+version: 0.2
 updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-05, SPEC-04, DESIGN, FR-16, FR-18, FR-19, ADR-025, ADR-039, PLAN-38]
@@ -28,6 +28,19 @@ related: [SPEC-05, SPEC-04, DESIGN, FR-16, FR-18, FR-19, ADR-025, ADR-039, PLAN-
 - **남은 확인:** 원격 세션(https로 연 화면)의 창은 자동 시험으로 열지 않았다(`remoteSession()`은 주소의 https로 판별). 실제 iPad 확인은 `tests/integration/remote-loop.mjs` 실행 때 함께 본다.
 - **완료 판단:** 위 시험 통과와 SPEC-05.10 수용 결과의 PC 쪽 항목 확인.
 
+## T-263 통합 보완 — 할 일 작성자 작업과 합치기 (2026-10-08)
+
+할 일 작성자(SPEC-01.14의 12)와 이 작업이 계정 동그라미를 따로 만들어 합치며 검토 결함을 고쳤다.
+
+- **기준:** SPEC-05.10 1·4·5, SPEC-01.14의 12, SCR-34.
+- **변경 범위:**
+  - 동그라미 하나: `account-avatar.ts`의 색은 아이디 UTF-8 바이트의 FNV-1a 하나로 정한다(화면·사이트 같음), `avatarInitial('')`은 빈 글자. `authorLine`은 작성자가 없으면 고친 사람이 있어도 '작성자 정보 없음'으로 시작한다. `Avatar`는 `title`·`className`을 받고 `avatarNode`를 둔다(이름 앞뒤 공백 무시).
+  - 계정 번호 채우기: `RemoteAccess`가 시작할 때와, 채우지 못한 프로젝트가 남았으면(`onAccountId`가 false) 그 뒤 heartbeat마다 다시 채운다.
+  - 계정 단추: 창을 연 적이 없어도 15초마다 상태를 확인해 원격 점과 계정 동그라미(사이트 로그아웃)를 맞춘다. 좁은 화면 줄에 아이디와 `aria-expanded`.
+  - 설정을 가리키던 안내(`jig-submit.tsx`, 사이트 `hosts.tsx`·`home.tsx`)를 계정 단추로 바꾼다.
+- **검증:** `tests/core/account-avatar.test.mjs`(UTF-8 정의, 옛 안내 문구 없음), `tests/server/agenda-authors.test.mjs`('작성자 정보 없음 · 고침 lee', 시작·heartbeat 다시 채우기), `browser-account-panel.mjs`(창을 열지 않고 켜는 중→켜짐, 사이트 로그아웃→중립, 좁은 화면 아이디·`aria-expanded`), `npm run verify`, `npm run test:browser`.
+- **완료 판단:** 위 시험 통과.
+
 ## 현재 상태
 
-T-263 구현·자동 검증 완료(2026-10-08). 원격 세션 화면은 실기 확인 전.
+T-263 구현·자동 검증 완료(2026-10-08), 할 일 작성자 작업과 통합·보완 완료(2026-10-08). 원격 세션 화면은 실기 확인 전.
