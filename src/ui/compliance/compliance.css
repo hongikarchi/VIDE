@@ -1,0 +1,324 @@
+/* 법규 체크 jig 부품 (Design SCR-32). Tokens from ../tokens.css; state colours are the verdict
+   tokens (--ok · --ng · --warn · --info · --na). No coloured side bars: a chosen row is a soft
+   background. */
+
+.cmp-state {
+  white-space: nowrap;
+  font-weight: 600;
+}
+.cmp-state b {
+  font-weight: 700;
+}
+[data-tone='ok'] > .kit-kpi-title,
+.cmp-state[data-tone='ok'] {
+  color: var(--ok);
+}
+[data-tone='ng'] > .kit-kpi-title,
+.cmp-state[data-tone='ng'] {
+  color: var(--ng);
+}
+[data-tone='warn'] > .kit-kpi-title,
+.cmp-state[data-tone='warn'] {
+  color: var(--warn);
+}
+[data-tone='info'] > .kit-kpi-title,
+.cmp-state[data-tone='info'] {
+  color: var(--info);
+}
+[data-tone='na'] > .kit-kpi-title,
+.cmp-state[data-tone='na'] {
+  color: var(--muted);
+}
+.cmp-mono {
+  font-family: var(--font-mono);
+  font-size: var(--fs-eyebrow);
+}
+.cmp-tag {
+  display: inline-block;
+  margin-left: var(--s1);
+  padding: 0 4px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-eyebrow);
+  font-weight: 400;
+  color: var(--muted);
+}
+.cmp-warn {
+  margin: 0;
+  color: var(--warn);
+}
+.cmp-notice {
+  margin: 0;
+  font-size: var(--fs-eyebrow);
+  color: var(--muted);
+}
+
+/* --- [법규 체크] --------------------------------------------------------------------------- */
+.cmp-run {
+  display: grid;
+  gap: var(--s1);
+}
+.cmp-run-button {
+  width: 100%;
+  min-height: 36px;
+  font-weight: 600;
+}
+.cmp-run p {
+  margin: 0;
+}
+
+/* --- 머리 ----------------------------------------------------------------------------------- */
+.cmp-summary {
+  display: grid;
+  gap: var(--s2);
+}
+.cmp-stale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s3);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-sm);
+  background: var(--zone-warn);
+}
+.cmp-headline {
+  margin: 0;
+  font-weight: 600;
+}
+.cmp-headline[data-tone='ok'] {
+  color: var(--ok);
+}
+.cmp-headline[data-tone='ng'] {
+  color: var(--ng);
+}
+.cmp-headline[data-tone='warn'] {
+  color: var(--warn);
+}
+
+/* --- 결과 서랍 ------------------------------------------------------------------------------ */
+.cmp-drawer {
+  display: grid;
+  gap: var(--s2);
+}
+.cmp-drawer[data-stale='true'] .cmp-body {
+  opacity: 0.6;
+}
+.cmp-drawer-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s2);
+}
+.cmp-exports {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+.cmp-table-wrap {
+  max-height: 480px;
+}
+.cmp-table td {
+  white-space: normal;
+  vertical-align: top;
+}
+.cmp-table td[data-num],
+.cmp-table .cmp-cell-state {
+  white-space: nowrap;
+}
+.cmp-table .cmp-group th {
+  position: static;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: var(--fs-eyebrow);
+  font-weight: 600;
+  padding-top: var(--s2);
+}
+.cmp-table tbody tr.cmp-group {
+  cursor: default;
+}
+.cmp-table tbody tr.cmp-group:hover {
+  background: none;
+}
+.cmp-reason {
+  color: var(--muted);
+  min-width: 12em;
+}
+.cmp-margin[data-over] {
+  color: var(--ng);
+  font-weight: 600;
+}
+.cmp-basis {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px var(--s1);
+}
+.cmp-chip {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--ink);
+  font-size: var(--fs-eyebrow);
+  text-decoration: none;
+  white-space: nowrap;
+}
+a.cmp-chip:hover {
+  text-decoration: underline;
+}
+.cmp-chip[data-answer] {
+  font-family: var(--font-mono);
+}
+.cmp-table tbody tr.cmp-detail-row,
+.cmp-table tbody tr.cmp-detail-row:hover {
+  background: var(--bg-recessed);
+  cursor: default;
+}
+.cmp-detail {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s2) 0;
+}
+.cmp-detail p {
+  margin: 0;
+}
+.cmp-case {
+  margin-right: var(--s3);
+  white-space: nowrap;
+}
+.cmp-layers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  align-items: center;
+  margin-top: var(--s1);
+}
+.cmp-classification p {
+  margin: var(--s1) 0 0;
+}
+
+/* --- 모델 분류 카드 --------------------------------------------------------------------------- */
+.cmp-roles {
+  display: grid;
+  gap: var(--s1);
+}
+.cmp-roles p {
+  margin: 0;
+}
+.cmp-role-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cmp-role-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  font-variant-numeric: tabular-nums;
+}
+.cmp-text-button {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--info);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.cmp-text-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.cmp-proposals {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cmp-proposals li {
+  display: grid;
+  gap: 2px;
+  padding: var(--s2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-recessed);
+}
+.cmp-proposals .cmp-tag {
+  justify-self: start;
+  margin-left: 0;
+}
+.cmp-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+/* --- 좁은 jig 열 (Design SCR-32): a row reads in two lines --------------------------------------- */
+@container (max-width: 420px) {
+  .cmp-table thead {
+    display: none;
+  }
+  .cmp-table,
+  .cmp-table tbody {
+    display: block;
+  }
+  .cmp-table tr.cmp-group,
+  .cmp-table tr.cmp-detail-row {
+    display: block;
+  }
+  .cmp-table tr.cmp-group th,
+  .cmp-table tr.cmp-detail-row td {
+    display: block;
+  }
+  .cmp-table tr.cmp-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'state title planned limit'
+      'margin basis basis basis'
+      'reason reason reason reason';
+    gap: 2px var(--s2);
+    padding: var(--s1) 0;
+    border-bottom: var(--hairline) solid var(--line);
+  }
+  .cmp-table tr.cmp-row td {
+    display: block;
+    padding: 0;
+    border: 0;
+    text-align: left;
+  }
+  .cmp-table tr.cmp-row td.cmp-no {
+    display: none;
+  }
+  .cmp-table .cmp-cell-state {
+    grid-area: state;
+  }
+  .cmp-table .cmp-title {
+    grid-area: title;
+  }
+  .cmp-table .cmp-planned {
+    grid-area: planned;
+    text-align: right;
+  }
+  .cmp-table .cmp-limit {
+    grid-area: limit;
+    text-align: right;
+  }
+  .cmp-table .cmp-limit::before {
+    content: '/ ';
+    color: var(--muted);
+  }
+  .cmp-table .cmp-margin {
+    grid-area: margin;
+  }
+  .cmp-table .cmp-cell-basis {
+    grid-area: basis;
+  }
+  .cmp-table .cmp-reason {
+    grid-area: reason;
+    min-width: 0;
+  }
+}

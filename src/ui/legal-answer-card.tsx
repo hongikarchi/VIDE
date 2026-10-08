@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import type { ClawdeAnswer, ClawdeVerdict } from '../contracts/clawde.ts';
-import { LEGAL_TARGET_EVENT, type LegalTargetEventDetail } from './legal-target.ts';
+import { selectNative } from './legal-target.ts';
 
 // 법규 답 카드 (SPEC-13.5, Design SCR-29, PLAN-46 T-221): one cLAWde answer in the fixed order 결론
 // → 이유 → 근거 조항(링크·발췌·시행일) → 그림 → 해석 → 확인 필요 사항 → 쓴 정보, each part with its
@@ -249,13 +249,7 @@ export function LegalAnswerCard({
                     ? `뷰포트에서 ${target.label} 객체를 강조합니다`
                     : '대지 모델에서 이 대상을 찾지 못했습니다'
                 }
-                onClick={() =>
-                  window.dispatchEvent(
-                    new CustomEvent<LegalTargetEventDetail>(LEGAL_TARGET_EVENT, {
-                      detail: { label: target.label, objects: target.objects },
-                    }),
-                  )
-                }
+                onClick={() => selectNative({ label: target.label, objects: target.objects })}
               >
                 {target.label}
                 {target.found ? null : <small> · 모델에 없음</small>}

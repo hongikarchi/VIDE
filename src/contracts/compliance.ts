@@ -708,6 +708,13 @@ export const complianceResultSchema = z
     counts: z.record(complianceStateSchema, z.number().int().nonnegative()),
     unconfirmedCount: z.number().int().nonnegative(),
     notice: z.literal('탐색용 법규 체크 — 인허가 검토·법규 검토를 대체하지 않음'),
+    /**
+     * Optional (T-239): what the screen needs to draw the result in the viewport (SPEC-15.11) —
+     * the massing frame origin (local + `origin` = document metres, the viewport's world) and the
+     * base variant's 최대 외피 in local metres for the light outline. Without it the screen draws
+     * the exceedances at local coordinates and offers no outline.
+     */
+    display: z.object({ origin: vec3, envelope: meshSchema.nullable() }).strict().optional(),
   })
   .strict()
   .superRefine((r, ctx) => {

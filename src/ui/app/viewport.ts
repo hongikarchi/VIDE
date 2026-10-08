@@ -12,11 +12,7 @@ import { attachNativeAttributes } from '../native-attributes.ts';
 import { type SelectMode } from '../object-list.ts';
 import { objects, objectById, attachBrushSketch } from '../model.ts';
 import { displayIdOf, sourceIdOf } from '../layers.ts';
-import {
-  LEGAL_TARGET_EVENT,
-  shownTargetIds,
-  type LegalTargetEventDetail,
-} from '../legal-target.ts';
+import { SELECT_NATIVE_EVENT, shownTargetIds, type SelectNativeDetail } from '../legal-target.ts';
 import { initializeViewportEmpty } from '../viewport-empty.ts';
 import { element as $, readableError } from '../elements.ts';
 import { createViewport } from '../viewport.ts';
@@ -297,16 +293,17 @@ export function initViewport3() {
 
 export function initViewport4() {
   window.addEventListener('pagehide', () => viewerState.viewport?.dispose(), { once: true });
-  window.addEventListener(LEGAL_TARGET_EVENT, (event) =>
-    highlightTarget((event as CustomEvent<LegalTargetEventDetail>).detail),
+  window.addEventListener(SELECT_NATIVE_EVENT, (event) =>
+    highlightTarget((event as CustomEvent<SelectNativeDetail>).detail),
   );
 }
 
 /**
- * A legal answer's target chip (SPEC-13.8): select the named site-model objects the screen shows,
- * as Rhino's own pick is shown (SPEC-01.11 4), and frame them. VIDE's selection only.
+ * A legal answer's target chip (SPEC-13.8) or a 법규 체크 result row (SPEC-15.11): select the named
+ * host objects the screen shows, as Rhino's own pick is shown (SPEC-01.11 4), and frame them.
+ * VIDE's selection only.
  */
-function highlightTarget(detail: LegalTargetEventDetail) {
+function highlightTarget(detail: SelectNativeDetail) {
   if (!detail?.objects) return;
   const { ids, fileShown } = shownTargetIds(detail, linksState.currentLayers, (basis, id) =>
     displayIdOf(objects, basis, id),

@@ -84,13 +84,16 @@ export function PlanMap({
   const at = (x: number, y: number): [number, number] => [x * cos - y * sin, -(x * sin + y * cos)];
   const shapes = layers.map((layer) => ({
     key: layer.key,
-    items: layer.items.map((item) => ({
-      item,
-      pts:
-        item.kind === 'point'
-          ? [at(item.at[0], item.at[1])]
-          : item.points.map((p) => at(p[0], p[1])),
-    })),
+    // Plans draw outlines and points; a mesh (3D only, e.g. 법규 체크 초과 부분) is left out.
+    items: layer.items
+      .flatMap((item) => (item.kind === 'mesh' ? [] : [item]))
+      .map((item) => ({
+        item,
+        pts:
+          item.kind === 'point'
+            ? [at(item.at[0], item.at[1])]
+            : item.points.map((p) => at(p[0], p[1])),
+      })),
   }));
   let minX = Infinity,
     minY = Infinity,

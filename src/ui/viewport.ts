@@ -123,6 +123,11 @@ export type OverlayItem = { id: string; tone?: OverlayTone; label?: string } & (
       width?: number;
     }
   | { kind: 'point'; at: Point3 }
+  /**
+   * A closed triangle mesh (`v` xyz triples, `f` index triples), e.g. 법규 체크 초과 부분
+   * (SPEC-15.11): a translucent body with its crease edges, or only the edges (`fill: false`).
+   */
+  | { kind: 'mesh'; v: readonly number[]; f: readonly number[]; fill?: boolean }
 );
 export interface OverlayStyle {
   visible?: boolean;
@@ -1389,6 +1394,51 @@ export function createViewport(
       point.renderOrder = 7;
       part(point, 'point', 1);
       labelAt = point.position.clone();
+    } else if (item.kind === 'mesh') {
+      const count = Math.floor(item.v.length / 3);
+      if (count < 3 || !finite(item.v) || item.f.some((i) => !(i >= 0 && i < count)))
+        return undefined;
+      // Survey coordinates stay exact on the GPU: vertices relative to the first one.
+      const origin = new THREE.Vector3(item.v[0], item.v[1], item.v[2]);
+      const local = new Float32Array(count * 3);
+      for (let i = 0; i < count * 3; i += 3) {
+        local[i] = item.v[i] - origin.x;
+        local[i + 1] = item.v[i + 1] - origin.y;
+        local[i + 2] = item.v[i + 2] - origin.z;
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(local, 3));
+      geometry.setIndex(Array.from(item.f));
+      if (item.fill !== false) {
+        const body = new THREE.Mesh(
+          geometry,
+          new THREE.MeshBasicMaterial({
+            color,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+            transparent: true,
+          }),
+        );
+        body.position.copy(origin);
+        body.renderOrder = 5;
+        part(body, 'fill', 0.38);
+      }
+      const edges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(geometry, 20),
+        new THREE.LineBasicMaterial({ color, transparent: true, depthWrite: false }),
+      );
+      edges.position.copy(origin);
+      edges.renderOrder = 6;
+      part(edges, 'line', item.fill === false ? 0.55 : 0.9);
+      geometry.computeBoundingBox();
+      const box = geometry.boundingBox;
+      labelAt = box
+        ? new THREE.Vector3(
+            (box.min.x + box.max.x) / 2,
+            (box.min.y + box.max.y) / 2,
+            box.max.z,
+          ).add(origin)
+        : origin.clone();
     } else {
       const points =
         item.kind === 'polygon'
@@ -1451,7 +1501,11 @@ export function createViewport(
         // Sprites share one quad geometry; only the tag texture and material are their own.
         item.material.map?.dispose();
         item.material.dispose();
-      } else if (item instanceof THREE.Mesh || item instanceof THREE.Points) {
+      } else if (
+        item instanceof THREE.Mesh ||
+        item instanceof THREE.Points ||
+        item instanceof THREE.LineSegments
+      ) {
         item.geometry.dispose();
         (item.material as THREE.Material).dispose();
       }

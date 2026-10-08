@@ -1,0 +1,16 @@
+{
+  "layout": "jig-run",
+  "left": [
+    { "part": "jig-source", "input": "inputs.limits", "title": "규제 조건 · 건축 가능 영역·매스" },
+    { "part": "jig-source", "input": "inputs.siteModel", "title": "대지 · 사이트 모델링" },
+    { "part": "compliance-roles", "input": "inputs.model", "from": "step.check", "title": "모델" },
+    { "part": "param-group", "title": "설정" },
+    { "part": "compliance-run", "from": "step.check" }
+  ],
+  "center": {
+    "views": [],
+    "kpis": { "part": "compliance-summary", "from": "step.check" }
+  },
+  "drawer": { "part": "compliance-result", "from": "step.check" },
+  "actions": []
+}

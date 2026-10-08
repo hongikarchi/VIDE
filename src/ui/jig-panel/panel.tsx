@@ -39,6 +39,7 @@ import {
 import { BakePart } from './bake-parts.tsx';
 import { SitePicker } from './site-parts.tsx';
 import { JigSource } from './source-parts.tsx';
+import { CompliancePart } from '../compliance/panel-part.tsx';
 import { useInstance, type InstanceView, type StepReport } from './instance.ts';
 import { InstanceReportPart, renderReportPart } from './report-parts.tsx';
 import { scopeOf, validatePanel, type PanelAction } from './spec.ts';
@@ -72,6 +73,8 @@ export interface PanelHost {
   openReport?: (reportId: string) => void;
   /** Regions beside the panel (Design SCR-13): above the 3D view, over it, below it. */
   slots?: { top?: HTMLElement; board?: HTMLElement; drawer?: HTMLElement };
+  /** A remote screen (SPEC-04): views only; default from the page address. */
+  remote?: boolean;
 }
 
 const glob = (pattern: string) =>
@@ -643,6 +646,20 @@ export function JigPanel({
             inputKey={part.input.slice('inputs.'.length)}
             title={part.title}
             jig={jig}
+          />
+        );
+      case 'compliance-roles':
+      case 'compliance-run':
+      case 'compliance-summary':
+      case 'compliance-result':
+        return (
+          <CompliancePart
+            key={key}
+            part={part}
+            host={host}
+            instanceId={instanceId}
+            jig={jig}
+            data={data}
           />
         );
       case 'compare-bars':

@@ -34,6 +34,10 @@ export const PART_NAMES = [
   'ledger',
   'site-picker',
   'jig-source',
+  'compliance-roles',
+  'compliance-run',
+  'compliance-summary',
+  'compliance-result',
 ] as const;
 export type PartName = (typeof PART_NAMES)[number];
 
@@ -235,6 +239,19 @@ export const PART_PROPS = {
       title: title.optional(),
     })
     .strict(),
+  // 법규 체크 (SPEC-15, Design SCR-32, PLAN-48 T-239): parts bound to one `ComplianceResult`
+  // step output (`from`). The roles card reads the project's classification of the `host-document`
+  // input (`input`); the result drawer draws the exceedances in 3D and exports CSV and the report.
+  'compliance-roles': z
+    .object({
+      input: z.string().regex(new RegExp(`^inputs\\.${WORD}$`)),
+      from: binding,
+      title: title.optional(),
+    })
+    .strict(),
+  'compliance-run': z.object({ from: binding }).strict(),
+  'compliance-summary': z.object({ from: binding }).strict(),
+  'compliance-result': z.object({ from: binding }).strict(),
 } satisfies Record<PartName, z.ZodType>;
 
 /** Parts not built yet: listed, but a panel that uses them is refused (none since T-057). */
@@ -256,11 +273,13 @@ export const PLACES = {
     'conflict-banner',
     'site-picker',
     'jig-source',
+    'compliance-roles',
+    'compliance-run',
   ],
   views: ['viewport-overlay', 'plan-map', 'report'],
   board: ['slider-board'],
-  kpis: ['kpi-strip'],
-  drawer: ['result-tabs', 'issue-table', 'table', 'schedule', 'ledger'],
+  kpis: ['kpi-strip', 'compliance-summary'],
+  drawer: ['result-tabs', 'issue-table', 'table', 'schedule', 'ledger', 'compliance-result'],
   tab: ['issue-table', 'table', 'schedule', 'bake-card', 'compare-bars', 'ledger'],
 } as const satisfies Record<string, readonly PartName[]>;
 export type Place = keyof typeof PLACES;

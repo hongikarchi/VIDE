@@ -265,6 +265,22 @@ test('a synthetic reader → engine → screen chain passes the contract', () =>
   });
 });
 
+test('the optional display frame of a result (T-239 viewport overlay)', () => {
+  assert.equal(complianceResultSchema.parse(result).display, undefined, 'optional');
+  const shown = complianceResultSchema.parse({
+    ...result,
+    display: { origin: [200000, 450000, 30], envelope: box },
+  });
+  assert.deepEqual(shown.display.origin, [200000, 450000, 30]);
+  complianceResultSchema.parse({ ...result, display: { origin: [0, 0, 0], envelope: null } });
+  fails(complianceResultSchema, { ...result, display: { origin: [0, 0] } }, 'origin is xyz');
+  fails(
+    complianceResultSchema,
+    { ...result, display: { origin: [0, 0, 0], envelope: null, extra: 1 } },
+    'strict',
+  );
+});
+
 test('unknown document units are a state, not a read error', () => {
   const m = classifiedModelSchema.parse({ ...model, source: { ...model.source, toMeters: null } });
   assert.equal(m.source.toMeters, null);
