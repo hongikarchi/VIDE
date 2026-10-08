@@ -134,7 +134,10 @@ export async function hostDeviceRoute(
     const name = text(input.name, 80);
     const response = await signIn(auth, request, env, input.username, input.password);
     if (!response.ok) throw new HttpError(401, 'INVALID_LOGIN');
-    const reply = (await response.json()) as { token?: string; user?: { id?: string } };
+    const reply = (await response.json()) as {
+      token?: string;
+      user?: { id?: string; name?: string };
+    };
     const userId = reply.user?.id;
     if (!userId) throw new HttpError(401, 'INVALID_LOGIN');
     // The PC keeps only its host key; the browser session made by the check is discarded.
@@ -145,7 +148,15 @@ export async function hostDeviceRoute(
       .prepare('INSERT INTO remote_hosts(id,user_id,name,secret,created_at) VALUES(?,?,?,?,?)')
       .bind(id, userId, name, secret, Date.now())
       .run();
-    return json({ hostId: id, secret }, 201);
+    // The account the PC signed in to (SPEC-05.10, SPEC-01.14 12): id and ID only, no email.
+    return json(
+      {
+        hostId: id,
+        secret,
+        account: { id: userId, username: reply.user?.name || String(input.username).trim() },
+      },
+      201,
+    );
   }
   const row = await authenticateHost(request, db);
   if (path[0] === 'heartbeat' && path.length === 1 && request.method === 'POST') {
@@ -180,8 +191,14 @@ export async function hostDeviceRoute(
       )
       .bind(row.id, row.user_id)
       .all<{ id: string; name: string; deleted_at: number | null }>();
+    const account = await db
+      .prepare('SELECT id,name FROM user WHERE id=?')
+      .bind(row.user_id)
+      .first<{ id: string; name: string }>();
     return json({
       ok: true,
+      // This PC's account (SPEC-05.10): a PC signed in before 0015 learns its account id here.
+      ...(account ? { account: { id: account.id, username: account.name } } : {}),
       projects: projects.results.map((p) => ({ id: p.id, name: p.name, deleted: !!p.deleted_at })),
       // Requests left on the site while the PC was off (PLAN-20).
       queue: offline ? [] : await pendingQueue(db, row),

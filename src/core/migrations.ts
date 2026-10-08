@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 /** v5 and later cannot be opened by an older installation (UNSUPPORTED_SCHEMA); see ARCH-03 §10.1. */
-export const schemaVersion = 16;
+export const schemaVersion = 17;
 export const baselineSchema = `
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
@@ -223,6 +223,13 @@ CREATE TABLE IF NOT EXISTS compliance_proposals(projectId TEXT NOT NULL REFERENC
   seq INTEGER NOT NULL, PRIMARY KEY(projectId, id)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS compliance_roles_version(projectId TEXT PRIMARY KEY REFERENCES projects(id),
   version INTEGER NOT NULL) WITHOUT ROWID;`;
+// 할 일 작성자 (SPEC-01.14 12, ARCH-01 §3 「대시보드의 할 일」): the VIDE account that made an item
+// and the one that last changed it — the site account id (null while only the name is known) and
+// the account name at the time. Earlier rows keep all four NULL ('작성자 정보 없음'), never filled.
+const agendaAuthors = `ALTER TABLE agenda_items ADD COLUMN createdBy TEXT;
+ALTER TABLE agenda_items ADD COLUMN createdByName TEXT;
+ALTER TABLE agenda_items ADD COLUMN updatedBy TEXT;
+ALTER TABLE agenda_items ADD COLUMN updatedByName TEXT;`;
 export const migrations: Migration[] = [
   { version: 2, sql: baselineSchema },
   { version: 3, sql: hiddenRequests },
@@ -239,6 +246,7 @@ export const migrations: Migration[] = [
   { version: 14, sql: drawingBackflow },
   { version: 15, sql: drawingLayers },
   { version: 16, sql: complianceRoles },
+  { version: 17, sql: agendaAuthors },
 ];
 
 /** Caller holds the exclusive controller lock. Never migrates user model files. */

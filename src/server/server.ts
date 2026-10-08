@@ -222,7 +222,7 @@ import {
 import type { DwgReader } from '../knowledge/collect/dwg.ts';
 import { zwcadKnowledgeReader } from '../../hosts/zwcad/knowledge-dwg.ts';
 import { ProjectFolders } from '../core/project-folders.ts';
-import { Agenda } from '../core/agenda.ts';
+import { Agenda, setAgendaActor } from '../core/agenda.ts';
 import { agendaRoutes, agendaStatuses } from './agenda-routes.ts';
 import { FinishStore } from '../core/finish-store.ts';
 import { finishRoutes, finishStatuses } from './finish-routes.ts';
@@ -474,6 +474,15 @@ export async function startServer({
     activity: () => store.projectActivity(),
     onQueue: (items) => offlineView.receive(items),
     onAgendaEdits: (edits) => offlineView.applyEdits(edits),
+    // The site named this PC's account id: 할 일 recorded by the name alone get it (SPEC-01.14 12).
+    onAccountId: (account) => {
+      for (const project of store.listProjects())
+        try {
+          agenda.fillAccountId(project.id, account);
+        } catch {
+          /* A project that cannot be opened now is filled on a later sign-in. */
+        }
+    },
     afterHeartbeat: () => {
       void offlineView.tick().catch(() => {});
       notesTick();
@@ -509,6 +518,8 @@ export async function startServer({
       };
     },
   });
+  // Every 할 일 write of this engine is stamped with its signed-in VIDE account (SPEC-01.14 12).
+  setAgendaActor(store, () => remoteAccess.account());
   // External domain services (ADR-040, SPEC-13.11): settings, the sealed token and the connector.
   const serviceDirectory = filename === ':memory:' ? undefined : dirname(filename);
   const serviceSettings = new ServiceSettings({

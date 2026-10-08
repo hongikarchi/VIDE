@@ -192,6 +192,10 @@ try {
   });
   await pc.link('alice', alice.password, 'Studio PC', origin);
   assert.ok(pc.hostId, 'PC signed in');
+  // The login names the account (SPEC-05.10): its id and ID, kept on the PC; no email.
+  const aliceId = (await pc.status()).userId;
+  assert.match(aliceId ?? '', /\S/);
+  assert.deepEqual(pc.account(), { id: aliceId, name: 'alice' });
   await pc.pushProject(project);
 
   // A Sync of a linked file with a mesh at survey coordinates, a line, a hatch loop and a label.
@@ -489,11 +493,12 @@ try {
     data: { text: '현장 사진 정리', date: '2026-10-08' },
   });
   assert.equal(added.status, 201);
+  // Another member changes the waiting add: the author stays alice, mallory is the editor.
   assert.equal(
     (
       await api(`/agenda/${added.value.id}`, {
         method: 'PATCH',
-        cookie: alice.cookie,
+        cookie: mallory.cookie,
         data: { text: '현장 사진 정리·업로드' },
       })
     ).status,
@@ -548,8 +553,25 @@ try {
       ['현장 사진 정리·업로드', false, '2026-10-08', null, true],
     ],
   );
+  // Authors (SPEC-04.10 2): the waiting add is alice's and mallory changed it; the PC's item has
+  // no recorded author and alice's waiting change makes her its editor.
+  assert.deepEqual(
+    view.items.map((item) => [item.createdBy?.name ?? null, item.updatedBy?.name ?? null]),
+    [
+      [null, 'alice'],
+      ['alice', 'mallory'],
+    ],
+  );
   // The PC comes back: the edits arrive with the heartbeat, folded, and are confirmed.
   await pc.heartbeat();
+  assert.deepEqual(
+    siteEdits.map((edit) => [edit.op, edit.user?.name, edit.editor?.name ?? null]),
+    [
+      ['add', 'alice', 'mallory'],
+      ['set', 'alice', null],
+    ],
+  );
+  assert.ok(siteEdits.every((edit) => edit.user.id && !JSON.stringify(edit).includes('@')));
   assert.deepEqual(
     siteEdits.map((edit) => [edit.op, edit.itemId === 'item-1', edit.fields, edit.baseRevision]),
     [
@@ -570,12 +592,25 @@ try {
         date: '2026-10-08',
         order: 2,
         revision: 1,
+        // The PC keeps the accounts as recorded; the site shows the account's current ID.
+        createdBy: { id: aliceId, name: 'alice-old' },
+        updatedBy: { id: null, name: 'mallory' },
       },
     ]),
     undefined,
   );
   view = (await api('/agenda', { cookie: alice.cookie })).value;
   assert.equal(view.pending, 0);
+  assert.deepEqual(
+    view.items.map((item) => [item.createdBy, item.updatedBy]),
+    [
+      [null, null],
+      [
+        { id: aliceId, name: 'alice' },
+        { id: null, name: 'mallory' },
+      ],
+    ],
+  );
   assert.deepEqual(
     view.items.map((item) => [item.id, item.done, item.pending]),
     [

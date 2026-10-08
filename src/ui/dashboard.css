@@ -267,6 +267,23 @@ button.dash-tile:hover {
   background: var(--bg-hover);
   color: var(--text-1);
 }
+/* The author's circle at the row's end (SPEC-01.14 12, SCR-34); empty when none is recorded. */
+.dash-agenda-author {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+/* '작성 kim · 고침 lee' under the 일정 form and the in-place edit. */
+.dash-agenda-byline {
+  display: flex;
+  flex-basis: 100%;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-3);
+}
 .dash-agenda-edit {
   flex: 1;
   min-width: 0;

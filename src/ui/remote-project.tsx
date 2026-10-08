@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { api } from './gateway.ts';
 import { Markdown } from './kit/markdown.tsx';
 import { SharedHistory } from './shared-history.tsx';
+import { Avatar } from './shell/avatar.tsx';
+import { authorLine } from '../contracts/account-avatar.ts';
 import './remote-project.css';
 
 // A shared project opened on this PC as a remote project (SPEC-04.11 3, Design SCR-24): the
@@ -48,6 +50,17 @@ const agendaSchema = z.object({
         date: z.string().nullable(),
         done: z.boolean(),
         pending: z.boolean().optional(),
+        // The author and last editor (SPEC-01.14 12); none from an older site or earlier items.
+        createdBy: z
+          .object({ id: z.string().nullable(), name: z.string() })
+          .nullable()
+          .optional()
+          .catch(null),
+        updatedBy: z
+          .object({ id: z.string().nullable(), name: z.string() })
+          .nullable()
+          .optional()
+          .catch(null),
       })
       .passthrough(),
   ),
@@ -265,6 +278,17 @@ function RemoteProject({
                       <span>{item.done ? '☑' : '☐'}</span> {item.text}
                       {item.date ? <small> · {item.date}</small> : null}
                       {item.pending ? <small> · PC 반영 대기</small> : null}
+                      {item.createdBy ? (
+                        <>
+                          {' '}
+                          <Avatar
+                            name={item.createdBy.name}
+                            id={item.createdBy.id}
+                            size={16}
+                            title={authorLine(item.createdBy, item.updatedBy)}
+                          />
+                        </>
+                      ) : null}
                     </li>
                   ))}
                 </ul>

@@ -24,8 +24,12 @@ const deviceSchema = z.object({
   secret: z.string().regex(/^[a-f0-9]{64}$/),
   name: z.string().min(1).max(80),
   username: z.string().max(254).optional(),
+  /** The site account id (Better Auth `user.id`), from the login or a heartbeat (SPEC-05.10). */
+  userId: z.string().max(200).optional(),
   remote: z.boolean().default(false),
 });
+/** The account the site names in the login and heartbeat replies (ARCH-01 §8, site 0015). */
+const siteAccountSchema = z.object({ id: z.string().min(1).max(200), username: z.string() });
 type Device = z.infer<typeof deviceSchema>;
 const tokenSchema = z.object({
   h: z.string(),
@@ -71,6 +75,20 @@ const agendaEditSchema = z.object({
     .strip(),
   baseRevision: z.number().int().nullable(),
   editedAt: z.number().int(),
+  /**
+   * The site account that made the edit, and for an add changed since by another member, the one
+   * that changed it last (SPEC-04.10 2). An older site sends neither.
+   */
+  user: z
+    .object({ id: z.string().nullable(), name: z.string().min(1).max(254) })
+    .nullable()
+    .optional()
+    .catch(undefined),
+  editor: z
+    .object({ id: z.string().nullable(), name: z.string().min(1).max(254) })
+    .nullable()
+    .optional()
+    .catch(undefined),
 });
 export type AgendaEdit = z.infer<typeof agendaEditSchema>;
 export type AgendaEditResult = {
@@ -83,6 +101,8 @@ const failure = (code: string) => new DomainError(code);
 export interface RemoteStatus {
   linked: boolean;
   username?: string;
+  /** The site account id once the site has named it (SPEC-05.10). */
+  userId?: string;
   name?: string;
   site?: string;
   remote: boolean;
@@ -111,6 +131,11 @@ interface Options {
   onAgendaEdits?: (edits: AgendaEdit[]) => Promise<AgendaEditResult[]>;
   /** Runs after each successful heartbeat (offline view uploads). */
   afterHeartbeat?: () => void;
+  /**
+   * The site named this PC's account id for the first time: items recorded by the name alone get
+   * the id (SPEC-01.14 12).
+   */
+  onAccountId?: (account: { id: string; name: string }) => void;
   executable?: string;
   /** Fetches cloudflared to the given path (default: the official release, `cloudflared.ts`). */
   download?: (target: string) => Promise<unknown>;
@@ -200,6 +225,7 @@ export class RemoteAccess {
     return {
       linked: !!this.device,
       username: this.device?.username,
+      userId: this.device?.userId,
       name: this.device?.name,
       site: this.device?.workerOrigin,
       remote: !!this.device?.remote,
@@ -211,6 +237,30 @@ export class RemoteAccess {
       // A tunnel or tool error is not shown while remote access is off.
       error: !this.device?.remote && tunnelError(this.error) ? undefined : this.error,
     };
+  }
+  /**
+   * The VIDE account this PC is signed in to, for the 할 일 author (SPEC-01.14 12): the name kept
+   * on this PC even while the site cannot be reached, with the account id once known. Null when
+   * signed in to no account (or not yet loaded); never a Windows user name.
+   */
+  account(): { id: string | null; name: string } | null {
+    const device = this.device;
+    if (!device?.username) return null;
+    return { id: device.userId ?? null, name: device.username };
+  }
+  /** Keeps the account id the site named, once; a different account's id is not taken. */
+  private async learnAccount(value: unknown) {
+    const account = siteAccountSchema.safeParse(value);
+    const device = this.device;
+    if (!account.success || !device || device.userId === account.data.id) return;
+    const same = (name: string) => name.trim().toLowerCase();
+    if (device.username && same(device.username) !== same(account.data.username)) return;
+    await this.save({ ...device, userId: account.data.id, username: account.data.username });
+    try {
+      this.options.onAccountId?.({ id: account.data.id, name: account.data.username });
+    } catch {
+      /* Filling the id is best effort; the next start does it again. */
+    }
   }
   /** Sign this PC in to the account; the password is used once and never stored. */
   async link(
@@ -234,15 +284,27 @@ export class RemoteAccess {
     }
     if (!response.ok)
       throw failure(response.status === 401 ? 'INVALID_LOGIN' : 'ACCOUNT_LINK_FAILED');
-    const reply = z
-      .object({ hostId: z.string().uuid(), secret: z.string().regex(/^[a-f0-9]{64}$/) })
+    const { account, ...reply } = z
+      .object({
+        hostId: z.string().uuid(),
+        secret: z.string().regex(/^[a-f0-9]{64}$/),
+        account: siteAccountSchema.optional().catch(undefined),
+      })
       .parse(await response.json());
     if (this.device) await this.unlink();
     this.closed = false;
     // Signing in does not turn on remote access (ADR-039 3): the user turns it on in Settings.
     await this.save(
-      deviceSchema.parse({ workerOrigin: origin, name, username, remote: false, ...reply }),
+      deviceSchema.parse({
+        workerOrigin: origin,
+        name,
+        username: account?.username ?? username,
+        ...(account ? { userId: account.id } : {}),
+        remote: false,
+        ...reply,
+      }),
     );
+    if (account) this.options.onAccountId?.({ id: account.id, name: account.username });
     // Existing local projects join the account list with their ids.
     for (const project of this.options.projects?.() ?? []) await this.pushProject(project);
     this.beat();
@@ -465,6 +527,7 @@ export class RemoteAccess {
         .passthrough()
         .parse(await response.json());
       this.lastHeartbeat = new Date().toISOString();
+      await this.learnAccount(reply.account);
       if (this.error?.startsWith('HEARTBEAT') || this.error === 'ACCOUNT_UNLINKED')
         this.error = undefined;
       if (!offline) {

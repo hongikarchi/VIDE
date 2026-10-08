@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { z } from 'zod';
 import { Markdown } from '../../ui/kit/markdown';
+import { Avatar } from '../../ui/shell/avatar';
+import { authorLine } from '../../contracts/account-avatar';
 import { ApiError, api, message } from './api';
 
 // PLAN-33: the project's 할 일 (read and written here; the PC applies the changes when it is on)
@@ -8,6 +10,12 @@ import { ApiError, api, message } from './api';
 // the kinds 할 일·협의·접수·마감 (협의 has no done check), the period, 위치 and 참석자 are shown; a
 // kind this page does not know shows as a 할 일 instead of failing the whole list.
 const KINDS = ['task', 'meeting', 'receipt', 'deadline'] as const;
+/** An item's author or last editor (SPEC-01.14 12); an older site sends none. */
+const actorSchema = z
+  .object({ id: z.string().nullable(), name: z.string() })
+  .nullable()
+  .catch(null)
+  .default(null);
 const agendaSchema = z.object({
   sharedAt: z.number().nullable(),
   pending: z.number(),
@@ -25,6 +33,8 @@ const agendaSchema = z.object({
       done: z.boolean(),
       revision: z.number(),
       pending: z.boolean(),
+      createdBy: actorSchema,
+      updatedBy: actorSchema,
     }),
   ),
 });
@@ -181,6 +191,7 @@ export function OfflineAgenda({ projectId }: { projectId: string }) {
             )}
             {editing === item.id ? (
               <input
+                title={authorLine(item.createdBy, item.updatedBy)}
                 autoFocus
                 aria-label="할 일 내용"
                 defaultValue={item.text}
@@ -227,6 +238,17 @@ export function OfflineAgenda({ projectId }: { projectId: string }) {
               </small>
             ) : null}
             {item.pending ? <small className="offline-pending">PC 반영 대기</small> : null}
+            {editing === item.id ? (
+              <small className="muted">{authorLine(item.createdBy, item.updatedBy)}</small>
+            ) : null}
+            {item.createdBy ? (
+              <Avatar
+                name={item.createdBy.name}
+                id={item.createdBy.id}
+                size={16}
+                title={authorLine(item.createdBy, item.updatedBy)}
+              />
+            ) : null}
             <button
               className="ghost"
               aria-label={`${item.text} 삭제`}

@@ -26,6 +26,14 @@ export const AGENDA_ATTENDEES_MAX = 300;
 const location = z.string().max(AGENDA_LOCATION_MAX);
 const attendees = z.string().max(AGENDA_ATTENDEES_MAX);
 
+/**
+ * A VIDE (site) account on an item (SPEC-01.14 12, schema 17): `id` is the site account id (null
+ * while only the name is known on this PC), `name` the account name when it wrote. Never an AI
+ * subscription account and never PC information.
+ */
+export const agendaActorSchema = z.object({ id: z.string().nullable(), name: z.string() });
+export type AgendaActor = z.infer<typeof agendaActorSchema>;
+
 const text = z
   .string()
   .max(AGENDA_TEXT_MAX)
@@ -51,6 +59,9 @@ export const agendaItemSchema = z.object({
   revision: z.number().int().positive(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /** Who made it and who last changed its content (SPEC-01.14 12); null: not recorded. */
+  createdBy: agendaActorSchema.nullable().default(null),
+  updatedBy: agendaActorSchema.nullable().default(null),
 });
 export type AgendaItem = z.infer<typeof agendaItemSchema>;
 

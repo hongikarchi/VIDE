@@ -25,6 +25,8 @@ import {
 } from 'react';
 import { api } from './gateway.ts';
 import type { AgendaItem, DayLogEntry } from '../contracts/agenda.ts';
+import { authorLine } from '../contracts/account-avatar.ts';
+import { Avatar } from './shell/avatar.tsx';
 import {
   AGENDA_CHANGED,
   KIND_LABELS,
@@ -362,6 +364,7 @@ export function AgendaBoard({
         {editing ? (
           <AgendaForm
             variant="row"
+            author={entry}
             fields={edit.fields}
             busy={busy}
             submitLabel="저장"
@@ -436,6 +439,19 @@ export function AgendaBoard({
             </button>
           </span>
         )}
+        {editing ? null : (
+          // The author's circle (SPEC-01.14 12); an item with none keeps the place empty.
+          <span className="dash-agenda-author">
+            {entry.createdBy ? (
+              <Avatar
+                name={entry.createdBy.name}
+                id={entry.createdBy.id}
+                size={16}
+                title={authorLine(entry.createdBy, entry.updatedBy)}
+              />
+            ) : null}
+          </span>
+        )}
       </li>
     );
   };
@@ -505,6 +521,7 @@ export function AgendaBoard({
             <AgendaForm
               key={`item:${edit.id}`}
               variant="popover"
+              author={items?.find((item) => item.id === edit.id)}
               fields={edit.fields}
               busy={busy}
               submitLabel="저장"

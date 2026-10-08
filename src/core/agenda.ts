@@ -6,6 +6,7 @@ import {
   agendaUpdateSchema,
   dayLogEntrySchema,
   dayLogQuerySchema,
+  type AgendaActor,
   type AgendaChange,
   type AgendaItem,
   type DayLogDone,
@@ -77,7 +78,14 @@ const decode = (row: Record<string, unknown>): AgendaItem =>
     revision: row.revision,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    createdBy: actorOf(row.createdBy, row.createdByName),
+    updatedBy: actorOf(row.updatedBy, row.updatedByName),
   });
+/** A recorded account; nothing when neither the id nor the name was kept (earlier items). */
+function actorOf(id: unknown, name: unknown): AgendaActor | null {
+  if (typeof name === 'string' && name) return { id: typeof id === 'string' ? id : null, name };
+  return null;
+}
 const decodeLog = (row: Record<string, unknown>): DayLogEntry =>
   dayLogEntrySchema.parse({ ...row, body: JSON.parse(String(row.body)) });
 /** The one line a day-end entry reads as: '2026-10-06 · 완료 3 · 도면 정리, 회의록 검토'. */
@@ -93,12 +101,57 @@ function parsed<T>(
   return result.data as T;
 }
 
+const actorColumns = (actor: AgendaActor | null) =>
+  [actor?.id ?? null, actor?.name || null] as const;
+/**
+ * A change by a known account makes it the editor; with none (an engine signed in to no account)
+ * the editor recorded before stays, since nobody is better known (SPEC-01.14 12).
+ */
+const EDITOR =
+  'updatedBy=CASE WHEN ? IS NULL THEN updatedBy ELSE ? END,updatedByName=coalesce(?,updatedByName)';
+const editorColumns = (actor: AgendaActor | null) => {
+  const name = actor?.name || null;
+  return [name, actor?.id ?? null, name] as const;
+};
+
+/**
+ * Who this engine writes as (SPEC-01.14 12): the server registers the signed-in VIDE account once
+ * per store, so every `Agenda` over it (routes, the AI's tools, notes, the 자료 후보) stamps the
+ * same account. Never taken from a request body.
+ */
+const actors = new WeakMap<Store, () => AgendaActor | null>();
+export function setAgendaActor(store: Store, actor: () => AgendaActor | null) {
+  actors.set(store, actor);
+}
+
 export class Agenda {
   private readonly store: Store;
   private readonly now: () => Date;
   constructor(store: Store, { now = () => new Date() }: { now?: () => Date } = {}) {
     this.store = store;
     this.now = now;
+  }
+  /** The given account, or (undefined) the one this engine is signed in to. */
+  private actor(given: AgendaActor | null | undefined): AgendaActor | null {
+    if (given !== undefined) return given;
+    try {
+      return actors.get(this.store)?.() ?? null;
+    } catch {
+      return null;
+    }
+  }
+  /**
+   * The site named the account id of `name`: items this PC recorded by the name alone get it
+   * (SPEC-01.14 12). Items with neither (earlier ones) are left alone.
+   */
+  fillAccountId(projectId: string, account: { id: string; name: string }) {
+    const db = this.store.db(projectId);
+    db.prepare(
+      'UPDATE agenda_items SET createdBy=? WHERE projectId=? AND createdBy IS NULL AND lower(trim(createdByName))=lower(trim(?))',
+    ).run(account.id, projectId, account.name);
+    db.prepare(
+      'UPDATE agenda_items SET updatedBy=? WHERE projectId=? AND updatedBy IS NULL AND lower(trim(updatedByName))=lower(trim(?))',
+    ).run(account.id, projectId, account.name);
   }
   /** Every item of the project in the user's order (open and done). */
   list(projectId: string): AgendaItem[] {
@@ -118,9 +171,20 @@ export class Agenda {
     if (!row) throw new DomainError('NOT_FOUND');
     return decode(row as Record<string, unknown>);
   }
-  /** Adds at the end of the order. A time without a date is today's. */
-  add(projectId: string, value: unknown, source: 'user' | 'ai' = 'user'): AgendaItem {
+  /**
+   * Adds at the end of the order. A time without a date is today's. `actor` (SPEC-01.14 12) is the
+   * site account an edit came from, null none; left out, the account this engine is signed in to.
+   */
+  add(
+    projectId: string,
+    value: unknown,
+    source: 'user' | 'ai' = 'user',
+    given?: AgendaActor | null,
+    /** The last editor when it is not the author (a site add another member changed). */
+    editor?: AgendaActor | null,
+  ): AgendaItem {
     const input = parsed(agendaCreateSchema, value);
+    const actor = this.actor(given);
     this.store.project(projectId);
     return this.store.tx(this.store.db(projectId), () => {
       const count = this.store
@@ -142,7 +206,7 @@ export class Agenda {
       this.store
         .db(projectId)
         .prepare(
-          'INSERT INTO agenda_items(id,projectId,text,date,time,doneAt,ord,source,revision,createdAt,updatedAt,kind,endDate,endTime,location,attendees) VALUES(?,?,?,?,?,NULL,?,?,1,?,?,?,?,?,?,?)',
+          'INSERT INTO agenda_items(id,projectId,text,date,time,doneAt,ord,source,revision,createdAt,updatedAt,kind,endDate,endTime,location,attendees,createdBy,createdByName,updatedBy,updatedByName) VALUES(?,?,?,?,?,NULL,?,?,1,?,?,?,?,?,?,?,?,?,?,?)',
         )
         .run(
           id,
@@ -159,6 +223,8 @@ export class Agenda {
           span.endTime,
           freeText(input.location),
           freeText(input.attendees),
+          ...actorColumns(actor),
+          ...actorColumns(editor === undefined ? actor : editor),
         );
       return this.get(projectId, id);
     });
@@ -168,8 +234,9 @@ export class Agenda {
    * times and the end day. A new start day alone moves the end day with it (the period is kept), a
    * new start time alone moves the end time with it (cleared when it would pass midnight).
    */
-  set(projectId: string, id: string, value: unknown): AgendaItem {
+  set(projectId: string, id: string, value: unknown, given?: AgendaActor | null): AgendaItem {
     const input = parsed(agendaUpdateSchema, value);
+    const actor = this.actor(given);
     return this.store.tx(this.store.db(projectId), () => {
       const before = this.get(projectId, id);
       if (input.revision !== before.revision) throw new DomainError('REVISION_CONFLICT');
@@ -190,7 +257,7 @@ export class Agenda {
       this.store
         .db(projectId)
         .prepare(
-          'UPDATE agenda_items SET text=?,date=?,time=?,endDate=?,endTime=?,kind=?,location=?,attendees=?,doneAt=?,revision=revision+1,updatedAt=? WHERE projectId=? AND id=?',
+          `UPDATE agenda_items SET text=?,date=?,time=?,endDate=?,endTime=?,kind=?,location=?,attendees=?,doneAt=?,revision=revision+1,updatedAt=?,${EDITOR} WHERE projectId=? AND id=?`,
         )
         .run(
           input.text?.trim() ?? before.text,
@@ -203,6 +270,7 @@ export class Agenda {
           input.attendees === undefined ? before.attendees : freeText(input.attendees),
           doneAt,
           at,
+          ...editorColumns(actor),
           projectId,
           id,
         );
@@ -253,8 +321,9 @@ export class Agenda {
    * taken back on counts as being at the revision before that change (an add then a set of one
    * item, in one turn, both go back).
    */
-  revert(projectId: string, changes: readonly AgendaChange[]) {
+  revert(projectId: string, changes: readonly AgendaChange[], given?: AgendaActor | null) {
     this.store.project(projectId);
+    const actor = this.actor(given);
     return this.store.tx(this.store.db(projectId), () => {
       let reverted = 0,
         skipped = 0;
@@ -285,7 +354,7 @@ export class Agenda {
             .prepare(
               `UPDATE agenda_items SET text=?,date=?,time=?,kind=coalesce(?,kind),doneAt=?,${later
                 .map((key) => `${key}=?,`)
-                .join('')}revision=revision+1,updatedAt=? WHERE projectId=? AND id=?`,
+                .join('')}revision=revision+1,updatedAt=?,${EDITOR} WHERE projectId=? AND id=?`,
             )
             .run(
               text,
@@ -295,6 +364,7 @@ export class Agenda {
               doneAt,
               ...later.map((key) => change.before[key] ?? null),
               this.now().toISOString(),
+              ...editorColumns(actor),
               projectId,
               change.id,
             );

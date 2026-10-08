@@ -101,6 +101,26 @@ export function agendaFields(input: Record<string, unknown>, add: boolean): Agen
   return fields;
 }
 
+/** A VIDE account on a 할 일 (SPEC-01.14 12): its id (null: known by name only) and its ID. */
+export interface AgendaActor {
+  id: string | null;
+  name: string;
+}
+const ACTOR_NAME_MAX = 254;
+/** An account the PC sent with its list, taken leniently (anything else is none). */
+const actorOf = (value: unknown): AgendaActor | null => {
+  if (!value || typeof value !== 'object') return null;
+  const { id, name } = value as Record<string, unknown>;
+  if (typeof name !== 'string' || !name.trim()) return null;
+  return {
+    id: typeof id === 'string' && id && id.length <= 200 ? id : null,
+    name: name.trim().slice(0, ACTOR_NAME_MAX),
+  };
+};
+/** The stored account with the account's current ID when the site knows it. */
+const storedActor = (id: string | null, stored: string | null, current: string | null) =>
+  current ? { id, name: current } : stored ? { id, name: stored } : null;
+
 /** One 할 일 as the site shows it: the PC's copy with the site's waiting edits laid over it. */
 export interface AgendaView {
   id: string;
@@ -119,6 +139,9 @@ export interface AgendaView {
   updatedAt: string;
   /** A site edit the PC has not applied yet. */
   pending: boolean;
+  /** Who made it and who changed it last (SPEC-04.10 2); null: not recorded (earlier items). */
+  createdBy: AgendaActor | null;
+  updatedBy: AgendaActor | null;
 }
 export interface PendingEdit {
   id: string;
@@ -127,6 +150,10 @@ export interface PendingEdit {
   fields: AgendaFields;
   baseRevision: number | null;
   editedAt: number;
+  /** The account that made the edit (for an add, the author). */
+  user: AgendaActor | null;
+  /** An add changed by another member before the PC took it: the one that changed it last. */
+  editor: AgendaActor | null;
 }
 
 /** Applies the waiting edits, oldest first, to the PC's copy (what the site shows). */
@@ -156,10 +183,14 @@ export function agendaView(mirror: AgendaView[], edits: PendingEdit[]): AgendaVi
         revision: 0,
         updatedAt: at,
         pending: true,
+        createdBy: edit.user,
+        updatedBy: edit.editor ?? edit.user,
       };
       items.push(item);
     }
     if (!item) continue;
+    // A waiting change shows the account that made it (SPEC-04.10 2).
+    if (edit.op === 'set' && edit.user) item.updatedBy = edit.user;
     const { text, date, time, endDate, endTime, kind, location, attendees, done } = edit.fields;
     if (text !== undefined) item.text = text;
     if (date !== undefined) {
@@ -201,6 +232,12 @@ interface MirrorRow {
   ord: number;
   revision: number;
   updated_at: string;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  updated_by?: string | null;
+  updated_by_name?: string | null;
+  created_by_now?: string | null;
+  updated_by_now?: string | null;
 }
 interface EditRow {
   id: string;
@@ -209,6 +246,10 @@ interface EditRow {
   fields: string;
   base_revision: number | null;
   edited_at: number;
+  user_id?: string | null;
+  user_name?: string | null;
+  editor_id?: string | null;
+  editor_name?: string | null;
 }
 const pendingOf = (row: EditRow): PendingEdit => ({
   id: row.id,
@@ -217,7 +258,13 @@ const pendingOf = (row: EditRow): PendingEdit => ({
   fields: JSON.parse(row.fields) as AgendaFields,
   baseRevision: row.base_revision,
   editedAt: row.edited_at,
+  user: row.user_id && row.user_name ? { id: row.user_id, name: row.user_name } : null,
+  editor: row.editor_id && row.editor_name ? { id: row.editor_id, name: row.editor_name } : null,
 });
+/** A waiting edit's columns with its accounts' current IDs. */
+const EDIT_COLUMNS = `e.id,e.item_id,e.op,e.fields,e.base_revision,e.edited_at,e.user_id,e.editor_id,
+  u.name AS user_name,ed.name AS editor_name`;
+const EDIT_JOINS = 'LEFT JOIN user u ON u.id=e.user_id LEFT JOIN user ed ON ed.id=e.editor_id';
 
 async function summaryState(db: D1Database, project: string) {
   return db
@@ -229,7 +276,11 @@ async function summaryState(db: D1Database, project: string) {
 }
 async function mirror(db: D1Database, project: string): Promise<AgendaView[]> {
   const rows = await db
-    .prepare('SELECT * FROM project_agenda WHERE project_id=? ORDER BY ord,item_id')
+    .prepare(
+      `SELECT a.*, cu.name AS created_by_now, uu.name AS updated_by_now FROM project_agenda a
+       LEFT JOIN user cu ON cu.id=a.created_by LEFT JOIN user uu ON uu.id=a.updated_by
+       WHERE a.project_id=? ORDER BY a.ord,a.item_id`,
+    )
     .bind(project)
     .all<MirrorRow>();
   return rows.results.map((row) => ({
@@ -247,12 +298,23 @@ async function mirror(db: D1Database, project: string): Promise<AgendaView[]> {
     revision: row.revision,
     updatedAt: row.updated_at,
     pending: false,
+    createdBy: storedActor(
+      row.created_by ?? null,
+      row.created_by_name ?? null,
+      row.created_by_now ?? null,
+    ),
+    updatedBy: storedActor(
+      row.updated_by ?? null,
+      row.updated_by_name ?? null,
+      row.updated_by_now ?? null,
+    ),
   }));
 }
 async function pending(db: D1Database, project: string) {
   const rows = await db
     .prepare(
-      'SELECT id,item_id,op,fields,base_revision,edited_at FROM agenda_edits WHERE project_id=? AND applied_at IS NULL ORDER BY edited_at',
+      `SELECT ${EDIT_COLUMNS} FROM agenda_edits e ${EDIT_JOINS}
+       WHERE e.project_id=? AND e.applied_at IS NULL ORDER BY e.edited_at`,
     )
     .bind(project)
     .all<EditRow>();
@@ -333,7 +395,7 @@ export async function summaryRoute(
   // At most one waiting edit per item: a later one on the same item folds into it.
   const waiting = await db
     .prepare(
-      'SELECT id,item_id,op,fields,base_revision,edited_at FROM agenda_edits WHERE project_id=? AND item_id=? AND applied_at IS NULL',
+      'SELECT id,item_id,op,fields,base_revision,edited_at,user_id FROM agenda_edits WHERE project_id=? AND item_id=? AND applied_at IS NULL',
     )
     .bind(project, target)
     .first<EditRow>();
@@ -349,11 +411,22 @@ export async function summaryRoute(
       request.method === 'DELETE'
         ? { op: 'remove' as const, fields: {} }
         : { op: edit.op, fields: { ...edit.fields, ...fields } };
+    // A waiting add keeps its author and records the last editor; a waiting change belongs to the
+    // member who changed it last (SPEC-04.10 2).
+    const [author, editor] =
+      merged.op === 'add' ? [waiting.user_id ?? actor.id, actor.id] : [actor.id, null];
     await db
       .prepare(
-        'UPDATE agenda_edits SET op=?,fields=?,edited_at=? WHERE id=? AND applied_at IS NULL',
+        'UPDATE agenda_edits SET op=?,fields=?,edited_at=?,user_id=?,editor_id=? WHERE id=? AND applied_at IS NULL',
       )
-      .bind(merged.op, JSON.stringify(merged.fields), Math.max(now, edit.editedAt + 1), edit.id)
+      .bind(
+        merged.op,
+        JSON.stringify(merged.fields),
+        Math.max(now, edit.editedAt + 1),
+        author,
+        editor,
+        edit.id,
+      )
       .run();
     return json({ id: target, pending: true });
   }
@@ -394,14 +467,18 @@ export async function summaryRoute(
 export async function pendingAgendaEdits(db: D1Database, row: HostRow) {
   const rows = await db
     .prepare(
-      `SELECT e.id,e.project_id,e.item_id,e.op,e.fields,e.base_revision,e.edited_at FROM agenda_edits e
-       JOIN projects p ON p.id=e.project_id
+      `SELECT ${EDIT_COLUMNS},e.project_id FROM agenda_edits e
+       JOIN projects p ON p.id=e.project_id ${EDIT_JOINS}
        WHERE p.host_id=? AND p.created_by=? AND e.applied_at IS NULL
        ORDER BY e.edited_at LIMIT 100`,
     )
     .bind(row.id, row.user_id)
     .all<EditRow & { project_id: string }>();
-  return rows.results.map((r) => ({ ...pendingOf(r), projectId: r.project_id }));
+  // Each edit names its author (and an add's last editor) for the PC to record (SPEC-01.14 12).
+  return rows.results.map((r) => {
+    const { user, editor, ...edit } = pendingOf(r);
+    return { ...edit, projectId: r.project_id, user, ...(editor ? { editor } : {}) };
+  });
 }
 
 const ownedByHost = async (db: D1Database, row: HostRow, id: string) => {
@@ -514,6 +591,9 @@ export async function summaryDeviceRoute(
         order: item.order as number,
         revision: item.revision as number,
         updatedAt: shortText(item.updatedAt, 40),
+        // Kept as the PC sent them; anything else is none (SPEC-01.14 12).
+        createdBy: actorOf(item.createdBy),
+        updatedBy: actorOf(item.updatedBy),
       };
     });
     await db.batch([
@@ -521,7 +601,7 @@ export async function summaryDeviceRoute(
       ...list.map((item) =>
         db
           .prepare(
-            'INSERT INTO project_agenda(project_id,item_id,text,date,time,kind,done_at,ord,revision,updated_at,end_date,end_time,location,attendees) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            'INSERT INTO project_agenda(project_id,item_id,text,date,time,kind,done_at,ord,revision,updated_at,end_date,end_time,location,attendees,created_by,created_by_name,updated_by,updated_by_name) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
           )
           .bind(
             project,
@@ -538,6 +618,10 @@ export async function summaryDeviceRoute(
             item.endTime,
             item.location,
             item.attendees,
+            item.createdBy?.id ?? null,
+            item.createdBy?.name ?? null,
+            item.updatedBy?.id ?? null,
+            item.updatedBy?.name ?? null,
           ),
       ),
       upsert('agenda_at'),

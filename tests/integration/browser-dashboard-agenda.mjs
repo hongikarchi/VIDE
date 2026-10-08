@@ -23,6 +23,7 @@ import { chromium } from 'playwright';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { startServer } from '../../src/server/server.ts';
+import { setAgendaActor } from '../../src/core/agenda.ts';
 import { agentConnection } from '../../src/ai/agent-connection.ts';
 
 /** What the extraction turn's AI read from the attached file (the path in its context). */
@@ -309,6 +310,40 @@ try {
   // [빼기] removes one.
   await today.getByRole('button', { name: '현장 사진 분류 빼기' }).click();
   await today.getByText('현장 사진 분류').waitFor({ state: 'detached' });
+  assert.deepEqual(await texts(), ['도면 정리 — 단면도']);
+
+  // 작성자 (SPEC-01.14 12, SCR-34): this engine signed in to no account recorded none, so that row
+  // has no circle and its edit says '작성자 정보 없음'. Signed in as kim, a new row ends with kim's
+  // 'K' circle; changed by lee it reads '작성 kim · 고침 lee', in the row's tooltip and the edit.
+  const author = (text) => today.locator('li', { hasText: text }).locator('.dash-agenda-author');
+  assert.equal(await author('도면 정리 — 단면도').getByRole('img').count(), 0);
+  setAgendaActor(app.store, () => ({ id: 'u-kim', name: 'kim' }));
+  await input.fill('작성자 확인');
+  await input.press('Enter');
+  const kimCircle = author('작성자 확인').getByRole('img', { name: '계정 kim' });
+  await kimCircle.waitFor();
+  assert.equal(await kimCircle.innerText(), 'K');
+  assert.equal(await kimCircle.getAttribute('title'), '작성 kim');
+  setAgendaActor(app.store, () => ({ id: 'u-lee', name: 'lee' }));
+  {
+    const item = (await other('', 'GET')).items.find((entry) => entry.text === '작성자 확인');
+    await other(`/${item.id}`, 'PUT', { revision: item.revision, time: '09:00' });
+  }
+  await page.evaluate(() => dispatchEvent(new Event('focus')));
+  await page.waitForFunction(
+    () =>
+      document.querySelector('.dash-agenda-author [role="img"]')?.getAttribute('title') ===
+      '작성 kim · 고침 lee',
+  );
+  await today.getByRole('button', { name: '작성자 확인', exact: true }).click();
+  await section.locator('.dash-agenda-byline', { hasText: '작성 kim · 고침 lee' }).waitFor();
+  await page.keyboard.press('Escape');
+  await today.getByRole('button', { name: '도면 정리 — 단면도', exact: true }).click();
+  await section.locator('.dash-agenda-byline', { hasText: '작성자 정보 없음' }).waitFor();
+  await page.keyboard.press('Escape');
+  setAgendaActor(app.store, () => null);
+  await today.getByRole('button', { name: '작성자 확인 빼기' }).click();
+  await today.getByText('작성자 확인').waitFor({ state: 'detached' });
   assert.deepEqual(await texts(), ['도면 정리 — 단면도']);
 
   // The edge toggle opens the AI column on the dashboard: the 할 일 도우미 sits on top. Its quick

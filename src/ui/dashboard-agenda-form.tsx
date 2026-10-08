@@ -6,6 +6,8 @@
 import { useState, type FormEvent } from 'react';
 import type { AgendaItem, AgendaKind } from '../contracts/agenda.ts';
 import { KIND_LABELS } from './agenda-text.ts';
+import { authorLine } from '../contracts/account-avatar.ts';
+import { Avatar } from './shell/avatar.tsx';
 
 /** The fields as the form holds them ('' for none). */
 export interface AgendaFields {
@@ -141,8 +143,11 @@ export function AgendaForm({
   onCancel,
   onRemove,
   onClearDate,
+  author,
 }: {
   fields: AgendaFields;
+  /** The item being changed: its author line goes under the fields (SPEC-01.14 12). */
+  author?: Pick<AgendaItem, 'createdBy' | 'updatedBy'>;
   onChange: (fields: AgendaFields) => void;
   /** 'row': in place of a 할 일 row; 'popover': over the calendar. */
   variant: 'row' | 'popover';
@@ -268,6 +273,14 @@ export function AgendaForm({
         maxLength={300}
         onChange={(event) => set({ attendees: event.target.value })}
       />
+      {author ? (
+        <p className="dash-agenda-byline">
+          {author.createdBy ? (
+            <Avatar name={author.createdBy.name} id={author.createdBy.id} size={16} />
+          ) : null}
+          <span>{authorLine(author.createdBy, author.updatedBy)}</span>
+        </p>
+      ) : null}
       {problem ? (
         <p className="dash-folder-reason" role="alert">
           {problem}

@@ -25,12 +25,14 @@ export function agendaShare(store: Store, agenda: Agenda, projectId: string) {
   const row = store
     .db(projectId)
     .prepare(
-      `SELECT count(*) AS n, coalesce(max(updatedAt),'') AS u, total(revision) AS r, total(ord) AS o
+      `SELECT count(*) AS n, coalesce(max(updatedAt),'') AS u, total(revision) AS r, total(ord) AS o,
+       count(createdBy) + count(updatedBy) AS a
        FROM agenda_items WHERE projectId=?`,
     )
-    .get(projectId) as { n: number; u: string; r: number; o: number };
+    .get(projectId) as { n: number; u: string; r: number; o: number; a: number };
   return {
-    key: `${row.n}|${row.u}|${row.r}|${row.o}`,
+    // The account ids count too: filled in later (SPEC-01.14 12), the copy goes up again.
+    key: `${row.n}|${row.u}|${row.r}|${row.o}|${row.a}`,
     items: () => {
       const all = agenda.list(projectId);
       const done = new Set(
@@ -57,6 +59,9 @@ export function agendaShare(store: Store, agenda: Agenda, projectId: string) {
           order: item.order,
           revision: item.revision,
           updatedAt: item.updatedAt,
+          // The author and last editor (SPEC-01.14 12): account id and name only.
+          createdBy: item.createdBy,
+          updatedBy: item.updatedBy,
         }));
     },
   };
@@ -220,12 +225,17 @@ export function applyAgendaEdit(
   madeBy?: string,
 ): { outcome: AgendaEditResult['outcome']; itemId?: string } {
   const { projectId } = edit;
+  // The site account that made the edit (SPEC-04.10 2), never this PC's: an older site that names
+  // nobody records nobody.
+  const user = edit.user ?? null,
+    editor = edit.editor ?? user;
   let item: AgendaItem;
   try {
     if (edit.op === 'add' && !madeBy) {
       const { done, ...create } = fieldsOf(edit.fields);
-      const added = agenda.add(projectId, create, 'user');
-      if (done === true) agenda.set(projectId, added.id, { revision: added.revision, done: true });
+      const added = agenda.add(projectId, create, 'user', user, editor);
+      if (done === true)
+        agenda.set(projectId, added.id, { revision: added.revision, done: true }, editor);
       return { outcome: 'applied', itemId: added.id };
     }
     item = agenda.get(projectId, madeBy ?? edit.itemId);
@@ -248,17 +258,28 @@ export function applyAgendaEdit(
           (fields.text as string | undefined) ?? item.text,
           `사이트 수정 충돌 ${stamp(edit.editedAt)}: PC에서 "${clip(item.text, 60)}"로 고친 뒤 사이트 수정(${describe(edit.fields)})이 더 늦어 반영함`,
         );
-      agenda.set(projectId, item.id, { ...fields, revision: item.revision });
+      // A later version of an add counts its last editor; a set, the account that made it.
+      agenda.set(
+        projectId,
+        item.id,
+        { ...fields, revision: item.revision },
+        madeBy ? editor : user,
+      );
       return { outcome: changedHere ? 'conflict' : 'applied', itemId: madeBy };
     }
     // The change made here is later: it stays, and the item notes what the site wanted.
-    agenda.set(projectId, item.id, {
-      revision: item.revision,
-      text: noted(
-        item.text,
-        `사이트 수정 충돌 ${stamp(edit.editedAt)}: 사이트의 ${describe(edit.fields, edit.op === 'remove')}은 PC 수정보다 먼저라 반영하지 않음`,
-      ),
-    });
+    agenda.set(
+      projectId,
+      item.id,
+      {
+        revision: item.revision,
+        text: noted(
+          item.text,
+          `사이트 수정 충돌 ${stamp(edit.editedAt)}: 사이트의 ${describe(edit.fields, edit.op === 'remove')}은 PC 수정보다 먼저라 반영하지 않음`,
+        ),
+      },
+      null,
+    );
     return { outcome: 'conflict', itemId: madeBy };
   } catch (error) {
     // Invalid fields (a date the PC rejects) leave the item as it is.

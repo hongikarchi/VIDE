@@ -522,7 +522,7 @@ const definitions = {
   // The project's 할 일 (SPEC-01.14): read, and T1 writes recorded in the ledger with an undo.
   agenda_list: {
     description:
-      "List this project's 할 일 (the dashboard's to-do list and calendar). A dated item is on the calendar; no time means all day, endDate a span of days, endTime a time range. kind is task (할 일), meeting (협의: a meeting or consultation, an event with no done check), receipt (접수: a submission or filing) or deadline (마감). location and attendees are free text. Dates are the PC's local 'YYYY-MM-DD', times 'HH:MM'; today is given. Done items only with done:true.",
+      "List this project's 할 일 (the dashboard's to-do list and calendar). A dated item is on the calendar; no time means all day, endDate a span of days, endTime a time range. kind is task (할 일), meeting (협의: a meeting or consultation, an event with no done check), receipt (접수: a submission or filing) or deadline (마감). location and attendees are free text; author is the VIDE account that wrote the item (none for older items). Dates are the PC's local 'YYYY-MM-DD', times 'HH:MM'; today is given. Done items only with done:true.",
     schema: z.object({ targetRef: scoped, done: z.boolean().optional() }).strict(),
   },
   agenda_add: {
@@ -1633,6 +1633,8 @@ const agendaRow = (item: AgendaItem) => ({
   ...(item.attendees ? { attendees: item.attendees } : {}),
   done: item.done,
   ...(item.source === 'ai' ? { by: 'ai' } : {}),
+  // Who wrote it (SPEC-01.14 12): the account name only, so the AI can say whose item it is.
+  ...(item.createdBy ? { author: item.createdBy.name } : {}),
 });
 /**
  * agenda_list, and agenda_add/agenda_set as T1 writes (SPEC-01.14 6, SPEC-02.19 7): applied at once

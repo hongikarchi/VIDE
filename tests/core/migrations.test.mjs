@@ -494,3 +494,49 @@ test('schema 9 adds per-object model tables to a schema 8 database after a backu
   const [backup] = readdirSync(file + '.backups');
   assert.match(backup, /^schema-8-/);
 });
+
+test('schema 17 adds the 할 일 author columns; earlier rows keep none (SPEC-01.14 12)', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'vide-schema16-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const file = join(root, 'vide.sqlite');
+  const db = new DatabaseSync(file);
+  db.exec(
+    'CREATE TABLE schema_version(version INTEGER NOT NULL); INSERT INTO schema_version VALUES(16);' +
+      migrations
+        .filter((step) => step.version <= 16)
+        .map((step) => step.sql)
+        .join('\n'),
+  );
+  db.exec("INSERT INTO projects VALUES('p','existing')");
+  db.prepare(
+    "INSERT INTO agenda_items(id,projectId,text,ord,source,revision,createdAt,updatedAt,kind) VALUES('a1','p','구조 회의',1,'user',2,'t1','t2','meeting')",
+  ).run();
+  db.close();
+  const store = new Store(file);
+  try {
+    assert.equal(
+      store.app.prepare('SELECT version FROM schema_version').get().version,
+      schemaVersion,
+    );
+    assert.deepEqual(
+      {
+        ...store.app
+          .prepare(
+            'SELECT text,revision,createdBy,createdByName,updatedBy,updatedByName FROM agenda_items',
+          )
+          .get(),
+      },
+      {
+        text: '구조 회의',
+        revision: 2,
+        createdBy: null,
+        createdByName: null,
+        updatedBy: null,
+        updatedByName: null,
+      },
+    );
+  } finally {
+    store.close();
+  }
+  assert.match(readdirSync(file + '.backups')[0], /^schema-16-/);
+});
