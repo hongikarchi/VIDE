@@ -278,8 +278,15 @@ export function devReadPaths(jig: LoadedJig): Pick<ChildRunnerOptions, 'extraRea
     join(repo, 'src', 'native', 'structure'),
     join(repo, 'node_modules'),
   ];
-  // Imports resolve to real paths: a junctioned `node_modules` (a worktree sharing the main
-  // checkout's) is read at its target, so the target is allowed too.
+  return { extraReadPaths: withRealPaths(paths) };
+}
+
+/**
+ * Each path and its real path, without duplicates. Imports resolve to real paths: a junctioned
+ * `node_modules` (a worktree sharing the main checkout's) is read at its target, so the target
+ * must be allowed too. A path that does not exist is kept as is.
+ */
+export function withRealPaths(paths: readonly string[]): string[] {
   const real = (p: string) => {
     try {
       return realpathSync.native(p);
@@ -287,7 +294,7 @@ export function devReadPaths(jig: LoadedJig): Pick<ChildRunnerOptions, 'extraRea
       return p;
     }
   };
-  return { extraReadPaths: [...new Set(paths.flatMap((p) => [p, real(p)]))] };
+  return [...new Set(paths.flatMap((p) => [p, real(p)]))];
 }
 
 // --- signing ---------------------------------------------------------------------------------

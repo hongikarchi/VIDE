@@ -9,8 +9,10 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -35,6 +37,7 @@ import {
   signDigest,
   signingKey,
   validateJig,
+  withRealPaths,
 } from '../../src/jigs/runtime/pack.ts';
 import { digestEntries } from '../../src/jigs/runtime/loader.ts';
 import { closeJigRuntime, jigRoutes } from '../../src/server/jig-routes.ts';
@@ -987,4 +990,19 @@ test('prior outputs and apply requests: kept across runs, failures and restarts;
     replaced.map((o) => [o.id, o.fields.n]),
     [['demo:k1', 4]],
   );
+});
+
+test('dev-source read paths also allow the real path of a junctioned folder (worktree node_modules)', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'vide-realpath-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const target = join(dir, 'main-node_modules');
+  mkdirSync(target);
+  const link = join(dir, 'worktree-node_modules');
+  symlinkSync(target, link, 'junction');
+  const missing = join(dir, 'missing');
+  const paths = withRealPaths([link, missing, link]);
+  assert.ok(paths.includes(link));
+  assert.ok(paths.some((p) => p.toLowerCase() === realpathSync.native(target).toLowerCase()));
+  assert.ok(paths.includes(missing));
+  assert.equal(new Set(paths).size, paths.length);
 });
