@@ -2,7 +2,10 @@
 // for the first collection, [자료 업데이트] afterwards — runs only when pressed. While it runs:
 // the stage, n/m and [중단]; then the last collection's time, what was read and what was not.
 // Remote sessions only see the state. A finished run tells the 자료 tab and the proposals card to
-// read again (`vide:knowledge-collected`).
+// read again (`vide:knowledge-collected`). The row never hides itself (2026-10-08 user report "DB 정리도
+// 지금 vide에서는 안 보이는데"): without a project folder it says how to start, and a failed state
+// read shows the reason with [다시 읽기]. The 자료 tab shows the same row while it has no DB
+// (`KnowledgeStart`).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './gateway.ts';
 import { remoteSession } from './remote-panel.ts';
@@ -65,8 +68,24 @@ const when = (iso: string) => {
   return `${at.getMonth() + 1}/${at.getDate()} ${pad(at.getHours())}:${pad(at.getMinutes())}`;
 };
 
-export function KnowledgeCollect({ projectId }: { projectId: string }) {
+const NO_FOLDER = '프로젝트 폴더를 정하면 [자료 정리하기]를 쓸 수 있습니다.';
+
+export function KnowledgeCollect({
+  projectId,
+  hasFolder = true,
+  onNeedFolder,
+  needFolderLabel = '폴더 정하기',
+}: {
+  projectId: string;
+  /** Whether the project has a project folder (only those are collected, SPEC-08.9 1). */
+  hasFolder?: boolean;
+  /** Where to set a folder: the folder picker on the dashboard, the dashboard from the 자료 tab. */
+  onNeedFolder?: () => void;
+  needFolderLabel?: string;
+}) {
   const [state, setState] = useState<CollectState | undefined>();
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const remote = remoteSession();
@@ -86,8 +105,12 @@ export function KnowledgeCollect({ projectId }: { projectId: string }) {
     let live = true;
     const read = () =>
       api(base)
-        .then((value) => live && take(value as CollectState))
-        .catch(() => {});
+        .then((value) => {
+          if (!live) return;
+          setFailed(false);
+          take(value as CollectState);
+        })
+        .catch(() => live && setFailed(true));
     void read();
     const timer = setInterval(() => {
       if (running.current) void read();
@@ -96,7 +119,7 @@ export function KnowledgeCollect({ projectId }: { projectId: string }) {
       live = false;
       clearInterval(timer);
     };
-  }, [base, take]);
+  }, [base, take, attempt]);
 
   const act = async (path: string) => {
     setBusy(true);
@@ -109,7 +132,42 @@ export function KnowledgeCollect({ projectId }: { projectId: string }) {
       setBusy(false);
     }
   };
-  if (!state) return null;
+  if (!hasFolder)
+    return (
+      <div className="dash-collect" role="group" aria-label="자료 정리">
+        <div className="dash-collect-row">
+          <span className="dash-collect-last">{NO_FOLDER}</span>
+          {remote || !onNeedFolder ? null : (
+            <button type="button" onClick={onNeedFolder}>
+              {needFolderLabel}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  if (!state)
+    return (
+      <div className="dash-collect" role="group" aria-label="자료 정리">
+        <div className="dash-collect-row">
+          {failed ? (
+            <>
+              <span className="dash-collect-reason" role="alert">
+                자료 정리 상태를 읽지 못했습니다.
+              </span>
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => setAttempt((n) => n + 1)}
+              >
+                다시 읽기
+              </button>
+            </>
+          ) : (
+            <span className="dash-collect-last">자료 정리 상태를 읽는 중…</span>
+          )}
+        </div>
+      </div>
+    );
   const isRunning = state.state === 'running';
   const unread = Object.entries(state.counts?.unread ?? {})
     .map(([status, n]) => `${UNREAD[status] ?? status} ${n}`)
@@ -151,10 +209,47 @@ export function KnowledgeCollect({ projectId }: { projectId: string }) {
         <p className="dash-collect-counts">다른 드라이브라 뺀 폴더: {state.left.join(', ')}</p>
       ) : null}
       {reason || (state.state === 'failed' && state.error) ? (
-        <p className="dash-folder-reason" role="alert">
+        <p className="dash-collect-reason" role="alert">
           {reason || reasonOf(state.error ?? '')}
         </p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The 자료 tab (and the 자료 jig) without a DB: the same 자료 정리 row, so a collection starts where
+ * the user looks for the DB. Without a project folder its button goes to the dashboard's folders.
+ */
+export function KnowledgeStart({ projectId }: { projectId: string }) {
+  const [hasFolder, setHasFolder] = useState<boolean | undefined>();
+  useEffect(() => {
+    let live = true;
+    api(`/projects/${encodeURIComponent(projectId)}/folders`)
+      .then(
+        (value) =>
+          live &&
+          setHasFolder(
+            ((value as { folders?: { kind: string }[] }).folders ?? []).some(
+              (folder) => folder.kind === 'project',
+            ),
+          ),
+      )
+      // The folders could not be read: the row still shows; a start then says why.
+      .catch(() => live && setHasFolder(true));
+    return () => {
+      live = false;
+    };
+  }, [projectId]);
+  if (hasFolder === undefined) return null;
+  return (
+    <KnowledgeCollect
+      projectId={projectId}
+      hasFolder={hasFolder}
+      needFolderLabel="대시보드에서 폴더 정하기"
+      onNeedFolder={() =>
+        void import('./workspaces.ts').then((tabs) => tabs.setWorkspace('dashboard'))
+      }
+    />
   );
 }

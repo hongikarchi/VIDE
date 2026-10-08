@@ -56,7 +56,7 @@ try {
   if (await more.count()) await more.click();
   const section = board.getByRole('region', { name: '프로젝트 폴더' });
   // No folder, no 도면 관계.
-  await section.getByText('프로젝트 폴더를 정하면').waitFor();
+  await section.getByText('프로젝트 폴더를 정하면 AI가').waitFor();
   assert.equal(await section.getByRole('group', { name: '도면 관계' }).count(), 0);
 
   await section.getByRole('button', { name: '폴더 추가' }).click();

@@ -71,7 +71,15 @@ try {
   );
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
-  await page.locator('.rail [data-workspace-target="dashboard"]').click();
+  // The 자료 tab without a DB offers 자료 정리 right there (2026-10-08 user report); without a
+  // project folder its button goes to the dashboard.
+  await page.locator('.rail [data-workspace-target="data"]').click();
+  await page.getByText('이 프로젝트에는 아직 자료 DB가 없습니다.').waitFor();
+  const empty = page.locator('.facts-empty').getByRole('group', { name: '자료 정리' });
+  await empty.getByText('프로젝트 폴더를 정하면 [자료 정리하기]를 쓸 수 있습니다.').waitFor();
+  assert.equal(await page.getByText('시험판에서는 수집을 앱 밖에서').count(), 0);
+  await empty.getByRole('button', { name: '대시보드에서 폴더 정하기' }).click();
+  await page.waitForFunction(() => document.body.dataset.workspace === 'dashboard');
   const board = page.getByRole('region', { name: '대시보드', exact: true });
   // The folders may sit in a folded line (PLAN-39) or in their own section (PLAN-42 T-192).
   await board.locator('details.dash-more, section[aria-label="프로젝트 폴더"]').first().waitFor({
@@ -80,14 +88,14 @@ try {
   const more = board.locator('details.dash-more:not([open]) > summary');
   if (await more.count()) await more.click();
   const section = board.getByRole('region', { name: '프로젝트 폴더' });
-  // No folder, no button.
-  await section.getByText('프로젝트 폴더를 정하면').waitFor();
+  // No folder: the 자료 정리 row stays and says how to start; [폴더 정하기] opens the path field.
+  const collect = section.getByRole('group', { name: '자료 정리' });
+  await collect.getByText('프로젝트 폴더를 정하면 [자료 정리하기]를 쓸 수 있습니다.').waitFor();
   assert.equal(await section.getByRole('button', { name: '자료 정리하기' }).count(), 0);
 
-  await section.getByRole('button', { name: '폴더 추가' }).click();
+  await collect.getByRole('button', { name: '폴더 정하기' }).click();
   await section.getByRole('textbox', { name: '폴더 경로' }).fill(folder);
   await section.getByRole('button', { name: '추가', exact: true }).click();
-  const collect = section.getByRole('group', { name: '자료 정리' });
   await collect.getByRole('button', { name: '자료 정리하기' }).click();
   await collect
     .getByRole('status')
@@ -128,6 +136,30 @@ try {
   await collect.getByRole('status').waitFor({ state: 'detached', timeout: 20000 });
   await collect.getByText(/진술 3/).waitFor();
   assert.equal(await card.count(), 0);
+
+  // The 자료 tab now reads the DB.
+  await page.locator('.rail [data-workspace-target="data"]').click();
+  await page
+    .getByText(/진술 3개/)
+    .first()
+    .waitFor();
+  assert.equal(await page.locator('.facts-empty').count(), 0);
+
+  // A failed state read does not hide the row: the reason and [다시 읽기].
+  let failing = true;
+  await page.route('**/knowledge/collect', (route) =>
+    failing && route.request().method() === 'GET'
+      ? route.fulfill({ status: 500, json: { code: 'INTERNAL' } })
+      : route.fallback(),
+  );
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
+  await page.locator('.rail [data-workspace-target="dashboard"]').click();
+  const again = board.getByRole('group', { name: '자료 정리' });
+  await again.getByRole('alert').getByText('자료 정리 상태를 읽지 못했습니다.').waitFor();
+  failing = false;
+  await again.getByRole('button', { name: '다시 읽기' }).click();
+  await again.getByRole('button', { name: '자료 업데이트' }).waitFor();
 
   assert.deepEqual(errors, []);
   console.log('knowledge collect browser checks passed');

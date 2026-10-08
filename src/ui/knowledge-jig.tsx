@@ -13,6 +13,7 @@ import {
   type Summary,
   type Verdict,
 } from './facts-api.ts';
+import { KNOWLEDGE_COLLECTED, KnowledgeStart } from './knowledge-collect.tsx';
 import './facts-tab.css';
 
 // Project knowledge views (PLAN-08 K0, PLAN-22 T-065, SCR-19): a status report first (decided,
@@ -584,8 +585,20 @@ export function Report({
 export const countsLine = (summary: AvailableSummary) =>
   `파일 ${summary.counts.files.toLocaleString()}개 · 메일 ${summary.counts.mails}통 · 진술 ${summary.counts.statements.toLocaleString()}개 · 이슈 ${summary.counts.issues}개${summary.builtAt ? ` · 정리 ${summary.builtAt.slice(0, 10)}` : ''}`;
 
-export const NO_DB =
-  '이 프로젝트에는 아직 자료 DB가 없습니다. 시험판에서는 수집을 앱 밖에서 실행합니다(PLAN-08 K0).';
+export const NO_DB = '이 프로젝트에는 아직 자료 DB가 없습니다.';
+
+/**
+ * No DB yet (SPEC-08.1, SPEC-08.9 1): say so and offer the 자료 정리 row right here, so the DB is
+ * made where the user looks for it.
+ */
+export function NoKnowledge({ projectId }: { projectId: string }) {
+  return (
+    <div className="facts-empty">
+      <p className="jig-intro">{NO_DB}</p>
+      <KnowledgeStart projectId={projectId} />
+    </div>
+  );
+}
 
 /** The older JIG-list entry: the same views in the jig dialog. */
 export function KnowledgeJig({ projectId }: { projectId: string }) {
@@ -598,11 +611,20 @@ export function KnowledgeJig({ projectId }: { projectId: string }) {
   const [results, setResults] = useState<Statement[]>();
   const [view, setView] = useState<'report' | 'issues'>('report');
   useEffect(() => {
-    client
-      .summary()
-      .then(setSummary)
-      .catch(() => setError('자료 DB를 읽지 못했습니다.'));
-  }, [client]);
+    const read = (fresh = false) =>
+      client
+        .summary(fresh)
+        .then(setSummary)
+        .catch(() => setError('자료 DB를 읽지 못했습니다.'));
+    void read();
+    // A 자료 정리 started from the empty state finished: read the DB again.
+    const collected = (event: Event) => {
+      if ((event as CustomEvent<{ projectId: string }>).detail?.projectId === projectId)
+        void read(true);
+    };
+    addEventListener(KNOWLEDGE_COLLECTED, collected);
+    return () => removeEventListener(KNOWLEDGE_COLLECTED, collected);
+  }, [client, projectId]);
   const openIssue = async (id: number) => {
     setResults(undefined);
     setView('issues');
@@ -615,7 +637,7 @@ export function KnowledgeJig({ projectId }: { projectId: string }) {
   };
   if (error) return <p className="jig-intro">{error}</p>;
   if (!summary) return <p className="jig-intro">불러오는 중…</p>;
-  if (!summary.available) return <p className="jig-intro">{NO_DB}</p>;
+  if (!summary.available) return <NoKnowledge projectId={projectId} />;
   return (
     <div className="knowledge-jig">
       <p className="jig-intro">{countsLine(summary)}</p>

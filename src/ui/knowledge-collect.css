@@ -23,6 +23,16 @@
 .dash-collect-progress {
   font-variant-numeric: tabular-nums;
 }
+.dash-collect-reason {
+  flex: 1;
+  min-width: 0;
+  margin: 4px 0 0;
+  color: var(--warn);
+}
+.dash-collect-row > .dash-collect-reason {
+  margin: 0;
+  color: var(--warn);
+}
 .dash-collect-counts {
   margin: 4px 0 0;
   color: var(--text-3);

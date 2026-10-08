@@ -2,8 +2,8 @@
 id: PLAN-42
 title: 대시보드 배치 조정·기본 모델 Jev·프로젝트 폴더 자료 정리와 일정 제안 (T-192~T-196)
 status: review
-version: 0.2
-updated: 2026-10-07
+version: 0.3
+updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-01, SPEC-08, SPEC-02, ARCH-01, DESIGN, PLAN-08, PLAN-39, SPIKE-2026-09-29-knowledge-crawl, RESEARCH-06, FR-01, FR-09, FR-16, C-02]
 ---
@@ -83,6 +83,7 @@ related: [SPEC-01, SPEC-08, SPEC-02, ARCH-01, DESIGN, PLAN-08, PLAN-39, SPIKE-20
 |---|---|
 | 프로젝트 폴더 구역에 [자료 정리하기](한 번 정리한 뒤에는 [자료 업데이트])·진행 표시(단계·n/m)·마지막 정리 시각·[중단]. 폴더가 없으면 단추를 숨긴다. 원격 세션은 보기만 | `src/ui/project-folders.tsx`, 새 `src/ui/knowledge-collect.tsx`·`knowledge-collect.css` |
 | 다 끝나면 자료 탭 수와 이슈가 새로 읽힌다 | `src/ui/facts-tab.tsx` 등 |
+| 보완(2026-10-08 사용자 보고 "DB 정리도 지금 vide에서는 안 보이는데"): 폴더가 없을 때와 상태를 읽지 못할 때도 줄을 숨기지 않고 이유·행동([폴더 정하기]·[다시 읽기])을 보인다. 자료 탭(과 자료 jig)에 자료 DB가 없으면 옛 안내('시험판에서는 수집을 앱 밖에서') 대신 같은 자료 정리 줄을 보인다(폴더가 없으면 [대시보드에서 폴더 정하기]) | `src/ui/knowledge-collect.tsx`, `src/ui/project-folders.tsx`, `src/ui/facts-tab.tsx`, `src/ui/knowledge-jig.tsx` |
 
 **검증:** 브라우저 시험(가짜 실행기 엔진): 폴더 추가 → [자료 정리하기] → 진행 → 완료 시각, 자료 탭에 진술이 보임.
 

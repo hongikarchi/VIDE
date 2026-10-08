@@ -237,3 +237,11 @@ body[data-workspace='data'] .facts-workspace {
 .fact-window-head > strong {
   flex: 1;
 }
+
+/* No DB yet: the line and the 자료 정리 row under it (SPEC-08.9 1, Design SCR-19). */
+.facts-empty {
+  max-width: 560px;
+}
+.facts-empty .dash-collect {
+  margin-top: 4px;
+}

@@ -21,7 +21,7 @@ import {
   IssueNote,
   KIND,
   LISTS,
-  NO_DB,
+  NoKnowledge,
   Report,
   StatementRow,
   countsLine,
@@ -194,7 +194,7 @@ function FactsTab({ projectId }: { projectId: string }) {
 
   if (error && !summary) return <p className="jig-intro">{error}</p>;
   if (!summary) return <p className="jig-intro">불러오는 중…</p>;
-  if (!summary.available) return <p className="jig-intro">{NO_DB}</p>;
+  if (!summary.available) return <NoKnowledge projectId={projectId} />;
   const reviews = summary.reviews;
 
   return (
