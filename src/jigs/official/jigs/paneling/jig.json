@@ -452,7 +452,7 @@
         "note": "SPEC-16.4 추천값 3 mm",
         "question": "평면 패널로 볼 허용 오차는 얼마인가요?"
       },
-      "affects": []
+      "affects": ["optimize"]
     },
     {
       "key": "planarize",
@@ -479,7 +479,7 @@
         "note": "SPEC-16.4 추천값 패널별 최적 평면",
         "question": "패널을 평면으로 바꿀까요?"
       },
-      "affects": []
+      "affects": ["optimize"]
     },
     {
       "key": "typeTol",
@@ -502,7 +502,7 @@
         "note": "SPEC-16.4 추천값 2 mm",
         "question": "같은 타입으로 볼 허용 오차는 얼마인가요?"
       },
-      "affects": []
+      "affects": ["optimize"]
     },
     {
       "key": "maxTypes",
@@ -522,7 +522,7 @@
         "note": "SPEC-16.4 추천값 제한 없음(0)",
         "question": "패널 타입 수를 몇 개 이하로 맞출까요?"
       },
-      "affects": []
+      "affects": ["optimize"]
     },
     {
       "key": "flatRadius",
@@ -545,7 +545,7 @@
         "note": "SPEC-16.4 추천값 100 m",
         "question": "곡률 반지름이 얼마 이상이면 평면 패널로 볼까요?"
       },
-      "affects": []
+      "affects": ["optimize"]
     },
     {
       "key": "nodeAngleStep",
@@ -568,7 +568,7 @@
         "note": "SPEC-16.4 추천값 1°",
         "question": "결합부 각을 몇 도 간격으로 묶을까요?"
       },
-      "affects": []
+      "affects": ["optimize"]
     }
   ],
   "steps": [
@@ -592,7 +592,14 @@
       ],
       "writes": "preview",
       "speed": "live",
-      "gates": [{ "use": "inputs-present" }, { "use": "no-nan" }]
+      "gates": [
+        {
+          "use": "inputs-present"
+        },
+        {
+          "use": "no-nan"
+        }
+      ]
     },
     {
       "id": "members",
@@ -621,7 +628,44 @@
       ],
       "writes": "members",
       "speed": "release",
-      "gates": [{ "use": "inputs-present" }, { "use": "no-nan" }]
+      "gates": [
+        {
+          "use": "inputs-present"
+        },
+        {
+          "use": "no-nan"
+        }
+      ]
+    },
+    {
+      "id": "optimize",
+      "title": "3단계 최적화·타입화",
+      "kind": "library",
+      "use": "vide/paneling-kit#optimizeStep",
+      "reads": [
+        "input.surface",
+        "step.preview",
+        "step.members",
+        "param.axis",
+        "param.startCorner",
+        "param.flip",
+        "param.flatnessTol",
+        "param.planarize",
+        "param.typeTol",
+        "param.maxTypes",
+        "param.flatRadius",
+        "param.nodeAngleStep"
+      ],
+      "writes": "optimize",
+      "speed": "release",
+      "gates": [
+        {
+          "use": "inputs-present"
+        },
+        {
+          "use": "no-nan"
+        }
+      ]
     }
   ],
   "bake": [
@@ -666,7 +710,7 @@
     },
     {
       "name": "library.call",
-      "reason": "공식 라이브러리 vide/paneling-kit으로 패널 배치와 부재를 계산합니다"
+      "reason": "공식 라이브러리 vide/paneling-kit으로 패널 배치·부재·최적화와 타입을 계산합니다"
     },
     {
       "name": "host.bake",

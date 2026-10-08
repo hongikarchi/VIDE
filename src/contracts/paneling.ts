@@ -286,8 +286,9 @@ export const panelSchema = z
   );
 export type Panel = z.infer<typeof panelSchema>;
 
-/** The layout's own hash (`MemberSet.layoutHash`, the middle part of `makeKey`) is the engine's jig
- *  fingerprint of this object; `surfaceHash` covers the sample's face hashes, `settingsHash` stage 1's. */
+/** The layout's own hash (`MemberSet.layoutHash`, the middle part of `makeKey`) is the fingerprint of
+ *  its `surfaceHash` (the sample's face hashes) and `settingsHash` (stage 1's), which decide it
+ *  (`layoutFingerprint` in vide/paneling-kit). */
 export const panelLayoutSchema = z
   .object({
     schema: z.literal('vide.paneling.layout@1'),

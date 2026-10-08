@@ -15,7 +15,7 @@ import {
   type PanelLayout,
   type SurfaceSample,
 } from '../../contracts/paneling.ts';
-import { faceSampler, fingerprint } from '../official/paneling-kit/index.ts';
+import { faceSampler, layoutFingerprint } from '../official/paneling-kit/index.ts';
 import type { BakeDecl } from '../runtime/manifest.ts';
 import type { ParamValue } from '../runtime/params.ts';
 import { stageSources, stagesUpTo, stageOfStep } from '../runtime/paneling-confirmed.ts';
@@ -87,8 +87,9 @@ export const jointRef = (keys: readonly [string, string]) =>
     .digest('hex')
     .slice(0, 12);
 
-/** The layout fingerprint used in the make keys (`makeKey`, SPEC-16.9 6). */
-export const layoutHashOf = (layout: PanelLayout) => fingerprint(layout);
+/** The layout fingerprint used in the make keys (`makeKey`, SPEC-16.9 6): the same value stage 2
+ *  writes as `MemberSet.layoutHash`, so preview, member and joint keys share one middle part. */
+export const layoutHashOf = (layout: PanelLayout) => layoutFingerprint(layout);
 
 /** Items, the surface header and what stops the make, for one 패널링 declaration. */
 export function panelRows(input: PanelRowsInput): PanelRows {

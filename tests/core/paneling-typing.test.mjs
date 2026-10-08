@@ -6,8 +6,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildMembers,
   groupShapes,
   layoutPanels,
+  membersStep,
+  resolveMemberSettings,
   makeShape,
   optimizePanels,
   optimizeSettingsFromParams,
@@ -477,4 +480,69 @@ test('about 5,000 panels: typing time (release 2 s target)', (t) => {
   );
   assert.ok(layout.panels.length >= 5000);
   assert.ok(times[1] < 4000, `median ${times[1]} ms`);
+});
+
+// Integration (PLAN-49 W3): stage 3 on the real stage-2 `MemberSet` from T-254 instead of the
+// stand-in — joint-reduced plates keep their vertex keys, so nodes and joints are still found.
+test('real stage-2 members (joint 10 mm): typing covers every plate; the jig steps chain preview → members → optimize', () => {
+  const sample = sampleOf(plane(7.2, 3.6));
+  const ps = previewSettings();
+  const layout = layoutPanels(sample, ps).layout;
+  const members = buildMembers(
+    sample,
+    layout,
+    ps,
+    resolveMemberSettings({
+      thickness: 0.05,
+      thicknessSide: 'outside',
+      joint: 0.01,
+      boundaryJoint: 'half',
+      stock: null,
+    }),
+  ).members;
+  const result = optimizePanels({
+    sample,
+    layout,
+    members,
+    direction: ps.direction.value,
+    settings: resolveOptimizeSettings(),
+  });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  const parsed = panelTypingSchema.safeParse(result.typing);
+  assert.equal(parsed.success, true, JSON.stringify(parsed.error?.issues?.slice(0, 3)));
+  const { typing } = result;
+  assert.equal(typing.panels.length, layout.panels.length);
+  assert.equal(
+    typing.panels.filter((p) => p.failure).length,
+    0,
+    'no plate fails on a plane with a 10 mm joint',
+  );
+  // joint 10 mm with a half joint on the edge: every plate is 1.19 × 0.59, one flat type
+  assert.equal(typing.types.length, 1);
+  assert.equal(typing.types[0].class, 'flat');
+  assert.deepEqual(
+    typing.types[0].size.map((x) => Math.round(x * 1e4) / 1e4),
+    [1.19, 0.59],
+  );
+  assert.ok(typing.nodes.length >= 1, 'node types from the shared vertex keys');
+  assert.ok(typing.joints.length >= 1, 'joint types from the shared edges');
+
+  // The jig's own step functions: the stage outputs feed the next stage as inputs.steps.<id>.
+  const params = {
+    pattern: 'rect',
+    width: 1.2,
+    height: 0.6,
+    thickness: 0.05,
+    thicknessSide: 'outside',
+    joint: 0.01,
+    boundaryJoint: 'half',
+    stockWidth: 0,
+    stockHeight: 0,
+  };
+  const surface = sample;
+  const preview = layoutPanels(sample, ps).layout;
+  const set = membersStep({ surface, steps: { preview } }, params);
+  const typed = optimizeStep({ surface, steps: { preview, members: set } }, params);
+  assert.equal(panelTypingSchema.safeParse(typed).success, true);
+  assert.equal(typed.panels.length, preview.panels.length);
 });
