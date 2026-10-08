@@ -55,3 +55,13 @@ export { patternAxis, plateFrame, unrollPlate } from './unroll.ts';
 export { comparePanels, scheduleCsv, scheduleRows, sortedPanels } from './schedule.ts';
 export type { ScheduleRow, ScheduleTable } from './schedule.ts';
 export { optimizeSettingsFromParams } from './settings.ts';
+// [타입 만들기] (T-257): block definitions per type, placements per panel, the cut sheet.
+export { CUT_GAP, cutSheet, fitOutline, placePoint, typePlacements } from './place.ts';
+export type {
+  CutOutline,
+  PanelPlacement,
+  PlacementFailure,
+  PlacementInput,
+  TypeBlock,
+  TypePlacements,
+} from './place.ts';

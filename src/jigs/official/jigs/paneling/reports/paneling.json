@@ -1,0 +1,228 @@
+{
+  "template": "study",
+  "title": "패널링",
+  "eyebrow": "패널링 · 미리보기 → 부재 → 최적화·타입화 — 제작 도면·구조 검토를 대체하지 않음",
+  "headline": {
+    "cases": [
+      {
+        "when": "step.optimize.types.length > 0 && inputs.counts.assumed > 0 && inputs.counts.notFinal > 0",
+        "template": "패널 {step.preview.counts.total}개를 타입 {step.optimize.types.length}개로 묶었습니다 — 가정 값 {inputs.counts.assumed}개 포함, 다시 계산 필요.",
+        "tone": "warn"
+      },
+      {
+        "when": "step.optimize.types.length > 0 && inputs.counts.notFinal > 0",
+        "template": "패널 {step.preview.counts.total}개를 타입 {step.optimize.types.length}개로 묶었습니다 — 다시 계산 필요.",
+        "tone": "warn"
+      },
+      {
+        "when": "step.optimize.types.length > 0 && inputs.counts.assumed > 0",
+        "template": "패널 {step.preview.counts.total}개를 타입 {step.optimize.types.length}개로 묶었습니다 — 가정 값 {inputs.counts.assumed}개 포함.",
+        "tone": "warn"
+      },
+      {
+        "when": "step.optimize.types.length > 0",
+        "template": "패널 {step.preview.counts.total}개를 타입 {step.optimize.types.length}개로 묶었습니다.",
+        "tone": "ok"
+      },
+      {
+        "when": "step.preview.counts.total > 0 && inputs.counts.assumed > 0",
+        "template": "패널 {step.preview.counts.total}개로 나눴습니다 — 가정 값 {inputs.counts.assumed}개 포함.",
+        "tone": "warn"
+      },
+      {
+        "when": "step.preview.counts.total > 0",
+        "template": "패널 {step.preview.counts.total}개로 나눴습니다.",
+        "tone": "ok"
+      },
+      {
+        "template": "아직 패널이 없습니다. 기준 면을 고르고 1단계 미리보기를 계산하세요.",
+        "tone": "na"
+      }
+    ]
+  },
+  "kpis": [
+    { "label": "패널", "from": "step.preview.counts.total", "unit": "개" },
+    { "label": "패널 타입", "from": "step.optimize.types.length", "unit": "개" },
+    { "label": "노드 타입", "from": "step.optimize.nodes.length", "unit": "개" },
+    { "label": "줄눈 타입", "from": "step.optimize.joints.length", "unit": "개" },
+    { "label": "실패·뺀 패널(1단계)", "from": "step.preview.counts.failed", "unit": "개" },
+    { "label": "가정 값", "from": "inputs.counts.assumed", "unit": "개" }
+  ],
+  "sections": [
+    {
+      "id": "settings",
+      "from": ["inputs.settings", "inputs.counts.assumed"],
+      "title": {
+        "cases": [
+          {
+            "when": "inputs.counts.assumed > 0",
+            "template": "단계별 설정값과 출처 — 가정 값 {inputs.counts.assumed}개"
+          },
+          { "template": "단계별 설정값과 출처" }
+        ]
+      },
+      "blocks": [
+        {
+          "kind": "table",
+          "from": "inputs.settings",
+          "columns": [
+            { "field": "title", "label": "설정" },
+            { "field": "value", "label": "값" },
+            { "field": "by", "label": "출처" },
+            { "field": "basis", "label": "근거" },
+            { "field": "note", "label": "물어볼 것" }
+          ],
+          "max": 40
+        }
+      ]
+    },
+    {
+      "id": "layout",
+      "from": [
+        "step.preview.counts.total",
+        "step.preview.counts.boundary",
+        "step.preview.counts.failed",
+        "step.preview.counts.dropped"
+      ],
+      "title": {
+        "cases": [
+          {
+            "when": "step.preview.counts.failed > 0",
+            "template": "1단계 — 패널 {step.preview.counts.total}개, 실패 {step.preview.counts.failed}개"
+          },
+          {
+            "when": "step.preview.counts.total > 0",
+            "template": "1단계 — 패널 {step.preview.counts.total}개, 경계 패널 {step.preview.counts.boundary}개"
+          },
+          { "template": "1단계 미리보기 전" }
+        ]
+      }
+    },
+    {
+      "id": "members",
+      "from": ["step.members.members.length", "step.members.overStock.length"],
+      "title": {
+        "cases": [
+          {
+            "when": "step.members.overStock.length > 0",
+            "template": "2단계 — 부재 {step.members.members.length}개 가운데 판재 초과 {step.members.overStock.length}개"
+          },
+          {
+            "when": "step.members.members.length > 0",
+            "template": "2단계 — 부재 {step.members.members.length}개, 판재 초과 없음"
+          },
+          { "template": "2단계 부재 전" }
+        ]
+      }
+    },
+    {
+      "id": "types",
+      "from": [
+        "step.optimize.types",
+        "step.optimize.types.length",
+        "step.optimize.overTypeTol.length"
+      ],
+      "title": {
+        "cases": [
+          {
+            "when": "step.optimize.overTypeTol.length > 0",
+            "template": "패널 타입 {step.optimize.types.length}개 — 허용 오차를 넘는 패널 {step.optimize.overTypeTol.length}개"
+          },
+          {
+            "when": "step.optimize.types.length > 0",
+            "template": "패널 타입 {step.optimize.types.length}개"
+          },
+          { "template": "3단계 타입화 전" }
+        ]
+      },
+      "blocks": [
+        {
+          "kind": "table",
+          "from": "step.optimize.types",
+          "columns": [
+            { "field": "type", "label": "타입" },
+            { "field": "count", "label": "수" },
+            { "field": "class", "label": "등급" },
+            { "field": "vertexCount", "label": "꼭짓점 수" },
+            { "field": "representative", "label": "대표 패널" },
+            { "field": "mirrorOf", "label": "거울상 짝" }
+          ],
+          "max": 200
+        }
+      ]
+    },
+    {
+      "id": "connections",
+      "from": [
+        "step.optimize.nodes",
+        "step.optimize.joints",
+        "step.optimize.nodes.length",
+        "step.optimize.joints.length"
+      ],
+      "title": {
+        "cases": [
+          {
+            "when": "step.optimize.nodes.length > 0",
+            "template": "결합부 — 노드 타입 {step.optimize.nodes.length}개, 줄눈 타입 {step.optimize.joints.length}개"
+          },
+          { "template": "결합부 타입화 전" }
+        ]
+      },
+      "blocks": [
+        {
+          "kind": "table",
+          "title": "노드 타입",
+          "from": "step.optimize.nodes",
+          "columns": [
+            { "field": "type", "label": "노드 타입" },
+            { "field": "count", "label": "수" },
+            { "field": "valence", "label": "만나는 수" }
+          ],
+          "max": 200
+        },
+        {
+          "kind": "table",
+          "title": "줄눈 타입",
+          "from": "step.optimize.joints",
+          "columns": [
+            { "field": "type", "label": "줄눈 타입" },
+            { "field": "count", "label": "수" },
+            { "field": "length", "label": "길이", "unit": "m", "decimals": 3 },
+            { "field": "totalLength", "label": "길이 합", "unit": "m", "decimals": 3 }
+          ],
+          "max": 200
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "from": ["inputs.open", "inputs.counts.open"],
+      "title": {
+        "cases": [
+          {
+            "when": "inputs.counts.open > 0",
+            "template": "확인할 것 {inputs.counts.open}개"
+          },
+          { "template": "확인할 것 없음" }
+        ]
+      },
+      "blocks": [
+        {
+          "kind": "table",
+          "from": "inputs.open",
+          "columns": [
+            { "field": "kind", "label": "종류" },
+            { "field": "text", "label": "내용" },
+            { "field": "ask", "label": "물어볼 것" }
+          ]
+        }
+      ]
+    }
+  ],
+  "unchecked": [
+    "패널마다의 치수·평면도·실패 이유는 패널 일람표(CSV)에 있습니다",
+    "하부 구조·구조 검토·패널 무게는 이 보고서가 다루지 않습니다",
+    "곡면 패널의 펼침(재단 윤곽)은 평면 패널만 냅니다",
+    "Rhino에 만든 객체의 표본 차이는 만들기 결과 카드와 객체 속성(vide-deviation-mm)에 있습니다"
+  ]
+}

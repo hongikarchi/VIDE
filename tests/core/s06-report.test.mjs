@@ -325,7 +325,7 @@ test('exported page: no script, first page caveats, VIDE line; frames found with
 test('report inputs: settings ledger, open items and the shown structure summary', () => {
   const outputs = { analysis: analysisConfirmed(0.82, 0), sizing: sizingOutput(true) };
   const inputs = jigReportInputs({ params: paramRows, ledger: ledgerRows, outputs });
-  assert.deepEqual(inputs.counts, { settings: 3, assumed: 1, questions: 1, open: 2 });
+  assert.deepEqual(inputs.counts, { settings: 3, assumed: 1, questions: 1, open: 2, notFinal: 0 });
   assert.deepEqual(inputs.settings[0], {
     key: 'spanMax',
     title: '경간 상한',
@@ -383,6 +383,7 @@ test('report inputs: settings ledger, open items and the shown structure summary
   });
   assert.equal(stale.structure.mode, '미확정 미리보기');
   assert.equal(stale.structure.step, 'analysis');
+  assert.equal(stale.counts.notFinal, 2, 'results not final are counted (패널링 다시 계산 필요)');
   // Members a bake may make: only a member plan that is not a preview.
   assert.deepEqual(jigReportInputs({ outputs: { bakePlan: bakePlanOutput } }).bake, { members: 0 });
   assert.deepEqual(
@@ -394,6 +395,7 @@ test('report inputs: settings ledger, open items and the shown structure summary
     assumed: 0,
     questions: 0,
     open: 0,
+    notFinal: 0,
   });
 });
 

@@ -51,11 +51,15 @@ const LABELS: Record<string, string> = {
   members: 'H 부재',
   'member-columns': 'H 기둥',
   joints: '줄눈 선',
+  connections: '결합부 표식',
+  cuts: '재단 윤곽',
+  'cut-numbers': '재단 번호',
 };
 /** 패널링 makes are named by their template (`members` is also the built-in H member bake). */
 const TEMPLATE_LABELS: Record<string, string> = {
   'vide.bake.panels-uv@1': '미리보기 패널 면',
   'vide.bake.panel-solids@1': '패널 부재',
+  'vide.bake.block-instances@1': '타입 블록',
 };
 export const bakeLabel = (id: string, template?: string) =>
   (template ? TEMPLATE_LABELS[template] : undefined) ?? LABELS[id] ?? id;

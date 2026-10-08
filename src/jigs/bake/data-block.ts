@@ -15,6 +15,7 @@ export const TEMPLATE_NAMES = [
   'vide.bake.mesh@1',
   'vide.bake.panels-uv@1',
   'vide.bake.panel-solids@1',
+  'vide.bake.block-instances@1',
 ] as const;
 export type TemplateName = (typeof TEMPLATE_NAMES)[number];
 /**
@@ -26,6 +27,13 @@ export const PANEL_TEMPLATES = ['vide.bake.panels-uv@1', 'vide.bake.panel-solids
 export type PanelTemplateName = (typeof PANEL_TEMPLATES)[number];
 export const isPanelTemplate = (name: string): name is PanelTemplateName =>
   (PANEL_TEMPLATES as readonly string[]).includes(name);
+/**
+ * The 패널링 [타입 만들기] template (SPEC-16.9, PLAN-49 T-257): one block definition per panel type
+ * and one placement per panel. Its blocks carry a block header after the delete list (`BlockHeader`).
+ */
+export const BLOCK_TEMPLATE = 'vide.bake.block-instances@1' as const;
+export const isBlockTemplate = (name: string): name is typeof BLOCK_TEMPLATE =>
+  name === BLOCK_TEMPLATE;
 /** `vide-status` codes of a made panel (the template writes the word). */
 export const PANEL_STATUS = ['ok', 'boundary', 'pole'] as const;
 export type Vec3 = [number, number, number];
@@ -110,6 +118,57 @@ export interface PanelItem extends ItemBase {
   /** The engine's interpolated points at `uv` (m): the template measures `vide-deviation-mm`. */
   expect: Vec3[];
 }
+/**
+ * One placement of a 패널링 type block (T-257). `key` is the header's `keyPrefix` + `id`; the
+ * template writes `vide-panel-id`, `-type`, `-class`, `-size`, `vide-flatness-mm` and `vide-status`.
+ * A panel the engine already failed (`fail` set, `def` '') is drawn on the failure layer as its
+ * `outline` and number instead.
+ */
+export interface BlockItem extends ItemBase {
+  id: string;
+  /** Block definition name (one of the header's `defs`), '' for a failed panel. */
+  def: string;
+  /** Curvature class word written as `vide-panel-class`. */
+  cls: string;
+  /** Index into `PANEL_STATUS`. */
+  status: number;
+  /** Flatness (m; the template writes mm). */
+  flatness: number;
+  /** Plate size (m; written as `vide-panel-size` in mm). */
+  width: number;
+  height: number;
+  fail: string;
+  /** Row-major 3×3 rotation of the block frame into the world (proper, no mirror). */
+  rotation: number[];
+  /** World position of the block frame's origin (m). */
+  origin: Vec3;
+  /** Failed panels: the outline for the failure layer (world m); empty otherwise. */
+  outline: Vec3[];
+}
+/** One type's block definition: the flat outline in its own frame pushed along +Z by `thickness`. */
+export interface BlockDef {
+  /** `vide-panel-<type>-<typing fingerprint 6>` (SPEC-16.9 6). */
+  name: string;
+  type: string;
+  /** Signed plate thickness along the block's +Z (the front normal), m. */
+  thickness: number;
+  /** Counter-clockwise outline in the block frame, m. */
+  outline: [number, number][];
+}
+/** The block header of `vide.bake.block-instances@1` (ARCH-03 §9.1). */
+export interface BlockHeader {
+  /** `makeKey('type', layoutHash, '')`: the template sets `vide-key` = prefix + panel id. */
+  keyPrefix: string;
+  /** The typing fingerprint's first 6 characters: every current definition name ends in it, and an
+   *  older VIDE definition of this make is removed once no placement uses it. */
+  hash: string;
+  budgetMs: number;
+  failLayerPath: string;
+  /** Attributes every placement gets (`vide-assumed`, `vide-thickness`, `vide-joint`). */
+  attrs: [string, string][];
+  /** Every definition the items may name; each body carries only those its items use. */
+  defs: BlockDef[];
+}
 /** The block header of the panel templates (ARCH-03 §9.1). */
 export interface SurfaceHeader {
   objectId: string;
@@ -134,7 +193,8 @@ export type BakeItem =
   | ExtrudeItem
   | FacesItem
   | MeshItem
-  | PanelItem;
+  | PanelItem
+  | BlockItem;
 export interface ItemsOf {
   'vide.bake.curves@1': CurveItem;
   'vide.bake.sweep-h@1': SweepItem;
@@ -145,6 +205,7 @@ export interface ItemsOf {
   'vide.bake.mesh@1': MeshItem;
   'vide.bake.panels-uv@1': PanelItem;
   'vide.bake.panel-solids@1': PanelItem;
+  'vide.bake.block-instances@1': BlockItem;
 }
 export interface DataBlockHeader {
   template: TemplateName;
@@ -158,6 +219,8 @@ export interface DataBlockHeader {
   deleteIds: string[];
   /** Panel templates only (`PANEL_TEMPLATES`). */
   surface?: SurfaceHeader;
+  /** The block template only (`BLOCK_TEMPLATE`). */
+  blocks?: BlockHeader;
 }
 
 /**
@@ -241,9 +304,13 @@ export function unsafeArgs(items: readonly BakeItem[]): string[] {
       if (!ok) failed.push(`${at}:${attrNameSafe(name) ? name : 'attr-value'}`);
     }
     if ('section' in item && !bakeArgSafe(item.section)) failed.push(`${at}:section`);
-    if ('uv' in item) {
+    if ('uv' in item || 'rotation' in item) {
       if (!bakeArgSafe(item.id) || !item.key.endsWith(item.id)) failed.push(`${at}:id`);
       if (item.fail && !bakeArgSafe(item.fail)) failed.push(`${at}:fail`);
+    }
+    if ('rotation' in item) {
+      if (item.def && !bakeArgSafe(item.def)) failed.push(`${at}:def`);
+      if (!bakeArgSafe(item.cls)) failed.push(`${at}:class`);
     }
     if ('text' in item && !bakeArgSafe(item.text)) failed.push(`${at}:text`);
   });
@@ -321,8 +388,66 @@ function validTemplateItem(template: TemplateName, item: BakeItem, at: string, p
       problems.push(`${at}: 패널 크기가 수가 아닙니다`);
     if (!Number.isInteger(panel.status) || panel.status < 0 || panel.status >= PANEL_STATUS.length)
       problems.push(`${at}: 상태 번호가 맞지 않습니다`);
+  } else if (isBlockTemplate(template)) {
+    const block = item as BlockItem;
+    if (block.def) {
+      if (
+        !Array.isArray(block.rotation) ||
+        block.rotation.length !== 9 ||
+        !block.rotation.every(finite) ||
+        !isVec3(block.origin)
+      )
+        problems.push(`${at}: 놓기 변환이 수가 아닙니다`);
+      else if (Math.abs(det3(block.rotation) - 1) > 1e-6)
+        problems.push(`${at}: 놓기 변환이 회전이 아닙니다(거울·크기 바꿈)`);
+    } else if (
+      !block.fail ||
+      !Array.isArray(block.outline) ||
+      block.outline.length < 3 ||
+      !block.outline.every(isVec3)
+    )
+      problems.push(`${at}: 실패 패널의 윤곽이 없습니다`);
+    if (![block.flatness, block.width, block.height].every(finite))
+      problems.push(`${at}: 패널 수치가 수가 아닙니다`);
+    if (!Number.isInteger(block.status) || block.status < 0 || block.status >= PANEL_STATUS.length)
+      problems.push(`${at}: 상태 번호가 맞지 않습니다`);
   } else return false;
   return true;
+}
+const det3 = (r: readonly number[]) =>
+  r[0] * (r[4] * r[8] - r[5] * r[7]) -
+  r[1] * (r[3] * r[8] - r[5] * r[6]) +
+  r[2] * (r[3] * r[7] - r[4] * r[6]);
+/** Why the block template's header cannot be encoded, or nothing. */
+export function blockHeaderProblems(blocks: BlockHeader | undefined): string[] {
+  if (!blocks) return ['블록 머리가 없습니다'];
+  const problems: string[] = [];
+  if (!bakeArgSafe(blocks.keyPrefix + 'x')) problems.push('키 앞머리가 맞지 않습니다');
+  if (!/^[a-f0-9]{6}$/.test(blocks.hash)) problems.push('타입화 지문이 맞지 않습니다');
+  if (!finite(blocks.budgetMs) || blocks.budgetMs <= 0) problems.push('시간 한도가 수가 아닙니다');
+  const names = new Set<string>();
+  for (const def of blocks.defs) {
+    if (!bakeArgSafe(def.name) || !def.name.endsWith(`-${blocks.hash}`) || names.has(def.name))
+      problems.push(`블록 이름이 맞지 않습니다: ${def.name}`);
+    names.add(def.name);
+    if (!bakeArgSafe(def.type) || def.type.includes(':'))
+      problems.push(`${def.name}: 타입 이름이 맞지 않습니다`);
+    if (!finite(def.thickness) || def.thickness === 0)
+      problems.push(`${def.name}: 두께가 수가 아닙니다`);
+    if (
+      def.outline.length < 3 ||
+      def.outline.length > PANEL_OUTLINE_MAX ||
+      !def.outline.every((q) => q.length === 2 && q.every(finite))
+    )
+      problems.push(`${def.name}: 윤곽은 수로 된 점 3~${PANEL_OUTLINE_MAX}개여야 합니다`);
+  }
+  const pseudo: CurveItem = {
+    key: blocks.keyPrefix + 'x',
+    attrs: blocks.attrs,
+    curve: { kind: 'polyline', points: [] },
+  };
+  problems.push(...unsafeArgs([pseudo]).map((p) => `공통 속성 ${p}`));
+  return problems;
 }
 /** Most outline points one panel may send (contract `OUTLINE_LIMIT`). */
 export const PANEL_OUTLINE_MAX = 64;
@@ -384,6 +509,7 @@ export function itemPoints(item: BakeItem): Vec3[] {
   if ('volume' in item) return item.faces.flat(2);
   if ('vertices' in item) return item.vertices;
   if ('expect' in item) return item.expect;
+  if ('rotation' in item) return item.def ? [item.origin] : item.outline;
   return [item.point];
 }
 
@@ -483,6 +609,7 @@ function writeItem(
   item: BakeItem,
   origin: Vec3,
   table?: Map<string, number>,
+  defs?: Map<string, number>,
 ) {
   if (isPanelTemplate(template)) {
     // Compact: the key and per-panel attributes are the template's; corners are indexes into the
@@ -500,6 +627,28 @@ function writeItem(
       if (index === undefined) throw new Error('BAKE_PANEL_VERTEX');
       w.i32(index);
     }
+    return;
+  }
+  if (isBlockTemplate(template)) {
+    // Compact like the panels: key and per-placement attributes are the template's.
+    const block = item as BlockItem;
+    w.str(block.id);
+    const def = block.def ? defs?.get(block.def) : -1;
+    if (def === undefined) throw new Error('BAKE_BLOCK_DEF');
+    w.i32(def);
+    w.str(block.cls);
+    w.i32(block.status);
+    w.f32(block.flatness);
+    w.f32(block.width);
+    w.f32(block.height);
+    w.str(block.fail);
+    if (def >= 0) {
+      for (const value of block.rotation) w.f32(value);
+      w.vec3(block.origin, origin);
+      return;
+    }
+    w.i32(block.outline.length);
+    for (const point of block.outline) w.vec3(point, origin);
     return;
   }
   w.str(item.key);
@@ -548,8 +697,20 @@ function writeItem(
 export function itemBytes(template: TemplateName, item: BakeItem): number {
   if (isPanelTemplate(template)) return panelItemBytes(item as PanelItem);
   const w = new Writer();
-  writeItem(w, template, item, [0, 0, 0]);
+  const block = isBlockTemplate(template) ? (item as BlockItem).def : '';
+  writeItem(w, template, item, [0, 0, 0], undefined, block ? new Map([[block, 0]]) : undefined);
   return w.bytes().length;
+}
+/** Bytes one block definition adds to a block (once per body that uses it). */
+export function blockDefBytes(def: BlockDef): number {
+  return (
+    8 +
+    Buffer.byteLength(def.name, 'utf8') +
+    Buffer.byteLength(def.type, 'utf8') +
+    8 +
+    4 +
+    16 * def.outline.length
+  );
 }
 /** One corner of a panel in the vertex table: face, exact UV. */
 const vertexKey = (panel: PanelItem, k: number) =>
@@ -626,6 +787,45 @@ export function encodeDataBlock(
     }
     w.i32(items.length);
     for (const item of items) writeItem(w, header.template, item, origin, table.index);
+    return Buffer.from(w.bytes());
+  }
+  if (isBlockTemplate(header.template)) {
+    const blocks = header.blocks;
+    if (!blocks) throw new Error('BAKE_BLOCK_HEADER');
+    w.str(blocks.keyPrefix);
+    w.str(blocks.hash);
+    w.f64(blocks.budgetMs);
+    w.str(blocks.failLayerPath);
+    w.i32(blocks.attrs.length);
+    for (const [name, value] of blocks.attrs) {
+      w.str(name);
+      w.str(value);
+    }
+    // Only the definitions this body's items use, in first-use order.
+    const byName = new Map(blocks.defs.map((def) => [def.name, def]));
+    const index = new Map<string, number>();
+    const used: BlockDef[] = [];
+    for (const item of items as BlockItem[]) {
+      if (item.key !== blocks.keyPrefix + item.id) throw new Error('BAKE_PANEL_KEY');
+      if (!item.def || index.has(item.def)) continue;
+      const def = byName.get(item.def);
+      if (!def) throw new Error('BAKE_BLOCK_DEF');
+      index.set(item.def, used.length);
+      used.push(def);
+    }
+    w.i32(used.length);
+    for (const def of used) {
+      w.str(def.name);
+      w.str(def.type);
+      w.f64(def.thickness);
+      w.i32(def.outline.length);
+      for (const [x, y] of def.outline) {
+        w.f64(x);
+        w.f64(y);
+      }
+    }
+    w.i32(items.length);
+    for (const item of items) writeItem(w, header.template, item, origin, undefined, index);
     return Buffer.from(w.bytes());
   }
   w.i32(items.length);
@@ -709,6 +909,26 @@ export function decodeDataBlock(bytes: Buffer): DecodedBlock {
     for (let n = i32(); n > 0; n--) attrs.push([str(), str()]);
     header.surface = { objectId, faces, keyPrefix, offset, budgetMs, failLayerPath, attrs };
   }
+  const defNames: string[] = [];
+  if (isBlockTemplate(template)) {
+    const keyPrefix = str();
+    const hash = str();
+    const budgetMs = f64();
+    const failLayerPath = str();
+    const attrs: [string, string][] = [];
+    for (let n = i32(); n > 0; n--) attrs.push([str(), str()]);
+    const defs: BlockDef[] = [];
+    for (let n = i32(); n > 0; n--) {
+      const name = str();
+      const type = str();
+      const thickness = f64();
+      const outline: [number, number][] = [];
+      for (let k = i32(); k > 0; k--) outline.push([f64(), f64()]);
+      defs.push({ name, type, thickness, outline });
+      defNames.push(name);
+    }
+    header.blocks = { keyPrefix, hash, budgetMs, failLayerPath, attrs, defs };
+  }
   const table: { uv: [number, number]; expect: Vec3 }[] = [];
   if (header.surface)
     for (let n = i32(); n > 0; n--) {
@@ -718,6 +938,38 @@ export function decodeDataBlock(bytes: Buffer): DecodedBlock {
   const items: BakeItem[] = [];
   const nItems = i32();
   for (let i = 0; i < nItems; i++) {
+    if (header.blocks) {
+      const id = str();
+      const def = i32();
+      const cls = str();
+      const status = i32();
+      const flatness = f32();
+      const width = f32();
+      const height = f32();
+      const fail = str();
+      const block: BlockItem = {
+        key: header.blocks.keyPrefix + id,
+        attrs: [],
+        id,
+        def: def >= 0 ? (defNames[def] ?? '') : '',
+        cls,
+        status,
+        flatness,
+        width,
+        height,
+        fail,
+        rotation: [],
+        origin: [0, 0, 0],
+        outline: [],
+      };
+      if (def >= 0) {
+        if (!defNames[def]) throw new Error('BAKE_DATA');
+        for (let k = 0; k < 9; k++) block.rotation.push(f32());
+        block.origin = vec3();
+      } else for (let k = i32(); k > 0; k--) block.outline.push(vec3());
+      items.push(block);
+      continue;
+    }
     if (header.surface) {
       const id = str();
       const faceIndex = i32();

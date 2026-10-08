@@ -329,6 +329,7 @@ const bakeDecl = z
       'vide.bake.mesh@1',
       'vide.bake.panels-uv@1',
       'vide.bake.panel-solids@1',
+      'vide.bake.block-instances@1',
     ]),
     host: z.literal('rhino'),
     items: z.string().min(1).max(200),

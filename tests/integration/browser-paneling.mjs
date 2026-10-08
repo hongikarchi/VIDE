@@ -163,6 +163,13 @@ function engine({ surface = false } = {}) {
       }
       return json({ affected: [...affected], instance: view() });
     }
+    // 보고서(HTML) of the jig's frame `reports/paneling.json` (PLAN-49 T-257).
+    if (path === `${base}/reports/paneling` && method === 'GET')
+      return json({
+        report: { id: 'paneling', title: '패널링', file: 'reports/paneling.json' },
+        model: { exportRefused: [] },
+        html: '<!doctype html><title>패널링</title><h1>패널 8개를 타입 3개로 묶었습니다.</h1>',
+      });
     if (path === '/projects/p1/paneling/surface' && method === 'GET') {
       assert.equal(url.searchParams.get('instanceId'), 'i1');
       return json(
@@ -436,10 +443,23 @@ try {
     page.waitForEvent('download'),
     drawer.locator('[data-csv="panels"]').click(),
   ]);
-  assert.match(csvFile.suggestedFilename(), /^패널링-패널-\d{8}-\d{4}\.csv$/);
+  // The first line stays the column head; the export's marks go in the name (SPEC-16.11).
+  const note = (await drawer.locator('[data-export-note]').textContent()) ?? '';
+  assert.match(note, /가정 값 \d+개 포함/);
+  assert.match(
+    csvFile.suggestedFilename(),
+    new RegExp(`^패널링-패널-\\d{8}-\\d{4}-${note.split(' · ').join('-')}\\.csv$`),
+  );
   const csvText = await readFile(await csvFile.path(), 'utf8');
   assert.ok(csvText.startsWith('﻿번호,면,행,열,경계,타입,등급,가로(mm),세로(mm)'));
   assert.equal(csvText.trimEnd().split('\r\n').length, 11);
+  // [보고서]: the engine's page of the jig's report frame, saved as HTML with the same marks.
+  const [reportFile] = await Promise.all([
+    page.waitForEvent('download'),
+    drawer.locator('[data-report]').click(),
+  ]);
+  assert.match(reportFile.suggestedFilename(), /^패널링-보고서-\d{8}-\d{4}-.+\.html$/);
+  assert.match(await readFile(await reportFile.path(), 'utf8'), /타입 3개로 묶었습니다/);
   if (shot) await page.screenshot({ path: `${shot}/paneling.png`, fullPage: true });
   assert.deepEqual(errors, []);
   await page.close();

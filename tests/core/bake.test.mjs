@@ -55,6 +55,19 @@ const header = (template, deleteIds = []) => ({
         },
       }
     : {}),
+  // The 패널링 type template carries its block header (PLAN-49 T-257).
+  ...(template === 'vide.bake.block-instances@1'
+    ? {
+        blocks: {
+          keyPrefix: 'type:abcdef01:',
+          hash: 'abcdef',
+          budgetMs: 1000,
+          failLayerPath: 'VIDE::격자::실패',
+          attrs: [],
+          defs: [],
+        },
+      }
+    : {}),
 });
 const b64 = (text) => Buffer.from(text, 'utf8').toString('base64');
 const near = (a, b, tolerance = 1e-3) =>
@@ -955,9 +968,12 @@ test('site templates: the C# makes faces and joins at 1e-5 m, never merges, and 
     assert.match(
       loadTemplate(name).text,
       // 패널링 templates add the failure reasons and the sample differences (PLAN-49 T-255).
-      name.includes('panel')
-        ? /return new \{ removed, keys = keys\.ToArray\(\), ids = ids\.ToArray\(\), failed = failed\.ToArray\(\), reasons = reasons\.ToArray\(\), dev = dev\.ToArray\(\), ms = [^\n]+ \};\n$/
-        : /return new \{ removed, keys = keys\.ToArray\(\), ids = ids\.ToArray\(\), failed = failed\.ToArray\(\) \};\n$/,
+      name === 'vide.bake.block-instances@1'
+        ? // The type blocks add the definitions made and removed (PLAN-49 T-257).
+          /return new \{ removed, keys = keys\.ToArray\(\), ids = ids\.ToArray\(\), failed = failed\.ToArray\(\), reasons = reasons\.ToArray\(\), defs = defsMade\.ToArray\(\), purged, ms = [^\n]+ \};\n$/
+        : name.includes('panel')
+          ? /return new \{ removed, keys = keys\.ToArray\(\), ids = ids\.ToArray\(\), failed = failed\.ToArray\(\), reasons = reasons\.ToArray\(\), dev = dev\.ToArray\(\), ms = [^\n]+ \};\n$/
+          : /return new \{ removed, keys = keys\.ToArray\(\), ids = ids\.ToArray\(\), failed = failed\.ToArray\(\) \};\n$/,
       `${name} returns the shared receipt`,
     );
 });

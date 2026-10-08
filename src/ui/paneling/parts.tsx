@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { api } from '../gateway.ts';
 import { Card } from '../question-card.tsx';
 import { SettingRow } from '../kit/settings.tsx';
 import { BakePart } from '../jig-panel/bake-parts.tsx';
@@ -14,6 +15,7 @@ import {
   STAGES,
   answerValue,
   assumedOf,
+  exportMarks,
   exportName,
   headCells,
   headNotices,
@@ -559,6 +561,28 @@ export function PanelingResult({
     { id: 'failed', title: '실패', count: failed.length },
   ];
   const exportable: ScheduleKind[] = typing ? ['panels', 'types', 'nodes', 'joints'] : ['panels'];
+  const marks = { assumed, stale };
+  const [reportNote, setReportNote] = useState('');
+  // 보고서(HTML, SPEC-16.11): the engine resolves the jig's frame `reports/paneling.json`.
+  const exportReport = async () => {
+    setReportNote('');
+    try {
+      const out = (await api(`${view.base}/reports/paneling`)) as {
+        html?: string;
+        model?: { exportRefused?: string[] };
+      };
+      if (!out.html) {
+        setReportNote(out.model?.exportRefused?.join(' · ') || '보고서를 내보낼 수 없습니다');
+        return;
+      }
+      const name = exportName('panels', new Date(), marks)
+        .replace('-패널-', '-보고서-')
+        .replace(/\.csv$/, '.html');
+      download(name, out.html, 'text/html;charset=utf-8');
+    } catch (error) {
+      setReportNote(error instanceof Error ? error.message : String(error));
+    }
+  };
 
   if (!results.layout)
     return (
@@ -666,7 +690,11 @@ export function PanelingResult({
                 className="kit-button"
                 data-csv={kind}
                 onClick={() =>
-                  download(exportName(kind), scheduleCsv(kind, results), 'text/csv;charset=utf-8')
+                  download(
+                    exportName(kind, new Date(), marks),
+                    scheduleCsv(kind, results),
+                    'text/csv;charset=utf-8',
+                  )
                 }
               >
                 {SCHEDULE_TITLES[kind]}
@@ -674,11 +702,17 @@ export function PanelingResult({
             ))}
           </div>
         </details>
+        <button type="button" className="kit-button" data-report="" onClick={exportReport}>
+          보고서
+        </button>
         {assumed || stale ? (
           <span className="kit-muted" data-export-note="">
-            {[assumed ? `가정 값 ${assumed}개 포함` : '', stale ? '다시 계산 필요' : '']
-              .filter(Boolean)
-              .join(' · ')}
+            {exportMarks(marks).join(' · ')}
+          </span>
+        ) : null}
+        {reportNote ? (
+          <span className="kit-muted" role="status" data-report-note="">
+            {reportNote}
           </span>
         ) : null}
       </div>

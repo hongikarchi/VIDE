@@ -21,9 +21,24 @@ import type { LoadedJig } from '../runtime/loader.ts';
 import type { BakeDecl, GateUse } from '../runtime/manifest.ts';
 import type { InstanceView, JigRuntime, ReadModel } from '../runtime/runtime.ts';
 import type { SurfaceSample } from '../../contracts/paneling.ts';
-import { isPanelTemplate, unsafeArgs, type BakeItem, type SurfaceHeader } from './data-block.ts';
+import {
+  isBlockTemplate,
+  isPanelTemplate,
+  unsafeArgs,
+  type BakeItem,
+  type BlockHeader,
+  type SurfaceHeader,
+} from './data-block.ts';
 import { bakeDeclOf, bakeDeclsOf, builtinOutput, isBuiltinBake } from './builtin.ts';
-import { FAIL_LAYER, failureCode, isPanelDecl, LAYOUT_STEP, panelRows } from './panels.ts';
+import {
+  FAIL_LAYER,
+  failureCode,
+  isPanelDecl,
+  LAYOUT_STEP,
+  MEMBERS_STEP,
+  panelRows,
+  TYPING_STEP,
+} from './panels.ts';
 import {
   absorbedOf,
   extractItems,
@@ -92,6 +107,7 @@ interface DeclItems {
   inputHash?: string;
   stepId: string;
   surface?: SurfaceHeader;
+  blocks?: BlockHeader;
   deviationLimit?: number;
 }
 export interface BakeSummary {
@@ -273,13 +289,21 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
           stepId === LAYOUT_STEP
             ? output
             : runtime.output(input.projectId, input.instanceId, LAYOUT_STEP),
+        // Stage 3 places the stage-2 plates (T-257).
+        ...(stepId === TYPING_STEP
+          ? { members: runtime.output(input.projectId, input.instanceId, MEMBERS_STEP) }
+          : {}),
         sample: (kept?.sample as SurfaceSample | undefined) ?? null,
         manifestParams: jig.manifest.params,
         params: view.body.params,
         layerRoot: view.body.layerRoot,
       });
       // No joint lines (줄눈 0) is fine; no panel is not.
-      if (!rows.items.length && !rows.problems.length && isPanelTemplate(decl.template))
+      if (
+        !rows.items.length &&
+        !rows.problems.length &&
+        (isPanelTemplate(decl.template) || isBlockTemplate(decl.template))
+      )
         rows.problems.push('만들 패널이 없습니다');
       problems.push(...rows.problems.map((p) => `${decl.id}: ${p}`));
       return {
@@ -288,6 +312,7 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
         inputHash: step.inputHash,
         stepId,
         surface: rows.surface,
+        blocks: rows.blocks,
         deviationLimit: rows.deviationLimit,
       };
     }
@@ -342,7 +367,7 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
         step.slot === 'confirm-target' &&
         view.steps.find((s) => s.id === step.id)?.status === 'confirmed',
     );
-  for (const { decl, items, inputHash, stepId, surface, deviationLimit } of extracted) {
+  for (const { decl, items, inputHash, stepId, surface, blocks, deviationLimit } of extracted) {
     const layerPath = layerPathOf(view.body.layerRoot, decl);
     layers.push(layerPath);
     // Missing levels are made by the template (ARCH-03 §9.5); only the path text must be usable.
@@ -416,6 +441,7 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
               layerPath,
               deleteIds: plan.deleteIds,
               ...(surface ? { surface } : {}),
+              ...(blocks ? { blocks } : {}),
             },
             plan.create,
           );

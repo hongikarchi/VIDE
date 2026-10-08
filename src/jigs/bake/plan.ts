@@ -52,6 +52,7 @@ const FIELD_DEFAULTS: Record<TemplateName, string[]> = {
   // Panel rows are read by the 패널링 adapter (`panels.ts`), never field by field.
   'vide.bake.panels-uv@1': [],
   'vide.bake.panel-solids@1': [],
+  'vide.bake.block-instances@1': [],
 };
 
 const num = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : NaN);

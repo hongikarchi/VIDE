@@ -2,7 +2,7 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 1.10
+version: 1.11
 updated: 2026-10-08
 owner: agent:claude
 related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, PLAN-45, SPEC-12, RESEARCH-10, RESEARCH-12, SPEC-13, PLAN-46, SPEC-15, PLAN-48, SPEC-16, PLAN-49]
@@ -204,10 +204,10 @@ export interface BakeDecl {
   id: string;
   template: 'vide.bake.curves@1' | 'vide.bake.sweep-h@1' | 'vide.bake.extrude-column@1' | 'vide.bake.textdot@1'
     | 'vide.bake.extrude-polygon@1' | 'vide.bake.brep-faces@1' | 'vide.bake.mesh@1'
-    | 'vide.bake.panels-uv@1' | 'vide.bake.panel-solids@1';
+    | 'vide.bake.panels-uv@1' | 'vide.bake.panel-solids@1' | 'vide.bake.block-instances@1';
   host: 'rhino';
   items: string;                     // 단계 출력 경로(항목 배열)
-  rows?: 'paneling';                 // 패널링 결과(PanelLayout·MemberSet)를 VIDE 어댑터가 항목으로 바꿈(§9.1)
+  rows?: 'paneling';                 // 패널링 결과(PanelLayout·MemberSet·PanelTyping)를 VIDE 어댑터가 항목으로 바꿈(§9.1)
   layer: string;                     // layerRoot 아래 한 단계 이름
   key: string;                       // 항목의 안정 키 필드
   map?: Record<string, string>;      // 틀 인자 ← 항목 필드
@@ -584,6 +584,12 @@ jig 입력은 표시용 Sync가 아니라 jig 입력 읽기로 받는다.
     - 반환: `{ removed, keys[], ids[], failed[](실패한 패널 키), reasons[](failed와 같은 순서의 이유), dev[](keys와 같은 순서의 표본 차이 m, 실패 객체는 −1), ms }`. 엔진은 `failed`·`reasons`를 결과의 `failures[{key, reason, code}]`(계약 실패 코드: `UV_OUTSIDE_TRIM` → `outside-trim`, `NOT_CLOSED` → `not-closed`, 그 밖 `make-failed`)로, `dev`의 최댓값을 `deviationMax`로, 3단계 평면도 허용 오차(없으면 3 mm)를 `deviationLimit`로 카드에 준다. 카드는 '실제 면과 표본의 최대 차이 n mm'와 넘으면 '표본이 거칩니다 · 촘촘하게 다시 읽기', 본문이 여럿이면 'Rhino에서 되돌리려면 Ctrl+Z n번'(`undos`), 지금 결과에 없는 키의 사람 수정 보존을 '이전 배치에서 보존 n'(`preservedEarlier`)으로 보인다.
     - 2단계 줄눈 선은 같은 어댑터가 `MemberSet.joints`를 `vide.bake.curves@1` 항목(키 `joint:<배치 지문 앞 8>:<두 꼭짓점 키를 정렬해 이은 글의 SHA-256 앞 12>` — 꼭짓점 키에 `|`가 있어 키 규칙에 맞추려 줄임, 속성 `vide-joint`)으로 바꿔 `layerRoot::부재`에 만든다. 공식 jig `vide/paneling`의 만들기 선언은 `preview`(panels-uv) · `members`(panel-solids) · `joints`(curves)이고, 화면의 [부재 만들기]는 `members`와 `joints`를 함께 보낸다. `members`·`joints`는 점검 `paneling-confirmed`(§11)를 요구한다.
     - 크기(2026-10-08 실측, `tests/core/paneling-bake.test.mjs`): 틀 글이 약 17,700자라 본문 하나에 1단계 사각 패널 약 400개(꼭짓점 공유), 부재 약 210개(줄인 윤곽이라 공유 없음) — 5,562 패널이 본문 14개 / 26개다. 실제 Rhino 시간은 [PLAN-49](../plans/PLAN-49-paneling.md) T-255 「현재 상태」.
+  - `vide.bake.block-instances@1`(3단계 [타입 만들기], `block-instances.cs`, PLAN-49 T-257): 타입마다 블록 정의 하나와 타입이 있는 패널마다 놓기(블록 인스턴스) 하나를 `layerRoot::타입::<타입>`에 만든다. 데이터 블록은 §9.2 공통 머리(지울 목록까지) 뒤에 **블록 머리** `str keyPrefix(makeKey('type', 배치 지문, '')) · str hash(타입화 지문 앞 6자) · f64 budgetMs · str failLayerPath · i32 nAttr · (str · str) × nAttr(vide-assumed·vide-thickness·vide-joint) · i32 nDefs · (str 이름 · str 타입 · f64 두께(m, 블록 +Z 쪽 부호) · i32 n · (f64 x · f64 y) × n) × nDefs`, 항목마다 `str id · i32 정의 번호(-1 = 엔진이 이미 아는 실패) · str 등급 · i32 status · f32 평면도 · f32 판 가로 · f32 판 세로(m) · str fail` 다음 놓기면 `f32 × 9(블록 틀 → 세계 회전, 행 우선, 거울 없음) · f32 × 3(원점, 기준점 차이)`, 실패면 `i32 n · f32 × 3 × n(실패 레이어 윤곽)`이다. 한 본문에는 그 본문의 항목이 쓰는 정의만 싣는다(`renderChunks`가 정의 크기를 처음 쓰는 본문에만 셈).
+    - 정의: 이름 `vide-panel-<타입>-<타입화 지문 앞 6자>`(타입화 지문 = `typing.membersHash`·`settingsHash`의 지문, 엔진 `typingHashOf`), 설명 `VIDE <jig> · <작업본> · <만들기>`. 같은 이름의 정의가 있으면 설명이 `VIDE <jig> · `로 시작할 때만 그대로 쓰고, 아니면(사람이 만든 정의) 건드리지 않고 그 타입의 놓기를 `BLOCK_NAME_TAKEN`으로 실패시킨다. 없으면 대표 판의 평평한 윤곽(첫 꼭짓점 원점, 패턴 축 +X, 앞면 +Z — 재단 윤곽과 같은 틀)을 문서 허용 오차 안의 꼭짓점을 합친 뒤 +Z로 두께만큼 밀어(`Surface.CreateExtrusion` + `CapPlanarHoles`, 안 되면 두 뚜껑과 옆면을 `JoinBreps`) 닫힌 솔리드 하나로 만들어 `InstanceDefinitions.Add`한다. 닫힌 하나가 아니면 `BLOCK_GEOMETRY`.
+    - 놓기: 엔진(`paneling-kit` `typePlacements`)이 패널마다 자기 2단계 판의 최적 평면 판과 틀(재단 윤곽과 같은 틀)을 구하고, 타입 대표 윤곽을 그 판의 윤곽에 순환 번호 맞춤 가운데 최대 거리가 가장 작은 2D 강체 맞춤으로 놓은 회전·원점을 보낸다. '허용 오차 넘음'·타입 없음(`T-00`)·1·2단계 실패 패널은 블록을 놓지 않고 실패 항목(평면 판 또는 1단계 꼭짓점 윤곽)으로 보내 실패 레이어에 윤곽과 번호로 남긴다(조용히 맞추지 않음).
+    - 놓기마다 `vide-panel-id`·`vide-panel-type`·`vide-panel-class`·`vide-panel-size`·`vide-flatness-mm`·`vide-status`와 공통 속성을 쓴다. 지울 목록의 객체를 지운 뒤(태그 확인) 본문 끝에서, 설명이 이 작업본·만들기의 것이고 이름이 지금 지문으로 끝나지 않으며 놓기가 하나도 남지 않은 정의만 `InstanceDefinitions.Delete`한다 — 사람이 고쳐 보존된 놓기가 쓰는 이전 정의는 남는다. 정의 추가·삭제도 그 본문의 되돌리기 기록에 들어가 [되돌리기] 한 번에 함께 사라진다. 반환 `{ removed, keys[], ids[], failed[], reasons[], defs[](새로 만든 정의), purged, ms }`.
+    - 같은 [타입 만들기]의 나머지 셋: 결합부 표식 `vide.bake.textdot@1`(노드 타입 `N-nn`을 `nodeAt` 위치에, 키 `node:<배치 지문 8>:<꼭짓점 키 지문 12>`; 줄눈 타입 `J-nn`을 공유 모서리 두 꼭짓점의 가운데에, 키 `joint:<배치 지문 8>:<두 꼭짓점 키 지문 12>`; `vide-connection` = node·joint, `vide-mark` = 타입, 레이어 `layerRoot::결합부`), 재단 윤곽 `vide.bake.curves@1`(평면 판의 재단 윤곽을 기준 면 오른쪽 XY 평면에 타입·번호 순 격자로, 키 `cut:<배치 지문 8>:<패널>`)과 번호 `vide.bake.textdot@1`(`cut:…:<패널>:no`), 둘 다 `layerRoot::재단`.
+    - 크기(2026-10-08 실측, 숨은 Rhino 8.35, `tests/integration/rhino-paneling-types.mjs`): 쌍곡면 1,133 패널·185 타입 — 네 만들기 본문 25개 12.8 s, [되돌리기] 3.1 s. 5,421 패널·147 타입 — 본문 112개(대부분 결합부 표식 약 1.6만 개와 재단 윤곽·번호) 41 s, [되돌리기] 3.6 s.
 - `bake.ts`는 치환 뒤 본문이 "틀 원문에서 치환 자리만 데이터 블록으로 바뀐 것"과 정확히 같은지 확인한다. 키·부호·단면 이름·`vide-role` 값은 점검 `bake-args-safe`(`^[A-Za-z0-9가-힣:_>.\-]{1,64}$`)를 통과해야 한다.
 - **객체 속성(사용자 문자열, `data-block.ts`):** 이름은 `vide-` 뒤 소문자 영숫자 단어를 `-`로 이은 것(`^vide-[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`, 40자 이하)이고, 틀이 스스로 붙이는 `vide-jig`·`vide-instance`·`vide-run`·`vide-bake`·`vide-key`는 쓸 수 없다. 한 객체에 32개까지, 같은 이름 두 번은 거절한다. 값은 `vide-mark`·`vide-section`·`vide-role`만 위의 키 규칙을 따르고, 나머지는 자유 글(주소·한글 공백·숫자·짧은 JSON)로서 1~2,000자, 제어 문자(C0·DEL·C1)·줄/문단 구분자·양방향 재정의·격리 문자·짝 없는 대리 문자를 금지한다. 값은 base64 데이터 블록 안으로만 가고 C# 글이 되지 않는다. 규모검토 jig의 이름 목록(`SITE_ATTRS`, SPEC-12.6·12.9의 6·12.10의 8):
 

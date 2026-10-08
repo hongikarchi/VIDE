@@ -263,6 +263,8 @@ export interface PanelingView {
   showAssumed: (stage: PanelingStage) => void;
   notice?: string;
   remote: boolean;
+  /** The work copy's API path (`…/reports/paneling`, SPEC-16.11). */
+  base: string;
 }
 
 export function usePaneling({
@@ -388,5 +390,6 @@ export function usePaneling({
     showAssumed,
     notice: shared.notice,
     remote: remote ?? remoteSession(),
+    base: store.base,
   };
 }

@@ -700,6 +700,50 @@
       "key": "keys",
       "mode": "replace-own",
       "requires": ["paneling-confirmed"]
+    },
+    {
+      "id": "types",
+      "template": "vide.bake.block-instances@1",
+      "host": "rhino",
+      "items": "step.optimize",
+      "rows": "paneling",
+      "layer": "타입",
+      "key": "panelId",
+      "mode": "replace-own",
+      "requires": ["paneling-confirmed"]
+    },
+    {
+      "id": "connections",
+      "template": "vide.bake.textdot@1",
+      "host": "rhino",
+      "items": "step.optimize.nodeAt",
+      "rows": "paneling",
+      "layer": "결합부",
+      "key": "key",
+      "mode": "replace-own",
+      "requires": ["paneling-confirmed"]
+    },
+    {
+      "id": "cuts",
+      "template": "vide.bake.curves@1",
+      "host": "rhino",
+      "items": "step.optimize.panels",
+      "rows": "paneling",
+      "layer": "재단",
+      "key": "panelId",
+      "mode": "replace-own",
+      "requires": ["paneling-confirmed"]
+    },
+    {
+      "id": "cut-numbers",
+      "template": "vide.bake.textdot@1",
+      "host": "rhino",
+      "items": "step.optimize.panels",
+      "rows": "paneling",
+      "layer": "재단",
+      "key": "panelId",
+      "mode": "replace-own",
+      "requires": ["paneling-confirmed"]
     }
   ],
   "panel": "panel.json",
@@ -714,7 +758,7 @@
     },
     {
       "name": "host.bake",
-      "reason": "미리보기 패널 면·부재·줄눈 선을 사람이 누를 때 연결 Rhino 문서에 만듭니다"
+      "reason": "미리보기 패널 면·부재·줄눈 선·타입 블록·결합부 표식·재단 윤곽을 사람이 누를 때 연결 Rhino 문서에 만듭니다"
     }
   ],
   "selftest": {

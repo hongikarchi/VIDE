@@ -507,6 +507,8 @@ export function jigReportInputs(input: {
       assumed: assumed.length,
       questions: questions.length,
       open: open.length,
+      /** Steps whose kept result is not final (a preview, or stale: 패널링 '다시 계산 필요'). */
+      notFinal: Object.values(input.final ?? {}).filter((final) => final === false).length,
     },
     preview,
     bake: { members: bakeMembers },

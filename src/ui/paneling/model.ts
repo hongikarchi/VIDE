@@ -41,13 +41,20 @@ export interface StageMeta {
   make: string;
   /** The jig's make declaration the button runs (`jig.json` `bake[].id`, PLAN-49 T-255·T-257). */
   bake: string;
-  /** Further declarations the same button runs (2단계: the joint centre lines, `joints`). */
+  /** Further declarations the same button runs (2단계 the joint lines; 3단계 the marks and cuts). */
   also?: readonly string[];
 }
 export const STAGES: readonly StageMeta[] = [
   { id: 'preview', no: 1, title: '미리보기', make: '미리보기 만들기', bake: 'preview' },
   { id: 'members', no: 2, title: '부재', make: '부재 만들기', bake: 'members', also: ['joints'] },
-  { id: 'optimize', no: 3, title: '최적화·타입화', make: '타입 만들기', bake: 'types' },
+  {
+    id: 'optimize',
+    no: 3,
+    title: '최적화·타입화',
+    make: '타입 만들기',
+    bake: 'types',
+    also: ['connections', 'cuts', 'cut-numbers'],
+  },
 ];
 export const stageMeta = (id: PanelingStage) => STAGES.find((s) => s.id === id)!;
 
@@ -626,10 +633,28 @@ export function scheduleCsv(kind: ScheduleKind, results: Results): string {
   const body = rows.map((row) => columns.map(([key]) => csvCell(row[key])).join(','));
   return '﻿' + [head, ...body].join('\r\n') + '\r\n';
 }
-/** `패널링-<표>-YYYYMMDD-HHmm.csv`. */
-export function exportName(kind: ScheduleKind, at = new Date()) {
+/** What an export must say about itself (SPEC-16.11): assumed values left, a stale stage. */
+export interface ExportMarks {
+  assumed?: number;
+  stale?: boolean;
+}
+/** The export's head words: '가정 값 n개 포함' · '다시 계산 필요' (empty when neither). */
+export function exportMarks(marks: ExportMarks = {}): string[] {
+  return [
+    ...(marks.assumed ? [`가정 값 ${marks.assumed}개 포함`] : []),
+    ...(marks.stale ? ['다시 계산 필요'] : []),
+  ];
+}
+/**
+ * `패널링-<표>-YYYYMMDD-HHmm[-가정 값 n개 포함][-다시 계산 필요].csv`: the CSV's first line is the
+ * column head (Excel), so its marks go in the name (SPEC-16.11).
+ */
+export function exportName(kind: ScheduleKind, at = new Date(), marks: ExportMarks = {}) {
   const p = (n: number) => String(n).padStart(2, '0');
-  return `패널링-${SCHEDULE_TITLES[kind]}-${at.getFullYear()}${p(at.getMonth() + 1)}${p(at.getDate())}-${p(at.getHours())}${p(at.getMinutes())}.csv`;
+  const tail = exportMarks(marks)
+    .map((m) => `-${m}`)
+    .join('');
+  return `패널링-${SCHEDULE_TITLES[kind]}-${at.getFullYear()}${p(at.getMonth() + 1)}${p(at.getDate())}-${p(at.getHours())}${p(at.getMinutes())}${tail}.csv`;
 }
 
 // ── 질문 카드 (SPEC-16.4 2, ADR-026 §4) ──────────────────────────────────────────────────────

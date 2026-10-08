@@ -10,13 +10,17 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { packageRoot } from '../../core/package-root.ts';
 import {
+  blockDefBytes,
   encodeDataBlock,
+  isBlockTemplate,
   isPanelTemplate,
   itemBytes,
   panelCornerKeys,
   panelItemBytes,
   originOf,
   type BakeItem,
+  type BlockDef,
+  type BlockItem,
   type DataBlockHeader,
   type PanelItem,
   type TemplateName,
@@ -39,6 +43,7 @@ const FILES: Record<AnyTemplateName, string> = {
   'vide.bake.mesh@1': 'mesh.cs',
   'vide.bake.panels-uv@1': 'panels-uv.cs',
   'vide.bake.panel-solids@1': 'panel-solids.cs',
+  'vide.bake.block-instances@1': 'block-instances.cs',
   'vide.read.surface-grid@1': 'read-surface-grid.cs',
 };
 /**
@@ -122,6 +127,7 @@ export function renderTemplate(name: AnyTemplateName, block: Buffer): RenderedBo
 }
 
 const base64Length = (bytes: number) => Math.ceil(bytes / 3) * 4;
+const NO_DEF: BlockDef = { name: '', type: '', thickness: 0, outline: [] };
 /** Bytes of a block with no items (header, origin, delete list). */
 function headerBytes(header: DataBlockHeader) {
   return encodeDataBlock(header, []).length;
@@ -170,8 +176,17 @@ export function renderChunks(
   // Panel templates share corners within a body (vertex table): a panel adds only its new ones.
   const panels = isPanelTemplate(header.template);
   const seen = new Set<string>();
-  const sizeOf = (item: BakeItem) =>
-    panels ? panelItemBytes(item as PanelItem, seen) : itemBytes(header.template, item);
+  // The block template carries a type's definition in each body that places it (T-257).
+  const defs = new Map<string, BlockDef>(
+    isBlockTemplate(header.template) ? (header.blocks?.defs ?? []).map((d) => [d.name, d]) : [],
+  );
+  const defOf = (item: BakeItem) => (defs.size ? (item as BlockItem).def : '');
+  const sizeOf = (item: BakeItem) => {
+    if (panels) return panelItemBytes(item as PanelItem, seen);
+    const def = defOf(item);
+    const extra = def && !seen.has(def) ? blockDefBytes(defs.get(def) ?? NO_DEF) : 0;
+    return itemBytes(header.template, item) + extra;
+  };
   for (const item of items) {
     let size = sizeOf(item);
     if (!fits(bytes + size)) {
@@ -182,6 +197,7 @@ export function renderChunks(
       if (!fits(bytes + size)) throw new Error('BAKE_ITEM_TOO_LARGE');
     }
     if (panels) for (const key of panelCornerKeys(item as PanelItem)) seen.add(key);
+    else if (defOf(item)) seen.add(defOf(item));
     pending.push(item);
     bytes += size;
   }

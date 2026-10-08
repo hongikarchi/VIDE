@@ -97,13 +97,17 @@ const rowsInput = (over) => ({
   ...over,
 });
 
-test('the official jig declares the three makes: preview faces, members and joint lines, the last two gated', () => {
+test('the official jig declares its makes: preview faces, members and joint lines, stage-3 types, marks and cuts; all but the preview gated', () => {
   assert.deepEqual(
     manifest.bake.map((b) => [b.id, b.template, b.layer, b.rows, b.requires ?? []]),
     [
       ['preview', 'vide.bake.panels-uv@1', '미리보기', 'paneling', []],
       ['members', 'vide.bake.panel-solids@1', '부재', 'paneling', ['paneling-confirmed']],
       ['joints', 'vide.bake.curves@1', '부재', 'paneling', ['paneling-confirmed']],
+      ['types', 'vide.bake.block-instances@1', '타입', 'paneling', ['paneling-confirmed']],
+      ['connections', 'vide.bake.textdot@1', '결합부', 'paneling', ['paneling-confirmed']],
+      ['cuts', 'vide.bake.curves@1', '재단', 'paneling', ['paneling-confirmed']],
+      ['cut-numbers', 'vide.bake.textdot@1', '재단', 'paneling', ['paneling-confirmed']],
     ],
   );
   assert.ok(manifest.capabilities.some((c) => c.name === 'host.bake'));
