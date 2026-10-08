@@ -6,6 +6,7 @@ import {
   layerOptions,
   orderLayerPaths,
   subtreeItems,
+  withoutEmptyParents,
 } from '../../src/core/layer-tree.ts';
 
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -170,4 +171,30 @@ test('picker options indent sublayers and add their parents as non-pickable rows
   // With a table: Rhino order.
   const table = [layer(2, 'A', undefined), layer(1, 'B', undefined), layer(3, 'B::C', 1)];
   assert.deepEqual(orderLayerPaths(['A', 'B::C', 'B'], table), ['B', 'B::C', 'A']);
+});
+
+test('a picker drops a parent header once every layer under it is taken', () => {
+  const rows = layerOptions(['Bldg::L1', 'Bldg::L2', 'Bldg::Core::Wall', 'Site']);
+  const left = (taken) =>
+    withoutEmptyParents(
+      rows.filter((row) => !row.present || !taken.includes(row.value)),
+      (row) => row.present,
+    ).map((row) => row.value);
+  assert.deepEqual(left([]), [
+    'Bldg',
+    'Bldg::L1',
+    'Bldg::L2',
+    'Bldg::Core',
+    'Bldg::Core::Wall',
+    'Site',
+  ]);
+  assert.deepEqual(left(['Bldg::L1', 'Bldg::L2']), [
+    'Bldg',
+    'Bldg::Core',
+    'Bldg::Core::Wall',
+    'Site',
+  ]);
+  // A nested header empties with its parent.
+  assert.deepEqual(left(['Bldg::L1', 'Bldg::L2', 'Bldg::Core::Wall']), ['Site']);
+  assert.deepEqual(left(['Bldg::L1', 'Bldg::L2', 'Bldg::Core::Wall', 'Site']), []);
 });

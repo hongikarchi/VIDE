@@ -36,6 +36,26 @@ test('a parent layer filter takes its Rhino sublayers, not layers that only shar
   assert.deepEqual(ids('Bldg::L1::Walls'), ['a']);
   assert.deepEqual(ids('Bldg2'), ['b']);
 });
+test('the layer filter lists layers in Rhino panel order when the Sync has its layer table', () => {
+  const sample = structuredClone(request);
+  const encode = (text) => Buffer.from(text).toString('base64');
+  sample.result.objects.push({ id: 'c', name: 'Site', kind: 'native' });
+  sample.result.scene.push({ id: 'c', area: null, volume: null });
+  sample.result.scene[0].layer64 = encode('Bldg::L1');
+  sample.result.scene[1].layer64 = encode('Bldg::L2');
+  sample.result.scene[2].layer64 = encode('Site');
+  // Without the table: by name.
+  assert.deepEqual(quantities(sample).available.layers, ['Bldg::L1', 'Bldg::L2', 'Site']);
+  // Rhino's panel: Site, then Bldg > (L2, L1).
+  const row = (id, fullPath, parentId, order) => ({ id, parentId, fullPath, visible: true, order });
+  sample.result.layers = [
+    row('b', 'Bldg', null, 1),
+    row('l1', 'Bldg::L1', 'b', 3),
+    row('l2', 'Bldg::L2', 'b', 2),
+    row('s', 'Site', null, 0),
+  ];
+  assert.deepEqual(quantities(sample).available.layers, ['Site', 'Bldg::L2', 'Bldg::L1']);
+});
 test('CSV protects formulas and includes units and immutable candidate basis', () => {
   const csv = quantitiesCsv(quantities(request));
   assert.ok(csv.includes('"\'=SUM(1,2)"'));

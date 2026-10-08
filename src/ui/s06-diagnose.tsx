@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api } from './gateway.ts';
-import { layerOptions } from '../core/layer-tree.ts';
+import { layerOptions, withoutEmptyParents } from '../core/layer-tree.ts';
 import { messageOf } from './jig-panel/instance.ts';
 import type { JigContext } from './jigs.tsx';
 import { openContextTab } from './workspaces.ts';
@@ -90,19 +90,30 @@ const kindText = (layer: LayerSummary) =>
   Object.entries(layer.kinds)
     .map(([kind, n]) => `${KIND[kind as ObjectKind]} ${n}`)
     .join(', ');
-/** A Sync's layers as picker rows: sublayers indented under their parent (kept in given order). */
-function layerChoices(layers: readonly LayerSummary[]) {
+/**
+ * A Sync's layers as picker rows: sublayers indented under their parent (kept in given order),
+ * without the layers `taken` already holds. A parent with no objects of its own is a disabled
+ * header and stays only while some layer under it is still left to pick.
+ */
+function layerChoices(
+  layers: readonly LayerSummary[],
+  taken: (name: string) => boolean = () => false,
+) {
   const byName = new Map(layers.map((layer) => [layer.name, layer]));
   const placed = layerOptions(layers.map((layer) => layer.name).filter(Boolean));
   const rows = placed.map((option) => ({
     key: option.value,
     label: option.label,
+    depth: option.depth,
     layer: option.present ? byName.get(option.value) : undefined,
   }));
   // A row without a layer name keeps its place at the end.
   const unnamed = byName.get('');
-  if (unnamed) rows.push({ key: '', label: '(이름 없음)', layer: unnamed });
-  return rows;
+  if (unnamed) rows.push({ key: '', label: '(이름 없음)', depth: 0, layer: unnamed });
+  return withoutEmptyParents(
+    rows.filter(({ layer }) => !layer || !taken(layer.name)),
+    (row) => row.layer !== undefined,
+  );
 }
 /** 'document · layer — kind counts', as a role's layer reads in the list and in its chip. */
 const layerText = (document: string, layer: LayerSummary) =>
@@ -619,29 +630,23 @@ export function S06Diagnose({ context }: { context: JigContext }) {
                   <optgroup key={source.syncId} label={source.document}>
                     {/* Rhino sublayers indent under their parent, in the server's panel order;
                         a parent with no objects of its own is shown but not pickable. */}
-                    {layerChoices(source.layers)
-                      .filter(
-                        ({ layer }) =>
-                          !layer ||
-                          !roles[role].includes(
-                            pickValue({ syncId: source.syncId, layer: layer.name }),
-                          ),
-                      )
-                      .map(({ key, label, layer }) =>
-                        layer ? (
-                          <option
-                            key={key}
-                            value={pickValue({ syncId: source.syncId, layer: layer.name })}
-                            title={layerText(source.document, layer)}
-                          >
-                            {label + kindText(layer)}
-                          </option>
-                        ) : (
-                          <option key={key} value="" disabled>
-                            {label}
-                          </option>
-                        ),
-                      )}
+                    {layerChoices(source.layers, (name) =>
+                      roles[role].includes(pickValue({ syncId: source.syncId, layer: name })),
+                    ).map(({ key, label, layer }) =>
+                      layer ? (
+                        <option
+                          key={key}
+                          value={pickValue({ syncId: source.syncId, layer: layer.name })}
+                          title={layerText(source.document, layer)}
+                        >
+                          {label + kindText(layer)}
+                        </option>
+                      ) : (
+                        <option key={key} value="" disabled>
+                          {label}
+                        </option>
+                      ),
+                    )}
                   </optgroup>
                 ))}
               </select>

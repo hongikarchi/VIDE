@@ -73,6 +73,15 @@ function writeOpen(state: OpenState) {
   }
 }
 const NO_LAYER = '레이어 없음';
+/**
+ * A layer row's number: what Rhino has in it and its sublayers. A layer that is off (itself or
+ * under an off parent) counts the host's objects the Sync left out; a shown layer adds its own
+ * listed objects and its sublayers' numbers, so the rows under a parent add up to the parent's.
+ */
+export function shownCount<T>(node: LayerNode<T>): number {
+  if (node.hidden) return Math.max(node.hostTotal, node.total);
+  return node.children.reduce((sum, child) => sum + shownCount(child), node.own.length);
+}
 
 interface Document {
   key: string;
@@ -122,12 +131,12 @@ export function createObjectList(
   search.placeholder = '객체·레이어 검색';
   search.setAttribute('aria-label', '객체 검색');
   search.hidden = true;
-  const note = document.createElement('small');
-  note.className = 'layer-note';
-  note.hidden = true;
   const tree = document.createElement('div');
   tree.className = 'object-groups';
-  container.replaceChildren(head, search, note, tree);
+  // A tree for assistive tech (layer rows are tree items with their level); arrow keys move.
+  tree.setAttribute('role', 'tree');
+  tree.setAttribute('aria-label', '레이어');
+  container.replaceChildren(head, search, tree);
   // The search field opens from the icon; closing it clears the filter so nothing stays hidden.
   const showSearch = (show: boolean) => {
     search.hidden = !show;
@@ -167,6 +176,7 @@ export function createObjectList(
     button.title = item.type ? `${item.name} · ${typeLabel(item.type)}` : item.name;
     button.setAttribute('aria-label', item.name);
     button.setAttribute('aria-pressed', String(selected.has(item.id)));
+    button.tabIndex = -1;
     button.onclick = (e) => select([item.id], modeOf(e));
     rows.set(item.id, button);
     return button;
@@ -190,12 +200,15 @@ export function createObjectList(
     const wrap = document.createElement('div');
     wrap.className = 'layer';
     wrap.dataset.path = node.fullPath;
+    wrap.setAttribute('role', 'treeitem');
+    wrap.setAttribute('aria-level', String(node.depth + 1));
+    wrap.setAttribute('aria-label', node.name);
     if (node.hidden) wrap.classList.add('layer-off');
     const toggle = document.createElement('button');
     toggle.type = 'button';
     toggle.className = 'layer-row';
+    toggle.tabIndex = -1;
     toggle.style.setProperty('--depth', String(node.depth));
-    toggle.setAttribute('aria-level', String(node.depth + 1));
     const empty = node.total === 0 && node.children.length === 0;
     const chevron = document.createElement('span');
     chevron.className = 'layer-chevron';
@@ -224,18 +237,22 @@ export function createObjectList(
     }
     const count = document.createElement('span');
     count.className = 'layer-count';
-    count.textContent = (
-      node.hidden && node.total === 0 ? node.hostTotal : node.total
-    ).toLocaleString();
+    const shown = shownCount(node);
+    count.textContent = shown.toLocaleString();
     toggle.append(count);
-    const left = node.hostTotal - node.total;
+    // The badge's number, and how much of it the Sync left out (off layers are not brought in).
+    const left = shown - node.total;
     toggle.title = [
       node.fullPath,
       node.children.length
-        ? `이 레이어 ${node.own.length.toLocaleString()}개 · 하위 레이어 포함 ${node.total.toLocaleString()}개`
-        : `${node.total.toLocaleString()}개`,
-      node.hidden && left > 0
-        ? `${node.visible ? '상위 레이어가 꺼져' : '꺼져'} 있어 ${left.toLocaleString()}개는 가져오지 않음`
+        ? node.hidden
+          ? `하위 레이어 포함 ${shown.toLocaleString()}개`
+          : `이 레이어 ${node.own.length.toLocaleString()}개 · 하위 레이어 포함 ${shown.toLocaleString()}개`
+        : `${shown.toLocaleString()}개`,
+      left > 0
+        ? node.hidden
+          ? `${node.visible ? '상위 레이어가 꺼져' : '꺼져'} 있어 ${left.toLocaleString()}개는 가져오지 않음`
+          : `꺼진 하위 레이어의 ${left.toLocaleString()}개는 가져오지 않음`
         : '',
       empty ? '' : '눌러서 열기',
     ]
@@ -243,11 +260,13 @@ export function createObjectList(
       .join(' · ');
     const body = document.createElement('div');
     body.className = 'layer-objects';
+    body.setAttribute('role', 'group');
     wrap.append(toggle);
     if (node.total > 0) {
       const pick = document.createElement('button');
       pick.type = 'button';
       pick.className = 'group-select';
+      pick.tabIndex = -1;
       pick.textContent = '선택';
       pick.title = node.children.length
         ? '이 레이어와 하위 레이어 전체 선택 · Shift 추가 · Ctrl 제외'
@@ -271,7 +290,10 @@ export function createObjectList(
         return;
       }
       toggle.setAttribute('aria-expanded', String(expanded));
+      wrap.setAttribute('aria-expanded', String(expanded));
       body.hidden = !expanded;
+      // Closing a layer around the keyboard's row moves that row to the layer itself.
+      if (!expanded && active && body.contains(active)) activate(toggle);
       if (!expanded || filled) return;
       filled = true;
       // Sublayers first, then the layer's own objects (as in Rhino's panel).
@@ -293,6 +315,65 @@ export function createObjectList(
     show(isOpen(file, node));
     return wrap;
   }
+  /** The row that is in the Tab order (with its layer's 선택 button). */
+  let active: HTMLElement | undefined;
+  const pickOf = (element: HTMLElement) =>
+    element.classList.contains('layer-row')
+      ? element.parentElement?.querySelector<HTMLElement>(':scope > .group-select')
+      : undefined;
+  function activate(element: HTMLElement) {
+    if (active === element) return;
+    if (active) {
+      active.tabIndex = -1;
+      const pick = pickOf(active);
+      if (pick) pick.tabIndex = -1;
+    }
+    active = element;
+    element.tabIndex = 0;
+    const pick = pickOf(element);
+    if (pick) pick.tabIndex = 0;
+  }
+  /** Layer and object rows a viewer can see now, top to bottom. */
+  const visibleRows = () =>
+    [...tree.querySelectorAll<HTMLElement>('.layer-row, .object')].filter(
+      (element) => !element.parentElement?.closest('.layer-objects[hidden]'),
+    );
+  /** The layer row a row sits under (none for a top layer). */
+  const parentRow = (element: HTMLElement) => {
+    const own = element.classList.contains('layer-row')
+      ? element.parentElement?.parentElement
+      : element.parentElement;
+    return own?.closest('.layer')?.querySelector<HTMLElement>(':scope > .layer-row') ?? undefined;
+  };
+  tree.addEventListener('focusin', (event) => {
+    const target = event.target as HTMLElement;
+    if (target.matches('.layer-row, .object')) activate(target);
+  });
+  // Tree keys (WAI-ARIA tree view): up/down move, right opens or goes to the first sublayer or
+  // object, left closes or goes to the parent layer, Home/End go to the first/last row.
+  tree.addEventListener('keydown', (event) => {
+    const target = event.target as HTMLElement;
+    if (!target.matches('.layer-row, .object') || event.altKey || event.ctrlKey || event.metaKey)
+      return;
+    const rows = visibleRows();
+    const at = rows.indexOf(target);
+    const layerRow = target.classList.contains('layer-row');
+    const expanded = target.getAttribute('aria-expanded');
+    let next: HTMLElement | undefined;
+    if (event.key === 'ArrowDown') next = rows[at + 1];
+    else if (event.key === 'ArrowUp') next = rows[at - 1];
+    else if (event.key === 'Home') next = rows[0];
+    else if (event.key === 'End') next = rows.at(-1);
+    else if (event.key === 'ArrowRight') {
+      if (layerRow && expanded === 'false') target.click();
+      else if (layerRow && expanded === 'true') next = rows[at + 1];
+    } else if (event.key === 'ArrowLeft') {
+      if (layerRow && expanded === 'true') target.click();
+      else next = parentRow(target);
+    } else return;
+    event.preventDefault();
+    next?.focus();
+  });
   function documents(items: readonly Item[]) {
     const files = new Map<string, Document>();
     for (const item of items) {
@@ -340,7 +421,6 @@ export function createObjectList(
     const fragment = document.createDocumentFragment();
     const byFile = files.length > 1;
     let layerCount = 0;
-    let flatRhino = false;
     for (const file of files) {
       const table = tableOf.get(file.key) ?? file.table;
       const tree = buildLayerTree(
@@ -372,7 +452,6 @@ export function createObjectList(
         });
       if (!roots.length) continue;
       layerCount += tree.count + (loose.length ? 1 : 0);
-      if (file.host === 'rhino' && tree.source === 'flat') flatRhino = true;
       if (byFile) {
         const heading = document.createElement('div');
         heading.className = 'layer-file';
@@ -386,12 +465,15 @@ export function createObjectList(
       ? `${items.length.toLocaleString()}개 객체 · ${layerCount.toLocaleString()}개 레이어`
       : '모델을 가져오면 레이어별로 표시됩니다.';
     searchToggle.hidden = !current.length;
-    // An older Rhino plugin sends neither the layer table nor full paths: the list cannot nest.
-    note.hidden = !flatRhino;
-    note.textContent = flatRhino
-      ? '이 Rhino 연결은 레이어 계층 정보를 보내지 않아 레이어를 이름순 한 줄로 표시합니다. 플러그인을 업데이트하면 하위 레이어가 트리로 보입니다.'
-      : '';
+    const keep = active?.closest<HTMLElement>('.layer')?.dataset.path;
+    active = undefined;
     tree.replaceChildren(fragment);
+    // One row of the tree is in the Tab order (the one used last, else the first).
+    const again = keep
+      ? [...tree.querySelectorAll<HTMLElement>('.layer')].find((wrap) => wrap.dataset.path === keep)
+      : undefined;
+    const first = (again ?? tree).querySelector<HTMLElement>('.layer-row');
+    if (first) activate(first);
   }
   search.oninput = () => {
     clearTimeout(searchTimer);

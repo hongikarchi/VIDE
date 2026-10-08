@@ -3154,7 +3154,20 @@ export async function startServer({
           send(200, { requestId: id, full: true });
           return;
         }
-        const delta = workspace.models(projectId).deltaSince(projectId, id, since, base);
+        const changes = workspace.models(projectId).deltaSince(projectId, id, since, base);
+        // The layer table and the hidden layers are small result fields a Live Sync patches in
+        // place (live-sync.ts): they travel with every delta so the layer tree follows renames,
+        // moves, order and on/off without a whole fetch.
+        const stored = (workspace.summary(projectId, id).result ?? {}) as Record<string, unknown>;
+        const delta = changes.full
+          ? changes
+          : {
+              ...changes,
+              ...(Array.isArray(stored.layers) ? { layers: stored.layers } : {}),
+              ...(stored.displayCoverage && typeof stored.displayCoverage === 'object'
+                ? { displayCoverage: stored.displayCoverage }
+                : {}),
+            };
         if (delta.full) send(200, delta);
         // The host panels keep object rows only (`view=rows`, T-123): no geometry travels.
         else if (url.searchParams.get('view') === 'rows') {

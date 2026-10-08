@@ -769,7 +769,21 @@ export class ModelStore {
         }
         changed++;
       }
-      const moved = changed + removedCount > 0;
+      // A new layer table alone (a reorder, a rename or an off switch of a layer without listed
+      // objects) moves the revision too, so the page's layer tree follows the next delta.
+      const layersMoved =
+        'layers' in patch &&
+        !(
+          this.db
+            .prepare(
+              `SELECT coalesce(json_extract(result, '$.layers') = json(?), 0) AS same
+                FROM workspace_requests WHERE id=? AND projectId=?`,
+            )
+            .get(JSON.stringify(patch.layers ?? null), requestId, projectId) as
+            | { same: number }
+            | undefined
+        )?.same;
+      const moved = changed + removedCount > 0 || layersMoved;
       this.db
         .prepare(
           `UPDATE sync_manifests SET revision=?, objectCount=?, definitionCount=?, updatedAt=?

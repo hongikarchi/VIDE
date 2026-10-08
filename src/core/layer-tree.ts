@@ -307,6 +307,24 @@ export function layerOptions(
   }));
 }
 
+/**
+ * Picker rows (in tree order, with `depth`) without the parents left empty: a row that cannot be
+ * picked itself (`pickable` false, e.g. a parent with no objects of its own) stays only while a
+ * row after it is under it. Used once a picker drops the layers it already holds.
+ */
+export function withoutEmptyParents<T extends { depth: number }>(
+  rows: readonly T[],
+  pickable: (row: T) => boolean,
+): T[] {
+  const kept: T[] = [];
+  // From the end: the next kept row tells whether something is still under a parent.
+  for (let index = rows.length - 1; index >= 0; index--) {
+    const row = rows[index];
+    if (pickable(row) || (kept[0]?.depth ?? -1) > row.depth) kept.unshift(row);
+  }
+  return kept;
+}
+
 /** A layer table made from paths alone: parents by `::`, order by first appearance. */
 function pathTable(paths: readonly string[]): HostLayer[] {
   const order = new Map<string, number>();

@@ -193,8 +193,9 @@ export function QuantityView({
         ])}
         {select('레이어 필터', 'layer', [
           ['', '전체 레이어'],
-          // Rhino sublayers indent under their parent; a parent takes its sublayers.
-          ...layerOptions([...initial.available.layers].sort((a, b) => a.localeCompare(b))).map(
+          // Rhino sublayers indent under their parent in the engine's panel order; a parent
+          // takes its sublayers.
+          ...layerOptions(initial.available.layers).map(
             (option, index, all) =>
               [
                 option.value,

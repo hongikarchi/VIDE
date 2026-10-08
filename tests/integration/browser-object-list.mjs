@@ -152,7 +152,10 @@ try {
     const rowOf = (path) => container.querySelector(`.layer[data-path="${path}"]`);
     const roots = topNames().join('|') === 'Bldg|Site';
     const bldg = rowOf('Bldg');
-    const subtreeCount = bldg.querySelector('.layer-count').textContent === '4';
+    // 4 brought in under L1 plus the 3 Rhino has on the off L2::Walls: the rows add up.
+    const subtreeCount =
+      bldg.querySelector('.layer-count').textContent === '7' &&
+      bldg.querySelector('.layer-row').title.includes('꺼진 하위 레이어의 3개는 가져오지 않음');
     const collapsed =
       bldg.querySelector('.layer-row').getAttribute('aria-expanded') === 'false' &&
       !rowOf('Bldg::L1');
@@ -226,6 +229,102 @@ try {
     const cadFlat =
       topNames().join('|') === 'A-WALL|S-BEAM' &&
       container.querySelectorAll('.layer .layer').length === 0;
+    // Counts add up under a shown parent with an off sublayer; an off parent's tooltip agrees
+    // with its badge.
+    const countTable = [
+      ['V', null, 1, true, 1],
+      ['V::Off', 1, 2, false, 2],
+      ['V::On', 1, 3, true, 1],
+      ['A', null, 4, false, 0],
+      ['A::B', 4, 5, false, 4],
+    ].map(([fullPath, parent, n, visible, objectCount]) => ({
+      id: uuid(n),
+      parentId: parent ? uuid(parent) : null,
+      fullPath,
+      visible,
+      order: n,
+      objectCount,
+    }));
+    render(
+      [
+        ['v1', 'V'],
+        ['v2', 'V::On'],
+      ].map(([id, path]) => ({
+        id,
+        name: 'Obj ' + id,
+        layer: path,
+        layerName: path,
+        documentKey: 'doc-count',
+        documentName: 'count.3dm',
+        layerTable: countTable,
+        host: 'rhino',
+      })),
+      [],
+    );
+    if (rowOf('V').querySelector('.layer-row').getAttribute('aria-expanded') !== 'true')
+      rowOf('V').querySelector('.layer-row').click();
+    const countOf = (path) =>
+      Number(rowOf(path).querySelector(':scope > .layer-row .layer-count').textContent);
+    const countsAddUp =
+      countOf('V') === 4 &&
+      countOf('V::Off') === 2 &&
+      countOf('V::On') === 1 &&
+      countOf('V') === countOf('V::Off') + countOf('V::On') + 1 &&
+      countOf('A') === 4 &&
+      rowOf('A').querySelector('.layer-row').title.includes('하위 레이어 포함 4개') &&
+      rowOf('A').querySelector('.layer-row').title.includes('꺼져 있어 4개는 가져오지 않음') &&
+      !rowOf('A').querySelector('.layer-row').title.includes('0개');
+    // Tree semantics and keys: a tree of tree items with their level (not on the button), one
+    // row in the Tab order, arrows move, open and close.
+    const treeRole = container.querySelector('[role=tree]');
+    const vItem = rowOf('V');
+    const v = vItem.querySelector('.layer-row');
+    const treeSemantics =
+      Boolean(treeRole) &&
+      vItem.getAttribute('role') === 'treeitem' &&
+      vItem.getAttribute('aria-level') === '1' &&
+      rowOf('V::On').getAttribute('aria-level') === '2' &&
+      !v.hasAttribute('aria-level') &&
+      vItem.querySelector('.layer-objects').getAttribute('role') === 'group' &&
+      container.querySelectorAll('.object-groups [tabindex="0"]').length === 2 &&
+      v.tabIndex === 0;
+    const key = (target, name) =>
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true }));
+    v.focus();
+    key(v, 'ArrowDown');
+    const downToChild = document.activeElement === rowOf('V::Off').querySelector('.layer-row');
+    key(document.activeElement, 'ArrowLeft');
+    const leftToParent = document.activeElement === v;
+    key(v, 'ArrowLeft');
+    const leftCloses =
+      v.getAttribute('aria-expanded') === 'false' &&
+      vItem.getAttribute('aria-expanded') === 'false';
+    key(v, 'ArrowRight');
+    const rightOpens = v.getAttribute('aria-expanded') === 'true';
+    key(v, 'End');
+    const endLast = document.activeElement === rowOf('A').querySelector('.layer-row');
+    const roving =
+      container.querySelectorAll('.object-groups .layer-row[tabindex="0"]').length === 1 &&
+      document.activeElement.tabIndex === 0 &&
+      v.tabIndex === -1;
+    // A Rhino file with no sublayers and no table lists flat with no plugin advice.
+    render(
+      [
+        {
+          id: 'o1',
+          name: 'x',
+          layer: 'Walls',
+          layerName: 'Walls',
+          host: 'rhino',
+          documentKey: 'k3',
+          documentName: 'o.3dm',
+        },
+      ],
+      [],
+    );
+    const noFlatNote =
+      !container.querySelector('.layer-note') &&
+      !container.textContent.includes('플러그인을 업데이트');
     container.remove();
     return {
       initialMs,
@@ -260,6 +359,15 @@ try {
       searchCleared,
       inferred,
       cadFlat,
+      countsAddUp,
+      treeSemantics,
+      downToChild,
+      leftToParent,
+      leftCloses,
+      rightOpens,
+      endLast,
+      roving,
+      noFlatNote,
     };
   });
   assert.equal(result.replaced, 0);
@@ -294,6 +402,15 @@ try {
     'searchCleared',
     'inferred',
     'cadFlat',
+    'countsAddUp',
+    'treeSemantics',
+    'downToChild',
+    'leftToParent',
+    'leftCloses',
+    'rightOpens',
+    'endLast',
+    'roving',
+    'noFlatNote',
   ])
     assert.equal(result[key], true, key);
   console.log(JSON.stringify(result));

@@ -1705,16 +1705,6 @@ body.left-hidden.right-hidden main {
 .layer-off > .layer-row .sw {
   opacity: 0.4;
 }
-.layer-note {
-  display: block;
-  margin: 0 0 6px;
-  padding: 0 6px;
-  font-size: 11px;
-  color: var(--text-3);
-}
-.layer-note[hidden] {
-  display: none;
-}
 .layer-row .sw {
   flex: 0 0 9px;
   width: 9px;

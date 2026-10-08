@@ -135,6 +135,17 @@ test('a Live Sync delta changes, appends and removes as applyDisplayDelta would,
     models.applyDelta(projectId, 's1', { objects: [], scene: [], removed: [] }).revision,
     2,
   );
+  // The same layer table again leaves it too; a new table alone (a Rhino reorder) moves it, so a
+  // page following the revision fetches the delta and its layer table.
+  const empty = { objects: [], scene: [], removed: [] };
+  assert.equal(models.applyDelta(projectId, 's1', empty, { layers: [{ name: 'L' }] }).revision, 2);
+  assert.equal(
+    models.applyDelta(projectId, 's1', empty, { layers: [{ name: 'L', order: 1 }] }).revision,
+    3,
+  );
+  assert.equal(models.header(projectId, 's1').revision, 3);
+  const layerDelta = models.deltaSince(projectId, 's1', 2);
+  assert.deepEqual([layerDelta.full, layerDelta.objects, layerDelta.removed], [undefined, [], []]);
   // Removed and re-added in one page: appended at the end, like applyDisplayDelta.
   const again = { objects: [object('a')], scene: [mesh('a')], removed: ['a'] };
   const before = models.load(projectId, 's1');

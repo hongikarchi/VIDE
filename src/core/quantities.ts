@@ -3,6 +3,7 @@ import type { QuantityQuery, QuantityTable } from '../contracts/quantities.ts';
 import { DomainError } from './store.ts';
 import { StoredList } from './model-store.ts';
 import { sceneItems } from './scene-items.ts';
+import { orderLayerPaths, type HostLayer } from './layer-tree.ts';
 export interface SourceScene {
   id: string;
   nativeType?: string;
@@ -21,6 +22,8 @@ export interface SourceRequest {
     objects: { id: string; name: string; kind?: string }[];
     /** An array, or a stored list read (and checked) one item at a time (T-129). */
     scene: readonly SourceScene[] | StoredList;
+    /** Rhino's layer table (nesting and panel order); the layer filter follows it. */
+    layers?: unknown;
   };
 }
 type Metric = 'length' | 'area' | 'volume';
@@ -117,7 +120,19 @@ export function quantities(request: SourceRequest, rawQuery: unknown = {}): Quan
     available: {
       objects: rows.map(({ id, name }) => ({ id, name })),
       types: [...new Set(rows.map((row) => row.type))],
-      layers: [...new Set(rows.map((row) => row.layer).filter((value) => value !== null))],
+      // In Rhino's panel order (sublayers under their parent) when the Sync has its layer table,
+      // otherwise by name; the picker indents sublayers either way (SPEC-01.9 4).
+      layers: orderLayerPaths(
+        [...new Set(rows.map((row) => row.layer).filter((value) => value !== null))].sort((a, b) =>
+          a.localeCompare(b),
+        ),
+        Array.isArray(result.layers)
+          ? (result.layers as Partial<HostLayer>[]).filter(
+              (layer): layer is HostLayer =>
+                typeof layer?.fullPath === 'string' && layer.fullPath !== '',
+            )
+          : undefined,
+      ),
     },
     totalCount: rows.length,
     rows: filtered,

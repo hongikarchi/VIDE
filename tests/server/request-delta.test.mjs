@@ -124,6 +124,27 @@ test('request geometry and deltas over HTTP', async (t) => {
     continued.body.scene.map((entry) => entry.nativeId),
     ['a'],
   );
+  // A new layer table alone (Rhino reordered or switched layers): the revision moves and the
+  // delta carries the stored table and hidden layers, as binary and as rows.
+  const layers = [
+    { id: 'l1', parentId: null, fullPath: 'Bldg', visible: true, order: 0, objectCount: 0 },
+    { id: 'l2', parentId: 'l1', fullPath: 'Bldg::L1', visible: false, order: 1, objectCount: 2 },
+  ];
+  workspace.applyDelta(
+    project.id,
+    's1',
+    { objects: [], scene: [], removed: [] },
+    { layers, displayCoverage: { hiddenLayers: [{ path: 'Bldg::L1', count: 2 }] } },
+  );
+  for (const view of ['', '&view=rows']) {
+    const layered = await get(`${base}/s1/delta?since=2${view}`);
+    assert.deepEqual(
+      [layered.body.revision, layered.body.objects, layered.body.removed],
+      [3, [], []],
+    );
+    assert.deepEqual(layered.body.layers, layers);
+    assert.deepEqual(layered.body.displayCoverage.hiddenLayers, [{ path: 'Bldg::L1', count: 2 }]);
+  }
   // Another basis, a revision ahead or not stored per object: read the request whole.
   assert.deepEqual((await get(`${base}/s2/delta?since=2&base=other`)).body, {
     requestId: 's2',

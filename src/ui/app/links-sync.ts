@@ -38,8 +38,27 @@ export const deltaReplySchema = z.union([
     scene: z.array(z.object({ id: z.string(), nativeId: z.string() }).passthrough()),
     removed: z.array(z.string()),
     definitions: z.record(z.string(), z.unknown()).optional(),
+    // The Sync's current layer table and hidden layers (a Live Sync patches them in place).
+    layers: z.array(z.unknown()).optional(),
+    displayCoverage: z.record(z.string(), z.unknown()).optional(),
   }),
 ]);
+/**
+ * The small result fields a delta carries besides its objects (layer table, hidden layers). An
+ * unchanged field keeps the held value itself: a new layer table redraws every layer row.
+ */
+function deltaFields(
+  held: { layers?: unknown; displayCoverage?: unknown },
+  reply: { layers?: unknown[]; displayCoverage?: Record<string, unknown> },
+) {
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  return {
+    ...(reply.layers && !same(reply.layers, held.layers) ? { layers: reply.layers } : {}),
+    ...(reply.displayCoverage && !same(reply.displayCoverage, held.displayCoverage)
+      ? { displayCoverage: reply.displayCoverage }
+      : {}),
+  };
+}
 export const refreshing = new Set<string>();
 /**
  * SPEC-01.11 Live Sync, shown: the engine changed a file's shown Sync in place (its display
@@ -104,7 +123,12 @@ export async function refreshDisplay(
       ...next,
       request: {
         ...next.request,
-        result: current.scene ? { ...current, ...merged } : { ...current, objects: merged.objects },
+        // The layer table comes along so the tree shows renames, moves, order and on/off.
+        result: {
+          ...current,
+          ...(current.scene ? merged : { objects: merged.objects }),
+          ...deltaFields(current, reply),
+        } as typeof current,
       },
     };
     heldRevision.set(id, reply.revision);
@@ -161,7 +185,11 @@ async function continueFrom(
     } = (entry.request.result ?? {}) as NonNullable<typeof entry.request.result>;
     entry.request = {
       ...entry.request,
-      result: basis.scene ? { ...light, ...merged } : { ...light, objects: merged.objects },
+      result: {
+        ...light,
+        ...(basis.scene ? merged : { objects: merged.objects }),
+        ...deltaFields(light, reply),
+      } as typeof light,
     };
     const index = draftState.state.messages.findIndex((item) => item.id === request.id);
     if (index >= 0) draftState.state.messages[index] = entry;
