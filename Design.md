@@ -80,6 +80,7 @@ jig·보고서·자료 화면(§14)이 함께 쓰는 이름은 위 토큰을 가
 --zone-warn: color-mix(in srgb, var(--warn) 10%, transparent);
 --zone-no: color-mix(in srgb, var(--ng) 9%, transparent);
 --ov-grid: var(--text-3);  --ov-new: var(--text-1);  --ov-existing: var(--text-4);  --ov-clash: var(--ng);
+--ov-cat-1 … --ov-cat-12: #4e79a7 #f28e2b #59a14f #b07aa1 #76b7b2 #edc948 #9c755f #ff9da7 #86bcb6 #8cd17d #a0cbe8 #d4a6c8;  /* 겹침 범주 색 순서(패널 타입 등), 두 테마 같음 */
 --bar-base: var(--border);  --bar-alt: var(--text-4);  --bar-strong: var(--text-2);  --bar-actual: var(--accent);
 /* 글자·간격 */
 --fs-eyebrow: 11px;  --fs-small: 12px;  --fs-body: 13px;  --fs-lede: 15px;  --fs-h3: 20px;

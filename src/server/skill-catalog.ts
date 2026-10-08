@@ -11,7 +11,7 @@ import { JigStore } from '../core/jig-store.ts';
 import type { Workspace } from '../core/workspace.ts';
 import { JIGS } from '../jigs/catalog.ts';
 import { LEGACY_JIG_ICONS } from '../contracts/jig-icons.ts';
-import { OFFICIAL_JIG_ROUTING } from '../ui/request-route.ts';
+import { OFFICIAL_JIG_ROUTING, OFFICIAL_TOOL_ROUTING } from '../ui/request-route.ts';
 import {
   DEFAULT_OPEN,
   FIRST_HARD,
@@ -59,6 +59,11 @@ export async function skillCatalog(
       continue;
     }
     const front = skillFront(readSkill(jig.dir, jig.manifest.skill));
+    // An official tool jig's own routing words join those of its skill.md (SPEC-07.18).
+    const routing = entry.stage === 'official' ? OFFICIAL_TOOL_ROUTING[jig.id] : undefined;
+    const words = [...new Set([...(front.words ?? []), ...(routing?.words ?? [])])];
+    const notFor = [...new Set([...(front.not_for ?? []), ...(routing?.notFor ?? [])])];
+    const intent = front.intent_en ?? routing?.intent;
     out.push({
       id: jig.id,
       name: front.name ?? jig.manifest.name,
@@ -68,9 +73,9 @@ export async function skillCatalog(
       ...(jig.manifest.icon ? { icon: jig.manifest.icon } : {}),
       description: front.description ?? jig.manifest.summary,
       ...(front.examples ? { examples: front.examples } : {}),
-      ...(front.intent_en ? { intent: front.intent_en } : {}),
-      ...(front.words ? { words: front.words } : {}),
-      ...(front.not_for ? { notFor: front.not_for } : {}),
+      ...(intent ? { intent } : {}),
+      ...(words.length ? { words } : {}),
+      ...(notFor.length ? { notFor } : {}),
       invocation: front.invocation,
       ...openingOf(jig.manifest),
     });

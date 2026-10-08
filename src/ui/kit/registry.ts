@@ -38,6 +38,12 @@ export const PART_NAMES = [
   'compliance-run',
   'compliance-summary',
   'compliance-result',
+  'paneling-stages',
+  'paneling-surface',
+  'paneling-settings',
+  'paneling-make',
+  'paneling-summary',
+  'paneling-result',
 ] as const;
 export type PartName = (typeof PART_NAMES)[number];
 
@@ -88,8 +94,9 @@ const layer = z
     key: layerKey,
     title: title.optional(),
     from: binding,
-    shape: z.enum(['point', 'line', 'polygon']),
-    /** The row field holding the geometry (default `at` · `line` · `polygon`). */
+    /** `mesh`: a 3D outline (fanned into triangles) or `{v, f}` triangles; 3D only, not in plans. */
+    shape: z.enum(['point', 'line', 'polygon', 'mesh']),
+    /** The row field holding the geometry (default `at` · `line` · `polygon` · `mesh`). */
     at: field.optional(),
     /** The row field that identifies an item (default `key`). */
     id: field.optional(),
@@ -252,6 +259,18 @@ export const PART_PROPS = {
   'compliance-run': z.object({ from: binding }).strict(),
   'compliance-summary': z.object({ from: binding }).strict(),
   'compliance-result': z.object({ from: binding }).strict(),
+  // 패널링 (SPEC-16, Design SCR-33, PLAN-49 T-253): parts of one instance of `vide/paneling`. They
+  // read the fixed steps `preview` · `members` · `optimize` (contract `src/contracts/paneling.ts`)
+  // and the instance's settings by stage, so they carry no binding: the step rail with 가정 counts,
+  // the 기준 면 card, the settings of the chosen stage with '물어볼 것'·'가정' tags and question
+  // cards, the stage's [Rhino에 만들기], the head numbers and the schedule drawer with the panels
+  // drawn in 3D.
+  'paneling-stages': z.object({ title: title.optional() }).strict(),
+  'paneling-surface': z.object({ title: title.optional() }).strict(),
+  'paneling-settings': z.object({ title: title.optional() }).strict(),
+  'paneling-make': z.object({ title: title.optional() }).strict(),
+  'paneling-summary': z.object({}).strict(),
+  'paneling-result': z.object({}).strict(),
 } satisfies Record<PartName, z.ZodType>;
 
 /** Parts not built yet: listed, but a panel that uses them is refused (none since T-057). */
@@ -275,11 +294,23 @@ export const PLACES = {
     'jig-source',
     'compliance-roles',
     'compliance-run',
+    'paneling-stages',
+    'paneling-surface',
+    'paneling-settings',
+    'paneling-make',
   ],
   views: ['viewport-overlay', 'plan-map', 'report'],
   board: ['slider-board'],
-  kpis: ['kpi-strip', 'compliance-summary'],
-  drawer: ['result-tabs', 'issue-table', 'table', 'schedule', 'ledger', 'compliance-result'],
+  kpis: ['kpi-strip', 'compliance-summary', 'paneling-summary'],
+  drawer: [
+    'result-tabs',
+    'issue-table',
+    'table',
+    'schedule',
+    'ledger',
+    'compliance-result',
+    'paneling-result',
+  ],
   tab: ['issue-table', 'table', 'schedule', 'bake-card', 'compare-bars', 'ledger'],
 } as const satisfies Record<string, readonly PartName[]>;
 export type Place = keyof typeof PLACES;

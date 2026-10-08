@@ -40,6 +40,7 @@ import { BakePart } from './bake-parts.tsx';
 import { SitePicker } from './site-parts.tsx';
 import { JigSource } from './source-parts.tsx';
 import { CompliancePart } from '../compliance/panel-part.tsx';
+import { PanelingPart } from '../paneling/panel-part.tsx';
 import { useInstance, type InstanceView, type StepReport } from './instance.ts';
 import { InstanceReportPart, renderReportPart } from './report-parts.tsx';
 import { scopeOf, validatePanel, type PanelAction } from './spec.ts';
@@ -658,6 +659,22 @@ export function JigPanel({
       case 'compliance-result':
         return (
           <CompliancePart
+            key={key}
+            part={part}
+            host={host}
+            instanceId={instanceId}
+            jig={jig}
+            data={data}
+          />
+        );
+      case 'paneling-stages':
+      case 'paneling-surface':
+      case 'paneling-settings':
+      case 'paneling-make':
+      case 'paneling-summary':
+      case 'paneling-result':
+        return (
+          <PanelingPart
             key={key}
             part={part}
             host={host}

@@ -1,0 +1,308 @@
+/* 패널링 jig 부품 (Design SCR-33). Tokens from ../tokens.css; panel colours are the overlay tokens
+   (--ov-existing · --ov-clash · --ov-cat-1…12) and the verdict tokens. No coloured side bars: the
+   chosen stage and row are a soft background. */
+
+.pnl-mono {
+  font-family: var(--font-mono);
+  font-size: var(--fs-eyebrow);
+}
+.pnl-wide {
+  width: 100%;
+}
+.pnl-warn {
+  margin: 0;
+  color: var(--warn);
+}
+.pnl-empty {
+  margin: 0;
+  padding: var(--s2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-recessed);
+  color: var(--muted);
+}
+.pnl-line,
+.pnl-notice {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* --- 단계 레일 ------------------------------------------------------------------------------ */
+.pnl-rail {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pnl-rail button {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--s2);
+  align-items: baseline;
+  width: 100%;
+  padding: var(--s1) var(--s2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pnl-rail button:hover {
+  background: var(--bg-hover);
+}
+.pnl-rail button[aria-pressed='true'] {
+  background: var(--bg-selected);
+  font-weight: 600;
+}
+.pnl-rail button[data-dim] {
+  opacity: 0.55;
+}
+.pnl-rail-no {
+  font-family: var(--font-mono);
+}
+.pnl-rail-state {
+  color: var(--muted);
+  font-size: var(--fs-eyebrow);
+  font-weight: 400;
+}
+.pnl-rail button[data-state='stale'] .pnl-rail-state,
+.pnl-rail button[data-state='failed'] .pnl-rail-state {
+  color: var(--warn);
+}
+
+/* --- 기준 면 --------------------------------------------------------------------------------- */
+.pnl-surface {
+  display: grid;
+  gap: var(--s1);
+}
+.pnl-surface-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: baseline;
+}
+
+/* --- 설정 ------------------------------------------------------------------------------------ */
+.pnl-setting {
+  display: grid;
+  gap: 2px;
+}
+.pnl-source:empty {
+  display: none;
+}
+.pnl-source {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  font-size: var(--fs-eyebrow);
+}
+.pnl-ask {
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  background: var(--info-subtle);
+  color: var(--info);
+}
+.pnl-ask .kit-muted {
+  color: var(--muted);
+}
+.pnl-tag {
+  padding: 0 6px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.pnl-hint {
+  display: block;
+}
+.pnl-more > summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.pnl-questions {
+  display: grid;
+  gap: var(--s2);
+}
+
+/* --- 머리 수치 ------------------------------------------------------------------------------ */
+.pnl-summary {
+  display: grid;
+  gap: var(--s2);
+}
+.pnl-summary[data-stale] .kit-kpis {
+  opacity: 0.6;
+}
+.pnl-stale {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+  color: var(--warn);
+}
+.pnl-bad {
+  margin-left: var(--s1);
+  padding: 0 4px;
+  border-radius: var(--radius-sm);
+  background: var(--ng);
+  color: var(--bg);
+  font-size: var(--fs-eyebrow);
+}
+
+/* --- 서랍 ------------------------------------------------------------------------------------ */
+.pnl-drawer {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+}
+.pnl-drawer[data-stale] .pnl-body {
+  opacity: 0.6;
+}
+.pnl-drawer-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+}
+.pnl-colorby {
+  display: inline-flex;
+  gap: var(--s1);
+  align-items: center;
+  color: var(--muted);
+}
+.pnl-csv {
+  position: relative;
+}
+.pnl-csv > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.pnl-csv-menu .kit-button {
+  white-space: nowrap;
+}
+.pnl-csv-menu {
+  position: absolute;
+  min-width: 6em;
+  z-index: 2;
+  display: grid;
+  gap: 2px;
+  padding: var(--s1);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+.pnl-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+}
+.pnl-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+.pnl-chip {
+  white-space: nowrap;
+}
+.pnl-body {
+  min-width: 0;
+  overflow-x: auto;
+}
+.pnl-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.pnl-table th,
+.pnl-table td {
+  padding: 3px var(--s2);
+  border-bottom: var(--hairline) solid var(--line);
+  text-align: left;
+  font-weight: 400;
+}
+.pnl-table th {
+  color: var(--muted);
+  font-size: var(--fs-eyebrow);
+}
+.pnl-num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+.pnl-row {
+  cursor: pointer;
+}
+.pnl-row:hover {
+  background: var(--bg-hover);
+}
+.pnl-row[aria-selected='true'] {
+  background: var(--bg-selected);
+  font-weight: 600;
+}
+.pnl-row[data-status='실패'] .pnl-reason {
+  color: var(--ng);
+}
+.pnl-reason {
+  color: var(--muted);
+}
+.pnl-outline path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+}
+
+/* --- 좁은 jig 열 (420px 이하) --------------------------------------------------------------- */
+@container (max-width: 420px) {
+  .pnl-rail {
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+  }
+  .pnl-rail button {
+    grid-template-columns: auto 1fr;
+  }
+  .pnl-rail-state {
+    grid-column: 1 / -1;
+  }
+  .pnl-table thead {
+    display: none;
+  }
+  .pnl-table tr.pnl-row[data-panel] {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: var(--s2);
+    border-bottom: var(--hairline) solid var(--line);
+  }
+  .pnl-table tr.pnl-row[data-panel] td {
+    border: 0;
+    padding: 2px var(--s1);
+  }
+  /* 위 번호 · 타입 · 크기, 아래 등급 · 평면도 · 이유 (Design SCR-33). */
+  .pnl-table tr.pnl-row[data-panel] td:nth-child(1) {
+    grid-area: 1 / 1;
+  }
+  .pnl-table tr.pnl-row[data-panel] td:nth-child(2) {
+    grid-area: 1 / 2;
+  }
+  .pnl-table tr.pnl-row[data-panel] td:nth-child(4) {
+    grid-area: 1 / 3;
+    text-align: left !important;
+  }
+  .pnl-table tr.pnl-row[data-panel] td:nth-child(3) {
+    grid-area: 2 / 1;
+  }
+  .pnl-table tr.pnl-row[data-panel] td:nth-child(5) {
+    grid-area: 2 / 2;
+    text-align: left !important;
+  }
+  .pnl-table tr.pnl-row[data-panel] td:nth-child(6) {
+    grid-area: 2 / 3;
+  }
+}

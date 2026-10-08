@@ -107,7 +107,11 @@ export type OverlayTone =
   | 'ok'
   | 'warn'
   | 'ng'
-  | 'na';
+  | 'na'
+  | OverlayCategory;
+/** The categorical order of overlay colours (`--ov-cat-1`…`12`, e.g. 패널 타입, SPEC-16.8). */
+export type OverlayCategory = `ov-cat-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12}`;
+export const OVERLAY_CATEGORIES = 12;
 /**
  * One display primitive of a jig overlay layer (SPEC-07.10), in world metres. Polygons lie in
  * plan at height `z`; `label` draws a small tag (e.g. the issue number of a table row).

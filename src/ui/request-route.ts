@@ -172,6 +172,34 @@ export const OFFICIAL_JIG_ROUTING: Record<string, { intent: string; words: strin
   },
 };
 
+/**
+ * Words of official tool jigs (instance jigs) that open them from a request (SPEC-07.18), merged
+ * into their `skill.md` words by the catalog (src/server/skill-catalog.ts). Phrases open the jig at
+ * once; a single word ('패널링') goes to Jev.
+ */
+export const OFFICIAL_TOOL_ROUTING: Record<
+  string,
+  { intent: string; words: string[]; notFor?: string[] }
+> = {
+  // 패널링 (SPEC-16.1 1, PLAN-49 T-253): "이 면 패널로 나눠 줘".
+  'vide/paneling': {
+    intent:
+      'Panelize a Rhino surface: split it into panels by a pattern and size, preview in 3D, make members with thickness and joints, then planarize and type the panels and their joints with schedules.',
+    words: [
+      '패널링',
+      '패널 나눠',
+      '패널로 나눠',
+      '패널 분할',
+      '패널로 분할',
+      '패널 나누기',
+      '패널 타입',
+      '패널 유형화',
+      '곡면 분할',
+      '면 분할',
+    ],
+  },
+};
+
 // Words that name the file itself or change it: these requests always go to the file.
 const documentWords =
   /(원본|도면에서|도면을|cad\s*에서|캐드|zwcad|rhino\s*에서|라이노에서|파일에|삭제|지워|없애|레이어[^.]{0,12}(바꿔|변경|옮)|색(상|깔)?[을를]?\s*(바꿔|변경|바꾸)|수정|이동|옮겨|만들어|그려|생성|추가|복사|회전|늘려|줄여|저장)/i;

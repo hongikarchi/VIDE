@@ -13,6 +13,18 @@ export const TOKEN_FALLBACK = {
   'ov-new': '#121212',
   'ov-existing': '#a0a0a0',
   'ov-clash': '#b42323',
+  'ov-cat-1': '#4e79a7',
+  'ov-cat-2': '#f28e2b',
+  'ov-cat-3': '#59a14f',
+  'ov-cat-4': '#b07aa1',
+  'ov-cat-5': '#76b7b2',
+  'ov-cat-6': '#edc948',
+  'ov-cat-7': '#9c755f',
+  'ov-cat-8': '#ff9da7',
+  'ov-cat-9': '#86bcb6',
+  'ov-cat-10': '#8cd17d',
+  'ov-cat-11': '#a0cbe8',
+  'ov-cat-12': '#d4a6c8',
 } as const;
 export type ColorToken = keyof typeof TOKEN_FALLBACK;
 

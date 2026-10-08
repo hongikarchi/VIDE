@@ -136,6 +136,8 @@ export interface BakePartProps {
   projectId: string;
   instanceId: string;
   title?: string;
+  /** The words of the single make button (e.g. 패널링 '미리보기 만들기'); default '만들기'. */
+  label?: string;
   /** Bake ids to offer; every offer of the instance when omitted. */
   bake?: readonly string[];
   /** Recompute the instance (after edits were taken as 수정 사항). */
@@ -150,6 +152,7 @@ export function BakePart({
   projectId,
   instanceId,
   title = 'Rhino에 만들기',
+  label,
   bake,
   onRecompute,
   onFocus,
@@ -337,7 +340,7 @@ export function BakePart({
         <div className="kit-actions">
           {lineIds.length ? (
             <button type="button" disabled={busy || following} onClick={() => void start(lineIds)}>
-              {memberIds.length ? '선만 먼저 만들기' : '만들기'}
+              {memberIds.length ? '선만 먼저 만들기' : (label ?? '만들기')}
             </button>
           ) : null}
           {memberIds.length ? (

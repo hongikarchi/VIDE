@@ -122,6 +122,41 @@ function points(value: unknown): [number, number, number][] {
 const isPointList = (value: unknown) =>
   Array.isArray(value) && value.length >= 3 && value.every((p) => !!point(p));
 
+/**
+ * Triangles of a mesh layer row: `{v, f}` as given (xyz triples and index triples), or a 3D
+ * outline (e.g. a panel's corners) fanned from its centre.
+ */
+export function meshOf(value: unknown): { v: number[]; f: number[] } | undefined {
+  if (isRecord(value) && Array.isArray(value.v) && Array.isArray(value.f)) {
+    const v = value.v,
+      f = value.f;
+    const count = Math.floor(v.length / 3);
+    if (
+      count >= 3 &&
+      v.length % 3 === 0 &&
+      f.length >= 3 &&
+      f.length % 3 === 0 &&
+      v.every(finite) &&
+      f.every((i) => Number.isInteger(i) && (i as number) >= 0 && (i as number) < count)
+    )
+      return { v: v as number[], f: f as number[] };
+    return undefined;
+  }
+  const outline = points(value);
+  if (outline.length < 3) return undefined;
+  return fan(outline);
+}
+/** A closed outline as triangles around its centre (the centre is the last vertex). */
+export function fan(outline: readonly (readonly [number, number, number])[]) {
+  const n = outline.length;
+  const c = [0, 0, 0];
+  for (const p of outline) for (let k = 0; k < 3; k++) c[k] += p[k] / n;
+  const v = [...outline.flatMap((p) => [p[0], p[1], p[2]]), c[0], c[1], c[2]];
+  const f: number[] = [];
+  for (let i = 0; i < n; i++) f.push(i, (i + 1) % n, n);
+  return { v, f };
+}
+
 export interface LayerOptions {
   /** Colour by verdict; off shows the layer's own tone (판정색 끄기). */
   verdict: boolean;
@@ -137,8 +172,7 @@ export function layerItems(
   const value = resolve(layer.from, data);
   const base: OverlayTone = layer.tone ?? 'ov-new';
   const bands = layer.colorBy ? bandsOf(layer.bands, data) : undefined;
-  const at =
-    layer.at ?? (layer.shape === 'point' ? 'at' : layer.shape === 'line' ? 'line' : 'polygon');
+  const at = layer.at ?? (layer.shape === 'point' ? 'at' : layer.shape);
   // A bare point list (e.g. an outline) is one polygon or line.
   const rows: { id: string; geometry: unknown; row?: Record<string, unknown> }[] =
     layer.shape !== 'point' && isPointList(value)
@@ -166,6 +200,15 @@ export function layerItems(
     if (layer.shape === 'point') {
       const p = point(geometry);
       if (p) items.push({ ...common, kind: 'point', at: p });
+    } else if (layer.shape === 'mesh') {
+      const mesh = meshOf(geometry);
+      if (mesh)
+        items.push({
+          ...common,
+          kind: 'mesh',
+          ...mesh,
+          ...(layer.fill === false ? { fill: false } : {}),
+        });
     } else {
       const list = points(geometry);
       if (layer.shape === 'polygon' && list.length >= 3)
