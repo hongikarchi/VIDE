@@ -202,16 +202,35 @@ namespace Vide.Desktop
 
         /// <summary>
         /// The Windows folder picker for 대시보드 › 프로젝트 폴더 (SPEC-01.13); the page gets
-        /// <c>{type:'folder:picked', id, path}</c> (path null when cancelled). Shown after the
+        /// <c>{type:'folder:picked', id, path}</c> (path null when cancelled). It is the Explorer-style
+        /// dialog with 즐겨찾기 (<see cref="FolderPicker"/>); if that cannot open, the old tree picker;
+        /// if neither opens, <c>error</c> says so and the page opens its path field. Shown after the
         /// message handler returns, not inside it.
         /// </summary>
         public void PickFolder(string id)
         {
             BeginInvoke((Action)(() =>
             {
+                const string title = "VIDE 프로젝트 폴더를 고르세요";
                 string path = null;
-                using (var dialog = new FolderBrowserDialog { Description = "VIDE 프로젝트 폴더를 고르세요", ShowNewFolderButton = false })
-                    if (dialog.ShowDialog(this) == DialogResult.OK) path = dialog.SelectedPath;
+                string error = null;
+                if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
+                Activate();
+                try { path = FolderPicker.Pick(Handle, title); }
+                catch (Exception modern)
+                {
+                    ShellLog.Error("folder-picker-failed", modern);
+                    try
+                    {
+                        using (var dialog = new FolderBrowserDialog { Description = title, ShowNewFolderButton = false })
+                            if (dialog.ShowDialog(this) == DialogResult.OK) path = dialog.SelectedPath;
+                    }
+                    catch (Exception old)
+                    {
+                        ShellLog.Error("folder-browser-failed", old);
+                        error = "폴더 선택 창을 열지 못했습니다. 경로를 붙여넣으세요.";
+                    }
+                }
                 if (!ready || view.CoreWebView2 == null) return;
                 try
                 {
@@ -220,6 +239,7 @@ namespace Vide.Desktop
                         ["type"] = "folder:picked",
                         ["id"] = id,
                         ["path"] = path,
+                        ["error"] = error,
                     }));
                 }
                 catch { /* Page gone. */ }

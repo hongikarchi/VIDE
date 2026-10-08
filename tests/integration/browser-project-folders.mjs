@@ -1,6 +1,9 @@
 // 대시보드 › 프로젝트 폴더 (SPEC-01.13, Design §03, PLAN-26 T-091): in a browser [폴더 추가] opens a
 // path field; the engine's check decides (a drive root is refused with its reason), the row shows
-// the folder and [빼기] takes it off. Synthetic temporary folders only; no real CLI or host.
+// the folder and [빼기] takes it off. In the program window (a stand-in WebView2) the button asks
+// the shell's folder dialog: cancel changes nothing, a chosen folder is added, and when no dialog
+// opens the path field shows the shell's reason. Synthetic temporary folders only; no real CLI,
+// host or Windows dialog.
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -63,6 +66,84 @@ try {
   await section.getByRole('button', { name: `${folder} 빼기` }).click();
   await section.getByText('프로젝트 폴더를 정하면 AI가 그 안의 파일을 직접 읽습니다.').waitFor();
   assert.equal(await list.count(), 0);
+
+  // In the program window [폴더 추가] asks the shell (`folder:pick`, the Windows Explorer-style
+  // dialog); a stand-in WebView2 answers with the test's queued replies.
+  const shell = await (
+    await browser.newContext({ viewport: { width: 1440, height: 900 } })
+  ).newPage();
+  shell.setDefaultTimeout(10000);
+  shell.on('pageerror', (error) => errors.push(error.message));
+  for (const [pattern, json] of [
+    ['**/api/v1/host', { available: false }],
+    ['**/api/v1/providers', [{ id: 'codex-cli', available: true }]],
+    [
+      '**/api/v1/models',
+      [{ id: 'codex-cli', name: 'Test', provider: 'codex-cli', efforts: ['default'] }],
+    ],
+  ])
+    await shell.route(pattern, (route) => route.fulfill({ json }));
+  await shell.addInitScript(() => {
+    const target = new EventTarget();
+    const answer = (data) =>
+      setTimeout(() => target.dispatchEvent(new MessageEvent('message', { data })), 20);
+    window.__picks = [];
+    window.__replies = [];
+    window.chrome = {
+      webview: {
+        addEventListener: (type, listener) => target.addEventListener(type, listener),
+        removeEventListener: (type, listener) => target.removeEventListener(type, listener),
+        postMessage(message) {
+          if (message?.type === 'desktop:get')
+            answer({
+              type: 'desktop:state',
+              version: '0.0.0',
+              settings: { autostart: false, background: false },
+              update: { state: 'unavailable' },
+              folderPick: true,
+            });
+          if (message?.type === 'folder:pick') {
+            window.__picks.push(message);
+            answer({ type: 'folder:picked', id: message.id, ...window.__replies.shift() });
+          }
+        },
+      },
+    };
+  });
+  await shell.goto(app.launchUrl);
+  await shell.waitForFunction(() => document.querySelector('#project-picker')?.value);
+  await shell.locator('.rail [data-workspace-target="dashboard"]').click();
+  const picked = shell
+    .getByRole('region', { name: '대시보드', exact: true })
+    .getByRole('region', { name: '프로젝트 폴더' });
+  const pickedList = picked.getByRole('list', { name: '프로젝트 폴더 목록' });
+  const addButton = picked.getByRole('button', { name: '폴더 추가' });
+  await picked.getByText('프로젝트 폴더를 정하면 AI가 그 안의 파일을 직접 읽습니다.').waitFor();
+  // Cancel: nothing changes and no path field opens.
+  await shell.evaluate(() => window.__replies.push({ path: null }));
+  await addButton.click();
+  await shell.waitForFunction(() => window.__picks.length === 1);
+  await shell.waitForTimeout(200);
+  assert.equal(await picked.getByRole('textbox', { name: '폴더 경로' }).count(), 0);
+  assert.equal(await pickedList.count(), 0);
+  // A chosen folder goes to the engine and shows in the list.
+  await shell.evaluate((path) => window.__replies.push({ path }), folder);
+  await addButton.click();
+  await pickedList.getByText(folder).waitFor();
+  assert.equal(await picked.getByRole('textbox', { name: '폴더 경로' }).count(), 0);
+  // No picker could open: the path field opens with the shell's reason.
+  await shell.evaluate(() =>
+    window.__replies.push({
+      path: null,
+      error: '폴더 선택 창을 열지 못했습니다. 경로를 붙여넣으세요.',
+    }),
+  );
+  await addButton.click();
+  await picked.getByRole('alert').getByText('폴더 선택 창을 열지 못했습니다').waitFor();
+  await picked.getByRole('textbox', { name: '폴더 경로' }).waitFor();
+  assert.equal(await shell.evaluate(() => window.__picks.length), 3);
+  await picked.getByRole('button', { name: `${folder} 빼기` }).click();
+  await picked.getByText('프로젝트 폴더를 정하면 AI가 그 안의 파일을 직접 읽습니다.').waitFor();
 
   assert.deepEqual(errors, []);
   console.log('project folder browser checks passed');

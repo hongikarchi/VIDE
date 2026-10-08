@@ -1,6 +1,7 @@
 // 대시보드 › 프로젝트 폴더 (SPEC-01.13, Design §03 「대시보드의 프로젝트 폴더」): the folders of this
 // PC the project points at, and the folders the user let the AI read with [이 폴더는 항상]. In the
-// VIDE program window [폴더 추가] opens the Windows folder picker (WebView2 message `folder:pick`);
+// VIDE program window [폴더 추가] opens the Windows Explorer-style folder dialog with 즐겨찾기
+// (WebView2 message `folder:pick`; when no picker opens, the path field with the shell's reason);
 // in a browser, or a program window whose shell does not offer the picker, a path field opens.
 // The engine checks every path (exists, a folder, not a drive root, VIDE data or a key folder).
 // 자료 정리 (knowledge-collect.tsx, SPEC-08.9) always shows (without a folder it says how to start);
@@ -43,16 +44,24 @@ function useFolderPicker() {
   }, []);
   return picker;
 }
-/** The Windows folder picker of the program window; null when cancelled. */
-function pickFolder(): Promise<string | null> {
+/**
+ * The Windows folder picker of the program window (the Explorer-style dialog with 즐겨찾기): the
+ * chosen path, null when cancelled, or the shell's message when no picker could open.
+ */
+function pickFolder(): Promise<{ path: string | null; error?: string }> {
   const view = webview()!;
   const id = Math.random().toString(36).slice(2);
   return new Promise((resolve) => {
     const listen = (event: MessageEvent) => {
-      const data = event.data as { type?: string; id?: string; path?: unknown } | undefined;
+      const data = event.data as
+        | { type?: string; id?: string; path?: unknown; error?: unknown }
+        | undefined;
       if (data?.type !== 'folder:picked' || data.id !== id) return;
       view.removeEventListener('message', listen);
-      resolve(typeof data.path === 'string' && data.path ? data.path : null);
+      resolve({
+        path: typeof data.path === 'string' && data.path ? data.path : null,
+        error: typeof data.error === 'string' && data.error ? data.error : undefined,
+      });
     };
     view.addEventListener('message', listen);
     view.postMessage({ type: 'folder:pick', id });
@@ -118,8 +127,14 @@ export function ProjectFolders({
   };
   const add = async () => {
     if (!picker) return setTyping(true);
+    setReason('');
     const chosen = await pickFolder();
-    if (chosen) await change('add', chosen);
+    if (chosen.path) await change('add', chosen.path);
+    else if (chosen.error) {
+      // No picker opened: the path field, with the shell's reason.
+      setTyping(true);
+      setReason(chosen.error);
+    }
   };
   const submit = async () => {
     if (!path.trim()) return;

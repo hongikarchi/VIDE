@@ -2,8 +2,8 @@
 id: PLAN-26
 title: 대화가 화면과 작업을 이끄는 구조 — skill 시작, 토큰 정리, 셸 정리, 산출물 탭
 status: review
-version: 0.14
-updated: 2026-10-06
+version: 0.15
+updated: 2026-10-08
 owner: agent:claude
 related: [ADR-026, ADR-016, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07, ARCH-03, ARCH-01, DESIGN, RESEARCH-12, PLAN-22, PLAN-24, PLAN-40, FR-18, FR-24, FR-25, AC-48]
 ---
@@ -212,10 +212,11 @@ related: [ADR-026, ADR-016, ADR-022, ADR-021, ADR-020, SPEC-01, SPEC-02, SPEC-07
 | `src/server/agent-tools.ts`, `src/ai/agent-connection.ts`, `src/ai/instructions/common.md` | 도구 `file_read`·`file_list`(계획 모드 포함), 오류 코드, 지시문 |
 | `src/server/execution.ts`, `src/server/server.ts` | 턴마다 파일 도구를 범위에 더함, 권한 질문(자체 질문과 같은 대기 경로·답 경로, 원격의 '항상'은 이번만), 진행 기록에 경로, `GET·POST …/folders`·`POST …/folders/remove`, 원격은 GET만 |
 | `src/ui/dashboard.tsx`, `dashboard.css`, `src/desktop/shell/ShellContext.cs`·`ShellForm.cs` | 대시보드 '프로젝트 폴더' 구역(목록·[폴더 추가]·[빼기]·읽기 허용 폴더), PC 프로그램의 Windows 폴더 선택 창(`folder:pick` 메시지), 브라우저는 경로 입력 |
+| `src/desktop/shell/FolderPicker.cs`(신설, 2026-10-08), `ShellForm.cs`, `src/ui/project-folders.tsx` | 사용자 요청(2026-10-08) '폴더 추가할 때 뜨는 창이 너무 작아. 윈도우 기본 탐색기로 … 즐겨찾기나 이런게 없어서 불편'. 옛 `FolderBrowserDialog`(SHBrowseForFolder 트리)를 탐색기형 `IFileOpenDialog`(폴더 고르기)로 바꾸고, 만들 수 없으면 옛 창, 그것도 실패하면 `error`로 페이지의 경로 입력칸을 이유와 함께 연다. 메시지 형식·엔진 검사는 그대로 |
 
 **선행·외부 조건:** 없음. 실제 Claude·Codex가 권한 질문을 기다리는 동안의 도구 대기 한도(Codex 60초)는 설치본 릴리스 때 확인한다. 셸의 폴더 선택 창은 다음 설치본부터 보이고, 그 전 셸과 브라우저는 경로 입력을 쓴다.
 
-**검증 — 정상:** 단위 `tests/server/project-files.test.mjs`(폴더 더하기·빼기·검사, 안의 파일은 묻지 않고 읽음, 목록 나눠 읽기·패턴, 텍스트 구간·이미지 항목, 밖의 파일 → 질문 → 이번만/항상/거절 각각, 같은 턴의 거절 폴더는 다시 묻지 않음, 원격의 '항상'은 이번만, 진행 기록에 경로). 브라우저 `browser-project-folders.mjs`(대시보드에서 경로로 더하기·빼기, 거절 이유 표시). 전체 `npm test`·`npm run test:browser`·`npm run typecheck`·prettier. 셸은 `npm run desktop:build`로 빌드만 확인.
+**검증 — 정상:** 단위 `tests/server/project-files.test.mjs`(폴더 더하기·빼기·검사, 안의 파일은 묻지 않고 읽음, 목록 나눠 읽기·패턴, 텍스트 구간·이미지 항목, 밖의 파일 → 질문 → 이번만/항상/거절 각각, 같은 턴의 거절 폴더는 다시 묻지 않음, 원격의 '항상'은 이번만, 진행 기록에 경로). 브라우저 `browser-project-folders.mjs`(대시보드에서 경로로 더하기·빼기, 거절 이유 표시; 대역 WebView2로 셸 선택 창의 취소 → 변화 없음, 고른 폴더 → 목록, 창을 못 열면 → 경로 입력칸과 이유). 전체 `npm test`·`npm run test:browser`·`npm run typecheck`·prettier. 셸은 `npm run desktop:build`로 빌드, `tests/integration/manual-folder-picker.ps1`(인자 없이 컴파일만)로 `FolderPicker.cs` 컴파일 확인. 실제 창은 사람이 `-Open`으로 또는 다음 설치본에서 확인한다: 왼쪽 즐겨찾기·주소 표시줄, 한글 폴더 경로 그대로, 취소하면 변화 없음, 다른 드라이브·연결된 네트워크 드라이브 경로가 그대로 엔진까지 감(무인 실행 금지 — 바탕화면에 창이 뜬다).
 
 **검증 — 실패:** 정션으로 폴더 밖을 가리킴 → `FILE_FORBIDDEN`(질문 없음). `.ssh`·`.env`·VIDE 데이터 폴더 → `FILE_FORBIDDEN`(허용 폴더 안이어도). 드라이브 맨 위·데이터 폴더·없는 경로를 프로젝트 폴더로 → `FOLDER_NOT_ALLOWED`·`FOLDER_NOT_FOUND`. 답 없음·턴 중단 → `FILE_ACCESS_DENIED`와 카드 거둠.
 
