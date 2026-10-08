@@ -1,0 +1,16 @@
+{
+  "layout": "jig-run",
+  "left": [{ "part": "step-rail" }, { "part": "param-group" }],
+  "center": {
+    "views": [],
+    "kpis": {
+      "part": "kpi-strip",
+      "items": [
+        { "label": "패널", "from": "step.preview.counts.total", "unit": "개" },
+        { "label": "경계", "from": "step.preview.counts.boundary", "unit": "개" },
+        { "label": "실패", "from": "step.preview.counts.failed", "unit": "개" },
+        { "label": "목표와 다름", "from": "step.preview.counts.offTarget", "unit": "개" }
+      ]
+    }
+  }
+}

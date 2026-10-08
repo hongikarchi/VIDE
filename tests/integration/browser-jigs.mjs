@@ -249,12 +249,13 @@ try {
   // J-01 사이트 모델링, J-04 건축 가능 영역·매스 and J-11 건축개요 are official tool jigs
   // (vide/site-model T-207, vide/buildable-mass T-209, vide/building-summary T-213): one card each.
   // 도면 반영 (T-234) is a built-in screen jig of the catalogue; J-12 법규 체크 is
-  // vide/compliance-check (PLAN-48).
+  // vide/compliance-check (PLAN-48). J-07 패널링 shows its tool card (vide/paneling,
+  // PLAN-49 T-252) instead of the planned one.
   assert.equal(await official.count(), 15);
   assert.equal(await official.filter({ hasText: '법규 체크' }).count(), 1);
   assert.equal(
     await dialog.locator('.jig-card[data-source="official"][data-status="planned"]').count(),
-    5,
+    4,
   );
   assert.equal(await official.filter({ hasText: '건축개요' }).count(), 1);
   assert.equal(await official.filter({ hasText: '사이트 모델링' }).count(), 1);

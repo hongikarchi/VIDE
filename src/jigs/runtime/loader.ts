@@ -94,6 +94,9 @@ const LIBRARY_MODULES: Record<string, () => Promise<Record<string, unknown>>> = 
   // 법규 체크 model reading and role rules (PLAN-48 T-237); the check itself joins in T-238.
   'vide/compliance-kit': () =>
     import('../official/compliance-kit/index.ts') as Promise<Record<string, unknown>>,
+  // 패널링 stage computations on a sampled Rhino face (PLAN-49 T-252~).
+  'vide/paneling-kit': () =>
+    import('../official/paneling-kit/index.ts') as Promise<Record<string, unknown>>,
   // SHP reading and PNU helpers only; public-data calls stay with the engine (keys, T-205).
   'vide/site-data': () =>
     import('../official/site-data/library.ts') as Promise<Record<string, unknown>>,

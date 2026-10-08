@@ -1,0 +1,18 @@
+{
+  "steps": {
+    "preview": {
+      "schema": "vide.paneling.layout@1",
+      "counts": {
+        "total": 6,
+        "boundary": 2,
+        "pole": 0,
+        "failed": 0,
+        "dropped": 0,
+        "offTarget": 0
+      },
+      "sizeRange": { "minW": 0.1, "maxW": 1.2, "minH": 0.6, "maxH": 0.6, "area": 3 },
+      "module": [1.2, 0.6],
+      "coarseSample": true
+    }
+  }
+}

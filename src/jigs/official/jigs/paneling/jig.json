@@ -1,0 +1,456 @@
+{
+  "contractVersion": 3,
+  "id": "vide/paneling",
+  "version": "0.1.0",
+  "kind": "tool",
+  "name": "패널링",
+  "summary": "Rhino 곡면을 패턴(사각·엇갈림·마름모·삼각)과 크기로 나눠 바로 3D로 보고, 두께·줄눈으로 부재를 만들고, 평면화·타입으로 묶어 일람표와 함께 Rhino에 만듭니다. 정해지지 않은 값은 추천값으로 가정하고 되묻습니다.",
+  "icon": "grid",
+  "hosts": { "rhino": "optional" },
+  "uses": [{ "id": "vide/paneling-kit", "range": "^0.1.0" }],
+  "inputs": [{ "key": "surface", "title": "기준 면", "kind": "host-document", "host": "rhino" }],
+  "params": [
+    {
+      "key": "pattern",
+      "title": "패턴",
+      "group": "1단계 미리보기",
+      "type": "choice",
+      "default": "grid",
+      "choices": [
+        { "value": "grid", "label": "사각 격자" },
+        {
+          "value": "staggered",
+          "label": "엇갈림",
+          "consequence": "짝수 번째 행을 가로의 반만큼 밉니다"
+        },
+        { "value": "diamond", "label": "마름모", "consequence": "대각선이 가로·세로인 마름모" },
+        {
+          "value": "triangle",
+          "label": "삼각",
+          "consequence": "격자 칸을 시작 모서리 쪽 대각선으로 둘로 나눕니다"
+        }
+      ],
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 사각 격자",
+        "question": "어떤 패턴으로 나눌까요?"
+      },
+      "affects": ["preview"]
+    },
+    {
+      "key": "width",
+      "title": "패널 가로",
+      "help": "패턴 축 방향의 줄눈 중심 간격(모듈)입니다. 판 크기를 정확히 X로 하려면 X + 줄눈 폭을 넣습니다.",
+      "group": "1단계 미리보기",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "mm", "decimals": 0 },
+      "default": 1.2,
+      "range": { "min": 0.05, "max": 20, "step": 0.001 },
+      "words": { "more": ["크게", "넓게"], "less": ["작게", "좁게"], "sign": 1 },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 1,200 mm",
+        "question": "패널 크기(가로 × 세로)는 얼마로 할까요?"
+      },
+      "affects": ["preview"]
+    },
+    {
+      "key": "height",
+      "title": "패널 세로",
+      "help": "패턴 축과 직각 방향의 줄눈 중심 간격(모듈)입니다.",
+      "group": "1단계 미리보기",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "mm", "decimals": 0 },
+      "default": 0.6,
+      "range": { "min": 0.05, "max": 20, "step": 0.001 },
+      "words": { "more": ["크게", "높게"], "less": ["작게", "낮게"], "sign": 1 },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 600 mm",
+        "question": "패널 크기(가로 × 세로)는 얼마로 할까요?"
+      },
+      "affects": ["preview"]
+    },
+    {
+      "key": "measure",
+      "title": "크기를 재는 법",
+      "group": "1단계 미리보기",
+      "type": "choice",
+      "default": "arc-length",
+      "choices": [
+        {
+          "value": "arc-length",
+          "label": "면 위 길이",
+          "consequence": "시작 모서리를 지나는 두 기준선 위에서 크기가 목표와 같습니다"
+        },
+        {
+          "value": "parameter",
+          "label": "매개변수 같은 간격",
+          "consequence": "면을 같은 매개변수 간격으로 나눠 잘린 끝 패널이 없습니다"
+        },
+        {
+          "value": "projected",
+          "label": "투영 격자",
+          "consequence": "평면(XY) 또는 수직 입면 위 격자를 면에 비춥니다"
+        }
+      ],
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 면 위 길이",
+        "question": "패널 크기는 무엇을 기준으로 잴까요?"
+      },
+      "affects": ["preview"]
+    },
+    {
+      "key": "projection",
+      "title": "투영 평면",
+      "help": "크기를 재는 법이 '투영 격자'일 때만 씁니다.",
+      "group": "1단계 미리보기",
+      "type": "choice",
+      "default": "plan-xy",
+      "choices": [
+        { "value": "plan-xy", "label": "평면 XY" },
+        { "value": "best-vertical", "label": "면에 맞춘 수직 입면" }
+      ],
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 평면 XY",
+        "question": "투영 격자를 어느 평면에 둘까요?"
+      },
+      "affects": ["preview"]
+    },
+    {
+      "key": "axis",
+      "title": "패턴 축",
+      "group": "1단계 미리보기",
+      "type": "choice",
+      "default": "u",
+      "choices": [
+        { "value": "u", "label": "면의 U 방향" },
+        { "value": "v", "label": "면의 V 방향" }
+      ],
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 U 방향",
+        "question": "패널 가로를 면의 어느 방향으로 둘까요?"
+      },
+      "affects": ["preview"]
+    },
+    {
+      "key": "startCorner",
+      "title": "시작 모서리",
+      "group": "1단계 미리보기",
+      "type": "choice",
+      "default": "min-min",
+      "choices": [
+        { "value": "min-min", "label": "U 최소 · V 최소" },
+        { "value": "max-min", "label": "U 최대 · V 최소" },
+        { "value": "min-max", "label": "U 최소 · V 최대" },
+        { "value": "max-max", "label": "U 최대 · V 최대" }
+      ],
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 매개변수 최소 모서리",
+        "question": "어느 모서리에서 나누기 시작할까요?"
+      },
+      "affects": ["preview"]
+    },
+    {
+      "key": "flip",
+      "title": "앞면 뒤집기",
+      "help": "켜면 기준 법선(앞면)을 뒤집습니다. 두께 방향 '바깥'의 실제 쪽, 꼭짓점 순서, 곡률 부호, 거울상 판정이 함께 바뀝니다.",
+      "group": "1단계 미리보기",
+      "type": "toggle",
+      "default": false,
+      "basis": { "status": "assumed", "note": "SPEC-16.9 기본 면의 법선 그대로" },
+      "affects": ["preview"]
+    },
+    {
+      "key": "boundaryRule",
+      "title": "경계 처리",
+      "group": "1단계 미리보기",
+      "type": "choice",
+      "default": "trim",
+      "choices": [
+        {
+          "value": "trim",
+          "label": "자르기",
+          "consequence": "경계·트림에 잘린 패널을 그대로 둡니다"
+        },
+        {
+          "value": "merge",
+          "label": "이웃에 합치기",
+          "consequence": "작은 잘린 패널을 가장 긴 모서리를 함께 쓰는 이웃에 합칩니다"
+        },
+        {
+          "value": "drop",
+          "label": "빼기",
+          "consequence": "잘린 패널을 빼고 수와 위치를 보고합니다"
+        }
+      ],
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 자르기",
+        "question": "경계에서 잘리는 패널은 어떻게 할까요?"
+      },
+      "affects": ["preview"]
+    },
+    {
+      "key": "mergeBelow",
+      "title": "합치기 기준",
+      "help": "경계 처리가 '이웃에 합치기'일 때, 잘린 패널이 온 패널 면적의 이 비율보다 작으면 합칩니다.",
+      "group": "1단계 미리보기",
+      "type": "ratio",
+      "display": { "unit": "%", "decimals": 0 },
+      "default": 0.3,
+      "range": { "min": 0, "max": 1, "step": 0.01 },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 30%",
+        "question": "온 패널 면적의 몇 % 미만이면 이웃에 합칠까요?"
+      },
+      "affects": ["preview"]
+    },
+    {
+      "key": "thickness",
+      "title": "패널 두께",
+      "group": "2단계 부재",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "mm", "decimals": 0 },
+      "default": 0.05,
+      "range": { "min": 0.001, "max": 1, "step": 0.001 },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 50 mm",
+        "question": "패널 두께는 얼마인가요?"
+      },
+      "affects": []
+    },
+    {
+      "key": "thicknessSide",
+      "title": "두께 방향",
+      "group": "2단계 부재",
+      "type": "choice",
+      "default": "outside",
+      "choices": [
+        { "value": "outside", "label": "바깥(면 법선 쪽)" },
+        { "value": "inside", "label": "안" }
+      ],
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 바깥",
+        "question": "두께를 면의 어느 쪽으로 줄까요?"
+      },
+      "affects": []
+    },
+    {
+      "key": "joint",
+      "title": "줄눈 폭",
+      "help": "면 위에서 잰 이웃 판 모서리 사이 거리입니다.",
+      "group": "2단계 부재",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "mm", "decimals": 0 },
+      "default": 0.01,
+      "range": { "min": 0, "max": 0.5, "step": 0.001 },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 10 mm",
+        "question": "줄눈 폭은 얼마인가요?"
+      },
+      "affects": []
+    },
+    {
+      "key": "boundaryJoint",
+      "title": "경계 줄눈",
+      "group": "2단계 부재",
+      "type": "choice",
+      "default": "flush",
+      "choices": [
+        { "value": "flush", "label": "경계에 맞춤" },
+        { "value": "half", "label": "반 줄눈" }
+      ],
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 경계에 맞춤",
+        "question": "기준 면 경계에 닿은 모서리에도 줄눈을 둘까요?"
+      },
+      "affects": []
+    },
+    {
+      "key": "stockWidth",
+      "title": "판재 한도 가로",
+      "help": "0이면 한도 없음. 판재 한도를 넘는 패널은 나누지 않고 '판재 초과'로 표시합니다(90° 돌려 들어가면 초과 아님).",
+      "group": "2단계 부재",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "mm", "decimals": 0 },
+      "default": 0,
+      "range": { "min": 0, "max": 20, "step": 0.001 },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 없음(0)",
+        "question": "판재 크기 한도가 있나요?"
+      },
+      "affects": []
+    },
+    {
+      "key": "stockHeight",
+      "title": "판재 한도 세로",
+      "help": "0이면 한도 없음.",
+      "group": "2단계 부재",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "mm", "decimals": 0 },
+      "default": 0,
+      "range": { "min": 0, "max": 20, "step": 0.001 },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 없음(0)",
+        "question": "판재 크기 한도가 있나요?"
+      },
+      "affects": []
+    },
+    {
+      "key": "flatnessTol",
+      "title": "평면도 허용 오차",
+      "group": "3단계 최적화·타입화",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "mm", "decimals": 1 },
+      "default": 0.003,
+      "range": { "min": 0.0001, "max": 0.1, "step": 0.0001 },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 3 mm",
+        "question": "평면 패널로 볼 허용 오차는 얼마인가요?"
+      },
+      "affects": []
+    },
+    {
+      "key": "planarize",
+      "title": "평면화 방법",
+      "group": "3단계 최적화·타입화",
+      "type": "choice",
+      "default": "best-fit",
+      "choices": [
+        { "value": "none", "label": "없음" },
+        { "value": "best-fit", "label": "패널별 최적 평면" },
+        { "value": "pq", "label": "전체 평면 사각 최적화(준비 중)" }
+      ],
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 패널별 최적 평면",
+        "question": "패널을 평면으로 바꿀까요?"
+      },
+      "affects": []
+    },
+    {
+      "key": "typeTol",
+      "title": "타입 허용 오차",
+      "group": "3단계 최적화·타입화",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "mm", "decimals": 1 },
+      "default": 0.002,
+      "range": { "min": 0.0001, "max": 0.1, "step": 0.0001 },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 2 mm",
+        "question": "같은 타입으로 볼 허용 오차는 얼마인가요?"
+      },
+      "affects": []
+    },
+    {
+      "key": "maxTypes",
+      "title": "최대 타입 수",
+      "help": "0이면 제한 없음.",
+      "group": "3단계 최적화·타입화",
+      "type": "count",
+      "unit": "EA",
+      "default": 0,
+      "range": { "min": 0, "max": 5000, "step": 1 },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 제한 없음(0)",
+        "question": "패널 타입 수를 몇 개 이하로 맞출까요?"
+      },
+      "affects": []
+    },
+    {
+      "key": "flatRadius",
+      "title": "평면으로 볼 곡률 반지름",
+      "group": "3단계 최적화·타입화",
+      "type": "length",
+      "unit": "m",
+      "display": { "unit": "m", "decimals": 0 },
+      "default": 100,
+      "range": { "min": 1, "max": 100000, "step": 1 },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 100 m",
+        "question": "곡률 반지름이 얼마 이상이면 평면 패널로 볼까요?"
+      },
+      "affects": []
+    },
+    {
+      "key": "nodeAngleStep",
+      "title": "결합부 각 간격",
+      "group": "3단계 최적화·타입화",
+      "type": "angle",
+      "unit": "deg",
+      "display": { "unit": "deg", "decimals": 1 },
+      "default": 1,
+      "range": { "min": 0.1, "max": 15, "step": 0.1 },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 1°",
+        "question": "결합부 각을 몇 도 간격으로 묶을까요?"
+      },
+      "affects": []
+    }
+  ],
+  "steps": [
+    {
+      "id": "preview",
+      "title": "1단계 미리보기",
+      "kind": "library",
+      "use": "vide/paneling-kit#previewStep",
+      "reads": [
+        "input.surface",
+        "param.pattern",
+        "param.width",
+        "param.height",
+        "param.measure",
+        "param.projection",
+        "param.axis",
+        "param.startCorner",
+        "param.flip",
+        "param.boundaryRule",
+        "param.mergeBelow"
+      ],
+      "writes": "preview",
+      "speed": "live",
+      "gates": [{ "use": "inputs-present" }, { "use": "no-nan" }]
+    }
+  ],
+  "panel": "panel.json",
+  "capabilities": [
+    {
+      "name": "sync.read",
+      "reason": "연결 Rhino 문서에서 고른 기준 면을 표본으로 읽습니다"
+    },
+    {
+      "name": "library.call",
+      "reason": "공식 라이브러리 vide/paneling-kit으로 패널 배치를 계산합니다"
+    }
+  ],
+  "selftest": { "fixtures": "fixtures", "requiresHost": false },
+  "skill": "skill.md",
+  "open": { "reuse": "last", "layerRoot": "패널링" },
+  "from_request": ["pattern", "width", "height", "measure", "boundaryRule"],
+  "autorun": { "until": "preview" }
+}
