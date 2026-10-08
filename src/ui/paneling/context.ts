@@ -41,30 +41,85 @@ export interface SurfaceState {
   /** Live Sync saw the face's fingerprint move (SPEC-16.3 3). */
   changed: boolean;
 }
-const surfaceSchema = z
+// The engine's answers (PLAN-49 T-251, `src/server/paneling-routes.ts`): GET `…/paneling/surface`
+// gives the kept reference, its summary and '기준 면이 바뀜'; POST `…/paneling/surface/read` gives
+// the new reference or `ok: false` with the reason (the earlier sample stays).
+const pickedSchema = z
   .object({
-    surface: z
-      .object({
-        documentName: z.string().optional(),
-        linkId: z.string().optional(),
-        objectId: z.string().optional(),
-        faces: z.number().int().nonnegative(),
-        readAt: z.string().optional(),
-        unit: z.string().optional(),
-        extent: z.tuple([z.number(), z.number(), z.number()]).optional(),
-        changed: z.boolean().default(false),
-      })
-      .passthrough()
-      .nullable(),
+    linkId: z.string().optional(),
+    objectId: z.string().optional(),
+    faces: z.array(z.number()).default([]),
+    readAt: z.string().optional(),
   })
   .passthrough();
+const summarySchema = z
+  .object({
+    toMeters: z.number().optional(),
+    extent: z.tuple([z.number(), z.number(), z.number()]).optional(),
+  })
+  .passthrough()
+  .nullable()
+  .optional();
+const surfaceStateSchema = z
+  .object({
+    picked: pickedSchema.nullable().optional(),
+    documentName: z.string().optional(),
+    summary: summarySchema,
+    changed: z.unknown().optional(),
+  })
+  .passthrough();
+const surfaceReadSchema = z
+  .object({
+    ok: z.boolean(),
+    code: z.string().optional(),
+    message: z.string().optional(),
+    picked: pickedSchema.optional(),
+    documentName: z.string().optional(),
+    summary: summarySchema,
+  })
+  .passthrough();
+
+const UNIT_BY_METERS: [number, string][] = [
+  [0.001, 'mm'],
+  [0.01, 'cm'],
+  [1, 'm'],
+  [0.0254, 'in'],
+  [0.3048, 'ft'],
+];
+const unitOf = (toMeters?: number) =>
+  toMeters === undefined
+    ? undefined
+    : UNIT_BY_METERS.find(([m]) => Math.abs(m - toMeters) < 1e-9 * Math.max(1, m))?.[1];
+
+/** The card's view of a kept reference (null when no face was read). */
+export function surfaceStateOf(
+  answer: {
+    picked?: z.infer<typeof pickedSchema> | null;
+    documentName?: string;
+    summary?: z.infer<typeof summarySchema>;
+  },
+  changed: unknown,
+): SurfaceState | null {
+  const { picked, summary, documentName } = answer;
+  if (!picked) return null;
+  return {
+    documentName,
+    linkId: picked.linkId,
+    objectId: picked.objectId,
+    faces: picked.faces.length,
+    readAt: picked.readAt,
+    unit: unitOf(summary?.toMeters),
+    extent: summary?.extent,
+    changed: Boolean(changed),
+  };
+}
 
 /** Read failures by code (the read template's codes, ARCH-03 §9.1, and the route's); the
  * earlier sample stays (SPEC-16.3 5). */
 const SURFACE_ERRORS: Record<string, string> = {
   MESH_NOT_ACCEPTED: '메쉬 기준 면은 아직 받지 않습니다 · Rhino에서 서피스로 바꾸세요',
   NOT_A_SURFACE: '서피스나 폴리서피스의 면이 아닙니다. Rhino에서 면을 고른 뒤 누르세요.',
-  NO_SELECTION: 'Rhino에서 서피스나 폴리서피스 면을 고른 뒤 누르세요.',
+  PICK_NONE: 'Rhino에서 서피스나 폴리서피스 면을 고른 뒤 누르세요.',
   FACE_NOT_FOUND: '고른 면을 찾지 못했습니다. Rhino에서 다시 고르세요.',
   HOST_NOT_CONNECTED: '연결된 Rhino 문서가 없습니다. Rhino를 연결한 뒤 다시 누르세요.',
   UNKNOWN_UNITS: '문서 단위를 알 수 없어 읽지 않았습니다.',
@@ -108,10 +163,15 @@ class Store {
     this.state = { ...this.state, ...next };
     for (const listener of this.listeners) listener();
   }
+  get surfaceBase() {
+    return `/projects/${encodeURIComponent(this.projectId)}/paneling/surface`;
+  }
   async readSurface() {
     try {
-      const read = surfaceSchema.parse(await api(`${this.base}/paneling/surface`));
-      this.set({ surface: read.surface });
+      const read = surfaceStateSchema.parse(
+        await api(`${this.surfaceBase}?instanceId=${encodeURIComponent(this.instanceId)}`),
+      );
+      this.set({ surface: surfaceStateOf(read, read.changed) });
     } catch {
       // Nothing read yet (or no route in this engine): the card asks for a face.
       this.set({ surface: null });
@@ -120,10 +180,20 @@ class Store {
   async pickSurface(mode: 'pick' | 'reread') {
     this.set({ reading: true, surfaceError: undefined, meshRefused: false });
     try {
-      const read = surfaceSchema.parse(
-        await api(`${this.base}/paneling/surface`, 'POST', { mode }),
+      const read = surfaceReadSchema.parse(
+        await api(`${this.surfaceBase}/read`, 'POST', { instanceId: this.instanceId, mode }),
       );
-      this.set({ surface: read.surface, reading: false });
+      if (!read.ok) {
+        // A refused read keeps the earlier sample (SPEC-16.3 5).
+        const code = read.code ?? '';
+        this.set({
+          reading: false,
+          surfaceError: read.message ?? SURFACE_ERRORS[code] ?? code,
+          meshRefused: code === MESH,
+        });
+        return;
+      }
+      this.set({ surface: surfaceStateOf(read, false), reading: false });
       window.dispatchEvent(
         new CustomEvent(JIG_PARAMS_CHANGED, { detail: { instanceId: this.instanceId } }),
       );

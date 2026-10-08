@@ -255,6 +255,8 @@ export function sampleSummary(sample: SurfaceSample) {
     toMeters: sample.source.toMeters,
     absTol: sample.source.absTol,
     points: sample.faces.reduce((n, f) => n + f.nu * f.nv, 0),
+    /** Size of the sampled faces' box along x, y, z (m), for the 기준 면 card. */
+    extent: extentOf(sample.faces),
     faces: sample.faces.map((f) => {
       const inside = f.inside.reduce<number>((n, v) => n + v, 0);
       return {
@@ -270,6 +272,18 @@ export function sampleSummary(sample: SurfaceSample) {
       };
     }),
   };
+}
+function extentOf(faces: SurfaceFaceSample[]): [number, number, number] {
+  const lo = [Infinity, Infinity, Infinity];
+  const hi = [-Infinity, -Infinity, -Infinity];
+  for (const f of faces)
+    for (let k = 0; k < f.points.length; k++) {
+      const v = f.points[k];
+      if (v < lo[k % 3]) lo[k % 3] = v;
+      if (v > hi[k % 3]) hi[k % 3] = v;
+    }
+  const size = (a: number) => (Number.isFinite(hi[a] - lo[a]) ? hi[a] - lo[a] : 0);
+  return [size(0), size(1), size(2)];
 }
 function maxSpacing(f: SurfaceFaceSample) {
   const p = f.points;

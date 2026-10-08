@@ -8,7 +8,7 @@
   "icon": "grid",
   "hosts": { "rhino": "optional" },
   "uses": [{ "id": "vide/paneling-kit", "range": "^0.1.0" }],
-  "inputs": [{ "key": "surface", "title": "기준 면", "kind": "host-document", "host": "rhino" }],
+  "inputs": [{ "key": "surface", "title": "기준 면", "kind": "host-surface", "host": "rhino" }],
   "params": [
     {
       "key": "pattern",

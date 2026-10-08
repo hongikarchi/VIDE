@@ -70,16 +70,24 @@ function engine({ surface = false } = {}) {
     puts: [],
     picks: [],
   };
+  // What T-251's routes answer (`src/server/paneling-routes.ts`): the kept reference and summary.
   function read() {
     return {
+      key: 'surface',
+      picked: {
+        hash: 'h-surface',
+        linkId: 'link-1',
+        documentKey: 'link-1',
+        objectId: '6f1c2a10-0000-4000-8000-000000000001',
+        faces: [0],
+        faceHashes: ['f0'],
+        revisionKey: 'r1',
+        grid: 128,
+        readAt: '2026-10-08T09:12:00.000Z',
+        syncHash: null,
+      },
       documentName: '합성-쌍곡면.3dm',
-      linkId: 'link-1',
-      objectId: '6f1c2a10-0000-4000-8000-000000000001',
-      faces: 1,
-      readAt: '2026-10-08T09:12:00.000Z',
-      unit: 'mm',
-      extent: [30, 20, 4.5],
-      changed: false,
+      summary: { toMeters: 0.001, absTol: 0.001, points: 16384, extent: [30, 20, 4.5], faces: [] },
     };
   }
   const steps = (status) =>
@@ -98,7 +106,7 @@ function engine({ surface = false } = {}) {
     body: { layerRoot: 'VIDE::패널링', assembly: {} },
     steps: steps(() => (state.surface ? 'done' : 'pending')),
     params: panelingParams(state.by, state.values),
-    inputs: [{ key: 'surface', title: '기준 면', kind: 'surface-pick', required: true }],
+    inputs: [{ key: 'surface', title: '기준 면', kind: 'host-surface', host: 'rhino' }],
     updatedAt: '2026-10-08T09:00:00.000Z',
   });
   async function answer(route) {
@@ -155,16 +163,27 @@ function engine({ surface = false } = {}) {
       }
       return json({ affected: [...affected], instance: view() });
     }
-    if (path === `${base}/paneling/surface` && method === 'GET')
-      return json({ surface: state.surface });
-    if (path === `${base}/paneling/surface` && method === 'POST') {
+    if (path === '/projects/p1/paneling/surface' && method === 'GET') {
+      assert.equal(url.searchParams.get('instanceId'), 'i1');
+      return json(
+        state.surface
+          ? { ...state.surface, watching: false, changed: null }
+          : { key: 'surface', picked: null, summary: null, watching: false, changed: null },
+      );
+    }
+    if (path === '/projects/p1/paneling/surface/read' && method === 'POST') {
       state.picks.push(body);
       if (state.meshNext) {
         state.meshNext = false;
-        return json({ code: 'MESH_NOT_ACCEPTED', message: 'mesh' }, 400);
+        return json({
+          ok: false,
+          key: 'surface',
+          code: 'MESH_NOT_ACCEPTED',
+          message: '메쉬 기준 면은 아직 받지 않습니다 · Rhino에서 서피스로 바꾸세요',
+        });
       }
       state.surface = read();
-      return json({ surface: state.surface });
+      return json({ ok: true, ...state.surface });
     }
     if (path === `${base}/bakes` && method === 'GET')
       return json({
@@ -258,7 +277,10 @@ try {
   await card.getByRole('button', { name: '고른 면 쓰기' }).click();
   await card.getByText('면 1 · 30.00 × 20.00 m 범위 · mm 문서').waitFor();
   await card.getByText('합성-쌍곡면.3dm').waitFor();
-  assert.deepEqual(fake.state.picks, [{ mode: 'pick' }, { mode: 'pick' }]);
+  assert.deepEqual(fake.state.picks, [
+    { instanceId: 'i1', mode: 'pick' },
+    { instanceId: 'i1', mode: 'pick' },
+  ]);
   await kpi('패널').getByText('8').waitFor();
   assert.equal(await kpi('경계').textContent(), '2');
   assert.equal(await kpi('목표와 다름').textContent(), '2');

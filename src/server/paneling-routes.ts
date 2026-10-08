@@ -131,6 +131,15 @@ function changedState(
   return { watching: true, changed: null };
 }
 
+/** The linked document's name for the 기준 면 card; absent when the link is gone. */
+function documentNameOf(ctx: PanelingRouteContext, projectId: string, linkId: string) {
+  try {
+    return ctx.links?.get(projectId, linkId).name;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function surfaceState(
   ctx: PanelingRouteContext,
   projectId: string,
@@ -144,6 +153,7 @@ export async function surfaceState(
   return {
     key: input.key,
     picked: reference,
+    documentName: documentNameOf(ctx, projectId, reference.linkId),
     summary: sampleSummary(sample as SurfaceSample),
     ...changedState(ctx, projectId, reference),
   };
@@ -164,6 +174,7 @@ export async function readSurface(
       ok: true;
       key: string;
       picked: Record<string, unknown>;
+      documentName: string;
       summary: ReturnType<typeof sampleSummary>;
     }
   | ({ ok: false; key: string } & ReadFailure)
@@ -255,7 +266,13 @@ export async function readSurface(
       syncHash: sync.hash,
     });
     const { ref: _ref, ...picked } = kept;
-    return { ok: true, key: input.key, picked, summary: sampleSummary(sample) };
+    return {
+      ok: true,
+      key: input.key,
+      picked,
+      documentName: link.name,
+      summary: sampleSummary(sample),
+    };
   } catch (error) {
     const read = (error as { read?: ReadFailure }).read;
     if (read) return { ok: false, key: input.key, ...read };
