@@ -91,6 +91,25 @@ export const directExecuteResultSchema = z.discriminatedUnion('ok', [
   }),
 ]);
 export type DirectExecuteResult = z.infer<typeof directExecuteResultSchema>;
+/** `direct-read` (PLAN-49 T-251): an official read template's value, or why it was refused. */
+export const directReadResultSchema = z.discriminatedUnion('ok', [
+  z.object({
+    ok: z.literal(true),
+    value: z.unknown(),
+    log: z.string().optional(),
+    ms: z.number().nonnegative().optional(),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: z.string(),
+    message: z.string().optional(),
+    exceptionType: z.string().nullish(),
+    diagnostics: z.array(z.string()).optional(),
+    /** READ_CHANGED_DOCUMENT: whether what the template did was put back. */
+    reverted: z.boolean().optional(),
+  }),
+]);
+export type DirectReadResult = z.infer<typeof directReadResultSchema>;
 export const directUndoResultSchema = z.object({
   ok: z.boolean(),
   already: z.boolean().optional(),

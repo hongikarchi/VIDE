@@ -193,6 +193,60 @@ internal sealed class DirectExecutor : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// `direct-read` (PLAN-49 T-251, ARCH-03 §9.1): an official read template (C# body, same compile
+    /// and CodePolicy as direct-execute) that writes nothing. No undo record is opened and the result
+    /// is not kept per request (a 256² surface read is 5.7 MB). If the document changed anyway, the
+    /// objects and layers it added are removed (outside any undo record, so the person's undo list is
+    /// untouched) and the read is refused with READ_CHANGED_DOCUMENT; a change or deletion of an
+    /// existing object cannot be put back without a record and is reported as `reverted: false`.
+    /// </summary>
+    internal object Read(JsonElement request)
+    {
+        var code = request.GetProperty("code").GetString() ?? "";
+        if (code.Length is < 1 or > 65536) throw new InvalidOperationException("INVALID_CODE");
+        var compiled = Compile(code, "read:" + Guid.NewGuid().ToString("N"));
+        if (compiled.Failure != null) return compiled.Failure;
+        if (compiled.Purges) return new { ok = false, code = "CODE_POLICY_REJECTED", diagnostics = new[] { "A read template may not purge." } };
+        var before = Snapshot();
+        var touched = new HashSet<Guid>();
+        void Replaced(object? s, RhinoReplaceObjectEventArgs e) { if (e.Document == document) touched.Add(e.ObjectId); }
+        void Modified(object? s, RhinoModifyObjectAttributesEventArgs e) { if (e.Document == document) touched.Add(e.RhinoObject.Id); }
+        var layersEdited = false;
+        void Layer(object? s, Rhino.DocObjects.Tables.LayerTableEventArgs e)
+        { if (e.Document == document && e.EventType is not (Rhino.DocObjects.Tables.LayerTableEventType.Current or Rhino.DocObjects.Tables.LayerTableEventType.Sorted)) layersEdited = true; }
+        var output = new StringBuilder();
+        object? value = null;
+        Exception? failure = null;
+        var started = DateTime.UtcNow;
+        RhinoDoc.ReplaceRhinoObject += Replaced;
+        RhinoDoc.ModifyObjectAttributes += Modified;
+        RhinoDoc.LayerTableEvent += Layer;
+        try { value = Assembly.Load(compiled.Bytes!).GetType("TaskCode")!.GetMethod("Run")!.Invoke(null, [document, output]); }
+        catch (Exception error) { failure = error is TargetInvocationException { InnerException: not null } inner ? inner.InnerException! : error; }
+        finally
+        {
+            RhinoDoc.ReplaceRhinoObject -= Replaced;
+            RhinoDoc.ModifyObjectAttributes -= Modified;
+            RhinoDoc.LayerTableEvent -= Layer;
+        }
+        var changes = Changes(before, touched);
+        if (changes.Any || layersEdited)
+        {
+            foreach (var added in changes.Added) document.Objects.Delete(added.Id, true);
+            var addedLayers = changes.LayersAdded.ToHashSet();
+            foreach (var layer in document.Layers.Where(l => !l.IsDeleted && addedLayers.Contains(l.FullPath)).OrderByDescending(l => l.FullPath.Length).ToList())
+                document.Layers.Delete(layer.Index, true);
+            var reverted = changes.Changed.Count == 0 && changes.Removed.Count == 0 && changes.LayersRemoved.Count == 0 &&
+                (!layersEdited || changes.LayersAdded.Count > 0);
+            document.Views.Redraw();
+            return new { ok = false, code = "READ_CHANGED_DOCUMENT", reverted, counts = new { added = changes.Added.Count, changed = changes.Changed.Count, removed = changes.Removed.Count } };
+        }
+        if (failure != null)
+            return new { ok = false, code = "EXECUTION_FAILED", exceptionType = failure.GetType().FullName, message = Short(failure.Message) };
+        return new { ok = true, value = Value(value), log = Log(output), ms = (DateTime.UtcNow - started).TotalMilliseconds };
+    }
+
     private static object Guarded(string kind, string detail, string log, int deletes = 0, int layers = 0) =>
         new { ok = false, reverted = true, guarded = new { kind, detail, deletes, layers }, log };
 

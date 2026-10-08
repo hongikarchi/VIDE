@@ -24,6 +24,7 @@ import {
   emptyBody,
   type AssembledRole,
   type HostDocumentRef,
+  type HostSurfaceRef,
   type InstanceBody,
   type Override,
   type SiteCopyRef,
@@ -778,6 +779,10 @@ export class JigRuntime {
         // The kept classified model (ARCH-03 §8.6); null until the engine has read the document.
         const kept = body.hostDocuments?.[input.key];
         inputs[input.key] = (kept && this.readGz(kept.ref)) ?? null;
+      } else if (input.kind === 'host-surface') {
+        // The kept surface sample (SPEC-16.3 3); null until a face is picked and read.
+        const kept = body.hostSurfaces?.[input.key];
+        inputs[input.key] = (kept && this.readGz(kept.ref)) ?? null;
       }
     }
     return inputs;
@@ -847,6 +852,56 @@ export class JigRuntime {
       instance.status === 'new' ? 'new' : previous?.hash !== hash ? 'stale' : undefined,
     );
     return entry;
+  }
+  /**
+   * Keep a read sample for a `host-surface` input (SPEC-16.3 3, PLAN-49 T-251): the input copy the
+   * steps read. A sample with other content makes the steps that read it '다시 계산 필요'; the same
+   * content (a [다시 읽기] of an unchanged face) only refreshes the reference.
+   */
+  async setHostSurface(
+    projectId: string,
+    instanceId: string,
+    key: string,
+    kept: Omit<HostSurfaceRef, 'ref' | 'hash'> & { sample: unknown },
+  ): Promise<HostSurfaceRef> {
+    const instance = this.store.instance(projectId, instanceId);
+    const jig = await this.jigOf(instance);
+    const input = jig.manifest.inputs.find((i) => i.key === key);
+    if (!input || input.kind !== 'host-surface') throw new DomainError('NOT_FOUND');
+    const { sample, ...reference } = kept;
+    // The read time and document revision are part of the sample's source; the content hash
+    // leaves them out (an unrelated edit elsewhere does not make the face new).
+    const content = sample as { source?: Record<string, unknown>; faces?: unknown };
+    const hash = hashValue([
+      reference.linkId,
+      reference.objectId,
+      reference.faces,
+      reference.faceHashes,
+      reference.grid,
+      hashValue({ ...content, source: { ...content.source, readAt: '', revisionKey: '' } }),
+    ]);
+    const body = bodyOf(instance.body);
+    const previous = body.hostSurfaces?.[key];
+    const changed = !previous || previous.hash !== hash;
+    // Same content: the step inputs stay byte-identical (the earlier copy and its read time).
+    const ref = changed
+      ? `surfaces/${instanceId}/${key.replace(/[^A-Za-z0-9_.-]/g, '_')}-${hash.slice(0, 16)}.json.gz`
+      : previous.ref;
+    if (changed) this.writeGz(ref, sample);
+    const entry: HostSurfaceRef = { ref, hash, ...reference };
+    body.hostSurfaces = { ...(body.hostSurfaces ?? {}), [key]: entry };
+    if (changed) this.markStale(jig, instanceId, this.graphOf(jig).affectedByInputs([key]));
+    this.bump(instanceId);
+    this.save(instance, body, instance.status === 'new' ? 'new' : changed ? 'stale' : undefined);
+    return entry;
+  }
+  /** A `host-surface` input's kept reference and sample; null when no face was read yet. */
+  hostSurface(projectId: string, instanceId: string, key: string) {
+    const instance = this.store.instance(projectId, instanceId);
+    const kept = bodyOf(instance.body).hostSurfaces?.[key];
+    if (!kept) return null;
+    const sample = this.readGz(kept.ref);
+    return sample === undefined ? null : { ...kept, sample };
   }
   /** The kept classified model of a `host-document` input, with its reference; null when unread. */
   hostDocument(projectId: string, instanceId: string, key: string) {

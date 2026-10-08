@@ -147,7 +147,8 @@ W4  T-257 3단계 만들기·내보내기 ─┐  T-258 통합 VERIFY(숨은 Rhi
 |---|---|---|
 | 계약 | 완료(2026-10-08), 같은 날 0.2 검토 보완: 이음매·극점·문서 허용 오차·표본 상한, 투영 평면, 꼭짓점 키(위상), 줄눈을 면 위 거리로 정의(`jointPlacement` → `boundaryJoint`), 줄눈 틈 범위, 평면화 틈·면에서 벗어남, 타입 `mirrorOf`·꼭짓점 수, 노드·줄눈 위치, `makeAllowed`·`makeKey`·`geomTol`·`SCHEDULE_COLUMNS` | `tests/contract/paneling-contract.test.mjs` 4개 통과 |
 | T-250 | 완료(2026-10-08). 채택: (a) 연결 Rhino 읽기 틀 + 새 `direct-read`, base64 float64, 기본 128², 엔진 3차 보간, 매개변수 좌표 만들기 틀(약 500 패널/본문). (b) 숨은 워커는 파일 연결 대안, (c) GH lite는 쓰지 않음. T-251·T-252·T-255 변경 범위를 결과로 고침. 설치 엔진 rhino8 커넥터가 실험 뒤 `other`로 남음 — 사용자 Rhino가 꺼진 뒤 다시 설치·`current` 확인 필요 | [SPIKE-2026-10-08-paneling](../tdd/SPIKE-2026-10-08-paneling.md), `tools/spikes/2026-10-08-paneling/result.json` |
-| T-251~T-258 | 계획 | — |
+| T-251 | 완료(2026-10-08). 읽기 틀 `src/jigs/bake/templates/read-surface-grid.cs` + `face-hash.cs`(`templates.ts`가 `//@include` 펼침), 호스트 방법 `direct-read`(`DirectExecution.cs` `Read` — 되돌리기 기록·결과 보관 없음, 문서가 바뀌면 더한 것을 지우고 `READ_CHANGED_DOCUMENT`; 플러그인 다시 빌드 필요), jig 입력 종류 `host-surface`(작업본 `hostSurfaces`, 같은 내용 다시 읽기는 단계를 흐리지 않음), `src/server/paneling-routes.ts`(`GET …/paneling/surface` 상태·'기준 면이 바뀜'(Live Sync 행 지문), `POST …/paneling/surface/read` 고르기·다시 읽기, 원격 403), 기본 128²·면이 많으면 줄임. 남은 것: 파일 연결만 있을 때의 숨은 워커 읽기는 `ATTACHED_ONLY`로 거절(후속), '면이 너무 작음'(패널 크기 필요)은 T-252 배치가 판단, 화면 연결은 T-253. 실행 뒤 설치 엔진 rhino8 커넥터는 `other`(다른 Rhino 실행 중이라 다시 설치 못 함, 아래 T-250과 같은 남은 일) | `tests/server/paneling-read.test.mjs` 7개, `tests/integration/rhino-paneling-read.mjs`(숨은 Rhino 8.35: 트림 구멍 쌍곡면 128² 1.8 s·되돌리기 기록 없음·문서 그대로, 6면 상자 104², 이음매·극점, 1 mm 이동 → 지문 다름, 메쉬 거절, 쓰는 본문 거절·되돌림) |
+| T-252~T-258 | 계획 | — |
 | T-259·T-260 | 후속 | — |
 
 ## 결정이 필요한 질문

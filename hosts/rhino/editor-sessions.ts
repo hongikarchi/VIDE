@@ -315,6 +315,10 @@ export class EditorSessions {
   async directExecute(target: HostTarget, input: DirectExecuteInput) {
     return (await this.attachedWorker(target)).directExecute(input);
   }
+  /** An official read template in an attached document (PLAN-49 T-251): writes nothing. */
+  async directRead(target: HostTarget, code: string) {
+    return (await this.attachedWorker(target)).directRead(code);
+  }
   async directUndo(target: HostTarget, undoId: string) {
     return (await this.attachedWorker(target)).directUndo(undoId);
   }

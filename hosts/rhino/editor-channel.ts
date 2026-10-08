@@ -8,6 +8,7 @@ import { viewMethods } from './view-tools.ts';
 import {
   directExecuteInputSchema,
   directExecuteResultSchema,
+  directReadResultSchema,
   directUndoResultSchema,
   documentFingerprintSchema,
   type DirectExecuteInput,
@@ -280,6 +281,17 @@ export function editorMethods(
         return directExecuteResultSchema.parse(value);
       return editorReply(directExecuteResultSchema, value);
     },
+    /**
+     * An official read template (PLAN-49 T-251, ARCH-03 §9.1) in this document: same compile and
+     * policy as direct-execute, no undo record, no kept result. A template that changed the
+     * document is refused (`READ_CHANGED_DOCUMENT`); compile, policy and template failures come
+     * back as results with their message (the template's own code leads it).
+     */
+    async directRead(code: string) {
+      if (typeof code !== 'string' || code.length < 1 || code.length > 65536)
+        throw failure('INVALID_CODE');
+      return directReadResultSchema.parse(await call('direct-read', { code }));
+    },
     /** Host undo of that execution's record; `not-latest` when anything was recorded after it. */
     async directUndo(undoId: string) {
       // A Rhino record serial, or a Grasshopper record (`gh:<document>:<record>`, ADR-033).
@@ -415,7 +427,7 @@ export function resumeEditor(
           port: identity.port,
           // A solve or an opened definition can take as long as an execute.
           timeoutMs:
-            ['displayPage', 'displayChanges', 'direct-execute'].includes(method) ||
+            ['displayPage', 'displayChanges', 'direct-execute', 'direct-read'].includes(method) ||
             method.startsWith('gh-')
               ? HOST_CALL_MS
               : 60000,

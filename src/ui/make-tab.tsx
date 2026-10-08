@@ -1012,6 +1012,7 @@ const INPUT_KINDS: Record<string, string> = {
   'table-file': '표 파일',
   'jig-output': '다른 jig의 결과',
   'host-document': '연결 문서 전체',
+  'host-surface': 'Rhino에서 고른 면',
 };
 /** The outline's 입력: each declared input, an assembly's roles named under it (T-101). */
 export function inputsOf(m: DraftManifest): { key: string; title: string; note: string }[] {

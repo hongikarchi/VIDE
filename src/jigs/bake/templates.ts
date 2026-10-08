@@ -21,7 +21,11 @@ import {
 export const PLACEHOLDER = '{{DATA_BASE64}}';
 /** The worker refuses longer bodies (WorkerExecutor `INVALID_CODE`). */
 export const MAX_BODY_CHARS = 65536;
-const FILES: Record<TemplateName, string> = {
+/** Official read templates (ARCH-03 §9.1): write nothing; run by `direct-read` (PLAN-49 T-251). */
+export const READ_TEMPLATE_NAMES = ['vide.read.surface-grid@1'] as const;
+export type ReadTemplateName = (typeof READ_TEMPLATE_NAMES)[number];
+type AnyTemplateName = TemplateName | ReadTemplateName;
+const FILES: Record<AnyTemplateName, string> = {
   'vide.bake.curves@1': 'curves.cs',
   'vide.bake.sweep-h@1': 'sweep-h.cs',
   'vide.bake.extrude-column@1': 'extrude-column.cs',
@@ -29,24 +33,40 @@ const FILES: Record<TemplateName, string> = {
   'vide.bake.extrude-polygon@1': 'extrude-polygon.cs',
   'vide.bake.brep-faces@1': 'brep-faces.cs',
   'vide.bake.mesh@1': 'mesh.cs',
+  'vide.read.surface-grid@1': 'read-surface-grid.cs',
 };
+/**
+ * Shared template text (SPEC-16.3 2): a line `//@include <file>.cs` is replaced by that file, so
+ * the read and make templates compute the face fingerprint with the very same host function.
+ */
+export const INCLUDE_FILES = ['face-hash.cs'] as const;
+const INCLUDE = /^\/\/@include ([a-z0-9-]+\.cs)$/gm;
 export interface Template {
-  name: TemplateName;
+  name: AnyTemplateName;
   text: string;
   /** sha256 of the template text (recorded with every bake). */
   hash: string;
   /** Where the placeholder sits. */
   at: number;
 }
-const loaded = new Map<TemplateName, Template>();
+const loaded = new Map<AnyTemplateName, Template>();
 export function templateDirectory() {
   return join(fileURLToPath(packageRoot), 'src', 'jigs', 'bake', 'templates');
 }
+const readText = (file: string) =>
+  readFileSync(join(templateDirectory(), file), 'utf8').replace(/\r\n/g, '\n');
 /** The template text, read once; a template with no or several placeholders is a build error. */
-export function loadTemplate(name: TemplateName): Template {
+export function loadTemplate(name: AnyTemplateName): Template {
   const cached = loaded.get(name);
   if (cached) return cached;
-  const text = readFileSync(join(templateDirectory(), FILES[name]), 'utf8').replace(/\r\n/g, '\n');
+  const text = readText(FILES[name]).replace(INCLUDE, (_line, file: string) => {
+    if (!(INCLUDE_FILES as readonly string[]).includes(file))
+      throw new Error('BAKE_TEMPLATE_INCLUDE');
+    const included = readText(file);
+    if (included.includes(PLACEHOLDER) || /^\/\/@include /m.test(included))
+      throw new Error('BAKE_TEMPLATE_INCLUDE');
+    return included.replace(/\n$/, '');
+  });
   const at = text.indexOf(PLACEHOLDER);
   if (at < 0 || text.indexOf(PLACEHOLDER, at + 1) >= 0)
     throw new Error('BAKE_TEMPLATE_PLACEHOLDER');
@@ -69,7 +89,7 @@ export interface RenderedBody {
   bytes: number;
 }
 /** Substitute the data block and verify the body is template text + base64 + template text. */
-export function renderTemplate(name: TemplateName, block: Buffer): RenderedBody {
+export function renderTemplate(name: AnyTemplateName, block: Buffer): RenderedBody {
   const template = loadTemplate(name);
   const base64 = block.toString('base64');
   if (!BASE64.test(base64)) throw new Error('BAKE_DATA_ENCODING');

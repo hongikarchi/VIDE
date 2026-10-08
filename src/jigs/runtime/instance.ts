@@ -60,6 +60,32 @@ export interface InstanceBody {
    * instance (the kept model and what it was read from).
    */
   hostDocuments?: Record<string, HostDocumentRef>;
+  /**
+   * `host-surface` inputs by key (SPEC-16.3·16.12, PLAN-49 T-251): the picked faces and the kept
+   * sample of their last read (an input copy that [다시 읽기] replaces).
+   */
+  hostSurfaces?: Record<string, HostSurfaceRef>;
+}
+export interface HostSurfaceRef {
+  /** The kept `SurfaceSample` under `<data>/jigs/` and the hash of its content. */
+  ref: string;
+  hash: string;
+  linkId: string;
+  documentKey: string;
+  objectId: string;
+  /** Face indexes read (Rhino Brep face index). */
+  faces: number[];
+  /** `geometryHash` of each face as the read template computed it (same order as `faces`). */
+  faceHashes: string[];
+  revisionKey: string;
+  /** Sample grid per face (nu = nv). */
+  grid: number;
+  readAt: string;
+  /**
+   * The object's display `geometryHash` in the link's Live Sync model at read time (null when
+   * that model did not have it): a later Sync row with another hash means '기준 면이 바뀜'.
+   */
+  syncHash: string | null;
 }
 export interface HostDocumentRef {
   /** The kept model under `<data>/jigs/` and the hash of its read (`revisionKey` + `rolesVersion`). */
@@ -165,5 +191,6 @@ export function bodyOf(value: unknown): InstanceBody {
     ...(body.jigOutputs ? { jigOutputs: body.jigOutputs } : {}),
     ...(body.jigOutputsUsed ? { jigOutputsUsed: body.jigOutputsUsed } : {}),
     ...(body.hostDocuments ? { hostDocuments: body.hostDocuments } : {}),
+    ...(body.hostSurfaces ? { hostSurfaces: body.hostSurfaces } : {}),
   };
 }

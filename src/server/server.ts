@@ -234,6 +234,7 @@ import {
   complianceStatuses,
   type ComplianceRouteContext,
 } from './compliance-routes.ts';
+import { panelingRoutes, panelingStatuses } from './paneling-routes.ts';
 import { SecretStore, type SecretProtector } from '../services/secrets.ts';
 import {
   ServiceSettings,
@@ -360,6 +361,7 @@ const statuses: Record<string, number> = {
   ...serviceSettingsStatuses,
   ...legalStatuses,
   ...complianceStatuses,
+  ...panelingStatuses,
 };
 export async function startServer({
   filename,
@@ -2412,6 +2414,19 @@ export async function startServer({
           links,
           sdk,
           propose: proposeRoles,
+        })
+      )
+        return;
+      // 패널링 기준 면 고르기·다시 읽기 (SPEC-16.3): a read-only template run, this PC only.
+      if (
+        await panelingRoutes(url, request.method, {
+          workspace,
+          dataDirectory: dirname(filename),
+          body: () => body(request),
+          send,
+          remote,
+          links,
+          sdk,
         })
       )
         return;

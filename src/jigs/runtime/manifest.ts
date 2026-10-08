@@ -162,6 +162,17 @@ const inputDecl = z.discriminatedUnion('kind', [
       required: z.boolean().optional(),
     })
     .strict(),
+  // 기준 면 (SPEC-16.3, PLAN-49 T-251): faces a person picked in a linked Rhino document (the
+  // human step '기준 면 고르기'). The engine reads them with the official read template when asked
+  // and gives the step the kept `SurfaceSample`; settings never call Rhino again.
+  z
+    .object({
+      ...inputBase,
+      kind: z.literal('host-surface'),
+      host: z.enum(['rhino']),
+      required: z.boolean().optional(),
+    })
+    .strict(),
   z
     .object({
       ...inputBase,
@@ -773,7 +784,12 @@ export function validateManifest(
       error('JIG_CAPABILITY_MISSING', 'capabilities', `${why}에는 ${name} 선언이 필요합니다`);
   };
   for (const input of manifest.inputs) {
-    if (input.kind === 'sync-layers' || input.kind === 'assembly' || input.kind === 'host-document')
+    if (
+      input.kind === 'sync-layers' ||
+      input.kind === 'assembly' ||
+      input.kind === 'host-document' ||
+      input.kind === 'host-surface'
+    )
       need('sync.read', `입력 ${input.key}`);
     if (input.kind === 'facts') need('facts.read', `입력 ${input.key}`);
     if (input.kind === 'jig-output') need('jig.read', `입력 ${input.key}`);

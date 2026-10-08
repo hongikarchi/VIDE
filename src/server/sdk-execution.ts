@@ -257,6 +257,17 @@ export class SdkExecution {
       ...(language && language !== 'csharp' ? { language } : {}),
     });
   }
+  /**
+   * An official read template in the attached document (`direct-read`, PLAN-49 T-251): no undo
+   * record, nothing kept in Rhino, refused when the document changed.
+   */
+  readDirect(target: HostTarget, code: string) {
+    return this.editors.directRead(target, code);
+  }
+  /** What the person has selected in the attached document now (jig '기준 면 고르기'). */
+  async selection(target: HostTarget) {
+    return (await this.editors.inspect(target)).selectedIds;
+  }
   /** [되돌리기]: host undo of that record, only while it is the document's latest one. */
   undoDirect(target: HostTarget, undoId: string) {
     return this.editors.directUndo(target, undoId);
