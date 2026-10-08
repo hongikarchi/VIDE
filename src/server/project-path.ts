@@ -39,7 +39,9 @@ export function within(folder: string, path: string) {
 
 /**
  * `path` when it is inside one of `folders` and denied in neither spelling: as written when that
- * matches a folder, else its real spelling (the one the folder listings use). `null` otherwise.
+ * matches a folder, else its real spelling (the one the folder listings use). Either way its real
+ * path must be inside a folder as well, so a junction or link below a folder that leads outside
+ * every folder (onto another drive included) is refused. `null` otherwise.
  */
 export function projectPath(
   folders: readonly string[],
@@ -48,13 +50,8 @@ export function projectPath(
 ): string | null {
   const written = win32.normalize(path);
   if (denied(written)) return null;
-  if (folders.some((folder) => under(folder, written))) {
-    // A link below the folder may still lead into a denied folder.
-    return denied(realPath(written)) ? null : written;
-  }
   const real = realPath(written);
   if (denied(real)) return null;
-  return folders.some((folder) => under(folder, real) || under(realPath(folder), real))
-    ? real
-    : null;
+  if (!folders.some((folder) => under(folder, real) || under(realPath(folder), real))) return null;
+  return folders.some((folder) => under(folder, written)) ? written : real;
 }

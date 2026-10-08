@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as doc from '../fixtures/documents.mjs';
@@ -113,6 +113,51 @@ test('xref graph: a drive-letter reference is the drawing listed under its share
   assert.equal(buildXrefGraph(reads, () => true).nodes.length, 3);
 });
 
+test('xref graph: a library outside the folders is one node by drive letter and by share', () => {
+  const read = (xrefs = []) => ({
+    units: 'mm',
+    scale: 0.001,
+    unitsAssumed: false,
+    xrefs,
+    inserts: xrefs.map((x) => ({ name: x.name, transform: [] })),
+  });
+  const lib = (path) => [{ name: 'lib', path, overlay: false, status: 'Resolved' }];
+  const real = (path) => path.replace(/^Z:\\/i, '\\\\server\\share\\');
+  const byLetter = 'Z:\\lib\\L.dwg';
+  const byShare = '\\\\server\\share\\lib\\L.dwg';
+  // Read under the letter (the first reference's spelling), named by the share from another drawing.
+  const reads = new Map([
+    ['C:\\p\\A.dwg', read(lib(byLetter))],
+    ['C:\\p\\B.dwg', read(lib(byShare))],
+    [byLetter, read()],
+  ]);
+  const graph = buildXrefGraph(reads, () => true, real);
+  assert.equal(graph.nodes.length, 3);
+  assert.deepEqual(
+    graph.edges.map((edge) => edge.child),
+    [byLetter, byLetter],
+  );
+  assert.equal(graph.nodes.find((node) => node.name === 'L.dwg').read, true);
+  // Read under the share, named by the letter: the same.
+  const shared = new Map([...reads].map(([path, v]) => [path === byLetter ? byShare : path, v]));
+  const second = buildXrefGraph(shared, () => true, real);
+  assert.equal(second.nodes.length, 3);
+  assert.deepEqual(
+    second.edges.map((edge) => edge.child),
+    [byShare, byShare],
+  );
+  // Not read yet: one unread node, so the next round reads it once.
+  const unread = new Map([...reads].filter(([path]) => path !== byLetter));
+  const third = buildXrefGraph(unread, () => true, real);
+  assert.equal(third.nodes.length, 3);
+  assert.equal(new Set(third.edges.map((edge) => edge.child)).size, 1);
+  // A read set holding both spellings: one node, its relations once.
+  const both = new Map([...reads, [byShare, read()]]);
+  const fourth = buildXrefGraph(both, () => true, real);
+  assert.equal(fourth.nodes.filter((node) => node.name === 'L.dwg').length, 1);
+  assert.equal(fourth.edges.length, 2);
+});
+
 /** A free drive letter, or undefined. */
 function freeLetter() {
   for (const letter of 'QRSTUVPONMLK') if (!existsSync(`${letter}:\\`)) return letter;
@@ -173,6 +218,76 @@ test('on a subst drive: drawing paths by drive letter, denied folders on both sp
   // Denied by its real spelling, even when named by the drive letter.
   assert.equal(projectPath([project], `${drive}\\2601 프로젝트\\비공개\\a.dwg`, denied), null);
   assert.equal(projectPath([project], `${drive}\\밖\\a.dwg`, denied), null);
+
+  // A library outside the folders, named by the drive letter from one drawing and by its real
+  // folder from another: one drawing in the graph, read under one spelling.
+  const library = join(directory, '라이브러리');
+  await mkdir(library, { recursive: true });
+  await writeFile(join(library, 'L.dwg'), 'AC1032 synthetic');
+  const entry = (path) => ({
+    units: 'mm',
+    scale: 0.001,
+    unitsAssumed: false,
+    xrefs: path ? [{ name: 'lib', path, overlay: false, status: 'Resolved' }] : [],
+    inserts: [],
+  });
+  const letterLib = `${drive}\\라이브러리\\L.dwg`;
+  const reads = new Map([
+    [join(project, 'A.dwg'), entry(letterLib)],
+    [join(project, 'B.dwg'), entry(join(library, 'L.dwg'))],
+    [letterLib, entry()],
+  ]);
+  const graph = buildXrefGraph(reads, existsSync, realPath);
+  const libs = graph.nodes.filter((node) => node.name === 'L.dwg');
+  assert.equal(libs.length, 1);
+  assert.equal(libs[0].read, true);
+  assert.deepEqual(
+    graph.edges.map((edge) => edge.child),
+    [letterLib, letterLib],
+  );
+  // Read under the real folder, named by the letter: the same one node.
+  const real = new Map(
+    [...reads].map(([path, v]) => [path === letterLib ? join(library, 'L.dwg') : path, v]),
+  );
+  const again = buildXrefGraph(real, existsSync, realPath);
+  assert.equal(again.nodes.length, 3);
+  assert.deepEqual(
+    again.edges.map((edge) => edge.child),
+    [join(library, 'L.dwg'), join(library, 'L.dwg')],
+  );
+});
+
+test('a junction below a project folder that leads outside is not a project path', async (t) => {
+  const directory = realpathSync.native(await mkdtemp(join(tmpdir(), 'vide-drives-link-')));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const project = join(directory, '프로젝트');
+  const outside = join(directory, '밖');
+  await mkdir(join(project, '안'), { recursive: true });
+  await mkdir(outside, { recursive: true });
+  await writeFile(join(outside, 'X.dwg'), 'AC1032 synthetic');
+  await writeFile(join(project, '안', 'Y.dwg'), 'AC1032 synthetic');
+  try {
+    await symlink(outside, join(project, 'link'), 'junction');
+    await symlink(join(project, '안'), join(project, 'inner'), 'junction');
+  } catch {
+    return t.skip('junctions unavailable');
+  }
+  const none = () => false;
+  const linked = join(project, 'link', 'X.dwg');
+  assert.equal(realPath(linked).toLowerCase(), join(outside, 'X.dwg').toLowerCase());
+  assert.equal(projectPath([project], linked, none), null);
+  // A junction that stays inside the folder is still taken as written.
+  const inner = join(project, 'inner', 'Y.dwg');
+  assert.equal(projectPath([project], inner, none), inner);
+  assert.equal(
+    projectPath([project], join(project, '안', 'Y.dwg'), none),
+    join(project, '안', 'Y.dwg'),
+  );
+  // A file not made yet below the folder keeps its place.
+  assert.equal(
+    projectPath([project], join(project, '새 도면.dwg'), none),
+    join(project, '새 도면.dwg'),
+  );
 });
 
 test('자료 정리 collects a folder on another drive and opens its originals', async (t) => {

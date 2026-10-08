@@ -126,32 +126,32 @@ export function resolveXref(
 /**
  * The graph of the drawings read (`reads`, keyed by original path). `exists` answers for files
  * outside the read set (a reference to a drawing that was not listed). `real`, when given, names
- * the real spelling of a path a reference writes another way (a mapped drive `Z:\…` for the
- * `\\server\share\…` the folder listing used): such a child is the drawing read under it.
+ * the real spelling of a path (a mapped drive `Z:\…` is `\\server\share\…`, a subst drive the
+ * folder it stands for): one file is one node whichever spelling the read set or a reference uses,
+ * and the node keeps the read set's spelling (else the first one met).
  */
 export function buildXrefGraph(
   reads: ReadonlyMap<string, XrefFileRead>,
   exists: (path: string) => boolean,
   real?: (path: string) => string,
 ): XrefGraph {
+  const sorted = [...reads.keys()].sort((a, b) => a.localeCompare(b));
+  /** One key per file: by its real path when `real` is given. */
+  const fileKey = (path: string) => pathKey(real ? real(path) : path);
+  // The read set's spelling under both keys (the first one wins when it holds a file twice).
   const known = new Map<string, string>();
-  for (const path of reads.keys()) known.set(pathKey(path), path);
+  for (const path of sorted)
+    for (const key of [pathKey(path), fileKey(path)]) if (!known.has(key)) known.set(key, path);
   const present = (path: string) => known.has(pathKey(path)) || exists(path);
-  /** The read set's spelling of `path` when it is one of them under another spelling. */
-  const spelling = (path: string) => {
-    if (!real || known.has(pathKey(path))) return path;
-    const other = known.get(pathKey(real(path)));
-    return other ?? path;
-  };
   const nodes = new Map<string, XrefNode>();
   const node = (written: string) => {
-    const path = spelling(written);
-    const key = pathKey(path);
+    const path = known.get(pathKey(written)) ?? known.get(fileKey(written)) ?? written;
+    const key = fileKey(path);
     let value = nodes.get(key);
     if (!value) {
-      const read = reads.get(known.get(key) ?? path);
+      const read = reads.get(path);
       value = {
-        path: known.get(key) ?? path,
+        path,
         name: win32.basename(path),
         read: !!read && !read.error,
         error: read?.error ?? null,
@@ -163,9 +163,9 @@ export function buildXrefGraph(
     return value;
   };
   const edges: XrefEdge[] = [];
-  const sorted = [...reads.keys()].sort((a, b) => a.localeCompare(b));
   for (const parent of sorted) {
-    node(parent);
+    // The same file read under a second spelling: its relations are the first one's.
+    if (node(parent).path !== parent) continue;
     const read = reads.get(parent)!;
     const seen = new Set<string>();
     for (const block of read.xrefs) {

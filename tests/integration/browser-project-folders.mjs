@@ -104,7 +104,12 @@ try {
             });
           if (message?.type === 'folder:pick') {
             window.__picks.push(message);
-            answer({ type: 'folder:picked', id: message.id, ...window.__replies.shift() });
+            const reply = window.__replies.shift();
+            // `hold`: the dialog has not appeared yet; the test releases it.
+            if (reply?.hold)
+              window.__release = () =>
+                answer({ type: 'folder:picked', id: message.id, path: null });
+            else answer({ type: 'folder:picked', id: message.id, ...reply });
           }
         },
       },
@@ -131,6 +136,16 @@ try {
   await addButton.click();
   await pickedList.getByText(folder).waitFor();
   assert.equal(await picked.getByRole('textbox', { name: '폴더 경로' }).count(), 0);
+  // A double click before the dialog shows asks for one picker only, and the button waits for it.
+  await shell.evaluate(() => window.__replies.push({ hold: true }, { path: null }));
+  await addButton.dblclick();
+  await shell.waitForTimeout(500);
+  assert.equal(await shell.evaluate(() => window.__picks.length), 3);
+  assert.equal(await addButton.isDisabled(), true);
+  await shell.evaluate(() => window.__release());
+  for (let i = 0; i < 100 && (await addButton.isDisabled()); i++) await shell.waitForTimeout(50);
+  assert.equal(await addButton.isDisabled(), false);
+  await shell.evaluate(() => window.__replies.shift());
   // No picker could open: the path field opens with the shell's reason.
   await shell.evaluate(() =>
     window.__replies.push({
@@ -141,7 +156,7 @@ try {
   await addButton.click();
   await picked.getByRole('alert').getByText('폴더 선택 창을 열지 못했습니다').waitFor();
   await picked.getByRole('textbox', { name: '폴더 경로' }).waitFor();
-  assert.equal(await shell.evaluate(() => window.__picks.length), 3);
+  assert.equal(await shell.evaluate(() => window.__picks.length), 4);
   await picked.getByRole('button', { name: `${folder} 빼기` }).click();
   await picked.getByText('프로젝트 폴더를 정하면 AI가 그 안의 파일을 직접 읽습니다.').waitFor();
 

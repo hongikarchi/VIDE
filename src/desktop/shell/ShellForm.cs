@@ -26,6 +26,8 @@ namespace Vide.Desktop
         private string origin;
         private string opened;
         private bool ready;
+        /// <summary>A folder picker is open (<see cref="PickFolder"/>).</summary>
+        private bool picking;
         // The last work page shown, so a recreated WebView comes back to the same project.
         private string lastPage;
         private readonly Queue<DateTime> reloads = new Queue<DateTime>();
@@ -205,45 +207,62 @@ namespace Vide.Desktop
         /// <c>{type:'folder:picked', id, path}</c> (path null when cancelled). It is the Explorer-style
         /// dialog with 즐겨찾기 (<see cref="FolderPicker"/>); if that cannot open, the old tree picker;
         /// if neither opens, <c>error</c> says so and the page opens its path field. Shown after the
-        /// message handler returns, not inside it.
+        /// message handler returns, not inside it. One picker at a time: the dialog's own message loop
+        /// still handles page messages, so a second request while one is open (a double click) is
+        /// answered at once with path null instead of opening a second dialog on top.
         /// </summary>
         public void PickFolder(string id)
         {
             BeginInvoke((Action)(() =>
             {
+                if (picking)
+                {
+                    ReplyPicked(id, null, null);
+                    return;
+                }
+                picking = true;
                 const string title = "VIDE 프로젝트 폴더를 고르세요";
                 string path = null;
                 string error = null;
-                if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
-                Activate();
-                try { path = FolderPicker.Pick(Handle, title); }
-                catch (Exception modern)
-                {
-                    ShellLog.Error("folder-picker-failed", modern);
-                    try
-                    {
-                        using (var dialog = new FolderBrowserDialog { Description = title, ShowNewFolderButton = false })
-                            if (dialog.ShowDialog(this) == DialogResult.OK) path = dialog.SelectedPath;
-                    }
-                    catch (Exception old)
-                    {
-                        ShellLog.Error("folder-browser-failed", old);
-                        error = "폴더 선택 창을 열지 못했습니다. 경로를 붙여넣으세요.";
-                    }
-                }
-                if (!ready || view.CoreWebView2 == null) return;
                 try
                 {
-                    view.CoreWebView2.PostWebMessageAsJson(json.Serialize(new Dictionary<string, object>
+                    if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
+                    Activate();
+                    try { path = FolderPicker.Pick(Handle, title); }
+                    catch (Exception modern)
                     {
-                        ["type"] = "folder:picked",
-                        ["id"] = id,
-                        ["path"] = path,
-                        ["error"] = error,
-                    }));
+                        ShellLog.Error("folder-picker-failed", modern);
+                        try
+                        {
+                            using (var dialog = new FolderBrowserDialog { Description = title, ShowNewFolderButton = false })
+                                if (dialog.ShowDialog(this) == DialogResult.OK) path = dialog.SelectedPath;
+                        }
+                        catch (Exception old)
+                        {
+                            ShellLog.Error("folder-browser-failed", old);
+                            error = "폴더 선택 창을 열지 못했습니다. 경로를 붙여넣으세요.";
+                        }
+                    }
                 }
-                catch { /* Page gone. */ }
+                finally { picking = false; }
+                ReplyPicked(id, path, error);
             }));
+        }
+
+        private void ReplyPicked(string id, string path, string error)
+        {
+            if (!ready || view.CoreWebView2 == null) return;
+            try
+            {
+                view.CoreWebView2.PostWebMessageAsJson(json.Serialize(new Dictionary<string, object>
+                {
+                    ["type"] = "folder:picked",
+                    ["id"] = id,
+                    ["path"] = path,
+                    ["error"] = error,
+                }));
+            }
+            catch { /* Page gone. */ }
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

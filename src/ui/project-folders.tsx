@@ -89,6 +89,7 @@ export function ProjectFolders({
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const picker = useFolderPicker();
+  const picking = useRef(false);
   const field = useRef<HTMLInputElement>(null);
   const remote = remoteSession();
   const base = `/projects/${encodeURIComponent(projectId)}/folders`;
@@ -127,8 +128,18 @@ export function ProjectFolders({
   };
   const add = async () => {
     if (!picker) return setTyping(true);
+    // One picker at a time: a second click before the dialog shows opens nothing.
+    if (picking.current) return;
+    picking.current = true;
+    setBusy(true);
     setReason('');
-    const chosen = await pickFolder();
+    let chosen: Awaited<ReturnType<typeof pickFolder>>;
+    try {
+      chosen = await pickFolder();
+    } finally {
+      picking.current = false;
+      setBusy(false);
+    }
     if (chosen.path) await change('add', chosen.path);
     else if (chosen.error) {
       // No picker opened: the path field, with the shell's reason.
