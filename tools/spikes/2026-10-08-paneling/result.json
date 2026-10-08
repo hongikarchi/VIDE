@@ -1,0 +1,925 @@
+{
+  "directory": ".vide\\spikes\\paneling\\2026-10-08T01-57-03-211Z",
+  "plugin": "<checkout>\\.vide\\build\\rhino-worker\\bin\\net8.0-windows\\VIDE.Worker.rhp",
+  "startedAt": "2026-10-08T01:57:03.215Z",
+  "workerLaunchMs": 6026,
+  "document": {
+    "file": ".vide\\spikes\\paneling\\2026-10-08T01-57-03-211Z\\attached\\paneling-surfaces.3dm",
+    "ids": {
+      "hypar": "d3bdd38b-16b7-4f01-bc23-f2ef2342af31",
+      "strip": "88b3188b-32a9-49a1-bb4d-121be81ce583",
+      "cylinder": "a09b3d8e-02b4-4d7e-bd30-1a72b2ccfabb",
+      "sphere": "323b8d19-85b5-4595-aed7-7c4e984be0ef",
+      "plane": "d903d2da-b461-4712-80ef-e8741561f47a",
+      "smalltrim": "072781f9-5324-4236-8b70-ad528a3eb6f9",
+      "mesh": "43fbdb9f-cf66-4793-ac29-308fcd18b620"
+    }
+  },
+  "rhino": "8.35.26251.13001",
+  "units": "Meters",
+  "tolerance": 0.001,
+  "attachedLaunchMs": 7432,
+  "readAttached": [
+    {
+      "surface": "hypar",
+      "n": 64,
+      "enc": "json",
+      "ms": 1380,
+      "hostMs": 23,
+      "chars": 649480
+    },
+    {
+      "surface": "hypar",
+      "n": 64,
+      "enc": "base64-f64",
+      "ms": 400,
+      "hostMs": 11,
+      "chars": 362823
+    },
+    {
+      "surface": "hypar",
+      "n": 128,
+      "enc": "json",
+      "ms": 503,
+      "hostMs": 42,
+      "chars": 2589522
+    },
+    {
+      "surface": "hypar",
+      "n": 128,
+      "enc": "base64-f64",
+      "ms": 473,
+      "hostMs": 43,
+      "chars": 1435977
+    },
+    {
+      "surface": "hypar",
+      "n": 256,
+      "enc": "json",
+      "ms": 741,
+      "hostMs": 177,
+      "chars": 10353799
+    },
+    {
+      "surface": "hypar",
+      "n": 256,
+      "enc": "base64-f64",
+      "ms": 592,
+      "hostMs": 188,
+      "chars": 5728586
+    },
+    {
+      "surface": "strip",
+      "n": 64,
+      "enc": "json",
+      "ms": 339,
+      "hostMs": 9,
+      "chars": 643818
+    },
+    {
+      "surface": "strip",
+      "n": 64,
+      "enc": "base64-f64",
+      "ms": 354,
+      "hostMs": 43,
+      "chars": 358372
+    },
+    {
+      "surface": "strip",
+      "n": 128,
+      "enc": "json",
+      "ms": 561,
+      "hostMs": 43,
+      "chars": 2598918
+    },
+    {
+      "surface": "strip",
+      "n": 128,
+      "enc": "base64-f64",
+      "ms": 449,
+      "hostMs": 43,
+      "chars": 1431526
+    },
+    {
+      "surface": "strip",
+      "n": 256,
+      "enc": "json",
+      "ms": 701,
+      "hostMs": 170,
+      "chars": 10430031
+    },
+    {
+      "surface": "strip",
+      "n": 256,
+      "enc": "base64-f64",
+      "ms": 669,
+      "hostMs": 146,
+      "chars": 5724135
+    },
+    {
+      "surface": "cylinder",
+      "n": 64,
+      "enc": "json",
+      "ms": 423,
+      "hostMs": 10,
+      "chars": 439304
+    },
+    {
+      "surface": "cylinder",
+      "n": 64,
+      "enc": "base64-f64",
+      "ms": 469,
+      "hostMs": 10,
+      "chars": 358371
+    },
+    {
+      "surface": "cylinder",
+      "n": 128,
+      "enc": "json",
+      "ms": 523,
+      "hostMs": 39,
+      "chars": 1753481
+    },
+    {
+      "surface": "cylinder",
+      "n": 128,
+      "enc": "base64-f64",
+      "ms": 521,
+      "hostMs": 32,
+      "chars": 1431525
+    },
+    {
+      "surface": "cylinder",
+      "n": 256,
+      "enc": "json",
+      "ms": 667,
+      "hostMs": 122,
+      "chars": 7012234
+    },
+    {
+      "surface": "cylinder",
+      "n": 256,
+      "enc": "base64-f64",
+      "ms": 529,
+      "hostMs": 152,
+      "chars": 5724134
+    },
+    {
+      "surface": "sphere",
+      "n": 64,
+      "enc": "json",
+      "ms": 384,
+      "hostMs": 30,
+      "chars": 645525
+    },
+    {
+      "surface": "sphere",
+      "n": 64,
+      "enc": "base64-f64",
+      "ms": 340,
+      "hostMs": 11,
+      "chars": 358386
+    },
+    {
+      "surface": "sphere",
+      "n": 128,
+      "enc": "json",
+      "ms": 413,
+      "hostMs": 35,
+      "chars": 2587839
+    },
+    {
+      "surface": "sphere",
+      "n": 128,
+      "enc": "base64-f64",
+      "ms": 426,
+      "hostMs": 40,
+      "chars": 1431540
+    },
+    {
+      "surface": "sphere",
+      "n": 256,
+      "enc": "json",
+      "ms": 623,
+      "hostMs": 164,
+      "chars": 10364383
+    },
+    {
+      "surface": "sphere",
+      "n": 256,
+      "enc": "base64-f64",
+      "ms": 555,
+      "hostMs": 172,
+      "chars": 5724149
+    },
+    {
+      "surface": "plane",
+      "n": 64,
+      "enc": "json",
+      "ms": 514,
+      "hostMs": 8,
+      "chars": 205881
+    },
+    {
+      "surface": "plane",
+      "n": 64,
+      "enc": "base64-f64",
+      "ms": 725,
+      "hostMs": 6,
+      "chars": 358356
+    },
+    {
+      "surface": "plane",
+      "n": 128,
+      "enc": "json",
+      "ms": 699,
+      "hostMs": 68,
+      "chars": 828412
+    },
+    {
+      "surface": "plane",
+      "n": 128,
+      "enc": "base64-f64",
+      "ms": 827,
+      "hostMs": 93,
+      "chars": 1431511
+    },
+    {
+      "surface": "plane",
+      "n": 256,
+      "enc": "json",
+      "ms": 1032,
+      "hostMs": 173,
+      "chars": 3294845
+    },
+    {
+      "surface": "plane",
+      "n": 256,
+      "enc": "base64-f64",
+      "ms": 1379,
+      "hostMs": 168,
+      "chars": 5724120
+    }
+  ],
+  "schema": {
+    "hypar": {
+      "ok": true,
+      "closedU": false,
+      "closedV": false,
+      "singular": {
+        "uMin": false,
+        "uMax": false,
+        "vMin": false,
+        "vMax": false
+      },
+      "domainU": [0, 31.199097435193238],
+      "domainV": [0, 20.792919983998218],
+      "trimLoops": 2,
+      "inside": 0.9693603515625,
+      "nonFinite": 0,
+      "hash": "e9d763c946fd"
+    },
+    "strip": {
+      "ok": true,
+      "closedU": false,
+      "closedV": false,
+      "singular": {
+        "uMin": false,
+        "uMax": false,
+        "vMin": false,
+        "vMax": false
+      },
+      "domainU": [0, 6],
+      "domainV": [0, 16.755160819145562],
+      "trimLoops": 0,
+      "inside": 1,
+      "nonFinite": 0,
+      "hash": "86f06e42bf99"
+    },
+    "cylinder": {
+      "ok": true,
+      "closedU": true,
+      "closedV": false,
+      "singular": {
+        "uMin": false,
+        "uMax": false,
+        "vMin": false,
+        "vMax": false
+      },
+      "domainU": [0, 25.132741228718345],
+      "domainV": [0, 6],
+      "trimLoops": 0,
+      "inside": 1,
+      "nonFinite": 0,
+      "hash": "db8a1782151f"
+    },
+    "sphere": {
+      "ok": true,
+      "closedU": true,
+      "closedV": false,
+      "singular": {
+        "uMin": false,
+        "uMax": false,
+        "vMin": false,
+        "vMax": true
+      },
+      "domainU": [0, 6.283185307179586],
+      "domainV": [0, 10.471975511965976],
+      "trimLoops": 0,
+      "inside": 1,
+      "nonFinite": 0,
+      "hash": "869bab138cba"
+    },
+    "plane": {
+      "ok": true,
+      "closedU": false,
+      "closedV": false,
+      "singular": {
+        "uMin": false,
+        "uMax": false,
+        "vMin": false,
+        "vMax": false
+      },
+      "domainU": [0, 20],
+      "domainV": [0, 10],
+      "trimLoops": 0,
+      "inside": 1,
+      "nonFinite": 0,
+      "hash": "880b2c3db6b1"
+    }
+  },
+  "curvatureSign": {
+    "sphereNormalOutward": true,
+    "k1": -0.19999999999999998,
+    "k2": -0.19999999999999998,
+    "expected": -0.2
+  },
+  "interpolation": {
+    "hypar": {
+      "64": {
+        "bilinear": {
+          "maxMm": 1.015,
+          "p95Mm": 0.761
+        },
+        "bicubic": {
+          "maxMm": 0.009,
+          "p95Mm": 0.003
+        }
+      },
+      "128": {
+        "bilinear": {
+          "maxMm": 0.244,
+          "p95Mm": 0.186
+        },
+        "bicubic": {
+          "maxMm": 0.001,
+          "p95Mm": 0
+        }
+      },
+      "256": {
+        "bilinear": {
+          "maxMm": 0.061,
+          "p95Mm": 0.047
+        },
+        "bicubic": {
+          "maxMm": 0,
+          "p95Mm": 0
+        }
+      }
+    },
+    "strip": {
+      "64": {
+        "bilinear": {
+          "maxMm": 1.157,
+          "p95Mm": 1.137
+        },
+        "bicubic": {
+          "maxMm": 0.036,
+          "p95Mm": 0.014
+        }
+      },
+      "128": {
+        "bilinear": {
+          "maxMm": 0.285,
+          "p95Mm": 0.278
+        },
+        "bicubic": {
+          "maxMm": 0.009,
+          "p95Mm": 0.001
+        }
+      },
+      "256": {
+        "bilinear": {
+          "maxMm": 0.071,
+          "p95Mm": 0.069
+        },
+        "bicubic": {
+          "maxMm": 0.002,
+          "p95Mm": 0
+        }
+      }
+    },
+    "cylinder": {
+      "64": {
+        "bilinear": {
+          "maxMm": 4.972,
+          "p95Mm": 4.959
+        },
+        "bicubic": {
+          "maxMm": 0.064,
+          "p95Mm": 0.064
+        }
+      },
+      "128": {
+        "bilinear": {
+          "maxMm": 1.224,
+          "p95Mm": 1.221
+        },
+        "bicubic": {
+          "maxMm": 0.008,
+          "p95Mm": 0.008
+        }
+      },
+      "256": {
+        "bilinear": {
+          "maxMm": 0.304,
+          "p95Mm": 0.303
+        },
+        "bicubic": {
+          "maxMm": 0.001,
+          "p95Mm": 0.001
+        }
+      }
+    },
+    "sphere": {
+      "64": {
+        "bilinear": {
+          "maxMm": 6.857,
+          "p95Mm": 6.4
+        },
+        "bicubic": {
+          "maxMm": 0.08,
+          "p95Mm": 0.075
+        }
+      },
+      "128": {
+        "bilinear": {
+          "maxMm": 1.696,
+          "p95Mm": 1.565
+        },
+        "bicubic": {
+          "maxMm": 0.01,
+          "p95Mm": 0.009
+        }
+      },
+      "256": {
+        "bilinear": {
+          "maxMm": 0.421,
+          "p95Mm": 0.395
+        },
+        "bicubic": {
+          "maxMm": 0.001,
+          "p95Mm": 0.001
+        }
+      }
+    },
+    "plane": {
+      "64": {
+        "bilinear": {
+          "maxMm": 0,
+          "p95Mm": 0
+        },
+        "bicubic": {
+          "maxMm": 0,
+          "p95Mm": 0
+        }
+      },
+      "128": {
+        "bilinear": {
+          "maxMm": 0,
+          "p95Mm": 0
+        },
+        "bicubic": {
+          "maxMm": 0,
+          "p95Mm": 0
+        }
+      },
+      "256": {
+        "bilinear": {
+          "maxMm": 0,
+          "p95Mm": 0
+        },
+        "bicubic": {
+          "maxMm": 0,
+          "p95Mm": 0
+        }
+      }
+    }
+  },
+  "undo": {
+    "before": [37, false],
+    "afterEdit": [38, false],
+    "afterRead": [39, false],
+    "readUndoId": null,
+    "undoRemovedTheEdit": [true, true],
+    "redoAfterRead": [true, true]
+  },
+  "fingerprint": {
+    "sameTwice": true,
+    "changedBy1mm": true,
+    "restoredByUndo": true,
+    "refusedMake": {
+      "rejected": "SURFACE_CHANGED"
+    },
+    "refusedUndoId": null,
+    "objectsUnchanged": true,
+    "hashMs": 688
+  },
+  "readFailures": {
+    "mesh": "EXECUTION_FAILED: MESH_NOT_ACCEPTED: 메쉬 기준 면은 아직 받지 않습니다 · Rhino에서 서피스로 바꾸세요",
+    "missing": "EXECUTION_FAILED: FACE_NOT_FOUND: 객체를 찾지 못했습니다",
+    "notAnId": "EXECUTION_FAILED: FACE_NOT_FOUND: 객체 ID가 아닙니다",
+    "smallTrimAt8": "EXECUTION_FAILED: NO_SAMPLE_INSIDE: 트림 안에 든 표본이 없습니다 · 촘촘하게 다시 읽기",
+    "smallTrimAt128": "ok",
+    "tooManyAllFaces": "EXECUTION_FAILED: SAMPLE_LIMIT: 표본 점이 65,536개를 넘습니다",
+    "noUnits": "EXECUTION_FAILED: UNKNOWN_UNITS: 문서 단위가 없습니다"
+  },
+  "make": [
+    {
+      "label": "faces 1k",
+      "kind": "face",
+      "panels": 996,
+      "bodies": 2,
+      "maxBodyChars": 65524,
+      "undoRecords": 2,
+      "made": 995,
+      "failed": 1,
+      "failedReasons": ["UV_OUTSIDE_TRIM"],
+      "failedSample": ["P-999-999:UV_OUTSIDE_TRIM"],
+      "makeMs": 800,
+      "hostMs": 74,
+      "added": 995,
+      "deviation": {
+        "bicubic": {
+          "maxMm": 0,
+          "p95Mm": 0
+        },
+        "bilinear": {
+          "maxMm": 0.252,
+          "p95Mm": 0.185
+        }
+      },
+      "undoMs": 23,
+      "undoAllOk": true,
+      "restored": true,
+      "ids": 995
+    },
+    {
+      "label": "faces 5k",
+      "kind": "face",
+      "panels": 4911,
+      "bodies": 10,
+      "maxBodyChars": 65512,
+      "undoRecords": 10,
+      "made": 4910,
+      "failed": 1,
+      "failedReasons": ["UV_OUTSIDE_TRIM"],
+      "failedSample": ["P-37-70:UV_OUTSIDE_TRIM"],
+      "makeMs": 3253,
+      "hostMs": 357,
+      "added": 4910,
+      "deviation": {
+        "bicubic": {
+          "maxMm": 0,
+          "p95Mm": 0
+        },
+        "bilinear": {
+          "maxMm": 0.252,
+          "p95Mm": 0.186
+        }
+      },
+      "undoMs": 51,
+      "undoAllOk": true,
+      "restored": true,
+      "ids": 4910
+    },
+    {
+      "label": "solids 1k",
+      "kind": "solid",
+      "panels": 995,
+      "bodies": 2,
+      "maxBodyChars": 65516,
+      "undoRecords": 2,
+      "made": 995,
+      "failed": 0,
+      "failedReasons": [],
+      "failedSample": [],
+      "makeMs": 2196,
+      "hostMs": 1492,
+      "added": 995,
+      "deviation": {
+        "bicubic": {
+          "maxMm": 0,
+          "p95Mm": 0
+        },
+        "bilinear": {
+          "maxMm": 0.252,
+          "p95Mm": 0.185
+        }
+      },
+      "undoMs": 16,
+      "undoAllOk": true,
+      "restored": true,
+      "ids": 995
+    },
+    {
+      "label": "solids 5k",
+      "kind": "solid",
+      "panels": 4911,
+      "bodies": 10,
+      "maxBodyChars": 65504,
+      "undoRecords": 10,
+      "made": 4910,
+      "failed": 1,
+      "failedReasons": ["UV_OUTSIDE_TRIM"],
+      "failedSample": ["P-37-70:UV_OUTSIDE_TRIM"],
+      "makeMs": 10368,
+      "hostMs": 7067,
+      "added": 4910,
+      "deviation": {
+        "bicubic": {
+          "maxMm": 0,
+          "p95Mm": 0
+        },
+        "bilinear": {
+          "maxMm": 0.252,
+          "p95Mm": 0.186
+        }
+      },
+      "undoMs": 90,
+      "undoAllOk": true,
+      "restored": true,
+      "ids": 4910
+    },
+    {
+      "label": "budget 15 ms",
+      "kind": "solid",
+      "panels": 600,
+      "bodies": 2,
+      "maxBodyChars": 65504,
+      "undoRecords": 0,
+      "made": 0,
+      "failed": 0,
+      "failedReasons": [],
+      "failedSample": [],
+      "makeMs": 303,
+      "hostMs": 0,
+      "added": 0,
+      "undoMs": 0,
+      "undoAllOk": true,
+      "restored": true,
+      "abort": {
+        "failed": "EXECUTION_FAILED",
+        "reverted": true,
+        "message": "BAKE_TIMEOUT: 만들기 시간 한도를 넘었습니다"
+      },
+      "ids": 0
+    }
+  ],
+  "seams": [[0, 12.566370614359169, 12.566370614359169, 37.69911184307752]],
+  "seam": {
+    "closedDir": "u",
+    "label": "cylinder seam",
+    "kind": "face",
+    "panels": 48,
+    "bodies": 1,
+    "maxBodyChars": 16464,
+    "undoRecords": 1,
+    "made": 48,
+    "failed": 0,
+    "failedReasons": [],
+    "failedSample": [],
+    "makeMs": 1905,
+    "hostMs": 7,
+    "added": 48,
+    "deviation": {
+      "bicubic": {
+        "maxMm": 0.008,
+        "p95Mm": 0.008
+      },
+      "bilinear": {
+        "maxMm": 1.222,
+        "p95Mm": 1.222
+      }
+    },
+    "undoMs": 8,
+    "undoAllOk": true,
+    "restored": true
+  },
+  "seamSolids": {
+    "label": "cylinder seam solids",
+    "kind": "solid",
+    "panels": 48,
+    "bodies": 1,
+    "maxBodyChars": 16456,
+    "undoRecords": 1,
+    "made": 48,
+    "failed": 0,
+    "failedReasons": [],
+    "failedSample": [],
+    "makeMs": 266,
+    "hostMs": 55,
+    "added": 48,
+    "deviation": {
+      "bicubic": {
+        "maxMm": 0.008,
+        "p95Mm": 0.008
+      },
+      "bilinear": {
+        "maxMm": 1.222,
+        "p95Mm": 1.222
+      }
+    },
+    "undoMs": 6,
+    "undoAllOk": true,
+    "restored": true
+  },
+  "seamAreas": {
+    "min": 6.283185307179579,
+    "max": 6.2831853071796,
+    "expected": 6.283185307179586,
+    "off": [],
+    "seams": [[0, 12.566370614359169, 12.566370614359169, 37.69911184307752]],
+    "invalidLog": null,
+    "failed": []
+  },
+  "mesh": [
+    {
+      "label": "mesh 1k (per panel)",
+      "items": 995,
+      "bodies": 2,
+      "makeMs": 403,
+      "added": 995,
+      "undoMs": 11,
+      "restored": true
+    },
+    {
+      "label": "mesh 1k (joined, splitMesh)",
+      "items": 2,
+      "bodies": 2,
+      "makeMs": 355,
+      "added": 2,
+      "undoMs": 8,
+      "restored": true
+    },
+    {
+      "label": "mesh 5k (per panel)",
+      "items": 4911,
+      "bodies": 10,
+      "makeMs": 2112,
+      "added": 4911,
+      "undoMs": 81,
+      "restored": true
+    },
+    {
+      "label": "mesh 5k (joined, splitMesh)",
+      "items": 9,
+      "bodies": 9,
+      "makeMs": 1676,
+      "added": 9,
+      "undoMs": 24,
+      "restored": true
+    }
+  ],
+  "gh": {
+    "stateBefore": {
+      "ms": 5,
+      "ok": true,
+      "chars": 159,
+      "sample": "{\"ok\":true,\"loaded\":false,\"documents\":[],\"next\":\"Grasshopper is not running. gh_open starts it (with a .gh file of the project work folder, or a new canvas).\"}"
+    },
+    "open": {
+      "ms": 5086,
+      "ok": true,
+      "chars": 151,
+      "sample": "{\"ok\":true,\"document\":{\"id\":\"d2167721-c060-4eee-8204-6eb188d2c5ef\",\"name\":\"unnamed\",\"path\":\"\",\"modified\":false,\"active\":true,\"objects\":0},\"revision\":1}"
+    },
+    "state": {
+      "ms": 41,
+      "ok": true,
+      "chars": 370,
+      "sample": "{\"ok\":true,\"loaded\":true,\"document\":{\"id\":\"d2167721-c060-4eee-8204-6eb188d2c5ef\",\"name\":\"unnamed\",\"path\":\"\",\"modified\":false,\"active\":true,\"objects\":0},\"revision\":1,\"solver\":true,\"total\":0,\"offset\":0,\"objects\":[],\"groups\":[],\"scribbles\":[],\"documents\":[{\"id\":\"d2167721-c060-4eee-8204-6eb188d2c5ef\",\"n"
+    },
+    "components": {
+      "ms": 28,
+      "ok": true,
+      "chars": 2149,
+      "sample": "{\"ok\":true,\"query\":\"Divide Surface\",\"total\":8,\"components\":[{\"guid\":\"5106bafc-d5d4-4983-83e7-7be3ed07f502\",\"name\":\"Divide Surface\",\"nickname\":\"SDivide\",\"category\":\"Surface\",\"subcategory\":\"Util\",\"description\":\"Generate a grid of {uv} points on a surface.\",\"kind\":\"CompiledObject\",\"obsolete\":false,\"inp"
+    },
+    "apply": {
+      "ms": 1898,
+      "ok": true,
+      "chars": 972,
+      "sample": "{\"ok\":true,\"undoId\":\"gh:d2167721-c060-4eee-8204-6eb188d2c5ef:7496c619-dc28-4acb-b8b1-f971fc0e6de8\",\"revision\":30,\"document\":{\"id\":\"d2167721-c060-4eee-8204-6eb188d2c5ef\",\"name\":\"unnamed\",\"path\":\"\",\"modified\":true,\"active\":true,\"objects\":1},\"results\":[{\"id\":\"ca377010-b93e-4cb8-a9bb-6d2b317f60e5\",\"name"
+    },
+    "outputs": {
+      "ms": 17,
+      "ok": true,
+      "chars": 36217,
+      "sample": "{\"ok\":true,\"document\":{\"id\":\"d2167721-c060-4eee-8204-6eb188d2c5ef\",\"name\":\"unnamed\",\"path\":\"\",\"modified\":true,\"active\":true,\"objects\":1},\"units\":\"Meters\",\"outputs\":[{\"ref\":{\"id\":\"ca377010-b93e-4cb8-a9bb-6d2b317f60e5\",\"param\":\"pts\",\"index\":1},\"label\":\"grid.pts\",\"type\":\"Generic Data\",\"paths\":1,\"count\""
+    },
+    "outputsShape": {
+      "count": 16384,
+      "type": "Generic Data",
+      "items": 500,
+      "firstItems": [
+        {
+          "path": "{0;0}",
+          "value": "{0, 0, 6.25}",
+          "type": "Point"
+        },
+        {
+          "path": "{0;0}",
+          "value": "{0.220037, 0, 6.140765}",
+          "type": "Point"
+        }
+      ],
+      "nextOffset": 500
+    }
+  },
+  "workerReader": {
+    "launchMs": 7771,
+    "reads": [
+      {
+        "n": 64,
+        "enc": "json",
+        "ms": 3104,
+        "hostMs": 38,
+        "chars": 651584,
+        "valueChars": 649291
+      },
+      {
+        "n": 64,
+        "enc": "base64-f64",
+        "ms": 2013,
+        "hostMs": 13,
+        "chars": 364927,
+        "valueChars": 362634
+      },
+      {
+        "n": 128,
+        "enc": "json",
+        "ms": 2225,
+        "hostMs": 52,
+        "chars": 2591626,
+        "valueChars": 2589333
+      },
+      {
+        "n": 128,
+        "enc": "base64-f64",
+        "ms": 1851,
+        "hostMs": 43,
+        "chars": 1438081,
+        "valueChars": 1435788
+      },
+      {
+        "n": 256,
+        "enc": "json",
+        "ms": 2166,
+        "hostMs": 176,
+        "chars": 10355902,
+        "valueChars": 10353609
+      },
+      {
+        "n": 256,
+        "enc": "base64-f64",
+        "ms": 2166,
+        "hostMs": 219,
+        "chars": 5730690,
+        "valueChars": 5728397
+      }
+    ],
+    "sameHash": true
+  },
+  "finishedAt": "2026-10-08T01:59:03.674Z",
+  "passed": true,
+  "connectors": {
+    "ok": true,
+    "connectors": [
+      {
+        "id": "rhino8",
+        "plugin": "other",
+        "running": true,
+        "path": "<checkout>\\.vide\\build\\rhino-worker\\bin\\net8.0-windows\\VIDE.Worker.rhp"
+      },
+      {
+        "id": "zwcad2023",
+        "plugin": "current",
+        "running": false,
+        "version": "0.2.30-0fc15004",
+        "path": "%LOCALAPPDATA%\\VIDE\\plugins\\zwcad\\0.2.30-0fc15004\\VIDE.Zwcad.Connection.dll"
+      }
+    ],
+    "rhinoRunning": true
+  }
+}

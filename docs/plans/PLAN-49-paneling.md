@@ -2,7 +2,7 @@
 id: PLAN-49
 title: 패널링 — 미리보기 · 부재 · 최적화·타입화 (T-250~T-260)
 status: draft
-version: 0.2
+version: 0.3
 updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-16, SPEC-07, SPEC-15, ARCH-03, DESIGN, C-07, FR-14, FR-22, FR-24, AC-14, AC-20, AC-34, ADR-022, ADR-026, ADR-029, ADR-033, RESEARCH-04, RESEARCH-16, PLAN-29, PLAN-48, HOST-RHINO]
@@ -51,8 +51,8 @@ W4  T-257 3단계 만들기·내보내기 ─┐  T-258 통합 VERIFY(숨은 Rhi
 
 - **기준:** SPEC-16.3·16.5 5·16.9 2, ARCH-03 §9·§13·§14('정확한 곡선 전송'), ADR-033(GH 얇은 도구), ADR-029.
 - **질문:** ① 기준 면 표본을 어느 경로로 읽는가 — (a) 연결 Rhino에서 공식 읽기 틀(`vide.read.surface-grid@1`, `BrepFace.PointAt`·`NormalAt`·`CurvatureAt`·`IsPointOnFace`, `{{DATA_BASE64}}` 하나), (b) 숨은 Rhino 워커가 작업 사본을 열어 같은 계산, (c) GH lite(`gh_apply`·`gh_outputs`·`gh_bake`)로 패널링 정의. ② 표본 격자 크기별(64², 128², 256²) 읽기 시간과 응답 크기(16 MB 상한, 본문 65,536자). ③ 연결 문서 직접 실행이 읽기에도 되돌리기 기록을 여는지(`DirectExecution.cs`)와 읽기 전용으로 돌릴 방법. ④ 약 5천 패널을 매개변수 좌표로 넘겨 Rhino가 원래 면에서 만드는 만들기의 본문 수·시간(1천·5천), 메쉬(`mesh@1`)와 트림 면·두께 오프셋(`CreateOffsetBrep`)의 시간. ⑤ 엔진 TS의 표본 보간으로 계산한 꼭짓점과 실제 면 값의 차이(mm)와, 그 차이가 평면도 허용 오차(3 mm) 안에 드는 표본 크기. ⑥ 형상 지문을 읽기 틀과 만들기 틀이 같은 호스트 함수로 계산하는 방법(SPEC-16.3 2)과 그 안정성(같은 면을 두 번 읽어 같은 값, 면을 1 mm 옮기면 다른 값). ⑦ 이음매(닫힌 원통)와 극점(구 띠)이 있는 면에서 `closedU`·`singular` 판정과, 주기를 넘는 UV를 만들기 틀이 원래 면에서 만드는 방법. ⑧ 5천 패널 만들기가 본문 몇 묶음(= Rhino 되돌리기 기록 수)이 되는지.
-- **방법:** `tools/spikes/2026-10-xx-paneling/`에 합성 면 생성 스크립트와 측정 틀. 합성 면은 `.vide/spikes/paneling/` 아래 3DM — 이중 곡면(쌍곡 포물면 30 × 20 m, 트림 구멍 하나), 원통 띠(R 8 m, 120°), 닫힌 원통(R 4 m, 이음매), 구 띠(극점 하나 포함), 평면(대조군). 에이전트가 띄운 숨은 Rhino 8에서만 재고, 사용자 Rhino에는 붙지 않는다. GH 경로(c)는 T-133(실제 Rhino 8 GH 확인) 전이므로 가능한 만큼만 재고 결과에 그 사실을 적는다.
-- **변경 범위:** `docs/tdd/SPIKE-2026-10-xx-paneling.md`(질문·환경·결과·한계·채택 경로), `tools/spikes/2026-10-xx-paneling/`, 결과에 따라 ARCH-03 §9.1에 읽기 틀과 패널 만들기 틀의 이름·데이터 꼴을 적는다.
+- **방법:** `tools/spikes/2026-10-08-paneling/`에 합성 면 생성 스크립트와 측정 틀. 합성 면은 `.vide/spikes/paneling/` 아래 3DM — 이중 곡면(쌍곡 포물면 30 × 20 m, 트림 구멍 하나), 원통 띠(R 8 m, 120°), 닫힌 원통(R 4 m, 이음매), 구 띠(극점 하나 포함), 평면(대조군). 에이전트가 띄운 숨은 Rhino 8에서만 재고, 사용자 Rhino에는 붙지 않는다. GH 경로(c)는 T-133(실제 Rhino 8 GH 확인) 전이므로 가능한 만큼만 재고 결과에 그 사실을 적는다.
+- **변경 범위:** `docs/tdd/SPIKE-2026-10-08-paneling.md`(질문·환경·결과·한계·채택 경로), `tools/spikes/2026-10-08-paneling/`, 결과에 따라 ARCH-03 §9.1에 읽기 틀과 패널 만들기 틀의 이름·데이터 꼴을 적는다.
 - **선행:** 없음.
 - **정상 검증:** 세 합성 면에서 (a)·(b)의 읽기 시간·크기 표, 5천 패널 만들기 시간 표, 보간 오차 표가 나옴.
 - **실패 검증:** 면 아님·단위 없음·트림 밖 표본만 있는 면의 읽기 오류가 이유와 함께 나옴, 시간 초과를 일부러 낸 경우 문서에 아무것도 남지 않음(되돌리기 기록 수 확인).
@@ -61,7 +61,7 @@ W4  T-257 3단계 만들기·내보내기 ─┐  T-258 통합 VERIFY(숨은 Rhi
 ## T-251 기준 면 읽기와 '기준 면 고르기' 단계
 
 - **기준:** SPEC-16.3·16.12, SPEC-01.11, SPEC-07.5, T-250 결과.
-- **변경 범위:** 읽기 틀 `src/jigs/bake/templates/read-surface-grid.cs`(또는 T-250이 정한 경로)와 그 실행 경로(읽기 전용, 되돌리기 기록 없음), `src/server/paneling-routes.ts`(고른 면 읽기·다시 읽기, 원격 세션 403), jig 입력 종류(사람 단계 '기준 면 고르기' — 지금 Rhino 선택을 받아 Link·객체 ID·면 번호를 고정, ARCH-03 §3 입력 종류 표에 더함), 읽은 표본을 작업본 입력 사본으로 저장하고 Live Sync 지문 변화 → '기준 면이 바뀜'.
+- **변경 범위:** 읽기 틀 `src/jigs/bake/templates/read-surface-grid.cs`(`vide.read.surface-grid@1`, ARCH-03 §9.1, 원형 `tools/spikes/2026-10-08-paneling/`)와 지문 글 `face-hash.cs`(`//@include`를 `templates.ts`가 펼침), 실행 경로는 새 호스트 방법 `direct-read`(`hosts/rhino/worker/DirectExecution.cs`·`editor-channel.ts`·`sdk-execution.ts` — 되돌리기 기록 없음, 결과 보관 없음, 문서가 바뀌면 되돌리고 `READ_CHANGED_DOCUMENT`; 플러그인 다시 빌드)이고 파일 연결만 있으면 숨은 워커 `execute`(SPIKE-2026-10-08-paneling 채택 경로 1). 응답의 base64 float64 묶음을 `SurfaceSample` 수 배열로 풀고, 기본 표본 128², `src/server/paneling-routes.ts`(고른 면 읽기·다시 읽기, 원격 세션 403), jig 입력 종류(사람 단계 '기준 면 고르기' — 지금 Rhino 선택을 받아 Link·객체 ID·면 번호를 고정, ARCH-03 §3 입력 종류 표에 더함), 읽은 표본을 작업본 입력 사본으로 저장하고 Live Sync 지문 변화 → '기준 면이 바뀜'.
 - **선행:** T-250, 계약.
 - **정상 검증:** `tests/server/paneling-read.test.mjs`(가짜 호스트 응답으로 표본 → `surfaceSampleSchema` 통과·저장·지문 변화 표시), 숨은 Rhino 8에서 합성 면 하나를 읽은 표본이 스키마를 통과.
 - **실패 검증:** 메쉬·SubD를 고름 → '메쉬 기준 면은 아직 받지 않습니다', 연결 없음·단위 없음·면 없음·응답 한도 초과 → 이유와 함께 실패하고 앞 표본 유지, 읽기가 Rhino 되돌리기 목록에 기록을 남기지 않음.
@@ -70,7 +70,7 @@ W4  T-257 3단계 만들기·내보내기 ─┐  T-258 통합 VERIFY(숨은 Rhi
 ## T-252 1단계 배치 — `vide/paneling-kit`과 공식 jig 골격
 
 - **기준:** SPEC-16.2·16.4·16.5, SPEC-07.6·07.7.
-- **변경 범위:** 새 라이브러리 `src/jigs/official/paneling-kit/`(`LIBRARY_MODULES`에 등록) — `sample.ts`(표본 격자의 쌍선형 보간, 면 위 길이 누적표), `domain.ts`(재는 법 세 가지로 2D 영역 만들기), `patterns.ts`(사각·엇갈림·마름모·삼각 셀), `layout.ts`(셀 배치·트림 자르기·경계 처리 자르기/합치기/빼기·번호 `P-행-열`·크기 범위·목표 대비 편차) → `PanelLayout`. 공식 jig `src/jigs/official/jigs/paneling/`(`vide/paneling` 0.1.0): `jig.json`(입력 기준 면, 단계 `preview`·`members`·`optimize`, 설정값과 '물어볼 것' 기본, 추천값 표 SPEC-16.4 1), `skill.md`(질문 카드로 묻는 항목), fixtures. `src/jigs/catalog.ts`의 J-07은 T-258이 끝날 때 `planned`에서 바꾼다.
+- **변경 범위:** 새 라이브러리 `src/jigs/official/paneling-kit/`(`LIBRARY_MODULES`에 등록) — `sample.ts`(표본 격자의 3차 Catmull-Rom 보간 — 닫힌 방향은 감고 열린 가장자리는 이차 유령 점 `3P₀ − 3P₁ + P₂`, 쌍선형은 쓰지 않음(SPIKE-2026-10-08-paneling §6: 128²에서 3차 ≤ 0.01 mm, 쌍선형 ≤ 1.7 mm이고 `κ·h²/8`로 큰 면에서 3 mm 초과), 면 위 길이 누적표), `domain.ts`(재는 법 세 가지로 2D 영역 만들기), `patterns.ts`(사각·엇갈림·마름모·삼각 셀), `layout.ts`(셀 배치·트림 자르기 — 표본의 `inside` 깃발이 아니라 `trimLoops`로 자름(SPIKE §7: 깃발로 고른 칸의 꼭짓점이 실제로는 트림 밖이었음)·경계 처리 자르기/합치기/빼기·번호 `P-행-열`·크기 범위·목표 대비 편차) → `PanelLayout`. 공식 jig `src/jigs/official/jigs/paneling/`(`vide/paneling` 0.1.0): `jig.json`(입력 기준 면, 단계 `preview`·`members`·`optimize`, 설정값과 '물어볼 것' 기본, 추천값 표 SPEC-16.4 1), `skill.md`(질문 카드로 묻는 항목), fixtures. `src/jigs/catalog.ts`의 J-07은 T-258이 끝날 때 `planned`에서 바꾼다.
 - **선행:** 계약. T-251과 무관(합성 표본 고정 자료).
 - **정상 검증:** `tests/core/paneling-layout.test.mjs` — 평면 2.4 × 1.2 m에 1.2 × 0.6 → 4장(`P-1-1`…`P-2-2`, 꼭짓점 반시계·첫 꼭짓점이 시작 모서리 쪽), 원통 띠에서 면 위 길이 기준 크기가 기준 이소커브 위 목표 ±1 mm(가로·세로는 SPEC-16.2 공통 규칙 4로 잼), 매개변수 같은 간격은 `n = round(L / 크기)`이고 편차가 보고됨, 남는 부분은 시작 모서리 반대쪽 끝의 잘린 패널, 시작 모서리·축·[뒤집기]를 바꾸면 번호·꼭짓점 순서가 SPEC-16.5 2대로 바뀜, 엇갈림 짝수 행이 w/2 밀림, 삼각 `a`·`b`, 닫힌 원통 둘레 → 이음매에 잘린 패널 없음·`module`이 둘레에 맞춰짐, 구 띠 극점 셀 → 삼각 패널·`pole` 수, 투영 격자에서 접힌 면 → `folded-projection`, 트림 구멍 둘레 패널이 '경계'이고 이웃끼리 꼭짓점 키를 공유, 합치기 비율 미만 패널이 가장 긴 모서리 이웃에 합쳐지고 번호 `+행-열`·`mergedFrom`, 빼기 → `dropped` 수, 같은 입력 두 번 → 같은 번호·같은 지문. 5천 패널 배치 시간 기록(ARCH-03 §13 `live` 100 ms 목표).
 - **실패 검증:** 패널 0개 → 단계 실패와 이유, 상한 2만 초과 → 계산 안 함, 빈 설정값 → 추천값으로 채우고 출처 `assumed`.
@@ -97,7 +97,7 @@ W4  T-257 3단계 만들기·내보내기 ─┐  T-258 통합 VERIFY(숨은 Rhi
 ## T-255 만들기 틀 — 1·2단계
 
 - **기준:** SPEC-16.9, SPEC-07.12·07.13, ARCH-03 §9, T-250 결과.
-- **변경 범위:** 공식 틀 `vide.bake.panels-uv@1`(기준 면 ID·면 번호·읽은 형상 지문·패널 UV 윤곽 → 지문을 다시 계산해 다르면 아무것도 만들지 않고 거절, 같으면 원래 면에서 잘라낸 열린 면, 주기를 넘는 UV는 이음매에서 감아 만듦, 표본과 실제의 차이 mm를 결과에 담음), `vide.bake.panel-solids@1`(같은 입력 + 두께·방향 → `CreateOffsetBrep` 닫힌 부재, 한 조각·`IsSolid`·`IsValid`가 아니면 `failed[]`). 1단계 메쉬는 `mesh@1`, 줄눈은 `curves@1`. jig `make` 선언 셋(SPEC-16.9 1), 레이어 `패널링::…`, 속성 `PANEL_ATTRS`, 객체 키 `makeKey`(SPEC-16.9 6), 실패 패널 → `패널링::실패` 윤곽과 번호, 확정 점검 `paneling-confirmed`(계약의 `makeAllowed`, 가정 값이 남으면 [부재 만들기] 막음), 결과 카드의 'Rhino Ctrl+Z n번'. ARCH-03 §9.1에 두 틀을 적는다.
+- **변경 범위:** 공식 틀 `vide.bake.panels-uv@1`(기준 면 ID·면 번호·읽은 형상 지문·패널 UV 윤곽 → 지문을 다시 계산해 다르면 아무것도 만들지 않고 거절, 같으면 원래 면에서 잘라낸 열린 면, 주기를 넘는 UV는 `Brep.ChangeSeam`을 패널 맞은편에 놓고 3D 최근점으로 꼭짓점을 옮겨 만듦, 실제 꼭짓점 `corners[]`를 돌려주어 엔진이 표본과의 차이 mm를 계산, 틀 안 시간 한도 `budgetMs`), `vide.bake.panel-solids@1`(같은 입력 + 두께·방향 → `CreateOffsetBrep` 닫힌 부재, 한 조각·`IsSolid`·`IsValid`가 아니면 `failed[]`). 데이터 꼴은 ARCH-03 §9.1(T-250에서 적음), 원형은 `tools/spikes/2026-10-08-paneling/make-panels-uv.cs`. 1단계 [미리보기 만들기]도 메쉬가 아니라 `panels-uv@1` 열린 면(SPIKE §7: 5천 개 2.6~3.3 s, 패널마다 메쉬와 비슷하고 실제 면 위에 정확), 줄눈은 `curves@1`. 본문 하나에 패널 약 500개(5천 = 본문 10개 = Ctrl+Z 10번); 꼭짓점 표 공유로 줄이는 것은 선택. jig `make` 선언 셋(SPEC-16.9 1), 레이어 `패널링::…`, 속성 `PANEL_ATTRS`, 객체 키 `makeKey`(SPEC-16.9 6), 실패 패널 → `패널링::실패` 윤곽과 번호, 확정 점검 `paneling-confirmed`(계약의 `makeAllowed`, 가정 값이 남으면 [부재 만들기] 막음), 결과 카드의 'Rhino Ctrl+Z n번'. ARCH-03 §9.1에 두 틀을 적는다.
 - **선행:** T-250(경로), T-251(실제 표본), T-252(배치), T-254(부재 UV).
 - **정상 검증:** `tests/core/paneling-bake.test.mjs`(데이터 블록·덩어리 나누기·확정 점검), 숨은 Rhino 8에서 합성 이중 곡면 1천·5천 패널의 미리보기·부재 만들기와 [되돌리기] 한 번으로 모두 사라짐, 다시 만들기에서 사람이 고친 패널 보존, 1단계 크기를 바꾼 다시 만들기 → 고치지 않은 이전 패널은 지워지고 고친 것은 '이전 배치에서 보존'으로 셈.
 - **실패 검증:** 일부러 깨뜨린 패널(UV가 트림 밖) → 실패 레이어와 결과 카드 이유, 가정 값 남음 → 만들기 거절, 면이 바뀐 뒤(지문 다름) → 쓰지 않고 다시 읽기 안내.
@@ -146,7 +146,7 @@ W4  T-257 3단계 만들기·내보내기 ─┐  T-258 통합 VERIFY(숨은 Rhi
 | 티켓 | 상태 | 증거 |
 |---|---|---|
 | 계약 | 완료(2026-10-08), 같은 날 0.2 검토 보완: 이음매·극점·문서 허용 오차·표본 상한, 투영 평면, 꼭짓점 키(위상), 줄눈을 면 위 거리로 정의(`jointPlacement` → `boundaryJoint`), 줄눈 틈 범위, 평면화 틈·면에서 벗어남, 타입 `mirrorOf`·꼭짓점 수, 노드·줄눈 위치, `makeAllowed`·`makeKey`·`geomTol`·`SCHEDULE_COLUMNS` | `tests/contract/paneling-contract.test.mjs` 4개 통과 |
-| T-250 | 계획 | — |
+| T-250 | 완료(2026-10-08). 채택: (a) 연결 Rhino 읽기 틀 + 새 `direct-read`, base64 float64, 기본 128², 엔진 3차 보간, 매개변수 좌표 만들기 틀(약 500 패널/본문). (b) 숨은 워커는 파일 연결 대안, (c) GH lite는 쓰지 않음. T-251·T-252·T-255 변경 범위를 결과로 고침. 설치 엔진 rhino8 커넥터가 실험 뒤 `other`로 남음 — 사용자 Rhino가 꺼진 뒤 다시 설치·`current` 확인 필요 | [SPIKE-2026-10-08-paneling](../tdd/SPIKE-2026-10-08-paneling.md), `tools/spikes/2026-10-08-paneling/result.json` |
 | T-251~T-258 | 계획 | — |
 | T-259·T-260 | 후속 | — |
 
@@ -154,7 +154,7 @@ W4  T-257 3단계 만들기·내보내기 ─┐  T-258 통합 VERIFY(숨은 Rhi
 
 | # | 질문 | 추천 기본값 | 대안 |
 |---|---|---|---|
-| 1 | 면 계산 경로 | 연결 Rhino의 공식 읽기 틀 + 표본 TS 보간 + 매개변수 좌표로 다시 계산하는 만들기(T-250에서 확인) | 숨은 Rhino 워커 / GH lite |
+| 1 | 면 계산 경로 | T-250에서 확인해 채택: 연결 Rhino의 공식 읽기 틀(`direct-read`) + 표본 TS 3차 보간 + 매개변수 좌표로 다시 계산하는 만들기 | 숨은 Rhino 워커(파일 연결만 있을 때) / GH lite(쓰지 않음) |
 | 2 | 1단계 빈 입력 | 추천값으로 바로 미리보기하고 '가정' 표지, 부재·타입 만들기만 확인 요구 | 모든 입력을 묻고 나서야 계산 |
 | 3 | 크기를 재는 기본 | 면 위 길이 | 매개변수 같은 간격 / 평면·입면 투영 |
 | 4 | 경계 패널 기본 | 자르기 | 이웃에 합치기 / 빼기 |
