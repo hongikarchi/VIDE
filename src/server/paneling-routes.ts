@@ -9,6 +9,7 @@
 //
 //   GET  /api/v1/projects/:id/paneling/surface?instanceId=&key=   → state of the kept sample
 //   POST …/paneling/surface/read {instanceId, key?, mode:'pick'|'reread', linkId?, objectId?, faces?, grid?}
+//   GET·POST …/paneling/curves[/read] — the tile and attractor picks (paneling-curves.ts, T-260)
 
 import { z } from 'zod';
 import { DomainError } from '../core/store.ts';
@@ -17,6 +18,7 @@ import { isFileLink, type DocumentLinks } from '../core/document-links.ts';
 import { isItemList } from '../core/model-store.ts';
 import type { SurfaceSample } from '../contracts/paneling.ts';
 import type { SdkExecution } from './sdk-execution.ts';
+import { curvesReadInput, curvesState, readCurves } from './paneling-curves.ts';
 import { jigRuntimeFor } from './jig-routes.ts';
 import {
   FACE_LIMIT,
@@ -287,10 +289,30 @@ export async function panelingRoutes(
   method: string | undefined,
   ctx: PanelingRouteContext,
 ) {
-  const match = /^\/api\/v1\/projects\/([^/]+)\/paneling\/surface(\/read)?$/.exec(url.pathname);
+  const match = /^\/api\/v1\/projects\/([^/]+)\/paneling\/(surface|curves)(\/read)?$/.exec(
+    url.pathname,
+  );
   if (!match) return false;
-  const [, projectId, read] = match;
+  const [, projectId, what, read] = match;
   ctx.workspace.store.project(projectId);
+  if (what === 'curves') {
+    // 타일 곡선·어트랙터 (SPEC-16.13, PLAN-49 T-260).
+    if (!read && method === 'GET') {
+      const instanceId = url.searchParams.get('instanceId');
+      if (!instanceId) throw new DomainError('INVALID_INPUT');
+      ctx.send(
+        200,
+        await curvesState(ctx, projectId, instanceId, url.searchParams.get('key') ?? undefined),
+      );
+      return true;
+    }
+    if (read && method === 'POST') {
+      if (ctx.remote) throw new DomainError('FORBIDDEN');
+      ctx.send(200, await readCurves(ctx, projectId, curvesReadInput.parse(await ctx.body())));
+      return true;
+    }
+    return false;
+  }
   if (!read && method === 'GET') {
     const instanceId = url.searchParams.get('instanceId');
     if (!instanceId) throw new DomainError('INVALID_INPUT');

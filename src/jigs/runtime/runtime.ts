@@ -23,6 +23,7 @@ import {
   bodyOf,
   emptyBody,
   type AssembledRole,
+  type HostCurvesRef,
   type HostDocumentRef,
   type HostSurfaceRef,
   type InstanceBody,
@@ -783,6 +784,10 @@ export class JigRuntime {
         // The kept surface sample (SPEC-16.3 3); null until a face is picked and read.
         const kept = body.hostSurfaces?.[input.key];
         inputs[input.key] = (kept && this.readGz(kept.ref)) ?? null;
+      } else if (input.kind === 'host-curves') {
+        // The kept points and curves (SPEC-16.13); null until picked and read.
+        const kept = body.hostCurves?.[input.key];
+        inputs[input.key] = (kept && this.readGz(kept.ref)) ?? null;
       }
     }
     return inputs;
@@ -894,6 +899,61 @@ export class JigRuntime {
     this.bump(instanceId);
     this.save(instance, body, instance.status === 'new' ? 'new' : changed ? 'stale' : undefined);
     return entry;
+  }
+  /**
+   * Keep (or clear, with null) the read points and curves of a `host-curves` input (SPEC-16.13,
+   * PLAN-49 T-260). Other content makes the steps that read it '다시 계산 필요'; the same content
+   * (picking the same curves again) only refreshes the reference.
+   */
+  async setHostCurves(
+    projectId: string,
+    instanceId: string,
+    key: string,
+    kept: (Omit<HostCurvesRef, 'ref' | 'hash'> & { curves: unknown }) | null,
+  ): Promise<HostCurvesRef | null> {
+    const instance = this.store.instance(projectId, instanceId);
+    const jig = await this.jigOf(instance);
+    const input = jig.manifest.inputs.find((i) => i.key === key);
+    if (!input || input.kind !== 'host-curves') throw new DomainError('NOT_FOUND');
+    const body = bodyOf(instance.body);
+    const previous = body.hostCurves?.[key];
+    if (!kept) {
+      if (!previous) return null;
+      const rest = { ...(body.hostCurves ?? {}) };
+      delete rest[key];
+      body.hostCurves = rest;
+      this.markStale(jig, instanceId, this.graphOf(jig).affectedByInputs([key]));
+      this.bump(instanceId);
+      this.save(instance, body, instance.status === 'new' ? 'new' : 'stale');
+      return null;
+    }
+    const { curves, ...reference } = kept;
+    // The read time is not content: the same curves read again keep the steps as they are.
+    const content = curves as { source?: Record<string, unknown> };
+    const hash = hashValue([
+      reference.linkId,
+      reference.objectIds,
+      hashValue({ ...content, source: { ...content.source, readAt: '' } }),
+    ]);
+    const changed = !previous || previous.hash !== hash;
+    const ref = changed
+      ? `curves/${instanceId}/${key.replace(/[^A-Za-z0-9_.-]/g, '_')}-${hash.slice(0, 16)}.json.gz`
+      : previous.ref;
+    if (changed) this.writeGz(ref, curves);
+    const entry: HostCurvesRef = { ref, hash, ...reference };
+    body.hostCurves = { ...(body.hostCurves ?? {}), [key]: entry };
+    if (changed) this.markStale(jig, instanceId, this.graphOf(jig).affectedByInputs([key]));
+    this.bump(instanceId);
+    this.save(instance, body, instance.status === 'new' ? 'new' : changed ? 'stale' : undefined);
+    return entry;
+  }
+  /** A `host-curves` input's kept reference and read copy; null when nothing was picked. */
+  hostCurves(projectId: string, instanceId: string, key: string) {
+    const instance = this.store.instance(projectId, instanceId);
+    const kept = bodyOf(instance.body).hostCurves?.[key];
+    if (!kept) return null;
+    const curves = this.readGz(kept.ref);
+    return curves === undefined ? null : { ...kept, curves };
   }
   /** A `host-surface` input's kept reference and sample; null when no face was read yet. */
   hostSurface(projectId: string, instanceId: string, key: string) {

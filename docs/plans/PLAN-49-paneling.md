@@ -2,7 +2,7 @@
 id: PLAN-49
 title: 패널링 — 미리보기 · 부재 · 최적화·타입화 (T-250~T-260)
 status: draft
-version: 0.8
+version: 0.9
 updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-16, SPEC-07, SPEC-15, ARCH-03, DESIGN, C-07, FR-14, FR-22, FR-24, AC-14, AC-20, AC-34, ADR-022, ADR-026, ADR-029, ADR-033, RESEARCH-04, RESEARCH-16, PLAN-29, PLAN-48, HOST-RHINO]
@@ -15,7 +15,7 @@ related: [SPEC-16, SPEC-07, SPEC-15, ARCH-03, DESIGN, C-07, FR-14, FR-22, FR-24,
 ## 착수 조건과 범위
 
 - **제품 결정:** 2026-10-08 사용자 지시로 C-07을 채택했다(PRD §4.4 C-07, §14.2 '패널링' 행). 단계는 사용자 메모의 세 단계 그대로다.
-- **범위:** 연결 Rhino 문서의 서피스 면 하나(또는 한 폴리서피스의 여러 면)를 읽어 1단계 미리보기 → 2단계 부재 → 3단계 평면화·타입·결합부·일람표·평면 패널 재단 윤곽까지 계산하고, 단계마다 사람이 눌러 Rhino에 만든다. 하부 구조, 육각·보로노이·비주기·사용자 타일, PQ 최적화, 곡면 펼침, 메쉬 기준 면은 제외(SPEC-16 「범위 밖」, T-259·T-260 후속).
+- **범위:** 연결 Rhino 문서의 서피스 면 하나(또는 한 폴리서피스의 여러 면)를 읽어 1단계 미리보기 → 2단계 부재 → 3단계 평면화·타입·결합부·일람표·평면 패널 재단 윤곽까지 계산하고, 단계마다 사람이 눌러 Rhino에 만든다. 하부 구조, 비주기 타일, PQ 최적화, 곡면 펼침, 메쉬 기준 면은 제외(SPEC-16 「범위 밖」, T-259 후속). 육각·보로노이·사용자 타일·어트랙터 개구는 T-260(SPEC-16.13).
 - **원칙:** 계산은 결정적 jig(엔진의 순수 TS + 공식 틀)이고 GH 캔버스 자동 배선은 jig 경로로 쓰지 않는다(RESEARCH-04 §J-07: 2026-07-23 비교에서 사용자가 결정적 경로를 택함). 과거 프로젝트 코드와 자료(S-06·S-12·Wireify 원장)는 읽기 참고만 하고 복사하지 않으며, 알고리즘은 새로 쓴다. 사용자가 띄운 Rhino에 붙거나 끄지 않는다. 실호스트 시험은 에이전트가 띄운 숨은 Rhino 8과 `.vide/` 아래의 합성 문서로만 하고, 자기 PID만 끄며, 끝나면 설치된 엔진의 `GET /api/v1/connectors`에서 rhino8 플러그인이 `current`인지 확인하고 아니면 Rhino가 꺼져 있을 때 `POST /api/v1/connectors/rhino8/install`을 부른다(`tests/integration/rhino-site-bake.mjs`의 `restoreInstalledPlugin`).
 - **병렬 작업:** 각 묶음은 `src/contracts/paneling.ts`의 형식(`SurfaceSample`·`PanelLayout`·`MemberSet`·`PanelTyping`·단계별 설정값)만 맞추면 서로 기다리지 않는다. 계약과 스키마 시험(`tests/contract/paneling-contract.test.mjs`)은 2026-10-08 이 계획과 함께 만들었다. 계약을 바꾸는 티켓은 계약·스키마 시험을 같은 커밋에서 고치고 이 문서의 「현재 상태」에 적는다.
 
@@ -39,7 +39,7 @@ W1  T-250 SPIKE 면 계산 경로 ───────────────�
 W2  T-251 기준 면 읽기 ─┐  T-252 1단계 배치(kit) ─┐  T-253 화면·메쉬 겹침 ─┤
 W3  T-254 2단계 부재(kit) ─┐  T-255 만들기 틀(1·2단계) ─┐  T-256 3단계(kit) ┤
 W4  T-257 3단계 만들기·내보내기 ─┐  T-258 통합 VERIFY(숨은 Rhino 8) ────────┘
-후속 T-259 PQ 평면화·곡면 펼침 SPIKE   T-260 추가 패턴·사용자 타일
+후속 T-259 PQ 평면화·곡면 펼침 SPIKE(완료)   T-260 추가 패턴·사용자 타일(완료)
 ```
 
 - W1은 T-250 하나다. 면 읽기 경로와 만들기 경로의 크기·시간을 재고 나머지 묶음의 경로를 고정한다.
@@ -139,9 +139,13 @@ W4  T-257 3단계 만들기·내보내기 ─┐  T-258 통합 VERIFY(숨은 Rhi
 
 ## T-260 후속 — 추가 패턴과 사용자 타일
 
-- **기준:** SPEC-16 「범위 밖」, RESEARCH-04 §J-07(사용자 타일을 면에 강체 배치, 비주기 타일).
-- **범위:** 육각·보로노이 셀(2D 씨앗 → 트림 영역 자르기 → 면으로), Rhino에서 그린 타일 묶음을 평면 영역에 받아 면 위 접평면 틀로 놓기, 어트랙터 개구율(상한 0.95). SPEC 보완 뒤 착수.
+- **기준:** SPEC-16.13(2026-10-08 보완), RESEARCH-04 §J-07(사용자 타일을 면에 강체 배치), RESEARCH-16 §4.
+- **범위:** 육각·보로노이 셀(2D 씨앗 → 트림 영역 자르기 → 면으로), Rhino에서 그린 타일 묶음을 평면 영역에 받아 면 위 접평면 틀로 놓기, 어트랙터 개구율(상한 0.95). 비주기 타일·타일 조각 경계 자르기·판 구멍 부재는 제외(SPEC-16 「범위 밖」).
+- **변경 범위:** 계약 `src/contracts/paneling.ts`(`PATTERNS` 셋 더함, 1단계 설정의 선택 항목 `voronoi`·`opening`, 패널 `opening`, 패널 번호 `t<n>`, `makeKey('opening')`, `CurveSet`, 일람표 '개구율(%)', `vide-opening`), `paneling-kit/patterns.ts`(육각 격자 점·보로노이 씨앗 이름 꼭짓점), `domain.ts`(육각 직각 방향 3h/4 주기·짝수 행), `tile.ts`(`tileFromCurves`·`placeTile` 접평면 틀·가장 가까운 점), `opening.ts`(거리·단계·√r 축소·실제 개구율), `layout.ts`(타일 경로, 이름 키, 개구, 배치 지문에 타일·어트랙터), `settings.ts`(`withPatternExtras`), `typing.ts`·`optimize.ts`(개구율이 다르면 다른 타입), `schedule.ts`, `steps.ts`(입력 `tile`·`attractors`). 읽기 틀 `src/jigs/bake/templates/read-curves.cs`(`vide.read.curves@1`)와 엔진 경로 `src/server/paneling-curves.ts`(`…/paneling/curves[/read]`), jig 입력 종류 `host-curves`(`manifest.ts`·`instance.ts` `hostCurves`·`runtime.ts` `setHostCurves`), `paneling-confirmed.ts`의 '읽을 때만 세는' 설정, 만들기 어댑터 `panels.ts`의 개구 곡선과 jig 만들기 `openings`, 화면(`src/ui/paneling/*` 타일·어트랙터 줄, 색 기준 '개구율', 설정 표시 규칙), `jig.json`·`skill.md`, ARCH-03 §3·§9.1, Design SCR-33.
 - **선행:** T-252.
+- **정상 검증:** `tests/core/paneling-patterns.test.mjs` — 육각 평면(넓이 합 = 면 넓이, 안쪽 꼭짓점 셋이 공유, 행 간격 0.6 m), 닫힌 원통 직각 방향 짝수 행·이음매에 잘린 패널 없음, 보로노이 결정적·씨앗 번호로 바뀜·흔들림 0이면 사각·꼭짓점 이름 공유, 닫힌 원통·트림 쌍곡면, 타일 평면(조각 크기 그대로·경계에 걸친 조각 `dropped`·공유 꼭짓점 없음)과 원통 띠(꼭짓점이 면 위·모서리 길이 1 mm 안), 개구율(거리·단계·상한·실제 비율·배치 지문), 단계 함수로 2·3단계까지(보로노이 줄눈, 육각 한 타입, 타일 줄눈 없음), 개구 단계별 타입 나뉨과 개구 만들기 곡선, 가정 계산 규칙(엔진·화면 같음), 공식 jig 선언. `tests/server/paneling-curves.test.mjs`(가짜 Rhino로 타일 읽기·단계가 읽음·타일 아님 거절과 앞 사본 유지·어트랙터·지우기·원격 403). `tests/contract/paneling-contract.test.mjs`.
+- **실패 검증:** 타일 없음 → `NO_TILE`, 열린·기운·자기 교차 곡선 → 읽기 거절, 개구율 0.95 초과 → 설정값 검사 거절.
+- **완료:** 위 시험, `npm run typecheck`, `jig:validate`. 실제 Rhino에서 `vide.read.curves@1` 확인은 숨은 Rhino 8 시험으로(아래 현재 상태).
 
 ## 현재 상태
 
@@ -158,7 +162,7 @@ W4  T-257 3단계 만들기·내보내기 ─┐  T-258 통합 VERIFY(숨은 Rhi
 | T-257 | 완료(2026-10-08). 공식 틀 `vide.bake.block-instances@1`(`block-instances.cs`, 블록 머리 + 본문마다 쓰는 정의만, 놓기는 회전 9 + 원점), `paneling-kit/place.ts` — `typePlacements`(패널마다 자기 2단계 판의 최적 평면 판·틀을 다시 구하고 타입 대표 윤곽을 순환 번호 맞춤 2D 강체 맞춤으로 놓음, '허용 오차 넘음'·`T-00`·1·2단계 실패는 놓지 않고 실패 윤곽으로)·`cutSheet`(평면 판 재단 윤곽을 기준 면 오른쪽 XY에 타입·번호 순 격자), 어댑터 `panels.ts` `typingRows`(키 `type:`·`node:`·`joint:`·`cut:`, 블록 이름의 타입화 지문 `typingHashOf`, 두께 쪽 부호), 만들기 선언 `types`·`connections`·`cuts`·`cut-numbers`(모두 `paneling-confirmed`, 화면 [타입 만들기]의 `also`, 결과 카드 이름), 보고서 틀 `reports/paneling.json`(머리 문장에 '가정 값 n개 포함'·'다시 계산 필요' — 보고서 입력에 `inputs.counts.notFinal` 더함), 화면 일람표 서랍의 [보고서](HTML 내려받기)와 CSV 파일 이름 끝의 표지(`exportName` 셋째 인자), SPEC-16.9 5·16.11 보완. 정의 만들기에서 숨은 Rhino로 드러나 고친 것: 트림 가장자리 패널의 대표 윤곽에 문서 허용 오차보다 가까운 꼭짓점이 있어 `CapPlanarHoles`가 실패(`BLOCK_GEOMETRY`) → 허용 오차 안 꼭짓점을 합치고, 안 되면 뚜껑·옆면을 `JoinBreps`. 시간(숨은 Rhino 8.35, 쌍곡면 30 × 20 m 구멍 하나, 줄눈 10 mm·두께 50 mm): 1,133 패널·185 타입 — 세 단계 계산 0.45 s, [타입 만들기](블록·결합부 3,455·재단 1,131·번호) 본문 25개 12.8 s, [되돌리기] 한 번 3.1 s에 정의까지 사라짐; 사람이 옮긴 놓기 보존·나머지 1,130 교체; 타입 허용 오차 5 mm(185 → 84 타입)로 다시 만들기 → 새 지문 정의 84개, 이전 정의는 보존된 놓기가 쓰는 1개만 남음; 사람이 만든 같은 이름 정의는 그대로이고 그 타입 패널 73개가 `BLOCK_NAME_TAKEN`으로 실패 레이어에; 5,421 패널·147 타입 — 본문 112개 41 s(대부분 결합부 표식 약 1.6만 개), [되돌리기] 3.6 s. 남은 것: 5천 패널의 본문 수(Ctrl+Z 112번)를 줄이려면 결합부 표식·재단 윤곽의 꼴을 압축하는 전용 틀이 필요(후속), 일람표 '표본 차이' 열은 아직 비어 있음(만들기 결과의 패널별 차이를 작업본에 남기지 않음), Excel 실제 열기는 확인 못 함(BOM·UTF-8·머리만 시험). 시험 플러그인은 작업 폴더에서 다시 빌드(주 작업 폴더 빌드는 T-251 전). 설치 엔진 rhino8 커넥터는 시작 전부터 `other`이고 사용자 Rhino가 실행 중이라 다시 설치하지 않음(T-250과 같은 남은 일) | `tests/core/paneling-types-make.test.mjs` 9개, `tests/core/paneling-bake.test.mjs`, `tests/core/s06-report.test.mjs`, `tests/integration/rhino-paneling-types.mjs`(숨은 Rhino 8) |
 | T-258 | 완료(2026-10-08), 3단계 [타입 만들기]·보고서는 T-257 통합 뒤 같은 시험으로 다시 확인. 숨은 Rhino 8.35에서 대화로 열기(규칙 경로 → 질문 카드 `by: decision` → 가정 값 미리보기·`vide-assumed` → `paneling-confirmed`가 막던 부재 만들기 통과), 쌍곡면 5,421장 네 패턴(1단계 0.09~0.16 s) → 2단계(0.25 s) → 3단계(타입 147, 0.22 s), 미리보기 만들기 5.3 s·본문 14·되돌리기 한 번, 부재·줄눈 만들기 33.8 s·본문 61·되돌리기 한 번, 실패 주입 여섯(메쉬·단위 없음·두께 곡률·판재·최대 타입 수·면 이동 → '기준 면이 바뀜'과 만들기 거절), 실제 경로 위 SCR-33 화면·CSV 넷·화면의 미리보기 만들기. 고친 결함 F-1: JIG 목록에서 연 화면이 `geometry` 실행으로 library 단계를 모두 건너뛰어 계산하지 않음 → `COMPUTING_PARTS`를 쓰는 패널은 `confirmed`로 실행. 남긴 것 F-2(요청의 'A x B' 크기·패턴 이름 읽기). 카탈로그 J-07 `available`. 설치 엔진 rhino8 커넥터는 `other`이고 사용자 Rhino 실행 중이라 되돌림 보류(Rhino를 닫은 뒤 커넥터 설치) | [VERIFY-2026-10-08-paneling](../tdd/VERIFY-2026-10-08-paneling.md), `tests/integration/rhino-paneling.mjs`, `tests/integration/browser-paneling.mjs` |
 | T-259 | 완료(2026-10-08), SPIKE. PQ: 90 × 60 m 합성 면 넷·1 m 격자(5,640~8,216 패널)에서 꼭짓점 키 그물의 국소/전역 반복(`tools/spikes/2026-10-08-paneling-pq/pq.ts`)이 반복당 13~21 ms, 이소커브가 공액인 안장면만 10번·0.2 s에 수렴(평면화 틈 2.51 → 0.50 mm, 면에서 벗어남 최대 2.4 mm), 30° 돌린 안장면·물결면·비틀린 면은 처음부터 정체(국소 이동이 서로 상쇄, 면에서 수십 mm 떼야 조금 줄어듦) → 'pq'는 범위로 옮기지 않고 패턴 방향을 곡률(공액) 방향에 맞추는 배치를 T-260 쪽으로 제안(SPEC-16 R-01). 펼침: 숨은 Rhino 8.35 워커에서 `Unroller`가 단곡 패널(원통·원뿔, 사각·트림 삼각)을 모두 한 조각, 면적 차 1e-7·모서리 길이 1 µm 안, 5천 패널 1.5~2.6 s; 원뿔 패널 모서리 휨 0.45~3.1 mm(곧은 윤곽의 재단 오차). 복곡은 상대 허용 오차 0.01·0.001에서 거절(조각 0개)되거나 0.1에서 늘여 맞춘 근사(3 × 4 m 모서리 1.4 mm) → 단곡 펼침만 SPEC-16.7 6 범위로 옮기자는 첨삭(SPEC-16 R-02). 수락되면 ARCH-03 §9 틀과 구현 티켓을 더함. 설치 엔진 rhino8 커넥터는 시작 전부터 `other`(다른 작업 폴더 빌드)이고 사용자 Rhino가 실행 중이라 다시 설치하지 않음(T-250과 같은 남은 일) | [SPIKE-2026-10-08-paneling-pq](../tdd/SPIKE-2026-10-08-paneling-pq.md), `tools/spikes/2026-10-08-paneling-pq/result-pq.json`·`result-unroll.json` |
-| T-260 | 후속 | — |
+| T-260 | 완료(2026-10-08). SPEC-16.13 보완 뒤 구현: 육각(`(w/2, h/4)` 격자, 행 3h/4·짝수 행 w/2, 직각 방향이 닫히면 짝수 행 ≥ 4로 세로를 주기에 맞춤), 보로노이(칸마다 결정적 흔들림 씨앗, 5 × 5 이웃 수직이등분선, 꼭짓점 이름 = 같은 거리 씨앗 목록이고 이웃 셀이 첫 계산 위치를 같이 써서 자른 점까지 키 공유), 사용자 타일(새 입력 종류 `host-curves`와 읽기 틀 `vide.read.curves@1`·`…/paneling/curves[/read]`, 칸 가운데 접평면 틀에 강체로 놓고 표본 보간 위 가우스-뉴턴으로 가장 가까운 점, 자르지 않고 경계에 걸친 조각은 `dropped`, 꼭짓점 공유 없음), 어트랙터 개구(점·꺾은선 거리, 선형 감소, 단계 수, 상한 0.95, √r 축소 윤곽과 실제 비율, 3단계 타입은 목표 개구율이 같은 것끼리, 일람표 '개구율(%)', [미리보기 만들기]가 `openings`로 `패널링::개구` 곡선, 색 기준 '개구율'). 계약은 더하기만(기존 배치 지문·고정 자료 그대로: 보로노이·개구 설정은 읽을 때만 설정에 들어가고, 타일·어트랙터는 있을 때만 배치 지문에 들어감). 가정 계산은 엔진(`paneling-confirmed`)과 화면이 같은 규칙(흔들림·씨앗은 보로노이일 때, 개구 설정은 개구율이 0보다 클 때만 셈; 두 개구율 칸은 늘 보임). 숨은 Rhino 8.35 워커에서 `vide.read.curves@1`: 닫힌 사각 둘·점·열린 선·원(꺾은선 2,048점, 반지름 오차 없음)·기운 사각(`flatXY` false)·서피스(`NOT_A_CURVE`) 확인, 읽기 한 번 약 2 s(대부분 컴파일). 남은 것: 연결 Rhino `direct-read`로의 실제 [고른 곡선 쓰기]와 개구 곡선 만들기는 실호스트로 다시 보지 않음(같은 `direct-read`·`curves@1` 틀 경로라 T-251·T-258 확인에 기댐), 타일 조각 경계 자르기·판 구멍 부재·비주기 타일은 후속. 설치 엔진 rhino8 커넥터는 시작 전부터 `other`이고 사용자 Rhino가 실행 중이라 다시 설치하지 않음(T-250과 같은 남은 일) | `tests/core/paneling-patterns.test.mjs` 13개, `tests/server/paneling-curves.test.mjs` 3개, `tests/contract/paneling-contract.test.mjs`, `tests/integration/browser-paneling.mjs`(타일 줄), `tests/integration/rhino-paneling-curves.mjs`(숨은 Rhino 8) |
 
 ## 결정이 필요한 질문
 

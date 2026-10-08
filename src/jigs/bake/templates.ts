@@ -30,7 +30,7 @@ export const PLACEHOLDER = '{{DATA_BASE64}}';
 /** The worker refuses longer bodies (WorkerExecutor `INVALID_CODE`). */
 export const MAX_BODY_CHARS = 65536;
 /** Official read templates (ARCH-03 §9.1): write nothing; run by `direct-read` (PLAN-49 T-251). */
-export const READ_TEMPLATE_NAMES = ['vide.read.surface-grid@1'] as const;
+export const READ_TEMPLATE_NAMES = ['vide.read.surface-grid@1', 'vide.read.curves@1'] as const;
 export type ReadTemplateName = (typeof READ_TEMPLATE_NAMES)[number];
 type AnyTemplateName = TemplateName | ReadTemplateName;
 const FILES: Record<AnyTemplateName, string> = {
@@ -45,6 +45,7 @@ const FILES: Record<AnyTemplateName, string> = {
   'vide.bake.panel-solids@1': 'panel-solids.cs',
   'vide.bake.block-instances@1': 'block-instances.cs',
   'vide.read.surface-grid@1': 'read-surface-grid.cs',
+  'vide.read.curves@1': 'read-curves.cs',
 };
 /**
  * Shared template text (SPEC-16.3 2): a line `//@include <file>.cs` is replaced by that file, so

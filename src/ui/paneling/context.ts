@@ -130,6 +130,36 @@ const SURFACE_ERRORS: Record<string, string> = {
 };
 const MESH = 'MESH_NOT_ACCEPTED';
 
+/** A `host-curves` input on the 기준 면 card (SPEC-16.13 3·4): the tile or the attractors. */
+export interface CurvesState {
+  key: string;
+  title: string;
+  accept?: 'tile' | 'attractor';
+  /** Points and polylines kept; null when nothing was picked. */
+  count: number | null;
+  readAt?: string;
+}
+const curvesStateSchema = z
+  .object({
+    inputs: z.array(
+      z
+        .object({
+          key: z.string(),
+          title: z.string().default(''),
+          accept: z.enum(['tile', 'attractor']).optional(),
+          picked: z
+            .object({ count: z.number(), readAt: z.string().optional() })
+            .passthrough()
+            .nullable(),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
+const curvesReadSchema = z
+  .object({ ok: z.boolean(), code: z.string().optional(), message: z.string().optional() })
+  .passthrough();
+
 interface Shared {
   stage: PanelingStage;
   colorBy?: ColorBy;
@@ -142,6 +172,10 @@ interface Shared {
   /** Bumped by [가정 값 보기]: the settings part scrolls into view. */
   reveal: number;
   notice?: string;
+  curves?: CurvesState[];
+  /** The input key being read, and the last refusal by key. */
+  curvesReading?: string;
+  curvesError?: Record<string, string>;
 }
 
 class Store {
@@ -206,6 +240,56 @@ class Store {
       });
     }
   }
+  get curvesBase() {
+    return `/projects/${encodeURIComponent(this.projectId)}/paneling/curves`;
+  }
+  async readCurves() {
+    try {
+      const read = curvesStateSchema.parse(
+        await api(`${this.curvesBase}?instanceId=${encodeURIComponent(this.instanceId)}`),
+      );
+      this.set({
+        curves: read.inputs.map((input) => ({
+          key: input.key,
+          title: input.title,
+          accept: input.accept,
+          count: input.picked ? input.picked.count : null,
+          readAt: input.picked?.readAt,
+        })),
+      });
+    } catch {
+      this.set({ curves: [] });
+    }
+  }
+  /** [고른 곡선 쓰기] / [지우기] for a tile or the attractors (SPEC-16.13). */
+  async pickCurves(key: string, mode: 'pick' | 'clear') {
+    const errors = { ...(this.state.curvesError ?? {}) };
+    delete errors[key];
+    this.set({ curvesReading: key, curvesError: errors });
+    try {
+      const read = curvesReadSchema.parse(
+        await api(`${this.curvesBase}/read`, 'POST', { instanceId: this.instanceId, key, mode }),
+      );
+      if (!read.ok) {
+        // A refused read keeps the earlier copy.
+        this.set({
+          curvesReading: undefined,
+          curvesError: { ...errors, [key]: read.message ?? read.code ?? '읽지 못했습니다' },
+        });
+        return;
+      }
+      this.set({ curvesReading: undefined });
+      await this.readCurves();
+      window.dispatchEvent(
+        new CustomEvent(JIG_PARAMS_CHANGED, { detail: { instanceId: this.instanceId } }),
+      );
+    } catch (error) {
+      this.set({
+        curvesReading: undefined,
+        curvesError: { ...errors, [key]: messageOf(error) },
+      });
+    }
+  }
   /** Write values as given by a person (`user`) or a question card (`decision`), then recompute. */
   async setValues(
     values: { key: string; value: number | string | boolean }[],
@@ -257,6 +341,11 @@ export interface PanelingView {
   meshRefused: boolean;
   reading: boolean;
   pickSurface: (mode: 'pick' | 'reread') => Promise<void>;
+  /** The tile and attractor inputs (SPEC-16.13), their reading state and refusals. */
+  curves: CurvesState[];
+  curvesReading?: string;
+  curvesError: Record<string, string>;
+  pickCurves: (key: string, mode: 'pick' | 'clear') => Promise<void>;
   confirm: (keys: readonly string[]) => Promise<void>;
   answer: (values: { key: string; value: number | string | boolean }[]) => Promise<void>;
   reveal: number;
@@ -285,6 +374,7 @@ export function usePaneling({
   const revision = jig.lastRun?.getTime();
   useEffect(() => {
     void store.readSurface();
+    void store.readCurves();
   }, [store, revision]);
 
   const preview = data.outputs.preview,
@@ -366,6 +456,10 @@ export function usePaneling({
     [store],
   );
   const pickSurface = useCallback((mode: 'pick' | 'reread') => store.pickSurface(mode), [store]);
+  const pickCurves = useCallback(
+    (key: string, mode: 'pick' | 'clear') => store.pickCurves(key, mode),
+    [store],
+  );
 
   return {
     stage: shared.stage,
@@ -384,6 +478,10 @@ export function usePaneling({
     meshRefused: !!shared.meshRefused,
     reading: !!shared.reading,
     pickSurface,
+    curves: shared.curves ?? [],
+    curvesReading: shared.curvesReading,
+    curvesError: shared.curvesError ?? {},
+    pickCurves,
     confirm,
     answer,
     reveal: shared.reveal,

@@ -65,6 +65,21 @@ export interface InstanceBody {
    * sample of their last read (an input copy that [다시 읽기] replaces).
    */
   hostSurfaces?: Record<string, HostSurfaceRef>;
+  /**
+   * `host-curves` inputs by key (SPEC-16.13, PLAN-49 T-260): the picked points and curves and the
+   * kept copy of their last read.
+   */
+  hostCurves?: Record<string, HostCurvesRef>;
+}
+export interface HostCurvesRef {
+  /** The kept `CurveSet` under `<data>/jigs/` and the hash of its content. */
+  ref: string;
+  hash: string;
+  linkId: string;
+  objectIds: string[];
+  /** Points and polylines read, for the card. */
+  count: number;
+  readAt: string;
 }
 export interface HostSurfaceRef {
   /** The kept `SurfaceSample` under `<data>/jigs/` and the hash of its content. */
@@ -192,5 +207,6 @@ export function bodyOf(value: unknown): InstanceBody {
     ...(body.jigOutputsUsed ? { jigOutputsUsed: body.jigOutputsUsed } : {}),
     ...(body.hostDocuments ? { hostDocuments: body.hostDocuments } : {}),
     ...(body.hostSurfaces ? { hostSurfaces: body.hostSurfaces } : {}),
+    ...(body.hostCurves ? { hostCurves: body.hostCurves } : {}),
   };
 }

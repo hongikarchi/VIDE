@@ -24,11 +24,14 @@ const vec2 = z.tuple([finite, finite]);
 const hash = z.string().regex(/^[a-f0-9]{8,64}$/);
 const iso = z.string().min(10).max(40);
 const interval = z.tuple([finite, finite]).refine(([a, b]) => b > a, 'interval must increase');
-/** `P-<row>-<col>` counted from 1 at the start corner, `a`/`b` for triangle halves, `+r-c` for a
- *  merged cut panel, `F<face>-` when several faces are picked (SPEC-16.5 2). */
+/** `P-<row>-<col>` counted from 1 at the start corner, `a`/`b` for triangle halves, `t<n>` for the
+ *  n-th piece of a person's tile (SPEC-16.13 3), `+r-c` for a merged cut panel, `F<face>-` when
+ *  several faces are picked (SPEC-16.5 2). */
 const panelId = z
   .string()
-  .regex(/^(F\d{1,3}-)?P-[1-9]\d{0,3}-[1-9]\d{0,3}[ab]?(\+[1-9]\d{0,3}-[1-9]\d{0,3}[ab]?)*$/);
+  .regex(
+    /^(F\d{1,3}-)?P-[1-9]\d{0,3}-[1-9]\d{0,3}([ab]|t[1-9]\d{0,2})?(\+[1-9]\d{0,3}-[1-9]\d{0,3}[ab]?)*$/,
+  );
 /** Lattice vertex key (SPEC-16.5 5): `<face>:<i>:<j>`, `<face>:x:<key>|<key>:<n>`, `<face>:t:<loop>:<n>`. */
 const vertexKey = z.string().min(5).max(200);
 const typeId = z.string().regex(/^T-\d{2,4}$/);
@@ -111,6 +114,45 @@ export const surfaceSampleSchema = z
   );
 export type SurfaceSample = z.infer<typeof surfaceSampleSchema>;
 
+// ── 타일 곡선·어트랙터 (SPEC-16.13 3·4) ──────────────────────────────────────────────────────
+
+/** Points per read item and items per read (`vide.read.curves@1`). */
+export const CURVE_POINT_LIMIT = 4096;
+export const CURVE_ITEM_LIMIT = 200;
+
+/** Rhino points and curves a person picked, read as points and polylines in world metres. */
+export const curveSetSchema = z
+  .object({
+    schema: z.literal('vide.paneling.curves@1'),
+    source: z
+      .object({
+        linkId: z.string().min(1).max(200),
+        documentKey: z.string().min(1).max(200),
+        readAt: iso,
+        toMeters: finite.positive(),
+        absTol: finite.nonnegative(),
+      })
+      .strict(),
+    items: z
+      .array(
+        z
+          .object({
+            objectId: z.string().uuid(),
+            kind: z.enum(['point', 'polyline']),
+            /** A closed polyline does not repeat its first point. */
+            closed: z.boolean(),
+            /** All points lie in one plane parallel to XY (within the document tolerance). */
+            flatXY: z.boolean(),
+            points: z.array(vec3).min(1).max(CURVE_POINT_LIMIT),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(CURVE_ITEM_LIMIT),
+  })
+  .strict();
+export type CurveSet = z.infer<typeof curveSetSchema>;
+
 /** `tol = max(document absolute tolerance, 0.1 mm)` (SPEC-16.2 공통 규칙 2). */
 export function geomTol(sample: { source: { absTol: number } }): number {
   return Math.max(sample.source.absTol, GEOM_TOL_MIN);
@@ -131,14 +173,27 @@ export type SettingSource = z.infer<typeof settingSourceSchema>;
 const sourced = <T extends z.ZodTypeAny>(value: T) =>
   z.object({ value, source: settingSourceSchema }).strict();
 
-export const PATTERNS = ['grid', 'staggered', 'diamond', 'triangle'] as const;
+export const PATTERNS = [
+  'grid',
+  'staggered',
+  'diamond',
+  'triangle',
+  'hexagon',
+  'voronoi',
+  'tile',
+] as const;
 export const patternSchema = z.enum(PATTERNS);
 export const PATTERN_LABELS: Record<z.infer<typeof patternSchema>, string> = {
   grid: '사각 격자',
   staggered: '엇갈림',
   diamond: '마름모',
   triangle: '삼각',
+  hexagon: '육각',
+  voronoi: '보로노이',
+  tile: '사용자 타일',
 };
+/** Upper bound of an opening ratio: a rim of plate always stays (SPEC-16.13 4). */
+export const OPENING_MAX = 0.95;
 
 export const previewSettingsSchema = z
   .object({
@@ -170,6 +225,30 @@ export const previewSettingsSchema = z
         })
         .strict(),
     ),
+    /** Voronoi seeds (SPEC-16.13 2); present only when the pattern is `voronoi`. */
+    voronoi: sourced(
+      z
+        .object({
+          /** Share of the half cell a seed may move from its cell centre, 0..1. */
+          jitter: finite.min(0).max(1),
+          seed: z.number().int().min(0).max(9999),
+        })
+        .strict(),
+    ).optional(),
+    /** Attractor openings (SPEC-16.13 4); present only when one of the two ratios is above 0. */
+    opening: sourced(
+      z
+        .object({
+          /** Opening ratio at an attractor and far from it (0..OPENING_MAX). */
+          near: finite.min(0).max(OPENING_MAX),
+          far: finite.min(0).max(OPENING_MAX),
+          /** Distance (m) over which the ratio goes from `near` to `far`. */
+          radius: finite.positive(),
+          /** Equal steps between far and near; 0 = continuous. */
+          levels: z.union([z.literal(0), z.number().int().min(2).max(20)]),
+        })
+        .strict(),
+    ).optional(),
   })
   .strict();
 export type PreviewSettings = z.infer<typeof previewSettingsSchema>;
@@ -230,7 +309,7 @@ export function makeAllowed(
 /** `vide-key` of a made object (SPEC-16.9 6): kind + first 8 of the layout hash + panel id, so a new
  *  layout never reuses an old key and a stage-2/3 change replaces the same panel. */
 export function makeKey(
-  kind: 'preview' | 'member' | 'type' | 'cut' | 'fail' | 'joint' | 'node',
+  kind: 'preview' | 'member' | 'type' | 'cut' | 'fail' | 'joint' | 'node' | 'opening',
   layoutHash: string,
   ref: string,
 ): string {
@@ -277,6 +356,16 @@ export const panelSchema = z
     width: finite.nonnegative(),
     height: finite.nonnegative(),
     area: finite.nonnegative(),
+    /** Attractor opening (SPEC-16.13 4): the target ratio, the measured one and its outline. */
+    opening: z
+      .object({
+        ratio: finite.positive().max(OPENING_MAX),
+        actual: finite.nonnegative(),
+        uv: z.array(vec2).min(3).max(OUTLINE_LIMIT),
+        corners: z.array(vec3).min(3).max(OUTLINE_LIMIT),
+      })
+      .strict()
+      .optional(),
     failure: panelFailureSchema.nullable(),
   })
   .strict()
@@ -473,6 +562,7 @@ export const PANEL_ATTRS = [
   'vide-deviation-mm',
   'vide-assumed',
   'vide-status',
+  'vide-opening',
 ] as const;
 
 /** Schedule CSV columns (SPEC-16.7 7, 16.11): key and Korean header with unit. Lengths are written in
@@ -492,6 +582,7 @@ export const SCHEDULE_COLUMNS = {
     ['plateHeight', '판 세로(mm)'],
     ['thickness', '두께(mm)'],
     ['area', '면적(m²)'],
+    ['opening', '개구율(%)'],
     ['flatness', '평면도(mm)'],
     ['planarGap', '평면화 틈(mm)'],
     ['offSurface', '면에서 벗어남(mm)'],

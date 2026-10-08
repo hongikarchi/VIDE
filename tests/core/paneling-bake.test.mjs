@@ -102,6 +102,7 @@ test('the official jig declares its makes: preview faces, members and joint line
     manifest.bake.map((b) => [b.id, b.template, b.layer, b.rows, b.requires ?? []]),
     [
       ['preview', 'vide.bake.panels-uv@1', '미리보기', 'paneling', []],
+      ['openings', 'vide.bake.curves@1', '개구', 'paneling', []],
       ['members', 'vide.bake.panel-solids@1', '부재', 'paneling', ['paneling-confirmed']],
       ['joints', 'vide.bake.curves@1', '부재', 'paneling', ['paneling-confirmed']],
       ['types', 'vide.bake.block-instances@1', '타입', 'paneling', ['paneling-confirmed']],

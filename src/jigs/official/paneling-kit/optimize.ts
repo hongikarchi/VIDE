@@ -162,6 +162,8 @@ export function optimizePanels(input: OptimizeInput): OptimizeOutcome {
             centre: plate.centre,
             normal: plate.plane.normal,
           });
+    // Panels of another target opening ratio are another type (SPEC-16.13 4).
+    if (p.opening) w.shape.cls = Math.round(p.opening.ratio * 1000);
     return w;
   });
 
@@ -276,7 +278,7 @@ export function optimizePanels(input: OptimizeInput): OptimizeOutcome {
   };
   if (grouping.unmet !== null)
     notes.push(
-      `꼭짓점 수가 달라 합칠 수 없는 타입이 남아 최대 타입 수 ${settings.maxTypes.value}개를 지킬 수 없습니다 · 가능한 최소 ${grouping.unmet}개`,
+      `꼭짓점 수${panels.some((p) => p.opening) ? '·개구율이' : '가'} 달라 합칠 수 없는 타입이 남아 최대 타입 수 ${settings.maxTypes.value}개를 지킬 수 없습니다 · 가능한 최소 ${grouping.unmet}개`,
     );
   return { ok: true, typing, notes, ms: Math.round(performance.now() - started) };
 }

@@ -45,7 +45,14 @@ export interface StageMeta {
   also?: readonly string[];
 }
 export const STAGES: readonly StageMeta[] = [
-  { id: 'preview', no: 1, title: '미리보기', make: '미리보기 만들기', bake: 'preview' },
+  {
+    id: 'preview',
+    no: 1,
+    title: '미리보기',
+    make: '미리보기 만들기',
+    bake: 'preview',
+    also: ['openings'],
+  },
   { id: 'members', no: 2, title: '부재', make: '부재 만들기', bake: 'members', also: ['joints'] },
   {
     id: 'optimize',
@@ -78,6 +85,12 @@ const STAGE_KEYS: Record<PanelingStage, readonly string[]> = {
     'flip',
     'boundary',
     'mergeBelow',
+    'jitter',
+    'seed',
+    'openNear',
+    'openFar',
+    'openRadius',
+    'openLevels',
   ],
   members: ['thickness', 'thicknessSide', 'joint', 'boundaryJoint', 'stockWidth', 'stockHeight'],
   optimize: ['flatnessTol', 'planarize', 'typeTol', 'maxTypes', 'flatRadius', 'nodeAngleStep'],
@@ -88,6 +101,18 @@ export const MORE_KEYS: ReadonlySet<string> = new Set(['flatRadius', 'nodeAngleS
 export const WHEN: Record<string, { key: string; value: string }> = {
   mergeBelow: { key: 'boundary', value: 'merge' },
   projection: { key: 'measure', value: 'projected' },
+};
+const opening = (values: Readonly<Record<string, unknown>>) =>
+  [values.openNear, values.openFar].some((v) => typeof v === 'number' && v > 0);
+/** SPEC-16.4 1 / 16.13: the Voronoi seeds with the Voronoi pattern; the opening settings while one
+ *  of the two ratios is above 0 (the engine's `paneling-confirmed` counts the same). */
+const WHEN_EXTRA: Record<string, (values: Readonly<Record<string, unknown>>) => boolean> = {
+  jitter: (v) => v.pattern === 'voronoi',
+  seed: (v) => v.pattern === 'voronoi',
+  openNear: opening,
+  openFar: opening,
+  openRadius: opening,
+  openLevels: opening,
 };
 
 export function stageOf(setting: Pick<PanelSetting, 'key' | 'group'>): PanelingStage | undefined {
@@ -140,9 +165,18 @@ export function settingInUse(
   setting: Pick<PanelSetting, 'key'>,
   values: Readonly<Record<string, unknown>>,
 ) {
+  const extra = WHEN_EXTRA[setting.key];
+  if (extra) return extra(values);
   const when = WHEN[setting.key];
   return !when || values[when.key] === undefined || values[when.key] === when.value;
 }
+/** Settings shown even when not counted: the two opening ratios turn the opening on (SPEC-16.13 4). */
+export const SHOWN_ALWAYS: ReadonlySet<string> = new Set(['openNear', 'openFar']);
+/** Is a setting on screen now (in use, or one that turns others on)? */
+export const settingShown = (
+  setting: Pick<PanelSetting, 'key'>,
+  values: Readonly<Record<string, unknown>>,
+) => SHOWN_ALWAYS.has(setting.key) || settingInUse(setting, values);
 /** Settings of these stages still on the recommended value (in use only). */
 export function assumedOf(
   settings: readonly PanelSetting[],
@@ -320,14 +354,19 @@ export function headNotices(
 
 // ── 3D 겹침과 색 기준 (SPEC-16.8) ─────────────────────────────────────────────────────────────
 
-export type ColorBy = 'deviation' | 'failure' | 'type' | 'class' | 'flatness';
+export type ColorBy = 'deviation' | 'failure' | 'type' | 'class' | 'flatness' | 'opening';
 export const COLOR_BY: readonly { id: ColorBy; label: string }[] = [
   { id: 'deviation', label: '편차' },
   { id: 'failure', label: '실패' },
   { id: 'type', label: '타입' },
   { id: 'class', label: '곡률 등급' },
   { id: 'flatness', label: '평면도' },
+  { id: 'opening', label: '개구율' },
 ];
+/** 개구율 bands of 19 % (SPEC-16.13 4: up to 95 %), one category tone each. */
+const OPENING_BANDS = 5;
+const openingBand = (ratio: number) =>
+  Math.min(OPENING_BANDS - 1, Math.floor((ratio / 0.95) * OPENING_BANDS));
 /** The 색 기준 a stage starts with. */
 export const defaultColorBy = (stage: PanelingStage): ColorBy =>
   stage === 'preview' ? 'deviation' : stage === 'members' ? 'failure' : 'type';
@@ -392,7 +431,12 @@ export function toneOf(
   const module = results.layout?.module ?? [panel.width, panel.height];
   switch (colorBy) {
     case 'deviation':
-      return offTarget(panel, module) ? 'warn' : panel.boundary ? 'ov-grid' : 'ov-existing';
+      // Voronoi and tile panels are not of one size (counts.offTarget 0, SPEC-16.13).
+      return results.layout?.counts.offTarget !== 0 && offTarget(panel, module)
+        ? 'warn'
+        : panel.boundary
+          ? 'ov-grid'
+          : 'ov-existing';
     case 'failure':
       return index.overStock.has(panel.id) || index.member.get(panel.id)?.jointUneven
         ? 'warn'
@@ -413,6 +457,10 @@ export function toneOf(
       if (!typed || !tol) return 'ov-existing';
       return typed.flatness <= tol ? 'ok' : typed.flatness <= 2 * tol ? 'warn' : 'ng';
     }
+    case 'opening':
+      return panel.opening
+        ? (`ov-cat-${openingBand(panel.opening.ratio) + 1}` as OverlayTone)
+        : 'ov-existing';
   }
 }
 
@@ -487,6 +535,14 @@ export function legendOf(
       push('warn', '허용 오차의 2배 이하');
       push('ng', '허용 오차의 2배 넘음');
       push('ov-existing', '타입 전');
+      break;
+    case 'opening':
+      for (let b = 0; b < OPENING_BANDS; b++) {
+        const lo = Math.round((b * 95) / OPENING_BANDS),
+          hi = Math.round(((b + 1) * 95) / OPENING_BANDS);
+        push(`ov-cat-${b + 1}` as OverlayTone, `개구율 ${lo}~${hi}%`);
+      }
+      push('ov-existing', '개구 없음');
       break;
   }
   push('ov-clash', '실패');
@@ -591,6 +647,7 @@ export function scheduleCsv(kind: ScheduleKind, results: Results): string {
         plateHeight: len(member?.flatSize[1]),
         thickness: len(member?.thickness),
         area: area(panel.area),
+        opening: panel.opening ? (panel.opening.ratio * 100).toFixed(1) : null,
         flatness: len(typed?.flatness),
         planarGap: len(typed?.planarGap),
         offSurface: len(typed?.offSurface),

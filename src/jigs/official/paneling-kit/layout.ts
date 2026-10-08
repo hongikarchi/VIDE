@@ -27,6 +27,8 @@ import { buildDomain, type Domain } from './domain.ts';
 import { fingerprint } from './hash.ts';
 import { estimateCells, patternCells, type Cell } from './patterns.ts';
 import { settingValues } from './settings.ts';
+import { placeTile, type TileSet } from './tile.ts';
+import { addOpenings, attractorsHash, type Attractor } from './opening.ts';
 import {
   area2,
   bestFitPlane,
@@ -42,7 +44,17 @@ import {
 
 export type LayoutOutcome =
   | { ok: true; layout: PanelLayout; notes: string[]; ms: number }
-  | { ok: false; code: 'TOO_MANY_PANELS' | 'NO_PANELS'; message: string };
+  | { ok: false; code: 'TOO_MANY_PANELS' | 'NO_PANELS' | 'NO_TILE'; message: string };
+
+/** What stage 1 reads besides the sample and the settings (SPEC-16.13): the person's tile and the
+ *  attractors, both picked in Rhino. */
+export interface LayoutExtras {
+  tile?: TileSet | null;
+  attractors?: readonly Attractor[];
+}
+
+/** Patterns whose cells are not of one size, so '목표와 다름' is not counted (SPEC-16.13 2·3). */
+const UNEVEN_PATTERNS = new Set(['voronoi', 'tile']);
 
 /** '목표와 다름': width or height more than this share away from the module (SPEC-16.5 4). */
 export const OFF_TARGET = 0.15;
@@ -69,13 +81,25 @@ interface Point {
 }
 
 /** Stage 1: lay the pattern on every face of the sample. */
-export function layoutPanels(sample: SurfaceSample, settings: PreviewSettings): LayoutOutcome {
+export function layoutPanels(
+  sample: SurfaceSample,
+  settings: PreviewSettings,
+  extras: LayoutExtras = {},
+): LayoutOutcome {
   const started = performance.now();
   const tol = geomTol(sample);
   const pattern = settings.pattern.value;
+  const tile = pattern === 'tile' ? (extras.tile ?? null) : null;
+  if (pattern === 'tile' && !tile)
+    return {
+      ok: false,
+      code: 'NO_TILE',
+      message: '타일이 없습니다 · Rhino에서 닫힌 곡선을 고르고 [고른 곡선 쓰기]',
+    };
   const domains = sample.faces.map((face) => buildDomain(face, settings));
   const estimate = domains.reduce(
-    (n, d) => n + estimateCells(pattern, d.cell, d.sRange, d.tRange),
+    (n, d) =>
+      n + estimateCells(pattern, d.cell, d.sRange, d.tRange) * (tile ? tile.pieces.length : 1),
     0,
   );
   if (estimate > PANEL_LIMIT)
@@ -87,9 +111,16 @@ export function layoutPanels(sample: SurfaceSample, settings: PreviewSettings): 
   const multi = sample.faces.length > 1;
   const panels: Panel[] = [];
   const notes: string[] = [];
+  if (tile) {
+    const [cw, ch] = domains[0].cell;
+    if (tile.size[0] > cw + tol || tile.size[1] > ch + tol)
+      notes.push(
+        `타일이 칸보다 큼 · 외접 ${(tile.size[0] * 1000).toFixed(0)} × ${(tile.size[1] * 1000).toFixed(0)} mm`,
+      );
+  }
   for (const domain of domains) {
     const prefix = multi ? `F${domain.faceIndex}-` : '';
-    panels.push(...layoutFace(domain, settings, tol, prefix));
+    panels.push(...layoutFace(domain, settings, tol, prefix, tile));
     for (const note of domain.notes) notes.push(multi ? `면 ${domain.faceIndex}: ${note}` : note);
   }
   if (panels.length > PANEL_LIMIT)
@@ -109,10 +140,20 @@ export function layoutPanels(sample: SurfaceSample, settings: PreviewSettings): 
     };
   const good = listed.filter((p) => !p.failure);
   const [mw, mh] = domains[0].module;
+  const opening = settings.opening?.value;
+  const attractors = opening ? (extras.attractors ?? []) : [];
+  if (opening)
+    addOpenings(panels, new Map(domains.map((d) => [d.faceIndex, d.sampler])), opening, attractors);
+  // The tile and the attractors decide the layout too (the make keys' layout hash, SPEC-16.9 6);
+  // without them the hash is the settings' alone, as before.
+  const decided: Record<string, unknown> = settingValues(settings);
+  if (tile) decided.tile = tile.hash;
+  if (attractors.length) decided.attractors = attractorsHash(attractors);
+  const uneven = UNEVEN_PATTERNS.has(pattern);
   const layout: PanelLayout = {
     schema: 'vide.paneling.layout@1',
     surfaceHash: fingerprint(sample.faces.map((f) => [f.faceIndex, f.geometryHash])),
-    settingsHash: fingerprint(settingValues(settings)),
+    settingsHash: fingerprint(decided),
     panels,
     counts: {
       total: listed.length,
@@ -120,7 +161,7 @@ export function layoutPanels(sample: SurfaceSample, settings: PreviewSettings): 
       pole: listed.filter((p) => p.pole).length,
       failed: listed.filter((p) => p.failure).length,
       dropped: panels.length - listed.length,
-      offTarget: listed.filter((p) => offTarget(p, mw, mh)).length,
+      offTarget: uneven ? 0 : listed.filter((p) => offTarget(p, mw, mh)).length,
     },
     sizeRange: good.length
       ? {
@@ -146,11 +187,17 @@ export function offTarget(panel: Panel, mw: number, mh: number): boolean {
   );
 }
 
-function layoutFace(domain: Domain, settings: PreviewSettings, tol: number, prefix: string) {
+function layoutFace(
+  domain: Domain,
+  settings: PreviewSettings,
+  tol: number,
+  prefix: string,
+  tile: TileSet | null,
+) {
   // Loops in general position against the lattice lines; nudged and retried when not.
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
-      return layoutFaceOnce(domain, settings, tol, prefix, attempt);
+      return layoutFaceOnce(domain, settings, tol, prefix, attempt, tile);
     } catch (error) {
       if (!(error instanceof ClipDegenerate) || attempt === 3) throw error;
     }
@@ -164,12 +211,15 @@ function layoutFaceOnce(
   tol: number,
   prefix: string,
   attempt: number,
+  tile: TileSet | null,
 ): Panel[] {
   const f = domain.faceIndex;
   const { pattern, boundary } = {
     pattern: settings.pattern.value,
     boundary: settings.boundary.value,
   };
+  const flip = settings.direction.value.flip ? -1 : 1;
+  if (tile) return tilePanels(domain, tile, flip, tol, prefix);
   const set = patternCells(
     pattern,
     domain.cell,
@@ -177,6 +227,7 @@ function layoutFaceOnce(
     domain.tRange,
     domain.closedS,
     domain.closedT,
+    settings.voronoi?.value,
   );
   const scale = Math.max(
     domain.sRange[1] - domain.sRange[0],
@@ -193,11 +244,14 @@ function layoutFaceOnce(
     const known = keyCache.get(raw);
     if (known) return known;
     let key: string | null = null;
+    const named = set.vertices?.[I];
     if (singular) {
-      const hit = domain.toUV(I * set.unit[0], J * set.unit[1]);
+      const at = named ? named.at : [I * set.unit[0], J * set.unit[1]];
+      const hit = domain.toUV(at[0], at[1]);
       const side = hit ? domain.poleOf(hit.uv) : null;
       if (side) key = `${f}:p:${side}`;
     }
+    if (!key && named) key = `${f}:v:${named.name}`;
     if (!key) {
       const [wi, wj] = set.wrap;
       const i = wi ? ((I % wi) + wi) % wi : I;
@@ -293,8 +347,60 @@ function layoutFaceOnce(
       if (d.cut && !d.failure)
         d.failure = { code: 'dropped', message: "경계 처리 '빼기'로 뺀 잘린 패널" };
 
+  return finishPanels(domain, drafts, rowOf, colOf, pointAt, flip, tol, prefix);
+}
+
+/** The person's tile on one face (SPEC-16.13 3): placed pieces, not cut, never merged. */
+function tilePanels(domain: Domain, tile: TileSet, flip: number, tol: number, prefix: string) {
+  const drafts: Draft[] = placeTile(domain, tile, flip).map((t) => ({
+    face: domain.faceIndex,
+    cell: t.cell,
+    st: t.st,
+    keys: t.keys,
+    raw: [],
+    cut: t.cut,
+    failure: t.failure,
+    merged: [],
+    removed: false,
+  }));
+  if (!drafts.length) return [];
+  const rmin = Math.min(...drafts.map((d) => d.cell.r));
+  const cmin = Math.min(...drafts.map((d) => d.cell.c));
+  const piece = (c: Cell) => Number(c.sub.slice(1)) || 0;
+  drafts.sort(
+    (a, b) => a.cell.r - b.cell.r || a.cell.c - b.cell.c || piece(a.cell) - piece(b.cell),
+  );
+  const sampler = domain.sampler;
+  const pointAt = (p: Vec2): Point => {
+    const hit = domain.toUV(p[0], p[1]);
+    return hit
+      ? { uv: hit.uv, xyz: sampler.point(hit.uv[0], hit.uv[1]), folded: hit.folded, missing: false }
+      : { uv: [NaN, NaN], xyz: [NaN, NaN, NaN], folded: false, missing: true };
+  };
+  return finishPanels(
+    domain,
+    drafts,
+    (c) => c.r - rmin + 1,
+    (c) => c.c - cmin + 1,
+    pointAt,
+    flip,
+    tol,
+    prefix,
+  );
+}
+
+/** Numbering and the measures of every draft of one face. */
+function finishPanels(
+  domain: Domain,
+  drafts: Draft[],
+  rowOf: (c: Cell) => number,
+  colOf: (c: Cell) => number,
+  pointAt: (p: Vec2) => Point,
+  flip: number,
+  tol: number,
+  prefix: string,
+): Panel[] {
   // Orientation of (s, t) against the reference normal, once per face.
-  const flip = settings.direction.value.flip ? -1 : 1;
   const sign = orientation(domain, flip);
   const panels: Panel[] = [];
   for (const d of drafts) {

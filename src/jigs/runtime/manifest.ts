@@ -173,6 +173,18 @@ const inputDecl = z.discriminatedUnion('kind', [
       required: z.boolean().optional(),
     })
     .strict(),
+  // Points and curves a person picked in a linked Rhino document (SPEC-16.13, PLAN-49 T-260): the
+  // tile drawn flat (`tile`, closed curves) or the attractors (`attractor`, points and curves). The
+  // engine reads them with the official read template when asked and keeps the read copy.
+  z
+    .object({
+      ...inputBase,
+      kind: z.literal('host-curves'),
+      host: z.enum(['rhino']),
+      accept: z.enum(['tile', 'attractor']),
+      required: z.boolean().optional(),
+    })
+    .strict(),
   z
     .object({
       ...inputBase,
@@ -796,7 +808,8 @@ export function validateManifest(
       input.kind === 'sync-layers' ||
       input.kind === 'assembly' ||
       input.kind === 'host-document' ||
-      input.kind === 'host-surface'
+      input.kind === 'host-surface' ||
+      input.kind === 'host-curves'
     )
       need('sync.read', `입력 ${input.key}`);
     if (input.kind === 'facts') need('facts.read', `입력 ${input.key}`);

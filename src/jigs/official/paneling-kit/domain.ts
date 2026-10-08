@@ -86,6 +86,7 @@ function directionMap(
   pattern: string,
   notes: string[],
   label: string,
+  repeat = 1,
 ): DirMap & { module: number } {
   const face = sampler.face;
   const [a0, a1] = dir === 'u' ? face.domainU : face.domainV;
@@ -103,16 +104,18 @@ function directionMap(
   const sign = startAtMin ? 1 : -1;
   const startParam = startAtMin ? a0 : a1;
   const spacing = ref / (table.params.length - 1);
+  // Hexagon rows repeat every 3h/4 and alternate (SPEC-16.13 1): `repeat` 0.75, an even count ≥ 4.
+  const step = size * repeat;
   const roundCount = (count: number) => {
-    let n = Math.max(closed ? 3 : 1, Math.round(count));
-    if (closed && EVEN_PATTERNS.has(pattern) && n % 2) n += 1;
+    let n = Math.max(closed ? (repeat !== 1 ? 4 : 3) : 1, Math.round(count));
+    if (closed && (EVEN_PATTERNS.has(pattern) || repeat !== 1) && n % 2) n += 1;
     return n;
   };
 
   if (measure === 'parameter') {
-    const n = roundCount(ref / size);
-    const S = n * size;
-    const module = closed ? ref / n : size;
+    const n = roundCount(ref / step);
+    const S = n * step;
+    const module = closed ? ref / (n * repeat) : size;
     if (closed && Math.abs(module - size) > 1e-9)
       notes.push(`${label} 닫힌 방향이라 크기를 둘레에 맞춤: ${(module * 1000).toFixed(1)} mm`);
     return {
@@ -153,8 +156,8 @@ function directionMap(
   };
   let module = size;
   if (closed) {
-    const n = roundCount(total / size);
-    module = total / n;
+    const n = roundCount(total / step);
+    module = total / (n * repeat);
     if (Math.abs(module - size) > 1e-9)
       notes.push(`${label} 닫힌 방향이라 크기를 둘레에 맞춤: ${(module * 1000).toFixed(1)} mm`);
   }
@@ -241,6 +244,7 @@ export function buildDomain(face: SurfaceFaceSample, settings: PreviewSettings):
     pattern,
     notes,
     '세로',
+    pattern === 'hexagon' ? 0.75 : 1,
   );
   const closedS = sDir === 'u' ? face.closedU : face.closedV;
   const closedT = tDir === 'u' ? face.closedU : face.closedV;

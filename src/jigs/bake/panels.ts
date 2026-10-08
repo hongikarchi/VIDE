@@ -160,6 +160,26 @@ export function panelRows(input: PanelRowsInput): PanelRows {
 
   if (input.stepId === TYPING_STEP) return typingRows(input, out, layout, shared, statusOf);
 
+  if (decl.template === 'vide.bake.curves@1' && isLayout(input.output)) {
+    // Opening outlines of stage 1 (개구, SPEC-16.13 4): one closed polyline per panel with one.
+    const layoutHash = layoutHashOf(layout);
+    out.layoutHash = layoutHash;
+    for (const panel of layout.panels) {
+      if (!panel.opening || panel.failure) continue;
+      const points = panel.opening.corners.map((c) => [c[0], c[1], c[2]] as Vec3);
+      out.items.push({
+        key: makeKey('opening', layoutHash, panel.id),
+        attrs: [
+          ...shared,
+          ['vide-panel-id', panel.id],
+          ['vide-opening', (panel.opening.ratio * 100).toFixed(1)],
+        ],
+        curve: { kind: 'polyline', points: [...points, points[0]] },
+      } satisfies CurveItem);
+    }
+    return out;
+  }
+
   if (decl.template === 'vide.bake.curves@1') {
     // Joint centre lines of stage 2 (줄눈 선, SPEC-16.6 1).
     const members = isMembers(input.output) ? input.output : undefined;

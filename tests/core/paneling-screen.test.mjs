@@ -262,7 +262,7 @@ test('the CSV carries the contract head, every panel and mm/m² text', () => {
   assert.equal(lines.length, 9);
   assert.equal(
     lines[1],
-    'P-1-1,0,1,1,,T-01,평면,1200.0,600.0,1190.0,590.0,50.0,0.720,0.4,0.0,0.0,10.0,10.0,,판재 초과,판재 한도를 넘습니다',
+    'P-1-1,0,1,1,,T-01,평면,1200.0,600.0,1190.0,590.0,50.0,0.720,,0.4,0.0,0.0,10.0,10.0,,판재 초과,판재 한도를 넘습니다',
   );
   assert.match(
     lines.find((l) => l.startsWith('P-2-4')),
@@ -278,7 +278,7 @@ test('the CSV carries the contract head, every panel and mm/m² text', () => {
   assert.match(scheduleCsv('joints', r), /J-01,10,-0\.5~0\.5,600\.0,6\.000/);
   // Only the layout yet: the later columns are empty.
   const early = scheduleCsv('panels', { layout: r.layout }).slice(1).split('\r\n')[1];
-  assert.equal(early, 'P-1-1,0,1,1,,,,1200.0,600.0,,,,0.720,,,,,,,정상,');
+  assert.equal(early, 'P-1-1,0,1,1,,,,1200.0,600.0,,,,0.720,,,,,,,,정상,');
 });
 
 test('question cards ask the stage’s missing values, recommended first', () => {

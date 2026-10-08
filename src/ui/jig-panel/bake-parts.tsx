@@ -54,6 +54,7 @@ const LABELS: Record<string, string> = {
   connections: '결합부 표식',
   cuts: '재단 윤곽',
   'cut-numbers': '재단 번호',
+  openings: '개구 윤곽',
 };
 /** 패널링 makes are named by their template (`members` is also the built-in H member bake). */
 const TEMPLATE_LABELS: Record<string, string> = {

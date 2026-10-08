@@ -59,13 +59,17 @@ const AFTER = {
 };
 
 /** The fake engine: one instance of `vide/paneling` and what its routes answer. */
-function engine({ surface = false } = {}) {
+function engine({ surface = false, values = {} } = {}) {
   const state = {
     surface: surface ? read() : null,
     meshNext: false,
     holdMembers: false,
     by: { pattern: 'user', width: 'user', height: 'user' },
-    values: {},
+    values: { ...values },
+    // T-260 (SPEC-16.13): the tile and attractor picks (`…/paneling/curves`).
+    curves: { tile: null, attractors: null },
+    curvePicks: [],
+    openNext: false,
     runs: [],
     puts: [],
     picks: [],
@@ -191,6 +195,43 @@ function engine({ surface = false } = {}) {
       }
       state.surface = read();
       return json({ ok: true, ...state.surface });
+    }
+    if (path === '/projects/p1/paneling/curves' && method === 'GET') {
+      assert.equal(url.searchParams.get('instanceId'), 'i1');
+      return json({
+        inputs: [
+          { key: 'tile', title: '타일 곡선', accept: 'tile', picked: state.curves.tile },
+          {
+            key: 'attractors',
+            title: '어트랙터',
+            accept: 'attractor',
+            picked: state.curves.attractors,
+          },
+        ],
+      });
+    }
+    if (path === '/projects/p1/paneling/curves/read' && method === 'POST') {
+      state.curvePicks.push(body);
+      if (body.mode === 'clear') {
+        state.curves[body.key] = null;
+        return json({ ok: true, key: body.key, picked: null });
+      }
+      if (state.openNext) {
+        state.openNext = false;
+        return json({
+          ok: false,
+          key: body.key,
+          code: 'NOT_TILE',
+          message: '타일 곡선이 아님 · 닫힌 곡선만 고르세요',
+        });
+      }
+      state.curves[body.key] = {
+        linkId: 'link-1',
+        objectIds: ['a', 'b'],
+        count: 2,
+        readAt: '2026-10-08T09:20:00.000Z',
+      };
+      return json({ ok: true, key: body.key, picked: state.curves[body.key] });
     }
     if (path === `${base}/bakes` && method === 'GET')
       return json({
@@ -465,6 +506,37 @@ try {
   if (shot) await page.screenshot({ path: `${shot}/paneling.png`, fullPage: true });
   assert.deepEqual(errors, []);
   await page.close();
+
+  // ── 사용자 타일 (T-260, SPEC-16.13 3): the tile row under the 기준 면, refusal and pick ─────
+  {
+    const { page, panel, fake, errors } = await open(
+      browser,
+      {},
+      { surface: true, values: { pattern: 'tile', openNear: 0, openFar: 0 } },
+    );
+    const row = panel.locator('.pnl-surface [data-curves="tile"]');
+    await row.getByText('Rhino에서 평면 XY에 그린 닫힌 곡선을 고르세요').waitFor();
+    assert.equal(await panel.locator('[data-curves="attractors"]').count(), 0, 'no opening');
+    fake.state.openNext = true;
+    await row.getByRole('button', { name: '고른 곡선 쓰기' }).click();
+    await row.getByRole('alert').getByText('타일 곡선이 아님 · 닫힌 곡선만 고르세요').waitFor();
+    await row.getByRole('button', { name: '고른 곡선 쓰기' }).click();
+    await row.getByText(/조각 2 · 읽음/).waitFor();
+    assert.equal(await row.getByRole('alert').count(), 0);
+    await row.getByRole('button', { name: '지우기' }).click();
+    await row.getByText('Rhino에서 평면 XY에 그린 닫힌 곡선을 고르세요').waitFor();
+    assert.deepEqual(
+      fake.state.curvePicks.map((p) => [p.key, p.mode]),
+      [
+        ['tile', 'pick'],
+        ['tile', 'pick'],
+        ['tile', 'clear'],
+      ],
+    );
+    if (shot) await page.screenshot({ path: `${shot}/paneling-tile.png`, fullPage: true });
+    assert.deepEqual(errors, []);
+    await page.close();
+  }
 
   // ── A remote screen: views only ─────────────────────────────────────────────────────────
   {

@@ -4,11 +4,13 @@
 // ('person' unless said otherwise). An assumed value may drive the preview, never a member make
 // (`makeAllowed` in the contract). Lengths are metres here; the screen shows mm.
 
-import type {
-  MemberSettings,
-  OptimizeSettings,
-  PreviewSettings,
-  SettingSource,
+import {
+  OPENING_MAX,
+  PATTERNS,
+  type MemberSettings,
+  type OptimizeSettings,
+  type PreviewSettings,
+  type SettingSource,
 } from '../../../contracts/paneling.ts';
 
 type Values<T> = { [K in keyof T]: T[K] extends { value: infer V } ? V : never };
@@ -22,6 +24,10 @@ export const RECOMMENDED_PREVIEW: Values<PreviewSettings> = {
   direction: { axis: 'u', startCorner: 'min-min', flip: false },
   boundary: { rule: 'trim', mergeBelow: 0.3 },
 };
+/** SPEC-16.4 1 추천값 of the stage-1 settings read only with some values (SPEC-16.13). */
+export const RECOMMENDED_VORONOI = { jitter: 0.5, seed: 1 };
+export const RECOMMENDED_OPENING = { near: 0, far: 0, radius: 10, levels: 5 as number };
+
 /** SPEC-16.4 1 추천값, stage 2. */
 export const RECOMMENDED_MEMBERS: Values<MemberSettings> = {
   thickness: 0.05,
@@ -95,7 +101,7 @@ export function previewSettingsFromParams(
 ): PreviewSettings {
   const given: Partial<Values<PreviewSettings>> = {};
   const sources: Partial<Record<keyof PreviewSettings, SettingSource>> = {};
-  const pattern = pick(params.pattern, ['grid', 'staggered', 'diamond', 'triangle'] as const);
+  const pattern = pick(params.pattern, PATTERNS);
   if (pattern) given.pattern = pattern;
   const w = positive(params.width),
     h = positive(params.height);
@@ -140,7 +146,59 @@ export function previewSettingsFromParams(
     mergeBelow: 'boundary',
   };
   for (const key of assumed) if (groups[key]) sources[groups[key]] = 'assumed';
-  return resolvePreviewSettings(given, sources);
+  const settings = resolvePreviewSettings(given, sources);
+  return withPatternExtras(settings, params, assumed);
+}
+
+const ratio = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= OPENING_MAX
+    ? value
+    : undefined;
+
+/**
+ * The stage-1 settings read only with some values (SPEC-16.13, SPEC-16.4 1): the Voronoi seeds when
+ * the pattern is Voronoi (params jitter, seed), the opening when one of the two ratios is above 0
+ * (params openNear, openFar, openRadius in metres, openLevels with 0 = continuous). Without them
+ * the settings (and their hash) stay as before.
+ */
+export function withPatternExtras(
+  settings: PreviewSettings,
+  params: Record<string, unknown>,
+  assumed: readonly string[] = [],
+): PreviewSettings {
+  const out: PreviewSettings = { ...settings };
+  const sourceOf = (keys: string[]): SettingSource =>
+    keys.some((k) => assumed.includes(k) || params[k] === undefined) ? 'assumed' : 'person';
+  if (settings.pattern.value === 'voronoi') {
+    const jitter =
+      typeof params.jitter === 'number' && params.jitter >= 0 && params.jitter <= 1
+        ? params.jitter
+        : RECOMMENDED_VORONOI.jitter;
+    const seed =
+      typeof params.seed === 'number' &&
+      Number.isInteger(params.seed) &&
+      params.seed >= 0 &&
+      params.seed <= 9999
+        ? params.seed
+        : RECOMMENDED_VORONOI.seed;
+    out.voronoi = { value: { jitter, seed }, source: sourceOf(['jitter', 'seed']) };
+  }
+  const near = ratio(params.openNear) ?? RECOMMENDED_OPENING.near;
+  const far = ratio(params.openFar) ?? RECOMMENDED_OPENING.far;
+  if (near > 0 || far > 0) {
+    const radius = positive(params.openRadius) ?? RECOMMENDED_OPENING.radius;
+    const levels =
+      typeof params.openLevels === 'number' &&
+      Number.isInteger(params.openLevels) &&
+      (params.openLevels === 0 || (params.openLevels >= 2 && params.openLevels <= 20))
+        ? params.openLevels
+        : RECOMMENDED_OPENING.levels;
+    out.opening = {
+      value: { near, far, radius, levels: levels as 0 },
+      source: sourceOf(['openNear', 'openFar', 'openRadius', 'openLevels']),
+    };
+  }
+  return out;
 }
 
 const nonNegative = (value: unknown) =>

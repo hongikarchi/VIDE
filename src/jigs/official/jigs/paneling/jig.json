@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "kind": "tool",
   "name": "패널링",
-  "summary": "Rhino 곡면을 패턴(사각·엇갈림·마름모·삼각)과 크기로 나눠 바로 3D로 보고, 두께·줄눈으로 부재를 만들고, 평면화·타입으로 묶어 일람표와 함께 Rhino에 만듭니다. 정해지지 않은 값은 추천값으로 가정하고 되묻습니다.",
+  "summary": "Rhino 곡면을 패턴(사각·엇갈림·마름모·삼각·육각·보로노이·직접 그린 타일)과 크기로 나눠 바로 3D로 보고, 두께·줄눈으로 부재를 만들고, 평면화·타입으로 묶어 일람표와 함께 Rhino에 만듭니다. 어트랙터로 개구율을 바꿀 수 있고, 정해지지 않은 값은 추천값으로 가정하고 되묻습니다.",
   "icon": "grid",
   "hosts": {
     "rhino": "optional"
@@ -21,6 +21,20 @@
       "title": "기준 면",
       "kind": "host-surface",
       "host": "rhino"
+    },
+    {
+      "key": "tile",
+      "title": "타일 곡선",
+      "kind": "host-curves",
+      "host": "rhino",
+      "accept": "tile"
+    },
+    {
+      "key": "attractors",
+      "title": "어트랙터",
+      "kind": "host-curves",
+      "host": "rhino",
+      "accept": "attractor"
     }
   ],
   "params": [
@@ -49,6 +63,21 @@
           "value": "triangle",
           "label": "삼각",
           "consequence": "격자 칸을 시작 모서리 쪽 대각선으로 둘로 나눕니다"
+        },
+        {
+          "value": "hexagon",
+          "label": "육각",
+          "consequence": "가로·세로 육각형, 행 간격은 세로의 3/4입니다"
+        },
+        {
+          "value": "voronoi",
+          "label": "보로노이",
+          "consequence": "칸마다 흔들린 씨앗 하나의 보로노이 셀"
+        },
+        {
+          "value": "tile",
+          "label": "사용자 타일",
+          "consequence": "Rhino에서 그린 닫힌 곡선을 칸마다 접평면에 놓습니다"
         }
       ],
       "basis": {
@@ -287,6 +316,139 @@
         "status": "to-ask",
         "note": "SPEC-16.4 추천값 30%",
         "question": "온 패널 면적의 몇 % 미만이면 이웃에 합칠까요?"
+      },
+      "affects": ["preview"]
+    },
+    {
+      "key": "jitter",
+      "title": "보로노이 흔들림",
+      "help": "패턴이 보로노이일 때, 씨앗이 칸 가운데에서 움직일 수 있는 반 칸의 비율입니다. 0이면 사각 격자와 같습니다.",
+      "group": "1단계 미리보기",
+      "type": "ratio",
+      "display": {
+        "unit": "%",
+        "decimals": 0
+      },
+      "default": 0.5,
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": 0.01
+      },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 50%",
+        "question": "보로노이 씨앗을 얼마나 흔들까요?"
+      },
+      "affects": ["preview"]
+    },
+    {
+      "key": "seed",
+      "title": "씨앗 번호",
+      "help": "같은 번호면 같은 보로노이 셀입니다.",
+      "group": "1단계 미리보기",
+      "type": "count",
+      "unit": "EA",
+      "default": 1,
+      "range": {
+        "min": 0,
+        "max": 9999,
+        "step": 1
+      },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 1",
+        "question": "보로노이 씨앗 번호를 정해 주세요"
+      },
+      "affects": ["preview"]
+    },
+    {
+      "key": "openNear",
+      "title": "가까운 개구율",
+      "help": "어트랙터에 닿은 패널의 개구 면적 비율입니다. 상한 95%. 가까운·먼 개구율이 모두 0이면 개구가 없습니다.",
+      "group": "1단계 미리보기",
+      "type": "ratio",
+      "display": {
+        "unit": "%",
+        "decimals": 0
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 0.95,
+        "step": 0.01
+      },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 0%(개구 없음)",
+        "question": "어트랙터에 가까운 패널의 개구율은 얼마로 할까요?"
+      },
+      "affects": ["preview"]
+    },
+    {
+      "key": "openFar",
+      "title": "먼 개구율",
+      "help": "영향 거리 밖(또는 어트랙터가 없을 때) 패널의 개구 면적 비율입니다. 상한 95%.",
+      "group": "1단계 미리보기",
+      "type": "ratio",
+      "display": {
+        "unit": "%",
+        "decimals": 0
+      },
+      "default": 0,
+      "range": {
+        "min": 0,
+        "max": 0.95,
+        "step": 0.01
+      },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 0%",
+        "question": "어트랙터에서 먼 패널의 개구율은 얼마로 할까요?"
+      },
+      "affects": ["preview"]
+    },
+    {
+      "key": "openRadius",
+      "title": "영향 거리",
+      "help": "이 거리에서 개구율이 가까운 값에서 먼 값으로 바뀝니다.",
+      "group": "1단계 미리보기",
+      "type": "length",
+      "unit": "m",
+      "display": {
+        "unit": "mm",
+        "decimals": 0
+      },
+      "default": 10,
+      "range": {
+        "min": 0.1,
+        "max": 1000,
+        "step": 0.01
+      },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 10 m",
+        "question": "어트랙터의 영향 거리는 얼마로 할까요?"
+      },
+      "affects": ["preview"]
+    },
+    {
+      "key": "openLevels",
+      "title": "개구율 단계 수",
+      "help": "개구율을 이 수의 같은 간격 값으로 맞춥니다. 0이면 연속(타입이 많아집니다).",
+      "group": "1단계 미리보기",
+      "type": "count",
+      "unit": "EA",
+      "default": 5,
+      "range": {
+        "min": 0,
+        "max": 20,
+        "step": 1
+      },
+      "basis": {
+        "status": "to-ask",
+        "note": "SPEC-16.4 추천값 5단계",
+        "question": "개구율을 몇 단계로 나눌까요?"
       },
       "affects": ["preview"]
     },
@@ -579,6 +741,8 @@
       "use": "vide/paneling-kit#previewStep",
       "reads": [
         "input.surface",
+        "input.tile",
+        "input.attractors",
         "param.pattern",
         "param.width",
         "param.height",
@@ -588,7 +752,13 @@
         "param.startCorner",
         "param.flip",
         "param.boundaryRule",
-        "param.mergeBelow"
+        "param.mergeBelow",
+        "param.jitter",
+        "param.seed",
+        "param.openNear",
+        "param.openFar",
+        "param.openRadius",
+        "param.openLevels"
       ],
       "writes": "preview",
       "speed": "live",
@@ -680,6 +850,16 @@
       "mode": "replace-own"
     },
     {
+      "id": "openings",
+      "template": "vide.bake.curves@1",
+      "host": "rhino",
+      "items": "step.preview",
+      "rows": "paneling",
+      "layer": "개구",
+      "key": "id",
+      "mode": "replace-own"
+    },
+    {
       "id": "members",
       "template": "vide.bake.panel-solids@1",
       "host": "rhino",
@@ -750,7 +930,7 @@
   "capabilities": [
     {
       "name": "sync.read",
-      "reason": "연결 Rhino 문서에서 고른 기준 면을 표본으로 읽습니다"
+      "reason": "연결 Rhino 문서에서 고른 기준 면을 표본으로, 타일 곡선과 어트랙터를 꺾은선으로 읽습니다"
     },
     {
       "name": "library.call",
@@ -758,7 +938,7 @@
     },
     {
       "name": "host.bake",
-      "reason": "미리보기 패널 면·부재·줄눈 선·타입 블록·결합부 표식·재단 윤곽을 사람이 누를 때 연결 Rhino 문서에 만듭니다"
+      "reason": "미리보기 패널 면·개구 윤곽·부재·줄눈 선·타입 블록·결합부 표식·재단 윤곽을 사람이 누를 때 연결 Rhino 문서에 만듭니다"
     }
   ],
   "selftest": {

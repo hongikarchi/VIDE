@@ -12,6 +12,9 @@ import {
   geomTol,
   SCHEDULE_COLUMNS,
   memberSettingsSchema,
+  curveSetSchema,
+  OPENING_MAX,
+  PATTERNS,
 } from '../../src/contracts/paneling.ts';
 
 // PLAN-49: the shared shapes of 패널링 (SPEC-16). A 2×2 sampled plane, one panel through the stages.
@@ -131,6 +134,49 @@ test('panel ids, make keys and schedule columns', () => {
   ]);
   const keys = new Set(SCHEDULE_COLUMNS.panels.map(([k]) => k));
   assert.equal(keys.size, SCHEDULE_COLUMNS.panels.length);
+  assert.ok(keys.has('opening'));
+  assert.equal(makeKey('opening', 'abcdef0123456789', 'P-1-1'), 'opening:abcdef01:P-1-1');
+});
+
+test('T-260: patterns, opening settings and openings, picked curves (SPEC-16.13)', () => {
+  assert.deepEqual(PATTERNS.slice(4), ['hexagon', 'voronoi', 'tile']);
+  const preview = {
+    pattern: { value: 'voronoi', source: 'person' },
+    size: { value: [1, 1], source: 'person' },
+    measure: { value: 'arc-length', source: 'person' },
+    projection: { value: 'plan-xy', source: 'assumed' },
+    direction: { value: { axis: 'u', startCorner: 'min-min', flip: false }, source: 'person' },
+    boundary: { value: { rule: 'trim', mergeBelow: 0.3 }, source: 'person' },
+  };
+  assert.equal(previewSettingsSchema.safeParse(preview).success, true, 'both extras are optional');
+  const opening = (near) => ({
+    ...preview,
+    voronoi: { value: { jitter: 0.5, seed: 1 }, source: 'person' },
+    opening: { value: { near, far: 0, radius: 5, levels: 0 }, source: 'person' },
+  });
+  assert.equal(previewSettingsSchema.safeParse(opening(OPENING_MAX)).success, true);
+  assert.equal(previewSettingsSchema.safeParse(opening(0.96)).success, false);
+  const set = {
+    schema: 'vide.paneling.curves@1',
+    source: {
+      linkId: 'l',
+      documentKey: 'l',
+      readAt: '2026-10-08T00:00:00.000Z',
+      toMeters: 0.001,
+      absTol: 0.00001,
+    },
+    items: [
+      {
+        objectId: '00000000-0000-4000-8000-000000000001',
+        kind: 'point',
+        closed: false,
+        flatXY: true,
+        points: [[1, 2, 3]],
+      },
+    ],
+  };
+  assert.equal(curveSetSchema.safeParse(set).success, true);
+  assert.equal(curveSetSchema.safeParse({ ...set, items: [] }).success, false);
 });
 
 test('layout → members → typing chain', () => {
@@ -172,6 +218,8 @@ test('layout → members → typing chain', () => {
     ['P-3-4a', true],
     ['P-3-4+3-5', true],
     ['F2-P-10-1b', true],
+    ['P-3-4t2', true],
+    ['P-3-4t0', false],
   ]) {
     const r = panelLayoutSchema.safeParse({ ...layout, panels: [{ ...layout.panels[0], id }] });
     assert.equal(r.success, ok, id);

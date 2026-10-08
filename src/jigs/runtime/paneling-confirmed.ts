@@ -14,6 +14,19 @@ const WHEN: Record<string, { key: string; value: string }> = {
   mergeBelow: { key: 'boundaryRule', value: 'merge' },
   projection: { key: 'measure', value: 'projected' },
 };
+type Values = (key: string) => unknown;
+const opening = (v: Values) =>
+  [v('openNear'), v('openFar')].some((x) => typeof x === 'number' && x > 0);
+/** SPEC-16.4 1 / 16.13: the Voronoi seeds only with the Voronoi pattern; the opening settings only
+ *  while one of the two ratios is above 0 (both 0 = no opening, nothing to confirm). */
+const WHEN_EXTRA: Record<string, (v: Values) => boolean> = {
+  jitter: (v) => v('pattern') === 'voronoi',
+  seed: (v) => v('pattern') === 'voronoi',
+  openNear: opening,
+  openFar: opening,
+  openRadius: opening,
+  openLevels: opening,
+};
 
 /** The stage of a setting by its manifest group, or undefined. */
 export function stageOfGroup(group: string | undefined): PanelingStage | undefined {
@@ -60,6 +73,8 @@ export function stageSources(
     if (!stage) continue;
     const when = WHEN[decl.key];
     if (when && params[when.key] && params[when.key].value !== when.value) continue;
+    const extra = WHEN_EXTRA[decl.key];
+    if (extra && !extra((key) => params[key]?.value)) continue;
     const source = sourceOfParam(params[decl.key]?.by);
     out.settings[stage][decl.key] = { source };
     if (source === 'assumed') out.assumed[stage].push(decl.key);

@@ -44,6 +44,9 @@ export interface Shape {
   /** Sorted edges then sorted radii (pose free). */
   key: Float64Array;
   perimeter: number;
+  /** Shapes of different classes never share a type: the panel's target opening ratio in 0.1 %
+   *  steps (SPEC-16.13 4); absent = 0 (no opening). */
+  cls?: number;
 }
 
 export function makeShape(input: ShapeInput): Shape {
@@ -101,12 +104,14 @@ export function mirrorShape(s: Shape): Shape {
   };
   // Ring reversed: k → −k (mod 2n) keeps vertices on even slots.
   const ring = Array.from({ length: 2 * n }, (_, k) => reflect(at((2 * n - k) % (2 * n))));
-  return makeShape({
+  const mirrored = makeShape({
     vertices: ring.filter((_, k) => k % 2 === 0),
     mids: ring.filter((_, k) => k % 2 === 1),
     centre: c,
     normal,
   });
+  if (s.cls) mirrored.cls = s.cls;
+  return mirrored;
 }
 
 /** Lower bound of the deviation from the pose-free keys (same vertex count assumed). */
@@ -263,12 +268,12 @@ function alignedDistance(a: Shape, b: Shape, shift: number): number {
 
 /**
  * The deviation of b against a: the smallest, over the cyclic re-indexings, largest check-point
- * distance after rigid alignment. Infinity when the vertex counts differ. Shifts whose edge/radius
+ * distance after rigid alignment. Infinity when the vertex counts or the classes differ. Shifts whose edge/radius
  * lower bound is above `bound` (or the best found) are skipped; the result above `bound` may then
  * be Infinity.
  */
 export function deviation(a: Shape, b: Shape, bound = Infinity): number {
-  if (a.n !== b.n) return Infinity;
+  if (a.n !== b.n || (a.cls ?? 0) !== (b.cls ?? 0)) return Infinity;
   const n = a.n;
   let best = Infinity;
   for (let r = 0; r < n; r++) {

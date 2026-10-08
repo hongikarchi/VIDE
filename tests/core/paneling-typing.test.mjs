@@ -429,6 +429,7 @@ test('the step reads step.preview and step.members; the schedule tables follow S
     plateHeight: 600,
     thickness: 50,
     area: 0.72,
+    opening: null,
     flatness: 0,
     planarGap: 0,
     offSurface: 0,

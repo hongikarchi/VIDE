@@ -4,13 +4,17 @@
 // `step.members` (`inputs.steps.<id>`) the same way.
 
 import {
+  curveSetSchema,
   surfaceSampleSchema,
+  type CurveSet,
   type MemberSet,
   type PanelLayout,
   type PanelTyping,
   type SurfaceSample,
 } from '../../../contracts/paneling.ts';
 import { layoutPanels } from './layout.ts';
+import { attractorsFromCurves } from './opening.ts';
+import { tileFromCurves } from './tile.ts';
 import { buildMembers } from './members.ts';
 import { optimizePanels } from './optimize.ts';
 import {
@@ -42,13 +46,33 @@ function sampleOf(input: unknown): SurfaceSample {
   return raw as SurfaceSample;
 }
 
-/** Stage 1 '미리보기': lay the pattern on the picked face (SPEC-16.5). */
+/** A picked-curves input (`host-curves`): the read set, a pinned `{ value }` around it, or null. */
+function curvesOf(input: unknown, what: string): CurveSet | null {
+  const raw =
+    input && typeof input === 'object' && 'value' in input && !('schema' in input)
+      ? (input as { value: unknown }).value
+      : input;
+  if (raw === undefined || raw === null) return null;
+  const parsed = curveSetSchema.safeParse(raw);
+  if (!parsed.success) throw new Error(`${what}의 형식이 맞지 않습니다 · 다시 고르세요`);
+  return parsed.data;
+}
+
+/** Stage 1 '미리보기': lay the pattern on the picked face (SPEC-16.5), with the person's tile and
+ *  the attractors when they were picked (SPEC-16.13). */
 export function previewStep(
   inputs: Record<string, unknown>,
   params: Record<string, unknown>,
 ): PanelLayout {
   const sample = sampleOf(inputs.surface);
-  const result = layoutPanels(sample, previewSettingsFromParams(params));
+  const settings = previewSettingsFromParams(params);
+  const tileCurves = settings.pattern.value === 'tile' ? curvesOf(inputs.tile, '타일') : null;
+  const result = layoutPanels(sample, settings, {
+    tile: tileCurves ? tileFromCurves(tileCurves) : null,
+    attractors: settings.opening
+      ? attractorsFromCurves(curvesOf(inputs.attractors, '어트랙터'))
+      : [],
+  });
   if (!result.ok) throw new Error(result.message);
   return result.layout;
 }

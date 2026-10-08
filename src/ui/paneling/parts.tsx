@@ -27,6 +27,7 @@ import {
   plateHint,
   scheduleCsv,
   settingInUse,
+  settingShown,
   settingsOfStage,
   shownValue,
   sourceOf,
@@ -174,7 +175,75 @@ export function PanelingSurface({ view, title }: { view: PanelingView; title?: s
           {view.reading ? '읽는 중…' : '고른 면 쓰기'}
         </button>
       )}
+      <CurvesRows view={view} />
     </section>
+  );
+}
+
+/** The tile (pattern 'tile') and the attractors (an opening ratio above 0) under the 기준 면
+ *  (SPEC-16.13 3·4): what was picked and [고른 곡선 쓰기] / [지우기]. */
+function CurvesRows({ view }: { view: PanelingView }) {
+  const opening = [view.values.openNear, view.values.openFar].some(
+    (v) => typeof v === 'number' && v > 0,
+  );
+  const shown = view.curves.filter((c) =>
+    c.accept === 'tile' ? view.values.pattern === 'tile' : c.accept === 'attractor' && opening,
+  );
+  if (!shown.length) return null;
+  return (
+    <>
+      {shown.map((c) => {
+        const tile = c.accept === 'tile';
+        const reading = view.curvesReading === c.key;
+        const error = view.curvesError[c.key];
+        return (
+          <div key={c.key} className="pnl-curves" data-curves={c.key}>
+            <p className="pnl-line">
+              <strong>{c.title || (tile ? '타일 곡선' : '어트랙터')}</strong>{' '}
+              {c.count === null ? (
+                <span className="kit-muted">
+                  {tile
+                    ? 'Rhino에서 평면 XY에 그린 닫힌 곡선을 고르세요'
+                    : '없음 · 모든 패널이 먼 개구율'}
+                </span>
+              ) : (
+                <span>
+                  {tile ? `조각 ${c.count}` : `점·곡선 ${c.count}`}
+                  {c.readAt ? ` · 읽음 ${time(c.readAt)}` : ''}
+                </span>
+              )}
+            </p>
+            {error ? (
+              <p className="kit-notice" role="alert">
+                {error}
+              </p>
+            ) : null}
+            {view.remote ? null : (
+              <div className="kit-actions">
+                <button
+                  type="button"
+                  className="link-button"
+                  disabled={reading}
+                  onClick={() => void view.pickCurves(c.key, 'pick')}
+                >
+                  {reading ? '읽는 중…' : tile ? '고른 곡선 쓰기' : '고른 점·곡선 쓰기'}
+                </button>
+                {c.count !== null ? (
+                  <button
+                    type="button"
+                    className="link-button"
+                    disabled={reading}
+                    onClick={() => void view.pickCurves(c.key, 'clear')}
+                  >
+                    지우기
+                  </button>
+                ) : null}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </>
   );
 }
 
@@ -255,7 +324,7 @@ export function PanelingSettings({
     if (view.reveal) box.current?.scrollIntoView?.({ block: 'nearest' });
   }, [view.reveal]);
   useEffect(() => setAsking(false), [stage]);
-  const list = settingsOfStage(view.settings, stage).filter((s) => settingInUse(s, view.values));
+  const list = settingsOfStage(view.settings, stage).filter((s) => settingShown(s, view.values));
   const main = list.filter((s) => !MORE_KEYS.has(s.key));
   const more = list.filter((s) => MORE_KEYS.has(s.key));
   const missing = assumedOf(list, [stage], view.values).length;

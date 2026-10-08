@@ -65,6 +65,7 @@ export function scheduleRows(
       plateHeight: m ? mm(m.flatSize[1]) : null,
       thickness: m ? mm(m.thickness) : null,
       area: m2(m ? m.area : p.area),
+      opening: p.opening ? (p.opening.ratio * 100).toFixed(1) : null,
       flatness: t ? mm(t.flatness) : null,
       planarGap: t ? mm(t.planarGap) : null,
       offSurface: t ? mm(t.offSurface) : null,
