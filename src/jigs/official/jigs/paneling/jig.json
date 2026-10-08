@@ -6,9 +6,23 @@
   "name": "패널링",
   "summary": "Rhino 곡면을 패턴(사각·엇갈림·마름모·삼각)과 크기로 나눠 바로 3D로 보고, 두께·줄눈으로 부재를 만들고, 평면화·타입으로 묶어 일람표와 함께 Rhino에 만듭니다. 정해지지 않은 값은 추천값으로 가정하고 되묻습니다.",
   "icon": "grid",
-  "hosts": { "rhino": "optional" },
-  "uses": [{ "id": "vide/paneling-kit", "range": "^0.1.0" }],
-  "inputs": [{ "key": "surface", "title": "기준 면", "kind": "host-surface", "host": "rhino" }],
+  "hosts": {
+    "rhino": "optional"
+  },
+  "uses": [
+    {
+      "id": "vide/paneling-kit",
+      "range": "^0.1.0"
+    }
+  ],
+  "inputs": [
+    {
+      "key": "surface",
+      "title": "기준 면",
+      "kind": "host-surface",
+      "host": "rhino"
+    }
+  ],
   "params": [
     {
       "key": "pattern",
@@ -17,13 +31,20 @@
       "type": "choice",
       "default": "grid",
       "choices": [
-        { "value": "grid", "label": "사각 격자" },
+        {
+          "value": "grid",
+          "label": "사각 격자"
+        },
         {
           "value": "staggered",
           "label": "엇갈림",
           "consequence": "짝수 번째 행을 가로의 반만큼 밉니다"
         },
-        { "value": "diamond", "label": "마름모", "consequence": "대각선이 가로·세로인 마름모" },
+        {
+          "value": "diamond",
+          "label": "마름모",
+          "consequence": "대각선이 가로·세로인 마름모"
+        },
         {
           "value": "triangle",
           "label": "삼각",
@@ -44,10 +65,21 @@
       "group": "1단계 미리보기",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "mm", "decimals": 0 },
+      "display": {
+        "unit": "mm",
+        "decimals": 0
+      },
       "default": 1.2,
-      "range": { "min": 0.05, "max": 20, "step": 0.001 },
-      "words": { "more": ["크게", "넓게"], "less": ["작게", "좁게"], "sign": 1 },
+      "range": {
+        "min": 0.05,
+        "max": 20,
+        "step": 0.001
+      },
+      "words": {
+        "more": ["크게", "넓게"],
+        "less": ["작게", "좁게"],
+        "sign": 1
+      },
       "basis": {
         "status": "to-ask",
         "note": "SPEC-16.4 추천값 1,200 mm",
@@ -62,10 +94,21 @@
       "group": "1단계 미리보기",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "mm", "decimals": 0 },
+      "display": {
+        "unit": "mm",
+        "decimals": 0
+      },
       "default": 0.6,
-      "range": { "min": 0.05, "max": 20, "step": 0.001 },
-      "words": { "more": ["크게", "높게"], "less": ["작게", "낮게"], "sign": 1 },
+      "range": {
+        "min": 0.05,
+        "max": 20,
+        "step": 0.001
+      },
+      "words": {
+        "more": ["크게", "높게"],
+        "less": ["작게", "낮게"],
+        "sign": 1
+      },
       "basis": {
         "status": "to-ask",
         "note": "SPEC-16.4 추천값 600 mm",
@@ -111,8 +154,14 @@
       "type": "choice",
       "default": "plan-xy",
       "choices": [
-        { "value": "plan-xy", "label": "평면 XY" },
-        { "value": "best-vertical", "label": "면에 맞춘 수직 입면" }
+        {
+          "value": "plan-xy",
+          "label": "평면 XY"
+        },
+        {
+          "value": "best-vertical",
+          "label": "면에 맞춘 수직 입면"
+        }
       ],
       "basis": {
         "status": "to-ask",
@@ -128,8 +177,14 @@
       "type": "choice",
       "default": "u",
       "choices": [
-        { "value": "u", "label": "면의 U 방향" },
-        { "value": "v", "label": "면의 V 방향" }
+        {
+          "value": "u",
+          "label": "면의 U 방향"
+        },
+        {
+          "value": "v",
+          "label": "면의 V 방향"
+        }
       ],
       "basis": {
         "status": "to-ask",
@@ -145,10 +200,22 @@
       "type": "choice",
       "default": "min-min",
       "choices": [
-        { "value": "min-min", "label": "U 최소 · V 최소" },
-        { "value": "max-min", "label": "U 최대 · V 최소" },
-        { "value": "min-max", "label": "U 최소 · V 최대" },
-        { "value": "max-max", "label": "U 최대 · V 최대" }
+        {
+          "value": "min-min",
+          "label": "U 최소 · V 최소"
+        },
+        {
+          "value": "max-min",
+          "label": "U 최대 · V 최소"
+        },
+        {
+          "value": "min-max",
+          "label": "U 최소 · V 최대"
+        },
+        {
+          "value": "max-max",
+          "label": "U 최대 · V 최대"
+        }
       ],
       "basis": {
         "status": "to-ask",
@@ -164,7 +231,10 @@
       "group": "1단계 미리보기",
       "type": "toggle",
       "default": false,
-      "basis": { "status": "assumed", "note": "SPEC-16.9 기본 면의 법선 그대로" },
+      "basis": {
+        "status": "assumed",
+        "note": "SPEC-16.9 기본 면의 법선 그대로"
+      },
       "affects": ["preview"]
     },
     {
@@ -203,9 +273,16 @@
       "help": "경계 처리가 '이웃에 합치기'일 때, 잘린 패널이 온 패널 면적의 이 비율보다 작으면 합칩니다.",
       "group": "1단계 미리보기",
       "type": "ratio",
-      "display": { "unit": "%", "decimals": 0 },
+      "display": {
+        "unit": "%",
+        "decimals": 0
+      },
       "default": 0.3,
-      "range": { "min": 0, "max": 1, "step": 0.01 },
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": 0.01
+      },
       "basis": {
         "status": "to-ask",
         "note": "SPEC-16.4 추천값 30%",
@@ -219,9 +296,16 @@
       "group": "2단계 부재",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "mm", "decimals": 0 },
+      "display": {
+        "unit": "mm",
+        "decimals": 0
+      },
       "default": 0.05,
-      "range": { "min": 0.001, "max": 1, "step": 0.001 },
+      "range": {
+        "min": 0.001,
+        "max": 1,
+        "step": 0.001
+      },
       "basis": {
         "status": "to-ask",
         "note": "SPEC-16.4 추천값 50 mm",
@@ -236,8 +320,14 @@
       "type": "choice",
       "default": "outside",
       "choices": [
-        { "value": "outside", "label": "바깥(면 법선 쪽)" },
-        { "value": "inside", "label": "안" }
+        {
+          "value": "outside",
+          "label": "바깥(면 법선 쪽)"
+        },
+        {
+          "value": "inside",
+          "label": "안"
+        }
       ],
       "basis": {
         "status": "to-ask",
@@ -253,9 +343,16 @@
       "group": "2단계 부재",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "mm", "decimals": 0 },
+      "display": {
+        "unit": "mm",
+        "decimals": 0
+      },
       "default": 0.01,
-      "range": { "min": 0, "max": 0.5, "step": 0.001 },
+      "range": {
+        "min": 0,
+        "max": 0.5,
+        "step": 0.001
+      },
       "basis": {
         "status": "to-ask",
         "note": "SPEC-16.4 추천값 10 mm",
@@ -270,8 +367,14 @@
       "type": "choice",
       "default": "flush",
       "choices": [
-        { "value": "flush", "label": "경계에 맞춤" },
-        { "value": "half", "label": "반 줄눈" }
+        {
+          "value": "flush",
+          "label": "경계에 맞춤"
+        },
+        {
+          "value": "half",
+          "label": "반 줄눈"
+        }
       ],
       "basis": {
         "status": "to-ask",
@@ -287,9 +390,16 @@
       "group": "2단계 부재",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "mm", "decimals": 0 },
+      "display": {
+        "unit": "mm",
+        "decimals": 0
+      },
       "default": 0,
-      "range": { "min": 0, "max": 20, "step": 0.001 },
+      "range": {
+        "min": 0,
+        "max": 20,
+        "step": 0.001
+      },
       "basis": {
         "status": "to-ask",
         "note": "SPEC-16.4 추천값 없음(0)",
@@ -304,9 +414,16 @@
       "group": "2단계 부재",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "mm", "decimals": 0 },
+      "display": {
+        "unit": "mm",
+        "decimals": 0
+      },
       "default": 0,
-      "range": { "min": 0, "max": 20, "step": 0.001 },
+      "range": {
+        "min": 0,
+        "max": 20,
+        "step": 0.001
+      },
       "basis": {
         "status": "to-ask",
         "note": "SPEC-16.4 추천값 없음(0)",
@@ -320,9 +437,16 @@
       "group": "3단계 최적화·타입화",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "mm", "decimals": 1 },
+      "display": {
+        "unit": "mm",
+        "decimals": 1
+      },
       "default": 0.003,
-      "range": { "min": 0.0001, "max": 0.1, "step": 0.0001 },
+      "range": {
+        "min": 0.0001,
+        "max": 0.1,
+        "step": 0.0001
+      },
       "basis": {
         "status": "to-ask",
         "note": "SPEC-16.4 추천값 3 mm",
@@ -337,9 +461,18 @@
       "type": "choice",
       "default": "best-fit",
       "choices": [
-        { "value": "none", "label": "없음" },
-        { "value": "best-fit", "label": "패널별 최적 평면" },
-        { "value": "pq", "label": "전체 평면 사각 최적화(준비 중)" }
+        {
+          "value": "none",
+          "label": "없음"
+        },
+        {
+          "value": "best-fit",
+          "label": "패널별 최적 평면"
+        },
+        {
+          "value": "pq",
+          "label": "전체 평면 사각 최적화(준비 중)"
+        }
       ],
       "basis": {
         "status": "to-ask",
@@ -354,9 +487,16 @@
       "group": "3단계 최적화·타입화",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "mm", "decimals": 1 },
+      "display": {
+        "unit": "mm",
+        "decimals": 1
+      },
       "default": 0.002,
-      "range": { "min": 0.0001, "max": 0.1, "step": 0.0001 },
+      "range": {
+        "min": 0.0001,
+        "max": 0.1,
+        "step": 0.0001
+      },
       "basis": {
         "status": "to-ask",
         "note": "SPEC-16.4 추천값 2 mm",
@@ -372,7 +512,11 @@
       "type": "count",
       "unit": "EA",
       "default": 0,
-      "range": { "min": 0, "max": 5000, "step": 1 },
+      "range": {
+        "min": 0,
+        "max": 5000,
+        "step": 1
+      },
       "basis": {
         "status": "to-ask",
         "note": "SPEC-16.4 추천값 제한 없음(0)",
@@ -386,9 +530,16 @@
       "group": "3단계 최적화·타입화",
       "type": "length",
       "unit": "m",
-      "display": { "unit": "m", "decimals": 0 },
+      "display": {
+        "unit": "m",
+        "decimals": 0
+      },
       "default": 100,
-      "range": { "min": 1, "max": 100000, "step": 1 },
+      "range": {
+        "min": 1,
+        "max": 100000,
+        "step": 1
+      },
       "basis": {
         "status": "to-ask",
         "note": "SPEC-16.4 추천값 100 m",
@@ -402,9 +553,16 @@
       "group": "3단계 최적화·타입화",
       "type": "angle",
       "unit": "deg",
-      "display": { "unit": "deg", "decimals": 1 },
+      "display": {
+        "unit": "deg",
+        "decimals": 1
+      },
       "default": 1,
-      "range": { "min": 0.1, "max": 15, "step": 0.1 },
+      "range": {
+        "min": 0.1,
+        "max": 15,
+        "step": 0.1
+      },
       "basis": {
         "status": "to-ask",
         "note": "SPEC-16.4 추천값 1°",
@@ -466,6 +624,40 @@
       "gates": [{ "use": "inputs-present" }, { "use": "no-nan" }]
     }
   ],
+  "bake": [
+    {
+      "id": "preview",
+      "template": "vide.bake.panels-uv@1",
+      "host": "rhino",
+      "items": "step.preview",
+      "rows": "paneling",
+      "layer": "미리보기",
+      "key": "id",
+      "mode": "replace-own"
+    },
+    {
+      "id": "members",
+      "template": "vide.bake.panel-solids@1",
+      "host": "rhino",
+      "items": "step.members",
+      "rows": "paneling",
+      "layer": "부재",
+      "key": "panelId",
+      "mode": "replace-own",
+      "requires": ["paneling-confirmed"]
+    },
+    {
+      "id": "joints",
+      "template": "vide.bake.curves@1",
+      "host": "rhino",
+      "items": "step.members.joints",
+      "rows": "paneling",
+      "layer": "부재",
+      "key": "keys",
+      "mode": "replace-own",
+      "requires": ["paneling-confirmed"]
+    }
+  ],
   "panel": "panel.json",
   "capabilities": [
     {
@@ -475,11 +667,23 @@
     {
       "name": "library.call",
       "reason": "공식 라이브러리 vide/paneling-kit으로 패널 배치와 부재를 계산합니다"
+    },
+    {
+      "name": "host.bake",
+      "reason": "미리보기 패널 면·부재·줄눈 선을 사람이 누를 때 연결 Rhino 문서에 만듭니다"
     }
   ],
-  "selftest": { "fixtures": "fixtures", "requiresHost": false },
+  "selftest": {
+    "fixtures": "fixtures",
+    "requiresHost": false
+  },
   "skill": "skill.md",
-  "open": { "reuse": "last", "layerRoot": "패널링" },
+  "open": {
+    "reuse": "last",
+    "layerRoot": "패널링"
+  },
   "from_request": ["pattern", "width", "height", "measure", "boundaryRule"],
-  "autorun": { "until": "preview" }
+  "autorun": {
+    "until": "preview"
+  }
 }

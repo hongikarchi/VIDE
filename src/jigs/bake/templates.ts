@@ -11,10 +11,14 @@ import { join } from 'node:path';
 import { packageRoot } from '../../core/package-root.ts';
 import {
   encodeDataBlock,
+  isPanelTemplate,
   itemBytes,
+  panelCornerKeys,
+  panelItemBytes,
   originOf,
   type BakeItem,
   type DataBlockHeader,
+  type PanelItem,
   type TemplateName,
 } from './data-block.ts';
 
@@ -33,13 +37,16 @@ const FILES: Record<AnyTemplateName, string> = {
   'vide.bake.extrude-polygon@1': 'extrude-polygon.cs',
   'vide.bake.brep-faces@1': 'brep-faces.cs',
   'vide.bake.mesh@1': 'mesh.cs',
+  'vide.bake.panels-uv@1': 'panels-uv.cs',
+  'vide.bake.panel-solids@1': 'panel-solids.cs',
   'vide.read.surface-grid@1': 'read-surface-grid.cs',
 };
 /**
  * Shared template text (SPEC-16.3 2): a line `//@include <file>.cs` is replaced by that file, so
- * the read and make templates compute the face fingerprint with the very same host function.
+ * the read and make templates compute the face fingerprint with the very same host function
+ * (`face-hash.cs`), and the two 패널링 make templates share one body (`panel-make.cs`).
  */
-export const INCLUDE_FILES = ['face-hash.cs'] as const;
+export const INCLUDE_FILES = ['face-hash.cs', 'panel-make.cs'] as const;
 const INCLUDE = /^\/\/@include ([a-z0-9-]+\.cs)$/gm;
 export interface Template {
   name: AnyTemplateName;
@@ -125,7 +132,9 @@ export interface BakeChunk extends RenderedBody {
 }
 /**
  * Encode the items in as few bodies as fit the worker limit. All chunks share the header and the
- * origin; only the first deletes. An item that alone exceeds the limit is refused.
+ * origin. The delete list goes first, as much of it in each body as fits (a small list all in the
+ * first body; thousands of replaced panels over several, PLAN-49 T-255), then the items fill on.
+ * An item that alone exceeds the limit is refused.
  */
 export function renderChunks(
   header: DataBlockHeader,
@@ -137,28 +146,45 @@ export function renderChunks(
   const origin = originOf(items);
   const chunks: BakeChunk[] = [];
   let pending: BakeItem[] = [];
-  let bytes = headerBytes(header);
-  const flush = (deleteIds: string[]) => {
-    const block = encodeDataBlock({ ...header, deleteIds }, pending, origin);
+  let deletes: string[] = [];
+  const empty = headerBytes({ ...header, deleteIds: [] });
+  let bytes = empty;
+  const fits = (size: number) => fixed + base64Length(size) <= limit;
+  const flush = () => {
+    const block = encodeDataBlock({ ...header, deleteIds: deletes }, pending, origin);
     chunks.push({
       ...renderTemplate(header.template, block),
       keys: pending.map((item) => item.key),
-      deleteIds,
+      deleteIds: deletes,
     });
     pending = [];
+    deletes = [];
+    bytes = empty;
   };
-  const fits = (size: number) => fixed + base64Length(size) <= limit;
+  for (const id of header.deleteIds) {
+    const size = 4 + Buffer.byteLength(id, 'utf8');
+    if (!fits(bytes + size)) flush();
+    deletes.push(id);
+    bytes += size;
+  }
+  // Panel templates share corners within a body (vertex table): a panel adds only its new ones.
+  const panels = isPanelTemplate(header.template);
+  const seen = new Set<string>();
+  const sizeOf = (item: BakeItem) =>
+    panels ? panelItemBytes(item as PanelItem, seen) : itemBytes(header.template, item);
   for (const item of items) {
-    const size = itemBytes(header.template, item);
+    let size = sizeOf(item);
     if (!fits(bytes + size)) {
-      if (!pending.length) throw new Error('BAKE_ITEM_TOO_LARGE');
-      flush(chunks.length ? [] : header.deleteIds);
-      bytes = headerBytes({ ...header, deleteIds: [] });
+      if (!pending.length && !deletes.length) throw new Error('BAKE_ITEM_TOO_LARGE');
+      flush();
+      seen.clear();
+      size = sizeOf(item);
       if (!fits(bytes + size)) throw new Error('BAKE_ITEM_TOO_LARGE');
     }
+    if (panels) for (const key of panelCornerKeys(item as PanelItem)) seen.add(key);
     pending.push(item);
     bytes += size;
   }
-  if (pending.length || !chunks.length) flush(chunks.length ? [] : header.deleteIds);
+  if (pending.length || deletes.length || !chunks.length) flush();
   return chunks;
 }

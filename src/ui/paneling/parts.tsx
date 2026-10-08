@@ -406,7 +406,7 @@ export function PanelingMake({
         instanceId={instanceId}
         title={title ?? 'Rhino에 만들기'}
         label={meta.make}
-        bake={[meta.bake]}
+        bake={[meta.bake, ...(meta.also ?? [])]}
         revision={jig.lastRun?.getTime()}
         onRecompute={() => void jig.recompute()}
       />

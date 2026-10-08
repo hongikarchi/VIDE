@@ -108,6 +108,7 @@ export const jigStatuses: Record<string, number> = {
   BAKE_UNDO_UNAVAILABLE: 409,
   BAKE_UNDO_NOT_LATEST: 409,
   BAKE_UNDO_FAILED: 409,
+  BAKE_SURFACE_CHANGED: 409,
 };
 /** What the person can do about a blocked before-bake gate (Design SCR-13 결과 서랍). */
 const bakeHints: Record<string, string> = {
@@ -116,6 +117,7 @@ const bakeHints: Record<string, string> = {
   'bake-args-safe': '키·부호 문자에 허용되지 않는 글자가 있습니다',
   'analysis-confirmed': '해석을 확정한 뒤 만드세요',
   'target-confirmed': '대상 필지를 확정한 뒤 만드세요',
+  'paneling-confirmed': '가정 값(추천값 그대로인 설정값)을 정하거나 그대로 받은 뒤 만드세요',
 };
 
 // A diagnosis has no cap on the Syncs, layers or objects it reads (ADR-031 7).

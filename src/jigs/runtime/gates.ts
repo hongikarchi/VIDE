@@ -7,6 +7,7 @@
 
 import type { GateUse, JigManifest } from './manifest.ts';
 import type { ParamValue } from './params.ts';
+import { panelingMakeAllowed, stageOfStep, stageSources } from './paneling-confirmed.ts';
 
 export type GateTiming = 'before-run' | 'after-run' | 'after-ai' | 'before-render' | 'before-bake';
 export type GateLevel = 'block' | 'warn' | 'isolate';
@@ -55,6 +56,7 @@ const GATE_TABLE = {
   'bake-args-safe': { timing: 'before-bake', level: 'block', implemented: false },
   'analysis-confirmed': { timing: 'before-bake', level: 'block', implemented: true },
   'target-confirmed': { timing: 'before-bake', level: 'block', implemented: true },
+  'paneling-confirmed': { timing: 'before-bake', level: 'block', implemented: true },
 } as const satisfies Record<string, GateSpec>;
 export type GateName = keyof typeof GATE_TABLE;
 export const GATES: { readonly [K in GateName]: GateSpec } = GATE_TABLE;
@@ -500,6 +502,16 @@ const checks: Record<GateName, Check> = {
     return {
       failed: ok ? [] : ['(analysis)'],
       message: ok ? '' : '같은 입력의 확정 해석이 없습니다',
+    };
+  },
+  // SPEC-16.4 3: 패널링 부재·타입 만들기 only once every setting of that stage and the earlier ones was
+  // given or taken by a person (the bake's step names the stage; a preview is always allowed).
+  'paneling-confirmed': (ctx) => {
+    const sources = stageSources(ctx.manifest.params, ctx.params);
+    const { allowed, assumed } = panelingMakeAllowed(stageOfStep(ctx.stepId), sources);
+    return {
+      failed: allowed ? [] : assumed.length ? assumed : ['(settings)'],
+      message: allowed ? '' : `가정 값 ${assumed.length}개를 확인하면 만들 수 있습니다`,
     };
   },
   'target-confirmed': (ctx) => {

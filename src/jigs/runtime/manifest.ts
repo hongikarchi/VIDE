@@ -327,9 +327,16 @@ const bakeDecl = z
       'vide.bake.extrude-polygon@1',
       'vide.bake.brep-faces@1',
       'vide.bake.mesh@1',
+      'vide.bake.panels-uv@1',
+      'vide.bake.panel-solids@1',
     ]),
     host: z.literal('rhino'),
     items: z.string().min(1).max(200),
+    /**
+     * `paneling`: the rows are a 패널링 result (`PanelLayout`, `MemberSet`) that VIDE's adapter turns
+     * into items (`src/jigs/bake/panels.ts`, PLAN-49 T-255); the panel templates always use it.
+     */
+    rows: z.literal('paneling').optional(),
     layer: z
       .string()
       .min(1)

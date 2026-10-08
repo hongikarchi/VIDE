@@ -41,10 +41,12 @@ export interface StageMeta {
   make: string;
   /** The jig's make declaration the button runs (`jig.json` `bake[].id`, PLAN-49 T-255·T-257). */
   bake: string;
+  /** Further declarations the same button runs (2단계: the joint centre lines, `joints`). */
+  also?: readonly string[];
 }
 export const STAGES: readonly StageMeta[] = [
   { id: 'preview', no: 1, title: '미리보기', make: '미리보기 만들기', bake: 'preview' },
-  { id: 'members', no: 2, title: '부재', make: '부재 만들기', bake: 'members' },
+  { id: 'members', no: 2, title: '부재', make: '부재 만들기', bake: 'members', also: ['joints'] },
   { id: 'optimize', no: 3, title: '최적화·타입화', make: '타입 만들기', bake: 'types' },
 ];
 export const stageMeta = (id: PanelingStage) => STAGES.find((s) => s.id === id)!;

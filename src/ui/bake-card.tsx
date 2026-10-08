@@ -29,7 +29,14 @@ export const bakeOutcomeSchema = z.object({
   deleted: z.array(z.string()),
   copies: z.number().int().nonnegative(),
   failed: z.array(z.string()).default([]),
+  /** Why each failed key failed (패널링: left on the failure layer, SPEC-16.9 5). */
+  failures: z.array(z.object({ key: z.string(), reason: z.string(), code: z.string() })).optional(),
   recordId: z.string().optional(),
+  /** 패널링: person-edited objects of an earlier layout kept ('이전 배치에서 보존'). */
+  preservedEarlier: z.number().int().nonnegative().optional(),
+  /** 패널링: largest actual-face vs sample difference at the made corners, and its limit (m). */
+  deviationMax: z.number().nonnegative().optional(),
+  deviationLimit: z.number().positive().optional(),
 });
 export const bakeSummarySchema = z.object({
   runId: z.string(),
@@ -48,6 +55,8 @@ export const bakeSummarySchema = z.object({
   layers: z.array(z.string()),
   text: z.string().optional(),
   direct: z.boolean().optional(),
+  /** Host undo records of a direct bake ('Rhino Ctrl+Z n번'). */
+  undos: z.number().int().nonnegative().optional(),
 });
 export type BakeSummary = z.infer<typeof bakeSummarySchema>;
 export type BakeOutcome = z.infer<typeof bakeOutcomeSchema>;
@@ -87,6 +96,18 @@ const choices: [Resolve, string][] = [
   ['absorb', '수정 사항으로 받기'],
 ];
 
+/** A failed panel's reason in words (SPEC-16.10; template reasons by their code). */
+const FAILURE_WORDS: Record<string, string> = {
+  'outside-trim': '꼭짓점이 트림 밖',
+  'not-closed': '닫힌 부재가 되지 않음',
+  degenerate: '모양이 퇴화함',
+  'folded-projection': '투영 격자가 접힘',
+  'thickness-curvature': '두께 불가(곡률)',
+  'make-failed': 'Rhino에서 만들지 못함',
+};
+const failureLabel = (failure: { code: string; reason: string }) =>
+  FAILURE_WORDS[failure.code] ?? failure.reason;
+
 function Line({ label, count, detail }: { label: string; count: number; detail?: string }) {
   return (
     <li className="bake-line" data-empty={count === 0}>
@@ -114,6 +135,15 @@ export function BakeCard({
   );
   const deletedKeys = summary.bakes.flatMap((bake) => bake.deleted);
   const applied = state === 'applied';
+  const earlier = summary.bakes.reduce((n, bake) => n + (bake.preservedEarlier ?? 0), 0);
+  const failures = summary.bakes.flatMap((bake) => bake.failures ?? []);
+  const deviations = summary.bakes.filter((bake) => bake.deviationMax !== undefined);
+  const deviation = deviations.length
+    ? Math.max(...deviations.map((bake) => bake.deviationMax!))
+    : undefined;
+  const deviationLimit = deviations.find((bake) => bake.deviationLimit)?.deviationLimit;
+  const coarse =
+    deviation !== undefined && deviationLimit !== undefined && deviation > deviationLimit;
   return (
     <section className="bake-card" data-state={state} aria-label="Rhino에 만들기 결과">
       <header className="bake-card-head">
@@ -144,7 +174,11 @@ export function BakeCard({
       <ul className="bake-lines">
         <Line label="추가" count={totals.added} />
         <Line label="교체" count={totals.replaced} />
-        <Line label="사람이 고친 것 보존" count={totals.preserved} />
+        <Line
+          label="사람이 고친 것 보존"
+          count={totals.preserved}
+          detail={earlier ? `이전 배치에서 보존 ${earlier}` : undefined}
+        />
         {totals.respected ? (
           <Line
             label="수정 사항으로 받은 것"
@@ -158,8 +192,39 @@ export function BakeCard({
           count={totals.deleted}
           detail={totals.deleted ? '다시 만들지 않음 · 되살리려면 덮기' : undefined}
         />
-        {totals.failed ? <Line label="만들지 못함" count={totals.failed} /> : null}
+        {totals.failed ? (
+          <Line
+            label="만들지 못함"
+            count={totals.failed}
+            detail={failures.length ? '실패 레이어에 윤곽과 번호로 남김' : undefined}
+          />
+        ) : null}
       </ul>
+      {deviation !== undefined ? (
+        <p className="bake-deviation" data-coarse={coarse || undefined}>
+          실제 면과 표본의 최대 차이 {(deviation * 1000).toFixed(1)} mm
+          {coarse ? ' · 표본이 거칩니다 · 촘촘하게 다시 읽기' : ''}
+        </p>
+      ) : null}
+      {failures.length ? (
+        <details className="bake-failures">
+          <summary>만들지 못한 패널 {failures.length}개</summary>
+          <ul>
+            {failures.slice(0, 50).map((failure) => (
+              <li key={failure.key}>
+                {failure.key.split(':').slice(2).join(':')} <small>{failureLabel(failure)}</small>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+      {applied && summary.direct && (summary.undos ?? 0) > 1 ? (
+        <p className="bake-undos">
+          <small>
+            Rhino에서 되돌리려면 Ctrl+Z {summary.undos}번 · [되돌리기]는 한 번에 모두 되돌립니다
+          </small>
+        </p>
+      ) : null}
       <p className="bake-layers">출력 레이어: {summary.layers.map((layer) => layer).join(' · ')}</p>
       {preservedRows.length ? (
         <details className="bake-preserved" open>

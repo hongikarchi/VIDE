@@ -41,6 +41,20 @@ const header = (template, deleteIds = []) => ({
   runId: 'run-1',
   layerPath: 'VIDE::격자::jig 기둥',
   deleteIds,
+  // 패널링 templates carry the picked face (PLAN-49 T-255).
+  ...(template.includes('panel')
+    ? {
+        surface: {
+          objectId: '00000000-0000-4000-8000-000000000001',
+          faces: [{ index: 0, hash: 'ab'.repeat(32) }],
+          keyPrefix: 'preview:abcdef01:',
+          offset: 0,
+          budgetMs: 1000,
+          failLayerPath: 'VIDE::격자::실패',
+          attrs: [],
+        },
+      }
+    : {}),
 });
 const b64 = (text) => Buffer.from(text, 'utf8').toString('base64');
 const near = (a, b, tolerance = 1e-3) =>
@@ -940,7 +954,10 @@ test('site templates: the C# makes faces and joins at 1e-5 m, never merges, and 
   for (const name of TEMPLATE_NAMES)
     assert.match(
       loadTemplate(name).text,
-      /return new \{ removed, keys = keys\.ToArray\(\), ids = ids\.ToArray\(\), failed = failed\.ToArray\(\) \};\n$/,
+      // 패널링 templates add the failure reasons and the sample differences (PLAN-49 T-255).
+      name.includes('panel')
+        ? /return new \{ removed, keys = keys\.ToArray\(\), ids = ids\.ToArray\(\), failed = failed\.ToArray\(\), reasons = reasons\.ToArray\(\), dev = dev\.ToArray\(\), ms = [^\n]+ \};\n$/
+        : /return new \{ removed, keys = keys\.ToArray\(\), ids = ids\.ToArray\(\), failed = failed\.ToArray\(\) \};\n$/,
       `${name} returns the shared receipt`,
     );
 });

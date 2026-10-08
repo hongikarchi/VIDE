@@ -50,8 +50,15 @@ const LABELS: Record<string, string> = {
   lines: '선(축선·기둥선·상단선)',
   members: 'H 부재',
   'member-columns': 'H 기둥',
+  joints: '줄눈 선',
 };
-export const bakeLabel = (id: string) => LABELS[id] ?? id;
+/** 패널링 makes are named by their template (`members` is also the built-in H member bake). */
+const TEMPLATE_LABELS: Record<string, string> = {
+  'vide.bake.panels-uv@1': '미리보기 패널 면',
+  'vide.bake.panel-solids@1': '패널 부재',
+};
+export const bakeLabel = (id: string, template?: string) =>
+  (template ? TEMPLATE_LABELS[template] : undefined) ?? LABELS[id] ?? id;
 const needsAnalysis = (offer: Offer) => offer.requires.includes('analysis-confirmed');
 
 /** A JSON call that keeps the body of a refusal (the blocked gates' hints). */
@@ -91,6 +98,8 @@ const errorText = (body: Record<string, unknown>, fallback: string) => {
   if (body.code === 'BAKE_UNDO_UNAVAILABLE')
     return '이 만들기는 VIDE에서 되돌릴 수 없습니다. Rhino에서 Ctrl+Z를 쓰세요.';
   if (body.code === 'STALE_INPUT') return 'Rhino 문서가 방금 바뀌었습니다. 다시 누르세요.';
+  if (body.code === 'BAKE_SURFACE_CHANGED')
+    return '기준 면이 바뀜 · 다시 읽기. 읽은 뒤 Rhino에서 면이 바뀌어 아무것도 만들지 않았습니다.';
   if (body.code === 'BAKE_NOT_COMPUTED') return '계산이 끝난 결과가 없습니다. 먼저 계산하세요.';
   return typeof body.message === 'string' ? body.message : fallback;
 };
@@ -444,7 +453,9 @@ export function BakePart({
               const count = Object.values(record.items).filter((i) => i.state === 'jig').length;
               return (
                 <li key={record.id}>
-                  <span>{bakeLabel(record.bakeId)}</span>
+                  <span>
+                    {bakeLabel(record.bakeId, offers.find((o) => o.id === record.bakeId)?.template)}
+                  </span>
                   <small>
                     {' '}
                     객체 {count}개 ·{' '}

@@ -20,8 +20,10 @@ import { runGates, type GateResult } from '../runtime/gates.ts';
 import type { LoadedJig } from '../runtime/loader.ts';
 import type { BakeDecl, GateUse } from '../runtime/manifest.ts';
 import type { InstanceView, JigRuntime, ReadModel } from '../runtime/runtime.ts';
-import { unsafeArgs, type BakeItem } from './data-block.ts';
+import type { SurfaceSample } from '../../contracts/paneling.ts';
+import { isPanelTemplate, unsafeArgs, type BakeItem, type SurfaceHeader } from './data-block.ts';
 import { bakeDeclOf, bakeDeclsOf, builtinOutput, isBuiltinBake } from './builtin.ts';
+import { FAIL_LAYER, failureCode, isPanelDecl, LAYOUT_STEP, panelRows } from './panels.ts';
 import {
   absorbedOf,
   extractItems,
@@ -71,9 +73,26 @@ export interface BakeOutcome {
   copies: number;
   /** Items the template could not make (invalid geometry). */
   failed: string[];
+  /** Why each failed key failed, when the template said (패널링: left on the failure layer). */
+  failures?: { key: string; reason: string; code: string }[];
   chunks: number;
   templateHash: string;
   recordId?: string;
+  /** Person-edited objects kept although the results no longer have their key (패널링 '이전 배치에서 보존'). */
+  preservedEarlier?: number;
+  /** 패널링: the largest difference between the actual face and the sample at the made corners (m). */
+  deviationMax?: number;
+  /** Above this the card says '표본이 거칩니다 · 촘촘하게 다시 읽기' (m). */
+  deviationLimit?: number;
+}
+/** What the declarations of a bake take from the results. */
+interface DeclItems {
+  decl: BakeDecl;
+  items: BakeItem[];
+  inputHash?: string;
+  stepId: string;
+  surface?: SurfaceHeader;
+  deviationLimit?: number;
 }
 export interface BakeSummary {
   runId: string;
@@ -94,6 +113,8 @@ export interface BakeSummary {
   text: string;
   /** Made directly in the open document (one host undo record per body); undone by `undoBake`. */
   direct?: boolean;
+  /** Host undo records the run made: 'Rhino Ctrl+Z n번' (SPEC-16.9 1). */
+  undos?: number;
 }
 /** A prepared bake the executor runs: fixed bodies, and what to do with the receipt. */
 export interface BakeJob {
@@ -112,7 +133,43 @@ const receiptSchema = z.object({
   keys: z.array(z.string()),
   ids: z.array(z.string().uuid()),
   failed: z.array(z.string()).default([]),
+  /** Panel templates: the reason of each failed key (same order), the sample difference per key (m, −1 = none). */
+  reasons: z.array(z.string()).optional(),
+  dev: z.array(z.number()).optional(),
 });
+type Receipt = z.infer<typeof receiptSchema>;
+/** A panel template refused the whole body: the face is not the one the sample was read from. */
+const rejectionOf = (value: unknown) => {
+  const rejected = (value as { rejected?: unknown } | null)?.rejected;
+  return typeof rejected === 'string' ? rejected : undefined;
+};
+/** Failures with reasons and the largest sample difference of a bake's receipts. */
+function receiptFacts(receipts: readonly (Receipt | undefined)[]) {
+  const failures: { key: string; reason: string; code: string }[] = [];
+  let deviationMax: number | undefined;
+  for (const receipt of receipts) {
+    if (!receipt) continue;
+    receipt.failed.forEach((key, i) => {
+      const reason = receipt.reasons?.[i] ?? '';
+      if (reason) failures.push({ key, reason, code: failureCode(reason) });
+    });
+    for (const d of receipt.dev ?? []) if (d >= 0) deviationMax = Math.max(deviationMax ?? 0, d);
+  }
+  return { failures, deviationMax };
+}
+/** The optional outcome fields a bake has only when it has them (generic bakes stay as they were). */
+function panelFacts(
+  facts: ReturnType<typeof receiptFacts>,
+  preservedEarlier: number,
+  deviationLimit: number | undefined,
+): Partial<BakeOutcome> {
+  return {
+    ...(facts.failures.length ? { failures: facts.failures } : {}),
+    ...(preservedEarlier ? { preservedEarlier } : {}),
+    ...(facts.deviationMax !== undefined ? { deviationMax: facts.deviationMax } : {}),
+    ...(deviationLimit !== undefined ? { deviationLimit } : {}),
+  };
+}
 
 // --- job registry (one engine process) ---------------------------------------------------------
 const jobs = new Map<string, BakeJob>();
@@ -153,7 +210,14 @@ export interface PreparedBake {
   problems: string[];
   /** Overrides added for `absorb` choices; the instance must be recomputed before baking. */
   absorbed: number;
-  plans: { decl: BakeDecl; plan: BakePlan; chunks: BakeChunk[] }[];
+  plans: {
+    decl: BakeDecl;
+    plan: BakePlan;
+    chunks: BakeChunk[];
+    preservedEarlier: number;
+    /** 패널링: '표본이 거칩니다' above this sample-vs-surface difference (m). */
+    deviationLimit?: number;
+  }[];
   codes: string[];
   layers: string[];
   jig: LoadedJig;
@@ -188,7 +252,45 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
   const linkId = input.linkId ?? singleLink(view);
   const problems: string[] = [];
   // Items come from computed, current step results only.
-  const extracted = decls.map((decl) => {
+  const extracted = decls.map((decl): DeclItems => {
+    if (isPanelDecl(decl)) {
+      // 패널링 (SPEC-16.9): the stage result → panel items, the picked face's header.
+      const { stepId } = itemsPath(decl);
+      const step = view.steps.find((s) => s.id === stepId);
+      const layoutStep = view.steps.find((s) => s.id === LAYOUT_STEP);
+      if (!step || step.status !== 'done' || !layoutStep || layoutStep.status !== 'done')
+        throw new DomainError(RESOLVE_CODE);
+      const output = runtime.output(input.projectId, input.instanceId, stepId);
+      const surfaceInput = jig.manifest.inputs.find((i) => i.kind === 'host-surface');
+      const kept = surfaceInput
+        ? runtime.hostSurface(input.projectId, input.instanceId, surfaceInput.key)
+        : null;
+      const rows = panelRows({
+        decl,
+        stepId,
+        output,
+        layout:
+          stepId === LAYOUT_STEP
+            ? output
+            : runtime.output(input.projectId, input.instanceId, LAYOUT_STEP),
+        sample: (kept?.sample as SurfaceSample | undefined) ?? null,
+        manifestParams: jig.manifest.params,
+        params: view.body.params,
+        layerRoot: view.body.layerRoot,
+      });
+      // No joint lines (줄눈 0) is fine; no panel is not.
+      if (!rows.items.length && !rows.problems.length && isPanelTemplate(decl.template))
+        rows.problems.push('만들 패널이 없습니다');
+      problems.push(...rows.problems.map((p) => `${decl.id}: ${p}`));
+      return {
+        decl,
+        items: rows.items,
+        inputHash: step.inputHash,
+        stepId,
+        surface: rows.surface,
+        deviationLimit: rows.deviationLimit,
+      };
+    }
     if (isBuiltinBake(decl)) {
       // Built-in bakes read every finished code step; nothing finished yet is not computed.
       const done = view.steps.filter((s) => s.status === 'done');
@@ -240,7 +342,7 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
         step.slot === 'confirm-target' &&
         view.steps.find((s) => s.id === step.id)?.status === 'confirmed',
     );
-  for (const { decl, items, inputHash, stepId } of extracted) {
+  for (const { decl, items, inputHash, stepId, surface, deviationLimit } of extracted) {
     const layerPath = layerPathOf(view.body.layerRoot, decl);
     layers.push(layerPath);
     // Missing levels are made by the template (ARCH-03 §9.5); only the path text must be usable.
@@ -298,7 +400,11 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
     });
     if (unsafe.length) blocked.add('bake-args-safe');
     const chunks =
-      blocked.size || problems.length || absorbed
+      // 패널링 with nothing to make or delete (no joint lines): no body, no empty host record.
+      blocked.size ||
+      problems.length ||
+      absorbed ||
+      (isPanelDecl(decl) && !plan.create.length && !plan.deleteIds.length)
         ? []
         : renderChunks(
             {
@@ -309,11 +415,20 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
               runId,
               layerPath,
               deleteIds: plan.deleteIds,
+              ...(surface ? { surface } : {}),
             },
             plan.create,
           );
     codes.push(...chunks.map((chunk) => chunk.code));
-    plans.push({ decl, plan, chunks });
+    const planned = new Set(items.map((item) => item.key));
+    plans.push({
+      decl,
+      plan,
+      chunks,
+      // Person-edited objects of keys the results no longer have (another 패널링 layout).
+      preservedEarlier: plan.preserved.filter((p) => !planned.has(p.key)).length,
+      ...(deviationLimit !== undefined ? { deviationLimit } : {}),
+    });
   }
   return {
     projectId: input.projectId,
@@ -339,6 +454,8 @@ function singleLink(view: InstanceView): string {
   const ids = new Set<string>();
   for (const role of Object.values(view.body.assembly))
     for (const source of role.sources) ids.add(source.linkId);
+  // A picked face (`host-surface`, 패널링) names its link too (SPEC-16.3).
+  for (const surface of Object.values(view.body.hostSurfaces ?? {})) ids.add(surface.linkId);
   if (ids.size !== 1) throw new DomainError('INVALID_INPUT');
   return [...ids][0];
 }
@@ -357,17 +474,30 @@ export function finishBake(
   const values = z.array(z.unknown()).parse(result.values ?? []);
   let index = 0;
   const bakes: BakeOutcome[] = [];
-  for (const { decl, plan, chunks } of prepared.plans) {
+  for (const { decl, plan, chunks, preservedEarlier, deviationLimit } of prepared.plans) {
     const layerPath = layerPathOf(prepared.view.body.layerRoot, decl);
+    const failLayer = `${prepared.view.body.layerRoot}::${FAIL_LAYER}`;
     const items: BakeRecordItems = { ...plan.carry };
     const failed: string[] = [];
+    const receipts: Receipt[] = [];
     for (const chunk of chunks) {
-      const receipt = receiptSchema.parse(values[index++]);
+      const value = values[index++];
+      if (rejectionOf(value))
+        throw Object.assign(new DomainError('BAKE_SURFACE_CHANGED'), {
+          reason: rejectionOf(value),
+        });
+      const receipt = receiptSchema.parse(value);
+      receipts.push(receipt);
+      // A panel that failed is left on the failure layer (outline under its key, number `<key>:no`).
+      const onFailLayer = new Set(receipt.reasons ? receipt.failed : []);
       receipt.keys.forEach((key, i) => {
         items[key] = {
           nativeId: receipt.ids[i],
           hash: '',
-          layer: layerPath,
+          layer:
+            onFailLayer.has(key) || onFailLayer.has(key.replace(/:no$/, ''))
+              ? failLayer
+              : layerPath,
           runId: prepared.runId,
           state: 'jig',
         };
@@ -386,6 +516,7 @@ export function finishBake(
       items,
       baselineReadId: null,
     });
+    const facts = receiptFacts(receipts);
     bakes.push({
       bakeId: decl.id,
       template: decl.template,
@@ -402,6 +533,7 @@ export function finishBake(
       chunks: chunks.length,
       templateHash: chunks[0]?.templateHash ?? '',
       recordId: record.id,
+      ...panelFacts(facts, preservedEarlier, deviationLimit),
     });
   }
   const summary = summarize(prepared, bakes);
@@ -435,6 +567,8 @@ function summarize(prepared: PreparedBake, bakes: BakeOutcome[]): BakeSummary {
     `사람이 지운 것 ${totals.deleted}`,
   ];
   if (totals.failed) parts.push(`만들지 못함 ${totals.failed}`);
+  const earlier = bakes.reduce((n, bake) => n + (bake.preservedEarlier ?? 0), 0);
+  if (earlier) parts.push(`이전 배치에서 보존 ${earlier}`);
   return {
     runId: prepared.runId,
     readId: prepared.readId,
@@ -562,6 +696,10 @@ export async function runDirectBake(
       if (run.guarded)
         // The host already undid this body's record; the ones before it are undone here.
         await rollback('BAKE_GUARDED', { guarded: run.guarded });
+      // A panel template made nothing: the face is not the one the sample was read from
+      // (SPEC-16.9 2 '기준 면이 바뀜 · 다시 읽기'); the bodies before it are undone.
+      const rejected = run.ok ? rejectionOf(run.value) : undefined;
+      if (rejected) await rollback('BAKE_SURFACE_CHANGED', { reason: rejected });
       if (!run.ok || !run.undoId)
         await rollback('BAKE_FAILED', { reason: run.reason ?? run.code, log: run.log });
       undoIds.push(run.undoId!);
@@ -602,16 +740,25 @@ export async function runDirectBake(
   const appliedAt = new Date().toISOString();
   const bakes: BakeOutcome[] = [];
   let index = 0;
-  for (const { decl, plan, chunks } of prepared.plans) {
+  for (const { decl, plan, chunks, preservedEarlier, deviationLimit } of prepared.plans) {
     const layerPath = layerPathOf(prepared.view.body.layerRoot, decl);
     const items: BakeRecordItems = { ...plan.carry };
     const failed: string[] = [];
+    const receipts: Receipt[] = [];
     for (const chunk of chunks) {
       const receipt = receiptSchema.safeParse(values[index++]);
+      if (receipt.success) receipts.push(receipt.data);
       const ids = receipt.success
         ? new Map(receipt.data.keys.map((key, i) => [key, receipt.data.ids[i]]))
         : undefined;
-      for (const key of chunk.keys) {
+      // Objects a template made beside a planned key (a failed panel's number `<key>:no`) are
+      // recorded too, so the next bake replaces or removes them like the rest.
+      const extra = receipt.success
+        ? receipt.data.keys.filter((key) => !chunk.keys.includes(key))
+        : [];
+      // Failed panels left on the failure layer have an object, but they are failures all the same.
+      if (receipt.success && receipt.data.reasons) failed.push(...receipt.data.failed);
+      for (const key of [...chunk.keys, ...extra]) {
         const object = found.get(`${decl.id}\u0000${key}`);
         const nativeId = object?.nativeId ?? (read ? undefined : ids?.get(key));
         if (!nativeId) {
@@ -638,22 +785,24 @@ export async function runDirectBake(
     const record = baseline
       ? ctx.store.updateBake(prepared.instanceId, added.id, { appliedAt })
       : added;
+    const failedSet = new Set(failed);
     bakes.push({
       bakeId: decl.id,
       template: decl.template,
       layer: layerPath,
-      added: plan.added.filter((key) => !failed.includes(key)),
-      replaced: plan.replaced.filter((key) => !failed.includes(key)),
+      added: plan.added.filter((key) => !failedSet.has(key)),
+      replaced: plan.replaced.filter((key) => !failedSet.has(key)),
       dropped: plan.dropped,
       preserved: plan.preserved,
       respected: plan.respected,
       kept: plan.kept,
       deleted: plan.deleted,
       copies: plan.copies,
-      failed,
+      failed: [...failedSet],
       chunks: chunks.length,
       templateHash: chunks[0]?.templateHash ?? '',
       recordId: record.id,
+      ...panelFacts(receiptFacts(receipts), preservedEarlier, deviationLimit),
     });
   }
   directRuns.set(prepared.runId, {
@@ -663,7 +812,17 @@ export async function runDirectBake(
     recordIds: bakes.map((bake) => bake.recordId!),
   });
   if (directRuns.size > MAX_JOBS) directRuns.delete(directRuns.keys().next().value as string);
-  const summary = { ...summarize(prepared, bakes), direct: true };
+  const summarized = summarize(prepared, bakes);
+  const summary = {
+    ...summarized,
+    // Several bodies are several Rhino undo records (SPEC-16.9 1).
+    text:
+      undoIds.length > 1
+        ? `${summarized.text} · Rhino Ctrl+Z ${undoIds.length}번`
+        : summarized.text,
+    direct: true,
+    undos: undoIds.length,
+  };
   return {
     result: {
       text: summary.text,
