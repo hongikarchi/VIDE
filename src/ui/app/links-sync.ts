@@ -11,6 +11,7 @@ import { requestData, requestMessage } from '../workspace-data.ts';
 import { withObjects } from '../object-rows.ts';
 import { hostAction } from '../host-panel.tsx';
 import { layerSignature, composeLayers } from '../layers.ts';
+import type { HostLayer } from '../../core/layer-tree.ts';
 import { linksState, type Layer } from '../store/links.ts';
 import { draftState } from '../store/draft.ts';
 import { sessionState } from '../store/session.ts';
@@ -558,7 +559,7 @@ export function loadFullResult(id: string): Promise<void> {
 /** The object list's row of each Sync row, while that row and its scene item stay the same. */
 const listedRows = new WeakMap<
   object,
-  { row: object; item: unknown; many: boolean; layer: string }
+  { row: object; item: unknown; many: boolean; layer: string; table: unknown }
 >();
 /** Layer names by their base64 form: decoded once, not once per object and redraw (T-085). */
 const layerNames = new Map<string, string | undefined>();
@@ -691,6 +692,10 @@ export function showLayers() {
   const composed = composeLayers(
     drawable.map(({ layer, result }) => {
       const native = new Map(result.scene!.map((item) => [item.id, item]));
+      // Rhino's layer table (nesting, panel order, on/off): the layer list draws it as a tree.
+      const table = (result as { layers?: unknown }).layers;
+      const layerTable = Array.isArray(table) ? (table as HostLayer[]) : undefined;
+      const host = layer.link?.host;
       return {
         key: layer.key,
         name: layer.name,
@@ -699,7 +704,13 @@ export function showLayers() {
           const item = native.get(o.id);
           // An unchanged row after a Live Sync keeps its listed form (T-085).
           const known = listedRows.get(o);
-          if (known && known.item === item && known.many === many && known.layer === layer.name)
+          if (
+            known &&
+            known.item === item &&
+            known.many === many &&
+            known.layer === layer.name &&
+            known.table === layerTable
+          )
             return known.row as typeof o;
           const name = layerOf(item?.layer64);
           const row = {
@@ -709,9 +720,11 @@ export function showLayers() {
             layerName: name,
             // The layer list's swatch (host layer colour, #rrggbb).
             layerColor: item?.layerColor,
+            layerTable,
+            host,
             type: item?.nativeType || o.kind,
           };
-          listedRows.set(o, { row, item, many, layer: layer.name });
+          listedRows.set(o, { row, item, many, layer: layer.name, table: layerTable });
           return row;
         }),
         // A drawing shown as an xref of a root drawing draws in the root's coordinates.

@@ -25,6 +25,17 @@ test('quantities keep unknown measurements separate and calculate native line le
   assert.equal(table.scope, 'candidate');
   assert.throws(() => quantities({ result: { hostExecuted: false } }), { code: 'NOT_FOUND' });
 });
+test('a parent layer filter takes its Rhino sublayers, not layers that only share a prefix', () => {
+  const sample = structuredClone(request);
+  const encode = (text) => Buffer.from(text).toString('base64');
+  sample.result.scene[0].layer64 = encode('Bldg::L1::Walls');
+  sample.result.scene[1].layer64 = encode('Bldg2');
+  const ids = (layer) => quantities(sample, { layer }).rows.map((row) => row.id);
+  assert.deepEqual(ids('Bldg'), ['a']);
+  assert.deepEqual(ids('Bldg::L1'), ['a']);
+  assert.deepEqual(ids('Bldg::L1::Walls'), ['a']);
+  assert.deepEqual(ids('Bldg2'), ['b']);
+});
 test('CSV protects formulas and includes units and immutable candidate basis', () => {
   const csv = quantitiesCsv(quantities(request));
   assert.ok(csv.includes('"\'=SUM(1,2)"'));

@@ -90,7 +90,10 @@ export function quantities(request: SourceRequest, rawQuery: unknown = {}): Quan
       (!query.objectId || row.id === query.objectId) &&
       (!query.search || row.name.toLocaleLowerCase().includes(query.search.toLocaleLowerCase())) &&
       (!query.type || row.type === query.type) &&
-      (!query.layer || row.layer === query.layer),
+      // A parent layer takes its sublayers too (Rhino `Parent::Child`, as the layer list's 선택).
+      (!query.layer ||
+        row.layer === query.layer ||
+        (row.layer?.startsWith(query.layer + '::') ?? false)),
   );
   const groups: QuantityTable['groups'] = [];
   const groupBy = query.groupBy;

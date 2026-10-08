@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { api } from './gateway.ts';
+import { layerOptions } from '../core/layer-tree.ts';
 import { quantityTableSchema, tableViewSchema } from '../contracts/quantities.ts';
 import type { QuantityQuery, QuantityTable, TableView } from '../contracts/quantities.ts';
 const metrics = ['length', 'area', 'volume'] as const;
@@ -192,7 +193,16 @@ export function QuantityView({
         ])}
         {select('레이어 필터', 'layer', [
           ['', '전체 레이어'],
-          ...initial.available.layers.map((value) => [value, value] as [string, string]),
+          // Rhino sublayers indent under their parent; a parent takes its sublayers.
+          ...layerOptions([...initial.available.layers].sort((a, b) => a.localeCompare(b))).map(
+            (option, index, all) =>
+              [
+                option.value,
+                (all[index + 1]?.depth ?? -1) > option.depth
+                  ? option.label + ' · 하위 포함'
+                  : option.label,
+              ] as [string, string],
+          ),
         ])}
         {select('그룹 기준', 'groupBy', [
           ['none', '그룹 없음'],

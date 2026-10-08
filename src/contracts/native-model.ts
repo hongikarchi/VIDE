@@ -45,7 +45,10 @@ export const sourceCoverageSchema = z.object({
   /** Hidden layers with the number of objects each one kept out of the read. */
   hiddenLayers: z.array(z.object({ path: z.string(), count })),
 });
-/** One layer of the document, empty layers included; `order` is the layer panel order. */
+/**
+ * One layer of the document, empty layers included; `order` is the layer panel order. `parentId`
+ * nests sublayers (Rhino `Parent::Child`); VIDE's layer list draws the table as a tree.
+ */
 export const displayLayerSchema = z.object({
   id: z.string().uuid(),
   parentId: z.string().uuid().nullable(),
@@ -55,6 +58,8 @@ export const displayLayerSchema = z.object({
   color: hexColor,
   order: z.number().int(),
   objectCount: count,
+  /** Expanded in Rhino's Layers panel: the layer list opens it the same way until toggled. */
+  expanded: z.boolean().optional(),
 });
 export const displayCoverageSchema = z.object({
   total: count,

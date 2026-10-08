@@ -50,6 +50,7 @@ import {
 import { jigReportInputs, renderJigReport, type JigReportLedgerRow } from './report.ts';
 import { ConversationStore } from '../core/conversation-store.ts';
 import { isItemList } from '../core/model-store.ts';
+import { orderLayerPaths, type HostLayer } from '../core/layer-tree.ts';
 import { skillCatalog } from './skill-catalog.ts';
 import { diagnose, type DiagnoseInputs } from '../../extensions/jigs/s06-frame/steps/diagnose.ts';
 import { ROLE_KEYS } from '../../extensions/jigs/s06-frame/steps/labels.ts';
@@ -804,7 +805,19 @@ export async function jigRoutes(
     if (!ids.length) throw new DomainError('INVALID_INPUT');
     const sources = ids.map((syncId) => {
       const result = syncResult(syncId);
-      return { syncId, document: documentName(result), layers: syncLayers(result) };
+      // Rhino's panel order (sublayers after their parent) when the Sync sent its layer table.
+      const layers = syncLayers(result);
+      const table = Array.isArray(result.layers) ? (result.layers as HostLayer[]) : undefined;
+      const order = orderLayerPaths(
+        layers.map((layer) => layer.name),
+        table,
+      );
+      const byName = new Map(layers.map((layer) => [layer.name, layer]));
+      return {
+        syncId,
+        document: documentName(result),
+        layers: order.map((name) => byName.get(name)!),
+      };
     });
     send(200, { sources, guess: guessRoles(sources) });
     return true;

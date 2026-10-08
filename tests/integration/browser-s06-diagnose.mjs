@@ -236,10 +236,11 @@ try {
   await dialog.getByText('역할 레이어가 바뀌어 이전 진단 결과를 지웠습니다').waitFor();
   assert.deepEqual(await picks('유수지 보'), []);
   // A role takes several layers (here from the civil model); all of them are sent.
+  // The picker lists layers under their file's group (the chip reads 'file · layer — kinds').
   const add = (name, label) =>
     role(name)
       .getByRole('combobox', { name: `${name} 레이어 추가` })
-      .selectOption({ label });
+      .selectOption({ label: label.slice(label.indexOf(' · ') + 3) });
   await add('유수지 보', basin);
   await add('유수지 보', guessed['기존 기초']);
   assert.deepEqual(await picks('유수지 보'), [basin, guessed['기존 기초']]);

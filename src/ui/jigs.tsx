@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
+import { layerOptions } from '../core/layer-tree.ts';
 import { z } from 'zod';
 import { api } from './gateway.ts';
 import { DeclaredJig } from './jig-panel/declared-jig.tsx';
@@ -1175,8 +1176,9 @@ function NewInstance({
       </label>
       {layers.length ? (
         <datalist id={listId}>
-          {layers.map((path) => (
-            <option key={path} value={path} />
+          {/* Rhino sublayers indent under their parent (the full path is the value). */}
+          {layerOptions(layers).map((option) => (
+            <option key={option.value} value={option.value} label={option.label} />
           ))}
         </datalist>
       ) : null}

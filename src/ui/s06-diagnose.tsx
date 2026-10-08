@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api } from './gateway.ts';
+import { layerOptions } from '../core/layer-tree.ts';
 import { messageOf } from './jig-panel/instance.ts';
 import type { JigContext } from './jigs.tsx';
 import { openContextTab } from './workspaces.ts';
@@ -83,6 +84,26 @@ const distance = (value: number | null) =>
   value === null ? '—' : value < 0 ? `겹침 ${(-value).toFixed(2)}` : value.toFixed(2);
 /** The document part of a Sync label ('name · date'). */
 const documentOf = (label: string) => label.split(' · ')[0];
+/** ' — kind counts' after a layer's name. */
+const kindText = (layer: LayerSummary) =>
+  ' — ' +
+  Object.entries(layer.kinds)
+    .map(([kind, n]) => `${KIND[kind as ObjectKind]} ${n}`)
+    .join(', ');
+/** A Sync's layers as picker rows: sublayers indented under their parent (kept in given order). */
+function layerChoices(layers: readonly LayerSummary[]) {
+  const byName = new Map(layers.map((layer) => [layer.name, layer]));
+  const placed = layerOptions(layers.map((layer) => layer.name).filter(Boolean));
+  const rows = placed.map((option) => ({
+    key: option.value,
+    label: option.label,
+    layer: option.present ? byName.get(option.value) : undefined,
+  }));
+  // A row without a layer name keeps its place at the end.
+  const unnamed = byName.get('');
+  if (unnamed) rows.push({ key: '', label: '(이름 없음)', layer: unnamed });
+  return rows;
+}
 /** 'document · layer — kind counts', as a role's layer reads in the list and in its chip. */
 const layerText = (document: string, layer: LayerSummary) =>
   `${document} · ${layer.name || '(이름 없음)'} — ` +
@@ -596,21 +617,31 @@ export function S06Diagnose({ context }: { context: JigContext }) {
                 </option>
                 {layers?.sources.map((source) => (
                   <optgroup key={source.syncId} label={source.document}>
-                    {source.layers
+                    {/* Rhino sublayers indent under their parent, in the server's panel order;
+                        a parent with no objects of its own is shown but not pickable. */}
+                    {layerChoices(source.layers)
                       .filter(
-                        (layer) =>
+                        ({ layer }) =>
+                          !layer ||
                           !roles[role].includes(
                             pickValue({ syncId: source.syncId, layer: layer.name }),
                           ),
                       )
-                      .map((layer) => (
-                        <option
-                          key={layer.name}
-                          value={pickValue({ syncId: source.syncId, layer: layer.name })}
-                        >
-                          {layerText(source.document, layer)}
-                        </option>
-                      ))}
+                      .map(({ key, label, layer }) =>
+                        layer ? (
+                          <option
+                            key={key}
+                            value={pickValue({ syncId: source.syncId, layer: layer.name })}
+                            title={layerText(source.document, layer)}
+                          >
+                            {label + kindText(layer)}
+                          </option>
+                        ) : (
+                          <option key={key} value="" disabled>
+                            {label}
+                          </option>
+                        ),
+                      )}
                   </optgroup>
                 ))}
               </select>

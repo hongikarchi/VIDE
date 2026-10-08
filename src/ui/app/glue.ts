@@ -1,6 +1,7 @@
 // Connections to other screens (PLAN-26 T-113, frozen after step F): jigs, the dashboard, saved
 // reviews and the skill start parts.
 import { initializeReviews, onReviewsChange } from '../reviews.tsx';
+import { orderLayerPaths, type HostLayer } from '../../core/layer-tree.ts';
 import { attachReviewNote, linkedCandidates, objects, packet, models } from '../model.ts';
 import { attachSharedFeedback } from '../shared-feedback.tsx';
 import { withObjects } from '../object-rows.ts';
@@ -42,15 +43,24 @@ import {
 } from './composer.ts';
 
 export let reviews!: ReturnType<typeof initializeReviews>;
-/** Layer paths in the stored Syncs, newest first: the output layers a jig instance may use. */
+/**
+ * Layer paths in the stored Syncs, newest Sync first and each in Rhino's panel order (sublayers
+ * under their parent): the output layers a jig instance may use.
+ */
 export function syncLayerPaths() {
   const paths = new Set<string>();
   for (const entry of [...draftState.state.messages].reverse()) {
     if (entry.request.state !== 'succeeded') continue;
     const layers = (entry.request.result as { layers?: unknown } | null | undefined)?.layers;
     if (!Array.isArray(layers)) continue;
-    for (const layer of layers as { fullPath?: unknown }[])
-      if (typeof layer?.fullPath === 'string' && layer.fullPath) paths.add(layer.fullPath);
+    const table = (layers as Partial<HostLayer>[]).filter(
+      (layer): layer is HostLayer => typeof layer?.fullPath === 'string' && layer.fullPath !== '',
+    );
+    for (const path of orderLayerPaths(
+      table.map((layer) => layer.fullPath),
+      table,
+    ))
+      paths.add(path);
   }
   return [...paths];
 }

@@ -82,6 +82,7 @@ internal sealed class ReadSurvey
                 id = layer.Id.ToString(), parentId = layer.ParentLayerId == Guid.Empty ? null : layer.ParentLayerId.ToString(),
                 fullPath = layer.FullPath, visible = layer.IsVisible, locked = layer.IsLocked, color = Hex(layer.Color),
                 order = layer.SortIndex >= 0 ? layer.SortIndex : layer.Index, objectCount = perLayer.GetValueOrDefault(layer.Index),
+                expanded = layer.IsExpanded,
             });
             if (!layer.IsVisible && hiddenPerLayer.TryGetValue(layer.Index, out var count))
                 hiddenLayers.Add(new { path = layer.FullPath, count });

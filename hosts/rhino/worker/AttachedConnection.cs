@@ -195,10 +195,12 @@ internal sealed class AttachedConnection : IDisposable
     private void ReplacedObject(object? sender, RhinoReplaceObjectEventArgs e) => MarkObjects(e.Document, [e.ObjectId]);
     private void ChangedAttributes(object? sender, RhinoModifyObjectAttributesEventArgs e) => MarkObjects(e.Document, [e.RhinoObject.Id]);
     // Current/sort changes do not alter objects. Other layer edits can change every object on the layer
-    // or on its sublayers (visibility, color, full path).
+    // or on its sublayers (visibility, color, full path). A reorder only bumps the revision so the next
+    // Live Sync carries the new layer table (VIDE's layer tree follows Rhino's panel order).
     private void ChangedLayer(object? sender, Rhino.DocObjects.Tables.LayerTableEventArgs e)
     {
-        if (e.EventType is Rhino.DocObjects.Tables.LayerTableEventType.Current or Rhino.DocObjects.Tables.LayerTableEventType.Sorted) return;
+        if (e.EventType is Rhino.DocObjects.Tables.LayerTableEventType.Current) return;
+        if (e.EventType is Rhino.DocObjects.Tables.LayerTableEventType.Sorted) { Mark(e.Document); return; }
         if (e.Document != document) return;
         var affected = new HashSet<int>();
         foreach (var layer in document.Layers)
