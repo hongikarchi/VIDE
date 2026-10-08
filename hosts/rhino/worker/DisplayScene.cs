@@ -126,7 +126,7 @@ internal sealed class DisplayScene
      * nested references. Each nested definition travels once per page beside it, so a nested block costs
      * its own geometry once rather than once per copy. The hash covers the nested definitions' hashes.
      */
-    private sealed record Definition(string Hash, double[] Vertices, int[] Indices, double[] Segments, byte[] Texts, Child[] Children)
+    private sealed record Definition(string Hash, double[] Vertices, int[] Indices, double[] Segments, byte[] Texts, Child[] Children, bool Partial = false)
     {
         internal long Size(bool binary) => Bytes(Vertices, binary) + Bytes(Indices, binary) + Bytes(Segments, binary) + Texts.Length + 256
             + Children.Length * 420L;
@@ -151,6 +151,8 @@ internal sealed class DisplayScene
     internal void Clear() { lock (shapes) shapes.Clear(); ClearDefinitions(); }
     /** Any definition edit may change nested content; all definitions are rebuilt on demand. */
     internal void ClearDefinitions() { lock (definitions) definitions.Clear(); }
+    /** Drops these definitions (an edited one and those nesting it); they are built again when read. */
+    internal void ForgetDefinitions(IEnumerable<Guid> ids) { lock (definitions) foreach (var id in ids) definitions.Remove(id); }
 
     internal static RhinoObject[] Visible(RhinoDoc doc) => Listed(doc, ReadScope.Display);
 
@@ -286,7 +288,9 @@ internal sealed class DisplayScene
     }
 
     // `path`: the definitions being built above this one (a reference back to one of them is a cycle,
-    // which Rhino does not allow; it and references deeper than DisplayParts.MaxDepth are left out).
+    // which Rhino does not allow; it is left out and the definition sent as `partial`). Every nesting
+    // level is sent by reference, however deep, so a definition is the same whichever instance of it
+    // is read first (it is cached by ID).
     private Definition DefinitionOf(RhinoDoc doc, InstanceDefinition definition, double scale, List<Guid>? path = null)
     {
         lock (definitions) if (definitions.TryGetValue(definition.Id, out var cached)) return cached;
@@ -297,13 +301,13 @@ internal sealed class DisplayScene
         var childHashes = new List<string>();
         foreach (var (child, xform) in parts.AddDefinition(definition))
         {
-            if (path.Contains(child.Id) || path.Count >= DisplayParts.MaxDepth) continue;
+            if (path.Contains(child.Id)) { parts.Truncated = true; continue; }
             childHashes.Add(DefinitionOf(doc, child, scale, path).Hash);
             children.Add(new Child(child.Id, TransformOf(xform, scale)));
         }
         path.RemoveAt(path.Count - 1);
         var vertices = Round(parts.Vertices, 1); var indices = parts.Indices.ToArray();
-        var segments = Round(parts.Segments, 1); var texts = TextsJson(parts.Texts);
+        var segments = Round(parts.Segments, 1); var texts = TextsJson(parts.Texts, definition: true);
         // A definition without nested references hashes as before; with them, the nested hashes and
         // transforms are part of it, so an edit inside a nested definition changes every outer hash.
         var hash = children.Count == 0
@@ -311,7 +315,7 @@ internal sealed class DisplayScene
             : Hash(definition.Id.ToString(), Json(vertices), Json(indices), Json(segments), texts,
                 Encoding.UTF8.GetBytes(string.Join(";", children.Select((child, i) => child.Definition + ":" + childHashes[i] + ":"
                     + string.Join(",", child.Transform.Select(v => v.ToString("R", System.Globalization.CultureInfo.InvariantCulture)))))));
-        var result = new Definition(hash, vertices, indices, segments, texts, children.ToArray());
+        var result = new Definition(hash, vertices, indices, segments, texts, children.ToArray(), parts.Truncated);
         lock (definitions) definitions[definition.Id] = result;
         return result;
     }
@@ -370,7 +374,9 @@ internal sealed class DisplayScene
         return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
     }
 
-    private static byte[] TextsJson(List<DisplayText> texts)
+    // `definition`: a block definition's labels say which ones are dimension text (`u`), which a
+    // nested block's transform turns upright again (block-nesting.ts).
+    private static byte[] TextsJson(List<DisplayText> texts, bool definition = false)
     {
         var buffer = new ArrayBufferWriter<byte>(64 + texts.Count * 96);
         using (var writer = new Utf8JsonWriter(buffer))
@@ -383,6 +389,7 @@ internal sealed class DisplayScene
                 Point(writer, "p", [Math.Round(text.P[0], 6), Math.Round(text.P[1], 6), Math.Round(text.P[2], 6)]);
                 writer.WriteNumber("h", Math.Round(text.H, 6)); writer.WriteNumber("r", Math.Round(text.R, 6));
                 writer.WriteNumber("ax", text.Ax); writer.WriteNumber("ay", text.Ay);
+                if (definition && text.Upright) writer.WriteBoolean("u", true);
                 writer.WriteEndObject();
             }
             writer.WriteEndArray();
@@ -619,6 +626,7 @@ internal sealed class DisplayScene
                 Indices(writer, "indices", definition.Indices, region);
                 Positions(writer, "segments", definition.Segments, region);
                 writer.WritePropertyName("texts"); writer.WriteRawValue(definition.Texts, true);
+                if (definition.Partial) writer.WriteBoolean("partial", true);
                 if (definition.Children.Length > 0)
                 {
                     writer.WriteStartArray("children");

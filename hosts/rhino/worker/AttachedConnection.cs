@@ -205,13 +205,35 @@ internal sealed class AttachedConnection : IDisposable
             for (var current = layer; current != null; current = current.ParentLayerId == Guid.Empty ? null : document.Layers.FindId(current.ParentLayerId))
                 if (current.Index == e.LayerIndex) { affected.Add(layer.Index); break; }
         affected.Add(e.LayerIndex);
-        MarkObjects(e.Document, AllObjects(obj => affected.Contains(obj.Attributes.LayerIndex)).Select(obj => obj.Id).ToList());
+        // Block members on a layer turned on or off are drawn or left out inside every definition.
+        var shown = e.EventType == Rhino.DocObjects.Tables.LayerTableEventType.Modified && e.OldState != null && e.NewState != null
+            && e.OldState.IsVisible != e.NewState.IsVisible;
+        if (shown) display.ClearDefinitions();
+        MarkObjects(e.Document, AllObjects(obj => affected.Contains(obj.Attributes.LayerIndex)
+            || (shown && obj.ObjectType == ObjectType.InstanceReference)).Select(obj => obj.Id).ToList());
     }
+    // Only the edited definition and the definitions that nest it (at any level) change: their instances
+    // are sent again, other blocks are not (re-sending every heavy nested block made a Live read slow).
     private void ChangedDefinition(object? sender, Rhino.DocObjects.Tables.InstanceDefinitionTableEventArgs e)
     {
         if (e.Document != document) return;
-        display.ClearDefinitions();
-        MarkObjects(e.Document, AllObjects(obj => obj.ObjectType == ObjectType.InstanceReference).Select(obj => obj.Id).ToList());
+        var changed = e.InstanceDefinitionIndex >= 0 && e.InstanceDefinitionIndex < document.InstanceDefinitions.Count
+            ? document.InstanceDefinitions[e.InstanceDefinitionIndex] : null;
+        if (changed == null)
+        {
+            display.ClearDefinitions();
+            MarkObjects(e.Document, AllObjects(obj => obj.ObjectType == ObjectType.InstanceReference).Select(obj => obj.Id).ToList());
+            return;
+        }
+        var affected = new HashSet<Guid> { changed.Id };
+        var pending = new Stack<InstanceDefinition>();
+        pending.Push(changed);
+        while (pending.Count > 0)
+            foreach (var container in pending.Pop().GetContainers() ?? [])
+                if (container != null && affected.Add(container.Id)) pending.Push(container);
+        display.ForgetDefinitions(affected);
+        MarkObjects(e.Document, AllObjects(obj => obj.Geometry is Rhino.Geometry.InstanceReferenceGeometry reference
+            && affected.Contains(reference.ParentIdefId)).Select(obj => obj.Id).ToList());
     }
     // Dimension styles drive annotation lines and text; definitions may contain annotations too.
     private void ChangedDimensionStyle(object? sender, Rhino.DocObjects.Tables.DimStyleTableEventArgs e)

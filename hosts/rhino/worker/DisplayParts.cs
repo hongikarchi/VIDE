@@ -4,8 +4,12 @@ using Rhino.Geometry;
 
 namespace Vide.Worker;
 
-/** Display-only text label: world point, height and XY rotation in display meters (CAD `texts` format). */
-internal sealed record DisplayText(string S, double[] P, double H, double R, int Ax, int Ay);
+/**
+ * Display-only text label: world point, height and XY rotation in display meters (CAD `texts` format).
+ * `Upright`: dimension text, turned to read left to right; a nested block's transform turns it again
+ * in the engine (block-nesting.ts), so a definition's label says so (`u`).
+ */
+internal sealed record DisplayText(string S, double[] P, double H, double R, int Ax, int Ay, bool Upright = false);
 
 // Collects display parts (surface mesh, wire segments, text labels) of annotations, hatches and block
 // definitions. Coordinates are model units transformed by `xform`, then scaled to meters by the caller.
@@ -14,13 +18,14 @@ internal sealed class DisplayParts
     // Per shape caps keep one dense hatch or huge block from dominating a Sync.
     private const int MaxSegmentValues = 600000;
     private const int MaxTexts = 2000;
-    /** Nesting levels below a top-level instance that are sent; deeper references are left out (Truncated). */
-    internal const int MaxDepth = 32;
     internal readonly List<double> Vertices = [];
     internal readonly List<int> Indices = [];
     internal readonly List<double> Segments = [];
     internal readonly List<DisplayText> Texts = [];
+    /** Something was left out (a size cap, a nested definition that is missing): sent as `partial`. */
     internal bool Truncated;
+    /** Block members that are hidden or on a hidden layer are drawn too (a read that asks for hidden objects). */
+    internal bool IncludeHidden;
     private readonly RhinoDoc doc;
     private readonly double scale;
     internal DisplayParts(RhinoDoc doc, double scale) { this.doc = doc; this.scale = scale; }
@@ -30,12 +35,15 @@ internal sealed class DisplayParts
      * A block definition's own geometry in definition space. Nested block references are not copied in
      * (that multiplied a nested definition by its copies until it no longer fit a reply and came as a
      * box): they are returned with their transform, and the caller sends each nested definition once.
+     * Members Rhino does not draw (hidden, or on a layer that is off, a parent layer included) are left
+     * out like top-level objects on a hidden layer.
      */
     internal List<(InstanceDefinition Definition, Transform Xform)> AddDefinition(InstanceDefinition definition)
     {
         var nestedReferences = new List<(InstanceDefinition, Transform)>();
         foreach (var member in definition.GetObjects())
         {
+            if (!IncludeHidden && !Shown(member)) continue;
             if (member.Geometry is InstanceReferenceGeometry nested)
             {
                 var child = doc.InstanceDefinitions.FindId(nested.ParentIdefId);
@@ -45,6 +53,15 @@ internal sealed class DisplayParts
             else Add(member.Geometry, Transform.Identity);
         }
         return nestedReferences;
+    }
+
+    private bool Shown(RhinoObject member)
+    {
+        if (!member.Attributes.Visible) return false;
+        for (var layer = doc.Layers.FindIndex(member.Attributes.LayerIndex); layer != null;
+             layer = layer.ParentLayerId == Guid.Empty ? null : doc.Layers.FindId(layer.ParentLayerId))
+            if (!layer.IsVisible) return false;
+        return true;
     }
 
     internal void Add(GeometryBase geometry, Transform xform)
@@ -125,7 +142,7 @@ internal sealed class DisplayParts
         var rotation = Math.Atan2(direction.Y, direction.X);
         if (upright && (rotation > Math.PI / 2 + 1e-9 || rotation <= -Math.PI / 2 + 1e-9)) rotation += rotation > 0 ? -Math.PI : Math.PI;
         Texts.Add(new DisplayText(value.Length > 2000 ? value[..2000] : value,
-            [point.X * scale, point.Y * scale, point.Z * scale], height * scale, rotation, ax, ay));
+            [point.X * scale, point.Y * scale, point.Z * scale], height * scale, rotation, ax, ay, upright));
     }
 
     private void AddText(TextEntity text, Transform xform)

@@ -3,7 +3,7 @@ import { resolve, isAbsolute } from 'node:path';
 import { inspectWindowsProcess } from '../common/owned-process.ts';
 import { HOST_CALL_MS, sendHostCommand } from '../common/transport.ts';
 import { plainPage, readScenePages } from './scene-pages.ts';
-import { expandNestedDefinitions } from './block-nesting.ts';
+import { expandNestedDefinitions, readBudget } from './block-nesting.ts';
 import { viewMethods } from './view-tools.ts';
 import {
   directExecuteInputSchema,
@@ -171,6 +171,8 @@ export function editorMethods(
         changes: number | undefined,
         total = 0,
         survey: Pick<ChangesPage, 'coverage' | 'layers'> = {};
+      // Nested block copies this whole change read may expand (block-nesting.ts).
+      const expansion = readBudget(false);
       do {
         // Binary pages (T-128) are restored to plain numbers: a change page is small and feeds
         // queries and coverage as well as storage.
@@ -185,6 +187,7 @@ export function editorMethods(
                 ...(revision === undefined ? {} : { revision }),
               }),
             ),
+            { budget: expansion },
           ),
         );
         if (

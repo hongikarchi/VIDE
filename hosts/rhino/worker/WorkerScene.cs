@@ -74,7 +74,7 @@ internal static class WorkerScene
             if (!boxOnly && geometry is InstanceReferenceGeometry reference && doc.InstanceDefinitions.FindId(reference.ParentIdefId) is { IsDeleted: false } definition)
             {
                 var key = definition.Id.ToString();
-                AddDefinitionJson(doc, definition, scale, definitions, definitionHashes, []);
+                AddDefinitionJson(doc, definition, scale, scope.IncludeHidden, definitions, definitionHashes, []);
                 block = new { definition = key, transform = DisplayScene.TransformOf(reference.Xform, scale) };
             }
             if (!boxOnly && brep != null && geometry.IsValid)
@@ -139,28 +139,33 @@ internal static class WorkerScene
     /**
      * A block definition's own geometry in definition space and, before it, every definition nested in it
      * (each once per page, as `children` references with their transform); hashed like DisplayScene's: the
-     * nested hashes are part of the outer hash. `path` guards against cycles and over-deep nesting.
+     * nested hashes are part of the outer hash. Every level is sent however deep, so a definition is the
+     * same whichever instance is read first; `path` guards against a cycle (left out, `partial`).
+     * `includeHidden`: block members that are hidden or on a hidden layer are kept (a read that asks).
      */
-    private static void AddDefinitionJson(RhinoDoc doc, InstanceDefinition definition, double scale,
+    private static void AddDefinitionJson(RhinoDoc doc, InstanceDefinition definition, double scale, bool includeHidden,
         Dictionary<string, object> definitions, Dictionary<string, string> hashes, List<Guid> path)
     {
         var key = definition.Id.ToString();
         if (definitions.ContainsKey(key)) return;
         path.Add(definition.Id);
-        var parts = new DisplayParts(doc, scale);
+        var parts = new DisplayParts(doc, scale) { IncludeHidden = includeHidden };
         var children = new List<object>();
         var childText = new StringBuilder();
         foreach (var (child, xform) in parts.AddDefinition(definition))
         {
-            if (path.Contains(child.Id) || path.Count >= DisplayParts.MaxDepth) continue;
-            AddDefinitionJson(doc, child, scale, definitions, hashes, path);
+            if (path.Contains(child.Id)) { parts.Truncated = true; continue; }
+            AddDefinitionJson(doc, child, scale, includeHidden, definitions, hashes, path);
             var transform = DisplayScene.TransformOf(xform, scale);
             children.Add(new { definition = child.Id.ToString(), transform });
             childText.Append(child.Id).Append(':').Append(hashes[child.Id.ToString()]).Append(':')
                 .Append(string.Join(",", transform.Select(v => v.ToString("R", System.Globalization.CultureInfo.InvariantCulture)))).Append(';');
         }
         path.RemoveAt(path.Count - 1);
-        var texts = parts.Texts.Select(text => new { s = text.S, p = text.P, h = text.H, r = text.R, ax = text.Ax, ay = text.Ay }).ToArray();
+        // Dimension text says so (`u`): a nested block's transform turns it upright again (block-nesting.ts).
+        var texts = parts.Texts.Select(text => text.Upright
+            ? (object)new { s = text.S, p = text.P, h = text.H, r = text.R, ax = text.Ax, ay = text.Ay, u = true }
+            : new { s = text.S, p = text.P, h = text.H, r = text.R, ax = text.Ax, ay = text.Ay }).ToArray();
         var options = new System.Text.Json.JsonSerializerOptions();
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         hash.AppendData(Encoding.UTF8.GetBytes(key));
@@ -171,9 +176,13 @@ internal static class WorkerScene
         if (children.Count > 0) hash.AppendData(Encoding.UTF8.GetBytes(childText.ToString()));
         var value = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
         hashes[key] = value;
-        definitions[key] = children.Count == 0
-            ? new { hash = value, vertices = parts.Vertices, indices = parts.Indices, segments = parts.Segments, texts }
-            : new { hash = value, vertices = parts.Vertices, indices = parts.Indices, segments = parts.Segments, texts, children };
+        var entry = new Dictionary<string, object>
+        {
+            ["hash"] = value, ["vertices"] = parts.Vertices, ["indices"] = parts.Indices, ["segments"] = parts.Segments, ["texts"] = texts,
+        };
+        if (parts.Truncated) entry["partial"] = true;
+        if (children.Count > 0) entry["children"] = children;
+        definitions[key] = entry;
     }
 
     private static string Encode(string value) => Convert.ToBase64String(Encoding.UTF8.GetBytes(value));

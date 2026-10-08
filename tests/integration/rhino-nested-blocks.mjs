@@ -7,6 +7,11 @@
 // Checks: every instance is a block with its expanded definition (never `oversized`), the expanded
 // geometry lies inside the instance's bounding box (the transforms compose right), the heavy block
 // holds every copy, and an inner edit changes the outer definition hash and geometry.
+// Review cases (rows named `x-…`, checked on their own): a 40-level chain read with a 20-level use of
+// it (every level, whichever is read first), members on a layer that is off (left out, like Rhino),
+// dimension text in a block turned 180° (upright), and nested blocks too large to expand (the
+// expansion is capped per definition and per read, marked partial, and the engine's memory stays
+// bounded for the Sync and a Live read). An inner edit sends again only the blocks that nest it.
 // No user document is opened; the test builds its own under .vide/. Without Rhino 8 it is skipped.
 // Afterwards only the Rhino processes this test launched are closed and the installed VIDE's plugin
 // registration is restored (VIDE_TEST_KEEP_REGISTRATION=1 keeps it).
@@ -20,6 +25,7 @@ import { launchOwnedHost } from '../../hosts/common/owned-process.ts';
 import { EditorSessions } from '../../hosts/rhino/editor-sessions.ts';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { coordinate } from '../../src/contracts/geometry-transfer.ts';
+import { MAX_EXPANDED_VALUES, MAX_READ_EXPANDED_VALUES } from '../../hosts/rhino/block-nesting.ts';
 import { SdkExecution } from '../../src/server/sdk-execution.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { runDirectory } from './run-directory.mjs';
@@ -34,6 +40,9 @@ if (!existsSync(probe.executable) || !existsSync(probe.plugin)) {
 }
 
 const HEAVY = 8;
+const CHAIN = 40;
+const HUGE_OUTERS = 4,
+  HUGE_COPIES = 200;
 const directory = runDirectory('rhino-nested-blocks');
 const options = sdkOptions(directory),
   connectionDirectory = join(directory, 'rhino-connections');
@@ -99,7 +108,63 @@ var heavyOuter = def("heavy-outer", heavyCol);
 place("case6-heavy-nested", heavyOuter, Transform.Translation(0, 80, 0));
 place("case6c-heavy-nested-again", heavyOuter, Transform.Translation(0, 100, 0) * turn);
 place("case6d-heavy-inner", heavyInner, Transform.Translation(40, 80, 0));
+// Review cases. A 40-level chain: each level a marker line and the next level 10 m up.
+var next = -1;
+for (int i = ${CHAIN - 1}; i >= 0; i--)
+{
+  var parts = new System.Collections.Generic.List<GeometryBase> { new LineCurve(new Point3d(0, 0, 0), new Point3d(1, 0, 0)) };
+  if (next >= 0) parts.Add(nest(next, Transform.Translation(0, 0, 10)));
+  next = def("chain" + i, parts.ToArray());
+  if (i == ${CHAIN / 2}) place("x-chain-level${CHAIN / 2}", next, Transform.Translation(-40, 0, 0));
+}
+place("x-chain${CHAIN}", next, Transform.Translation(-20, 0, 0));
+// Members on a layer that is off, inside a block and as a nested copy.
+var red = doc.Layers.Add("Red", System.Drawing.Color.Red);
+var offLayer = new Rhino.DocObjects.Layer { Name = "Off", IsVisible = false };
+var off = doc.Layers.Add(offLayer);
+System.Func<int, Rhino.DocObjects.ObjectAttributes> on = (layer) => new Rhino.DocObjects.ObjectAttributes { LayerIndex = layer };
+var cInner = doc.InstanceDefinitions.Add("c-inner", "", Point3d.Origin,
+  new GeometryBase[] { new LineCurve(new Point3d(0, 0, 0), new Point3d(1, 0, 0)), new LineCurve(new Point3d(0, 1, 0), new Point3d(1, 1, 0)),
+    new LineCurve(new Point3d(0, 2, 0), new Point3d(1, 2, 0)) },
+  new[] { on(red), on(off), new Rhino.DocObjects.ObjectAttributes() });
+var cOuter = doc.InstanceDefinitions.Add("c-outer", "", Point3d.Origin,
+  new GeometryBase[] { nest(cInner, Transform.Identity), nest(cInner, Transform.Translation(5, 0, 0)) },
+  new[] { on(red), on(off) });
+place("x-layers", cOuter, Transform.Translation(-60, 0, 0));
+// Nested blocks too large to expand in full: ${HUGE_COPIES} copies of a ~23k-vertex sphere each.
+var hugeInner = def("huge-inner", new GeometryBase[] { Mesh.CreateFromSphere(new Sphere(Point3d.Origin, 0.5), 150, 150) });
+for (int k = 0; k < ${HUGE_OUTERS}; k++)
+{
+  var copies = new GeometryBase[${HUGE_COPIES}];
+  for (int i = 0; i < ${HUGE_COPIES}; i++) copies[i] = nest(hugeInner, Transform.Translation(i % 20, i / 20, 0));
+  place("x-huge-" + k, def("huge-outer" + k, copies), Transform.Translation(0, -40 - k * 15, 0));
+}
 return doc.Objects.Count;`;
+
+// Dimension text in a block, flat and nested turned 180° (added in the attached Rhino: the working
+// copy's save check does not read a dimension inside a block back as equal).
+const dimensions = `
+var style = doc.DimStyles.Current;
+System.Func<string, GeometryBase[], int> def = (name, geometry) => {
+  var attrs = new System.Collections.Generic.List<Rhino.DocObjects.ObjectAttributes>();
+  foreach (var g in geometry) attrs.Add(new Rhino.DocObjects.ObjectAttributes());
+  var index = doc.InstanceDefinitions.Add(name, "", Point3d.Origin, geometry, attrs);
+  if (index < 0) throw new Exception("definition " + name);
+  return index;
+};
+System.Func<int, Transform, GeometryBase> nest = (index, x) => new InstanceReferenceGeometry(doc.InstanceDefinitions[index].Id, x);
+System.Action<string, int, Transform> place = (name, index, x) => {
+  var a = new Rhino.DocObjects.ObjectAttributes { Name = name };
+  if (doc.Objects.AddInstanceObject(index, x, a) == Guid.Empty) throw new Exception("instance " + name);
+};
+// Dimension text in a block, flat and nested turned 180°.
+var dimension = LinearDimension.Create(AnnotationType.Aligned, style, Plane.WorldXY, Vector3d.XAxis,
+  new Point3d(0, 0, 0), new Point3d(4, 0, 0), new Point3d(2, 1, 0), 0);
+var dimInner = def("dim-inner", new GeometryBase[] { dimension });
+var dimOuter = def("dim-outer", new GeometryBase[] { nest(dimInner, Transform.Rotation(Math.PI, Vector3d.ZAxis, Point3d.Origin)) });
+place("x-dim-flat", dimInner, Transform.Translation(-80, 0, 0));
+place("x-dim-nested-rot180", dimOuter, Transform.Translation(-80, 10, 0));
+output.Append("ok");`;
 
 // After the first Sync the nested definition edit-inner becomes a sphere and a line.
 const editInner = `
@@ -182,6 +247,7 @@ function checkBlocks(model, label, { bounds = true } = {}) {
   const summary = {};
   for (const row of model.scene) {
     const name = nameOf(row);
+    if (name.startsWith('x-')) continue;
     assert.ok(row.block, `${label} ${name}: a block, not a box`);
     assert.notEqual(row.oversized, true, `${label} ${name}: not oversized`);
     const definition = model.definitions[row.block.definition];
@@ -213,6 +279,64 @@ function checkBlocks(model, label, { bounds = true } = {}) {
     };
   }
   return summary;
+}
+
+/** The review cases (rows `x-…`) of a read. */
+function checkReview(model, label, { huge = true } = {}) {
+  const rows = rowsByName(model);
+  const definitionOf = (name) => {
+    const row = rows.get(name);
+    assert.ok(row?.block, `${label} ${name}: a block`);
+    return model.definitions[row.block.definition];
+  };
+  const out = {};
+  if (huge) out.huge = checkHuge(model, label);
+  // Every level of the chain, whichever instance was read first; nothing left out.
+  for (const [name, levels] of [
+    [`x-chain${CHAIN}`, CHAIN],
+    [`x-chain-level${CHAIN / 2}`, CHAIN / 2],
+  ]) {
+    const definition = definitionOf(name);
+    assert.equal(len(definition.segments) / 6, levels, `${label} ${name} levels`);
+    assert.notEqual(definition.partial, true, `${label} ${name} complete`);
+    out[name] = len(definition.segments) / 6;
+  }
+  // Members on the layer that is off are left out: the Red and by-parent lines of the first copy.
+  const layers = definitionOf('x-layers');
+  assert.equal(len(layers.segments) / 6, 2, `${label} x-layers lines`);
+  const ys = [];
+  for (let i = 1; i < len(layers.segments); i += 6) ys.push(coordinate(layers.segments, i));
+  assert.deepEqual(ys.sort(), [0, 2]);
+  out['x-layers'] = len(layers.segments) / 6;
+  if (!rows.has('x-dim-flat')) return out;
+  // Dimension text reads left to right in a block turned 180°, at the turned position.
+  const flat = definitionOf('x-dim-flat').texts[0];
+  const turned = definitionOf('x-dim-nested-rot180').texts[0];
+  assert.ok(flat && turned, `${label} dimension labels`);
+  assert.ok(Math.abs(flat.r) < 1e-6, `${label} flat label r ${flat.r}`);
+  assert.ok(Math.abs(turned.r) < 1e-6, `${label} turned label r ${turned.r}`);
+  assert.ok(Math.abs(turned.p[0] + flat.p[0]) < 1e-6, `${label} turned label x`);
+  assert.ok(Math.abs(turned.h - flat.h) < 1e-9, `${label} label height`);
+  out.dimension = { flat: flat.r, turned: turned.r };
+  return out;
+}
+
+/** The blocks too large to expand: capped per definition and per read, marked partial. */
+function checkHuge(model, label) {
+  const sizes = [];
+  for (const row of model.scene) {
+    const name = nameOf(row);
+    if (!name.startsWith('x-huge-')) continue;
+    assert.ok(row.block && row.oversized !== true, `${label} ${name}: a block, not a box`);
+    const definition = model.definitions[row.block.definition];
+    assert.equal(definition.partial, true, `${label} ${name} partial`);
+    const values = len(definition.vertices) + len(definition.segments);
+    assert.ok(values <= MAX_EXPANDED_VALUES, `${label} ${name} ${values} values`);
+    sizes.push(values);
+  }
+  const total = sizes.reduce((a, b) => a + b, 0);
+  assert.ok(total <= MAX_READ_EXPANDED_VALUES, `${label} huge total ${total}`);
+  return sizes;
 }
 
 let worker, host;
@@ -279,7 +403,20 @@ except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback
   const first = await sdk.syncEditor(target, () => {});
   result.firstSync = checkBlocks(first, 'sync');
   result.coverage = first.displayCoverage;
-  assert.equal(first.displayCoverage.omitted, 0, JSON.stringify(first.displayCoverage));
+  // Only the blocks too large to expand are not shown in full (marked, never boxes).
+  assert.equal(first.displayCoverage.omitted, HUGE_OUTERS, JSON.stringify(first.displayCoverage));
+  assert.deepEqual(first.displayCoverage.omittedTypes, {
+    'InstanceReference (중첩 블록 일부 생략)': HUGE_OUTERS,
+  });
+  result.review = checkReview(first, 'sync');
+  // Only the definitions the rows use are kept (nested ones are inside them).
+  const usedDefinitions = new Set(first.scene.map((row) => row.block?.definition));
+  assert.deepEqual(
+    Object.keys(first.definitions).filter((id) => !usedDefinitions.has(id)),
+    [],
+  );
+  result.definitions = Object.keys(first.definitions).length;
+  result.reviewExport = checkReview(exported, 'export', { huge: false });
   const rows = rowsByName(first);
   const heavy = first.definitions[rows.get('case6-heavy-nested').block.definition];
   const single = first.definitions[rows.get('case6d-heavy-inner').block.definition];
@@ -306,6 +443,9 @@ except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback
   const changes = await sessions.changes(target, before.revision ?? 0);
   const changed = rowsByName(changes).get('case5-edit-inner-after-sync');
   assert.ok(changed, 'the outer instance is reported changed');
+  // Only the blocks that nest the edited definition are sent again (not every block).
+  result.liveChangedRows = changes.scene.map(nameOf).sort();
+  assert.deepEqual(result.liveChangedRows, ['case5-edit-inner-after-sync']);
   // Rhino keeps reporting part of the instance's earlier bounding box after a definition edit
   // (seen on Rhino 8: min x stays at the old box), so the edited block is checked against where its
   // new geometry must be: the sphere (centre 0.5, radius 0.8) and the 3 m line, at x 0 and x 2,
@@ -337,6 +477,35 @@ except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback
   assert.notEqual(result.liveChanges.hash, firstEdit.hash);
   assert.ok(result.liveChanges.vertices > firstEdit.vertices * 10);
   assert.deepEqual(result.secondSync, result.liveChanges);
+
+  // 5. A Live read of the blocks too large to expand: moved, read again, capped and marked.
+  const heapBefore = process.memoryUsage().heapUsed;
+  const moved = await sessions.inspect(target);
+  const move = await sessions.directExecute(target, {
+    requestId: randomUUID(),
+    code: `foreach (var o in new System.Collections.Generic.List<Rhino.DocObjects.RhinoObject>(doc.Objects)) if (o.Name != null && o.Name.StartsWith("x-huge-")) doc.Objects.Transform(o, Transform.Translation(0, 0, 1), true);
+output.Append("ok");`,
+    label: 'move huge',
+  });
+  assert.equal(move.ok, true, JSON.stringify(move).slice(0, 400));
+  const hugeChanges = await sessions.changes(target, moved.revision ?? 0);
+  const hugeRows = hugeChanges.scene.filter((row) => nameOf(row).startsWith('x-huge-'));
+  assert.equal(hugeRows.length, HUGE_OUTERS);
+  result.liveHuge = checkHuge(hugeChanges, 'live');
+  // The Live read keeps plain arrays (about 50 bytes a value at its peak): it expands half of what a
+  // typed read may, and the engine's heap grows by about 1 GB at most (it used to run out of 4 GB).
+  result.liveHeapGrowthMB = Math.round((process.memoryUsage().heapUsed - heapBefore) / 2 ** 20);
+  assert.ok(result.liveHeapGrowthMB < 1600, `Live read heap growth ${result.liveHeapGrowthMB} MB`);
+
+  // 6. Dimension text inside a block turned 180° reads left to right after a Sync.
+  const dim = await sessions.directExecute(target, {
+    requestId: randomUUID(),
+    code: dimensions,
+    label: 'dimensions',
+  });
+  assert.equal(dim.ok, true, JSON.stringify(dim).slice(0, 400));
+  const third = await sdk.syncEditor(target, () => {});
+  result.thirdSync = checkReview(third, 'third sync');
 
   result.passed = true;
   await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));

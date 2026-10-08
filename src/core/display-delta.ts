@@ -42,7 +42,8 @@ export function displayCoverage(scene: SceneItem[], definitions?: Record<string,
     const visible = item.block
       ? item.valid !== false && shown(definition)
       : !!sceneRepresentation(item);
-    const partial = visible && definition?.partial === true;
+    // Marked partial even when nothing of it is left (the read's expansion budget ran out).
+    const partial = item.valid !== false && definition?.partial === true;
     if (!visible || item.oversized || partial) {
       omitted++;
       const type = item.oversized

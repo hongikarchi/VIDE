@@ -114,12 +114,38 @@ try {
       },
     );
     const shapes = { standin: view.shapeOf('standin'), nested: view.shapeOf('nested') };
+    // The outline is picked like the solid box it stands for: a click inside it, away from its
+    // edges, selects it (it used to select nothing). Scaled up so the centre is far from the edges.
+    view.replace([
+      {
+        ...cube,
+        id: 'standin',
+        oversized: true,
+        vertices: cube.vertices.map((v) => v * 20),
+      },
+    ]);
+    view.focus(['standin']);
+    const rect = container.getBoundingClientRect();
+    const inside = view.pickAt(rect.left + rect.width / 2, rect.top + rect.height / 2).ids;
     view.dispose();
     container.remove();
-    return { colors, selected, restored, wire, background, cad, byLayer, plot, unplotted, shapes };
+    return {
+      colors,
+      selected,
+      restored,
+      wire,
+      background,
+      cad,
+      byLayer,
+      plot,
+      unplotted,
+      shapes,
+      inside,
+    };
   });
   assert.deepEqual(result.shapes.standin, { kind: 'segments', standIn: true, points: 24 });
   assert.deepEqual(result.shapes.nested, { kind: 'mesh', standIn: false, points: 16 });
+  assert.deepEqual(result.inside, ['standin']);
   assert.deepEqual(result.colors.default, ['#d6d9d3', '#4c5650']);
   assert.equal(result.colors.layer[0], '#22aa33');
   assert.equal(result.colors.object[0], '#aa3322');

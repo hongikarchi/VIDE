@@ -590,9 +590,11 @@ export function createViewport(
       else if (representation.type === 'mesh' && object.oversized) {
         geometry.setIndex(indexAttribute(representation.indices));
         const outline = new THREE.EdgesGeometry(geometry, 1);
-        geometry.dispose();
         mesh = new THREE.LineSegments(outline, new THREE.LineBasicMaterial({ color: WIRE }));
         mesh.userData.standIn = true;
+        // The solid box inside the outline is not drawn but is hit: a click inside the box picks
+        // it, and the walker, sketches and section points land on it as on the real object.
+        mesh.add(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ visible: false })));
       } else if (representation.type === 'mesh') {
         geometry.setIndex(indexAttribute(representation.indices));
         geometry.computeVertexNormals();
@@ -1888,7 +1890,13 @@ export function createViewport(
     }
     down = { x: e.clientX, y: e.clientY };
   }
-  const surfaceMeshes = () => meshes.filter((m) => m instanceof THREE.Mesh);
+  /** The undrawn solid of an oversized stand-in box (its outline is what is drawn). */
+  const standInSolid = (object: THREE.Object3D) =>
+    object.userData.standIn === true && object.visible
+      ? object.children.filter((child) => child instanceof THREE.Mesh)
+      : [];
+  const surfaceMeshes = () =>
+    meshes.flatMap((m) => (m instanceof THREE.Mesh ? [m] : standInSolid(m)));
   /** The nearest hit the section leaves drawn: what is cut away is not picked or drawn on. */
   const shownHit = (hits: THREE.Intersection[]) =>
     clipPlanes.length ? hits.find((hit) => !isCut(hit.point)) : hits[0];
@@ -1897,6 +1905,7 @@ export function createViewport(
     const out: THREE.Object3D[] = [];
     for (const object of meshes) {
       if (object instanceof THREE.Mesh) out.push(object);
+      else if (object.userData.standIn === true) out.push(...standInSolid(object));
       else if (object instanceof THREE.Group)
         for (const child of object.children) if (child instanceof THREE.Mesh) out.push(child);
     }

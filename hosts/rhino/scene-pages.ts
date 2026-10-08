@@ -10,7 +10,7 @@ import {
 import { displayCoverage } from '../../src/core/display-delta.ts';
 import { jsonSafeGeometry, plainGeometry } from '../../src/contracts/geometry-transfer.ts';
 import { packedDisplayModelSchema } from '../../src/contracts/native-model.ts';
-import { expandNestedDefinitions } from './block-nesting.ts';
+import { expandNestedDefinitions, readBudget } from './block-nesting.ts';
 
 /** The scene items and block definitions of a page or model (where geometry arrays live). */
 function geometryItems(value: unknown): unknown[] {
@@ -105,6 +105,8 @@ export async function readScenePages(
   const measurementStats = { measuredObjects: 0, reusedObjects: 0 };
   let survey: z.infer<typeof surveySchema> = {};
   const cache = Buffer.byteLength(JSON.stringify(caches)) <= 2 * 1024 * 1024 ? caches : {};
+  // Nested block copies the whole read may expand (block-nesting.ts).
+  const expansion = readBudget(typed);
   do {
     const raw = await call({
       offset,
@@ -130,7 +132,7 @@ export async function readScenePages(
     }
     for (const item of geometryItems(raw)) (typed ? jsonSafeGeometry : plainGeometry)(item);
     // Nested blocks arrive as references between definitions; the model keeps them expanded.
-    expandNestedDefinitions(raw, { typed });
+    expandNestedDefinitions(raw, { typed, budget: expansion });
     // Only a read with a total cap measures its pages (writing them as JSON again costs time).
     if (maxBytes !== Infinity) {
       bytes += Buffer.byteLength(JSON.stringify(raw));
