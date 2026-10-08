@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { OverlayItem } from '../viewport.ts';
-import type { LegendSpec, PartOf, PartUse } from '../kit/registry.ts';
+import {
+  COMPUTING_PARTS,
+  type LegendSpec,
+  type PartName,
+  type PartOf,
+  type PartUse,
+} from '../kit/registry.ts';
 import { ConflictBanner, RoleCards, type RoleCardData } from '../kit/cards.tsx';
 import {
   FactBadge,
@@ -202,6 +208,17 @@ function Drawer({
   return <ResultTabs tabs={tabs} active={active} onActive={setActive} />;
 }
 
+/** Every `part` name in a panel as read (before it is checked). */
+function partNamesOf(value: unknown, out: PartName[] = []): PartName[] {
+  if (Array.isArray(value)) for (const item of value) partNamesOf(item, out);
+  else if (value && typeof value === 'object') {
+    const part = (value as { part?: unknown }).part;
+    if (typeof part === 'string') out.push(part as PartName);
+    for (const item of Object.values(value)) partNamesOf(item, out);
+  }
+  return out;
+}
+
 export function JigPanel({
   host,
   panel,
@@ -212,7 +229,12 @@ export function JigPanel({
   panel: unknown;
   instanceId: string;
 }) {
-  const jig = useInstance(host.projectId, instanceId);
+  // A panel with parts that compute on screen (패널링) runs its library steps (confirmed mode).
+  const screenMode = useMemo(
+    () => (partNamesOf(panel).some((name) => COMPUTING_PARTS.has(name)) ? 'confirmed' : undefined),
+    [panel],
+  );
+  const jig = useInstance(host.projectId, instanceId, screenMode);
   const { view } = jig;
   // Checked once per instance: what the jig declares does not change with its values.
   const checked = useMemo(

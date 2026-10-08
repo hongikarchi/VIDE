@@ -437,7 +437,7 @@ test('about 5,000 panels on a 128² sample: layout time (ARCH-03 §13 live 100 m
   assert.ok(median < 400, `median ${median} ms`);
 });
 
-test('the official jig is built in: registry, validation, self-test; J-07 stays planned until T-258', async () => {
+test('the official jig is built in: registry, validation, self-test; J-07 available since T-258', async () => {
   const dir = join(officialJigRoot(), 'paneling');
   const registry = new JigRegistry({ dataDir: tmpdir() });
   const entry = (await registry.list()).find((e) => e.id === 'vide/paneling');
@@ -457,5 +457,5 @@ test('the official jig is built in: registry, validation, self-test; J-07 stays 
     JSON.stringify(report.cases.filter((c) => !c.ok)),
   );
   const j07 = JIGS.find((j) => j.code === 'J-07');
-  assert.equal(j07.status, 'planned');
+  assert.equal(j07.status, 'available');
 });

@@ -273,6 +273,14 @@ export const PART_PROPS = {
   'paneling-result': z.object({}).strict(),
 } satisfies Record<PartName, z.ZodType>;
 
+/**
+ * Parts whose screen shows library steps as they are computed (패널링, SPEC-16.1 3: the stages
+ * recompute without AI when a setting changes). A panel that uses one runs its steps in `confirmed`
+ * mode when nothing names another; a geometry run would skip every library step (PLAN-49 T-258
+ * F-1). Other panels keep geometry runs and compute library steps on [다시 계산].
+ */
+export const COMPUTING_PARTS: ReadonlySet<PartName> = new Set<PartName>(['paneling-stages']);
+
 /** Parts not built yet: listed, but a panel that uses them is refused (none since T-057). */
 export const NOT_READY: ReadonlySet<PartName> = new Set<PartName>([]);
 

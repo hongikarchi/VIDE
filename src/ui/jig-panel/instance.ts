@@ -192,7 +192,16 @@ export function preferRun(instanceId: string, preference: RunPreference | undefi
 /** A step that has been evaluated by a run no longer waits for one. */
 const evaluated = (status: string) => status !== 'blocked' && status !== 'skipped';
 
-export function useInstance(projectId: string, instanceId: string) {
+/**
+ * One instance on screen. `screenMode` is how its own screen runs steps when nothing names a mode
+ * (패널링's parts compute library steps live: `confirmed`, registry `COMPUTING_PARTS`); a started
+ * skill's preference comes first, else geometry.
+ */
+export function useInstance(
+  projectId: string,
+  instanceId: string,
+  screenMode?: RunPreference['mode'],
+) {
   const base = `/projects/${encodeURIComponent(projectId)}/jig-instances/${encodeURIComponent(instanceId)}`;
   const [view, setViewState] = useState<InstanceView>();
   const [outputs, setOutputs] = useState<Record<string, unknown>>({});
@@ -226,7 +235,7 @@ export function useInstance(projectId: string, instanceId: string) {
         // A full run without a named mode follows the instance's preference (a started skill).
         const preferred =
           !options.mode && !options.until ? runPreferences.get(instanceId) : undefined;
-        const mode = options.mode ?? preferred?.mode ?? 'geometry';
+        const mode = options.mode ?? preferred?.mode ?? screenMode ?? 'geometry';
         const until = options.until ?? preferred?.until;
         const ran = (detail: Record<string, unknown>) =>
           window.dispatchEvent(
@@ -259,7 +268,7 @@ export function useInstance(projectId: string, instanceId: string) {
         if (mounted.current) setComputing(false);
       }
     },
-    [base, instanceId],
+    [base, instanceId, screenMode],
   );
 
   // Open: the view, then a run (cached steps come back without computing).

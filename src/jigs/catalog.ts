@@ -144,14 +144,14 @@ export const JIGS: JigEntry[] = [
     basis: 'S-06·S-07·S-09',
   },
   {
-    // The official tool jig `vide/paneling` (PLAN-49, stage 1 from T-252); the JIG list shows its
-    // card. The status turns 'available' when T-258's VERIFY passes.
+    // The official tool jig `vide/paneling` (PLAN-49); the JIG list shows its tool card. Available
+    // since T-258's VERIFY (VERIFY-2026-10-08-paneling, hidden Rhino 8).
     id: 'vide/paneling',
     code: 'J-07',
     name: '패널링',
     summary: '곡면 분할·패널 유형화·수량.',
     inputs: ['Rhino 곡면'],
-    status: 'planned',
+    status: 'available',
     basis: 'S-06·S-12',
   },
   {

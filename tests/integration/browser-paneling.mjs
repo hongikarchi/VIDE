@@ -331,6 +331,8 @@ try {
   await width.press('Enter');
   await kpi('패널').getByText('10').waitFor();
   assert.ok(fake.state.runs.length > runsBefore, 'recomputed');
+  // The screen computes its library steps (PLAN-49 T-258 F-1): no geometry run, which would skip them.
+  assert.deepEqual([...new Set(fake.state.runs.map((r) => r.mode))], ['confirmed']);
   assert.deepEqual(fake.state.puts.at(-1), { values: [{ key: 'width', value: 1.5 }], by: 'user' });
   assert.deepEqual(await overlay(), [{ key: 'paneling-panels', n: 10 }]);
   assert.equal(await panel.locator('[data-notice]').count(), 0, 'no false 크기 바뀜 notice');
