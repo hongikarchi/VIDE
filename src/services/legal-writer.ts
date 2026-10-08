@@ -380,8 +380,9 @@ export class LegalWriter {
           output,
         });
       } catch (error) {
-        // Only an unreachable service leaves the local pass shown as '로컬 검증만'.
-        if (error instanceof DomainError && error.code === 'SERVICE_UNAVAILABLE')
+        // An unreachable service, or one without /v1/verify yet (PLAN-48 T-240), leaves the local
+        // pass shown as '로컬 검증만'.
+        if (error instanceof DomainError && LOCAL_ONLY_ON.has(error.code))
           return {
             status: 'local-only',
             output,
@@ -494,3 +495,10 @@ const recipeUnavailable = (error: unknown): ProseFailure => ({
   path: 'recipe',
   message: messageOf(error),
 });
+
+/** Service failures of `/v1/verify` that leave a local pass as '로컬 검증만'. */
+const LOCAL_ONLY_ON = new Set([
+  'SERVICE_UNAVAILABLE',
+  'SERVICE_NOT_IMPLEMENTED',
+  'SERVICE_NOT_READY',
+]);

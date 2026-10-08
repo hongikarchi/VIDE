@@ -9,9 +9,20 @@ import { statusState } from '../store/status.ts';
 import { sessionState } from '../store/session.ts';
 import {
   serviceSettingsViewSchema,
+  type ClawdeFeature,
+  type ClawdeFeatures,
   type ClawdeSettingsView,
   type ServiceStatus,
 } from '../../contracts/services.ts';
+
+/** The features as the user knows them (PLAN-48 T-240); recipes and verify go with 답 문장. */
+const featureText: [ClawdeFeature, string][] = [
+  ['ask', '묻기'],
+  ['checklist', '단계별 법령'],
+  ['contribute', 'cLAWde로 보내기'],
+  ['golden', '모델 인증'],
+  ['verify', '답 문장 검증'],
+];
 
 const statusText: Record<ServiceStatus, string> = {
   connected: '연결됨',
@@ -45,7 +56,14 @@ interface CertRow {
  * one's last golden-set result. A run uses this PC's model on every golden question, so it starts
  * only when pressed; a model whose last run failed writes no prose until it passes.
  */
-const ModelCertRows = memo(function ModelCertRows({ connected }: { connected: boolean }) {
+const ModelCertRows = memo(function ModelCertRows({
+  connected,
+  offered,
+}: {
+  connected: boolean;
+  /** The service offers the golden set, answers and recipes now (PLAN-48 T-240). */
+  offered: boolean;
+}) {
   const [rows, setRows] = useState<CertRow[]>([]);
   const [running, setRunning] = useState('');
   const [error, setError] = useState('');
@@ -65,7 +83,11 @@ const ModelCertRows = memo(function ModelCertRows({ connected }: { connected: bo
   if (!connected || !rows.length) return null;
   return (
     <div className="services-cert">
-      <small>답 문장을 쓸 모델(cLAWde 레시피 기준). 인증은 누를 때만 돌며 토큰을 씁니다.</small>
+      <small>
+        {offered
+          ? '답 문장을 쓸 모델(cLAWde 레시피 기준). 인증은 누를 때만 돌며 토큰을 씁니다.'
+          : '서비스가 아직 이 기능을 제공하지 않습니다'}
+      </small>
       <ul className="settings-rows">
         {rows.map((row) => {
           const key = `${row.provider}/${row.model}/${row.effort}`;
@@ -85,7 +107,7 @@ const ModelCertRows = memo(function ModelCertRows({ connected }: { connected: bo
               ) : null}
               <button
                 type="button"
-                disabled={!!running}
+                disabled={!!running || !offered}
                 onClick={() => {
                   setRunning(key);
                   setError('');
@@ -163,6 +185,8 @@ export const ServicesSection = memo(function ServicesSection() {
 
   const off = !!project && !!view?.projectsOff.includes(project.id);
   const status = view?.status;
+  const features: Partial<ClawdeFeatures> = view?.features ?? {};
+  const missing = featureText.filter(([key]) => features[key] === false).map(([, text]) => text);
   return (
     <section className="services-settings remote-panel">
       <h3>외부 서비스</h3>
@@ -181,6 +205,16 @@ export const ServicesSection = memo(function ServicesSection() {
           </span>
         </li>
       </ul>
+      {view?.notReady ? (
+        <small id="clawde-not-ready" role="status">
+          서비스 준비 중 · 법령 DB를 아직 게시하지 않았습니다
+        </small>
+      ) : null}
+      {missing.length && status === 'connected' ? (
+        <small id="clawde-features" role="status">
+          {`서비스가 아직 제공하지 않는 기능: ${missing.join(' · ')}. 조항 보기·검색은 됩니다.`}
+        </small>
+      ) : null}
       <form
         className="services-form"
         onSubmit={(event) => {
@@ -252,7 +286,10 @@ export const ServicesSection = memo(function ServicesSection() {
           </button>
         </div>
       </form>
-      <ModelCertRows connected={status === 'connected'} />
+      <ModelCertRows
+        connected={status === 'connected'}
+        offered={features.golden !== false && features.ask !== false && features.recipes !== false}
+      />
       {project && view ? (
         <label className="remote-toggle">
           <input

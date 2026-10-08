@@ -130,6 +130,34 @@ test('meta announces the law DB date, stages, permit phases, answer models, reci
     clawdeMetaSchema.safeParse({ ...json, stages: [{ id: 'feasibility', label: 'x' }] }).success,
     false,
   );
+  // `endpoints`·`plannedEndpoints` are optional (PLAN-48 T-240): absent above, kept when given.
+  assert.equal(meta.endpoints, undefined);
+  const m1 = clawdeMetaSchema.parse({
+    ...json,
+    endpoints: ['meta', 'articles', 'search'],
+    plannedEndpoints: ['POST /v1/ask', 'checklist'],
+  });
+  assert.deepEqual(m1.endpoints, ['meta', 'articles', 'search']);
+  assert.deepEqual(m1.plannedEndpoints, ['POST /v1/ask', 'checklist']);
+  assert.equal(clawdeMetaSchema.safeParse({ ...json, endpoints: [''] }).success, false);
+});
+
+test('an M1 fake: meta lists endpoints, planned ones answer 501 NOT_IMPLEMENTED, articles answer the stored ref', async () => {
+  fake.control({ endpoints: ['meta', 'articles', 'search'], storedRefs: true });
+  const meta = clawdeMetaSchema.parse((await call('/v1/meta')).json);
+  assert.deepEqual(meta.endpoints, ['meta', 'articles', 'search']);
+  assert.ok(meta.plannedEndpoints.includes('ask') && meta.plannedEndpoints.includes('golden'));
+  const asked = await ask('일조 사선?');
+  assert.equal(asked.status, 501);
+  assert.equal(clawdeErrorSchema.parse(asked.json).error.code, 'NOT_IMPLEMENTED');
+  const article = await call(
+    `/v1/articles/${encodeURIComponent('law:국토계획법 시행령/제84조/①/4')}`,
+  );
+  assert.equal(article.status, 200);
+  assert.equal(
+    clawdeArticleSchema.parse(article.json).ref,
+    'law:국토의계획및이용에관한법률시행령/제84조/①/4',
+  );
 });
 
 test('ask answers each verdict in contract form, with constraints and a figure', async () => {

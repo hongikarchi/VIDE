@@ -157,11 +157,50 @@ export function buildAnswer(caseDef, { base, lawDbDate = FAKE_LAW_DB_DATE } = {}
   return answer;
 }
 
+/** Every endpoint of the contract by its first path segment (PLAN-48 T-240 `meta.endpoints`). */
+export const ENDPOINTS = [
+  'meta',
+  'articles',
+  'search',
+  'ask',
+  'checklist',
+  'verify',
+  'recipes',
+  'golden',
+  'contributions',
+];
+/** Law-name abbreviations the real service resolves (cLAWde `src/shared/aliases.ts`, a fixture subset). */
+const LAW_ALIASES = {
+  국토계획법: '국토의계획및이용에관한법률',
+  장애인등편의법: '장애인ㆍ노인ㆍ임산부등의편의증진보장에관한법률',
+};
+/**
+ * The service's stored form of a ref (PLAN-48 T-240): the law name without spaces, `·` as `ㆍ`, an
+ * abbreviation spelled out (`law:국토계획법 시행령/…` → `law:국토의계획및이용에관한법률시행령/…`).
+ */
+export function storedRef(ref) {
+  const [scheme, rest] = [ref.slice(0, ref.indexOf(':') + 1), ref.slice(ref.indexOf(':') + 1)];
+  const [law, ...parts] = rest.split('/');
+  let name = law.replace(/\s+/g, '').replace(/·/g, 'ㆍ');
+  for (const [short, full] of Object.entries(LAW_ALIASES))
+    if (name === short || name.startsWith(short + '시행')) name = full + name.slice(short.length);
+  return [scheme + name, ...parts].join('/');
+}
+
 const initialControl = () => ({
   delayMs: 0,
   failStatus: null,
+  /** The `error.code` of a scripted failure (503 `NO_PUBLICATION`·`PUBLISHING` = not ready). */
+  failCode: 'SERVICE_ERROR',
   lawDbDate: FAKE_LAW_DB_DATE,
   rejectKeys: [],
+  /**
+   * `null`: meta lists no endpoints (an older service) and every endpoint answers. An array: meta
+   * gives it as `endpoints` and the rest as `plannedEndpoints`, which answer 501 `NOT_IMPLEMENTED`.
+   */
+  endpoints: null,
+  /** Articles answer with the stored-form ref (abbreviations resolved), as the real service does. */
+  storedRefs: false,
 });
 
 export async function startFakeClawde({ port = 0, token = FAKE_CLAWDE_TOKEN } = {}) {
@@ -223,7 +262,16 @@ export async function startFakeClawde({ port = 0, token = FAKE_CLAWDE_TOKEN } = 
         profileKeys: PROFILE_KEYS,
         answerModels: ANSWER_MODELS,
         recipes: [{ id: 'answer-prose', version: CURRENT_RECIPE }],
+        ...(control.endpoints
+          ? {
+              endpoints: control.endpoints,
+              plannedEndpoints: ENDPOINTS.filter((name) => !control.endpoints.includes(name)),
+            }
+          : {}),
       });
+    const segment = path.split('/')[2];
+    if (control.endpoints && ENDPOINTS.includes(segment) && !control.endpoints.includes(segment))
+      return fail(res, 501, 'NOT_IMPLEMENTED', `${segment} is not implemented yet`);
     if (req.method === 'POST' && path === '/v1/ask') {
       const parsed = clawdeAskRequestSchema.safeParse(body);
       if (!parsed.success) return fail(res, 400, 'BAD_REQUEST', parsed.error.message);
@@ -239,9 +287,15 @@ export async function startFakeClawde({ port = 0, token = FAKE_CLAWDE_TOKEN } = 
     }
     if (req.method === 'GET' && path.startsWith('/v1/articles/')) {
       const ref = decodeURIComponent(path.slice('/v1/articles/'.length));
-      const article = ARTICLES.find((a) => a.ref === ref);
+      const article = control.storedRefs
+        ? ARTICLES.find((a) => storedRef(a.ref) === storedRef(ref))
+        : ARTICLES.find((a) => a.ref === ref);
       if (!article) return fail(res, 404, 'NOT_FOUND', 'no such article');
-      return send(res, 200, { ...article, lawDbDate: control.lawDbDate });
+      return send(res, 200, {
+        ...article,
+        ...(control.storedRefs ? { ref: storedRef(article.ref) } : {}),
+        lawDbDate: control.lawDbDate,
+      });
     }
     if (req.method === 'GET' && path === '/v1/search') {
       const q = url.searchParams.get('q') ?? '';
@@ -312,7 +366,7 @@ export async function startFakeClawde({ port = 0, token = FAKE_CLAWDE_TOKEN } = 
     const respond = () => {
       if (control.failStatus === 401) return fail(res, 401, 'UNAUTHORIZED', 'token expired');
       if (control.failStatus)
-        return fail(res, control.failStatus, 'SERVICE_ERROR', 'scripted failure');
+        return fail(res, control.failStatus, control.failCode, 'scripted failure');
       return route(req, res, url, body);
     };
     if (!control.delayMs) return respond();
@@ -331,7 +385,10 @@ export async function startFakeClawde({ port = 0, token = FAKE_CLAWDE_TOKEN } = 
     token,
     received,
     stored,
-    /** Script the next responses: `{delayMs, failStatus: 401|500|503|null, lawDbDate, rejectKeys}`. */
+    /**
+     * Script the next responses: `{delayMs, failStatus: 401|500|503|null, failCode, lawDbDate,
+     * rejectKeys, endpoints, storedRefs}`.
+     */
     control(patch) {
       control = { ...control, ...patch };
       return control;

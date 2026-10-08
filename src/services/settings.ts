@@ -3,7 +3,10 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { DomainError } from '../contracts/errors.ts';
 import {
+  CLAWDE_FEATURES,
   serviceSettingsUpdateSchema,
+  type ClawdeFeature,
+  type ClawdeFeatures,
   type ServiceSettingsView,
   type ServiceStatus,
   type ServiceToken,
@@ -33,6 +36,8 @@ export const serviceSettingsStatuses: Record<string, number> = {
   SERVICE_AUTH: 401,
   SERVICE_UNAVAILABLE: 503,
   SERVICE_BAD_RESPONSE: 502,
+  SERVICE_NOT_IMPLEMENTED: 409,
+  SERVICE_NOT_READY: 503,
   SECRETS_UNAVAILABLE: 500,
 };
 
@@ -46,6 +51,9 @@ const storedSchema = z.object({
       tokenExpiresAt: z.string().nullable().default(null),
       lawDbDate: z.string().nullable().default(null),
       checkedAt: z.string().nullable().default(null),
+      /** The last `meta`'s `endpoints`·`plannedEndpoints` (null: the service did not say). */
+      endpoints: z.array(z.string()).nullable().default(null),
+      plannedEndpoints: z.array(z.string()).nullable().default(null),
     }),
   }),
 });
@@ -67,6 +75,10 @@ export class ServiceSettings {
   private lastStatus: 'connected' | 'unreachable' | 'login-required' | undefined;
   private queue: Promise<unknown> = Promise.resolve();
   private renewing: Promise<string> | undefined;
+  /** Endpoint names that answered 501 since the last `meta` (not kept across restarts). */
+  private readonly notImplemented = new Set<string>();
+  /** The last call found the service not ready (503 NO_PUBLICATION·PUBLISHING). */
+  private lastNotReady = false;
   constructor({
     directory,
     secrets,
@@ -133,6 +145,8 @@ export class ServiceSettings {
         lawDbDate: c.lawDbDate,
         checkedAt: c.checkedAt,
         accountLinked: (await this.account?.linked().catch(() => false)) ?? false,
+        features: this.features(),
+        ...(this.lastNotReady ? { notReady: true } : {}),
       },
     };
   }
@@ -146,7 +160,10 @@ export class ServiceSettings {
     await this.save((c) => {
       if (clawde.baseUrl !== undefined) {
         const next = clawde.baseUrl && new URL(clawde.baseUrl).href.replace(/\/+$/, '');
-        if (next !== c.baseUrl) this.lastStatus = undefined;
+        if (next !== c.baseUrl) {
+          this.lastStatus = undefined;
+          this.forgetEndpoints(c);
+        }
         c.baseUrl = next;
       }
       if (clawde.enabled !== undefined) c.enabled = clawde.enabled;
@@ -230,17 +247,63 @@ export class ServiceSettings {
       throw new DomainError('SERVICE_AUTH');
     }
   }
-  /** The connector's report after each call; a `meta` answer also records the law DB date. */
+  /**
+   * The connector's report after each call; a `meta` answer also records the law DB date and the
+   * endpoints it lists (PLAN-48 T-240), which replace the 501s seen before.
+   */
   async report(
     status: 'connected' | 'unreachable' | 'login-required',
-    meta?: { lawDbDate: string },
+    meta?: { lawDbDate: string; endpoints?: string[]; plannedEndpoints?: string[] },
   ) {
     this.lastStatus = status;
-    if (meta)
+    this.lastNotReady = false;
+    if (meta) {
+      this.notImplemented.clear();
       await this.save((c) => {
         c.lawDbDate = meta.lawDbDate;
         c.checkedAt = this.now().toISOString();
+        c.endpoints = meta.endpoints?.map(endpointName) ?? null;
+        c.plannedEndpoints = meta.plannedEndpoints?.map(endpointName) ?? null;
       });
+    }
+  }
+  /** A 503 `NO_PUBLICATION`·`PUBLISHING`: the service is up but not ready; the status stays. */
+  reportNotReady() {
+    this.lastNotReady = true;
+  }
+  /** A 501 on `feature`'s endpoint: off until the next `meta`; the status is 'connected'. */
+  reportNotImplemented(feature: ClawdeFeature) {
+    this.notImplemented.add(CLAWDE_FEATURES[feature]);
+    this.lastStatus = 'connected';
+    this.lastNotReady = false;
+  }
+  /**
+   * Which features the service answers now: listed in the last `meta`'s `endpoints` (all of them
+   * when it gave none, an older service), not in `plannedEndpoints` and no 501 since. Reads the
+   * loaded settings; before the first load every feature counts as on.
+   */
+  features(): ClawdeFeatures {
+    const { endpoints, plannedEndpoints } = this.clawde;
+    const on = (feature: ClawdeFeature) => {
+      const name = CLAWDE_FEATURES[feature];
+      if (this.notImplemented.has(name)) return false;
+      if (endpoints) return endpoints.includes(name);
+      return !plannedEndpoints?.includes(name);
+    };
+    return {
+      ask: on('ask'),
+      checklist: on('checklist'),
+      contribute: on('contribute'),
+      verify: on('verify'),
+      golden: on('golden'),
+      recipes: on('recipes'),
+    };
+  }
+  private forgetEndpoints(c: Stored['services']['clawde']) {
+    c.endpoints = null;
+    c.plannedEndpoints = null;
+    this.notImplemented.clear();
+    this.lastNotReady = false;
   }
   /** The newest law DB date the service announced (answers older than it are stale). */
   async lawDbDate() {
@@ -251,4 +314,14 @@ export class ServiceSettings {
   get status() {
     return this.lastStatus;
   }
+}
+
+/**
+ * An endpoint entry of `meta` as its first path segment: `POST /v1/ask` → `ask`,
+ * `GET /v1/recipes/{id}` → `recipes`, `ask` → `ask`.
+ */
+export function endpointName(entry: string) {
+  const path = entry.trim().split(/\s+/).at(-1) ?? '';
+  const segments = path.replace(/^\/?v1\//, '').split(/[/?]/);
+  return segments[0] ?? '';
 }

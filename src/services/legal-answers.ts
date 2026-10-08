@@ -317,16 +317,23 @@ export class LegalAnswers {
     const parsed = clawdeArticleSchema.safeParse(JSON.parse(row.article_json));
     return parsed.success ? { article: parsed.data, fetchedAt: row.fetched_at } : undefined;
   }
-  /** Keeps an article the service returned (SPEC-13.9: articles stay in the project's record). */
-  saveArticle(projectId: string, article: ClawdeArticle) {
+  /**
+   * Keeps an article the service returned (SPEC-13.9: articles stay in the project's record). The
+   * service answers with its stored ref (정식 법령명, 약칭 풀림), which may differ from the one asked
+   * (PLAN-48 T-240): the article is kept under both, so either finds it.
+   */
+  saveArticle(projectId: string, article: ClawdeArticle, requestedRef?: string) {
     this.store.project(projectId);
     const at = this.now().toISOString();
-    this.store
-      .db(projectId)
-      .prepare(
-        'INSERT INTO legal_articles(projectId,ref,article_json,fetched_at) VALUES(?,?,?,?) ON CONFLICT(projectId,ref) DO UPDATE SET article_json=excluded.article_json, fetched_at=excluded.fetched_at',
-      )
-      .run(projectId, article.ref, JSON.stringify(article), at);
+    const db = this.store.db(projectId);
+    const put = db.prepare(
+      'INSERT INTO legal_articles(projectId,ref,article_json,fetched_at) VALUES(?,?,?,?) ON CONFLICT(projectId,ref) DO UPDATE SET article_json=excluded.article_json, fetched_at=excluded.fetched_at',
+    );
+    const json = JSON.stringify(article);
+    this.store.tx(db, () => {
+      put.run(projectId, article.ref, json, at);
+      if (requestedRef && requestedRef !== article.ref) put.run(projectId, requestedRef, json, at);
+    });
     return { article, fetchedAt: at };
   }
   /**

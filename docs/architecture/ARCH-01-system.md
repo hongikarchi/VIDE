@@ -2,7 +2,7 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 1.25
+version: 1.26
 updated: 2026-10-08
 owner: agent:codex
 related: [PLAN-47, SPEC-14, ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35, PLAN-36, ADR-039, PLAN-38, PLAN-39, PLAN-42, ADR-040, ADR-041, PLAN-43, SPEC-13, PLAN-46]
@@ -1027,7 +1027,7 @@ cLAWde·ArchiDB·Site Modeling·Structure Analysis는 각자의 저장소와 배
 동작은 [SPEC-13](../specs/SPEC-13-legal-qa.md)이 정한다. 아래는 VIDE가 cLAWde에 기대는 최소 계약이며, 서비스 내부(온톨로지·수집)는 cLAWde 저장소가 소유한다. 판은 경로의 `/v1`로 나누고, 필드 추가는 하위 호환이다. 모르는 필드는 무시하고 필수 필드가 없으면 그 응답을 버린다(`SERVICE_BAD_RESPONSE`).
 
 - **설정·비밀.** `<data>/service-settings.json {services: {clawde: {baseUrl, enabled, projectsOff[], tokenSource:'static'|'account'|null, tokenExpiresAt, lawDbDate, checkedAt}}}`(`src/services/settings.ts`), `GET/PUT /api/v1/settings/services`(원격 세션 쓰기 불가). 토큰은 `<data>/secrets/services.bin`에 Windows DPAPI(현재 사용자, PowerShell `ProtectedData`에 표준 입력으로 넘김)로 암호화해 두고(`src/services/secrets.ts`) API 응답·로그·작업 기록에 싣지 않는다.
-  - 보기: `{clawde: {baseUrl, enabled, projectsOff[], token{set, source, expiresAt}, status, lawDbDate, checkedAt, accountLinked}}`(`src/contracts/services.ts`). `status`는 `connected`·`unreachable`·`login-required`·`off`·`not-configured`·`unchecked`이며 마지막 서비스 호출의 결과다(엔진 재시작 뒤 첫 호출 전은 `unchecked`).
+  - 보기: `{clawde: {baseUrl, enabled, projectsOff[], token{set, source, expiresAt}, status, lawDbDate, checkedAt, accountLinked, features?, notReady?}}`(`src/contracts/services.ts`). `status`는 `connected`·`unreachable`·`login-required`·`off`·`not-configured`·`unchecked`이며 마지막 서비스 호출의 결과다(엔진 재시작 뒤 첫 호출 전은 `unchecked`).
   - `PUT`: `{clawde: {baseUrl?, enabled?, projectsOff?, token?}}`. `token`은 개발용 정적 토큰이며 문자열이면 저장하고 계정 토큰을 대신하며 서비스를 켠다. `null`이면 지운다. 모르는 필드는 400.
   - `POST /api/v1/settings/services/clawde/connect`([연결], 계정 토큰 받기 뒤 `meta`), `…/disconnect`([끊기], 토큰을 지우고 끔, 캐시한 답은 둠), `…/check`(`meta` 한 번으로 상태 갱신). 계정에 로그인하지 않은 PC의 [연결]은 409 `ACCOUNT_NOT_LINKED`.
 - **토큰 받기.** 엔진이 이 PC의 계정 연결 키(ADR-039, `remote-host.json`의 호스트 키)로 계정 사이트 `POST /api/hosts/device/services/clawde/token`을 부른다 → `{accessToken, expiresAt}`(짧은 수명). 엔진은 만료 1분 전부터 같은 호출로 갱신하며(동시에 한 번), 갱신이 실패하면 상태를 `login-required`로 바꾸고 그 호출을 보내지 않는다(`SERVICE_AUTH`). 사이트에 이 끝점이 없으면(404 등) `SERVICE_TOKEN_UNAVAILABLE`이고 정적 토큰만 쓸 수 있다. 사이트의 발급 구현과 cLAWde의 토큰 검증 방식(서명 공유 또는 검증 끝점)은 계정 사이트·cLAWde 저장소의 일이다(PLAN-46 T-217 남은 조건). 개발·시험은 설정에 정적 토큰을 직접 넣는다. 서비스 호출은 `Authorization: Bearer <token>`, `X-VIDE-Version`이며 토큰은 서비스 주소와 같은 origin에만 보낸다.
@@ -1035,7 +1035,7 @@ cLAWde·ArchiDB·Site Modeling·Structure Analysis는 각자의 저장소와 배
 
 | 끝점 | 요청 | 응답 |
 |---|---|---|
-| `GET /v1/meta` | — | `{service:'clawde', apiVersion, lawDbDate, stages[{id, label}], permitPhases[{id, label}], profileKeys[{key, label, unit?}], answerModels[{provider, models[], effort}], recipes[{id, version}]}` |
+| `GET /v1/meta` | — | `{service:'clawde', apiVersion, lawDbDate, stages[{id, label}], permitPhases[{id, label}], profileKeys[{key, label, unit?}], answerModels[{provider, models[], effort}], recipes[{id, version}], endpoints?[], plannedEndpoints?[]}` |
 | `POST /v1/ask` | `{question, stage, profile, model?, projectRef?, locale:'ko'}` | `Answer` |
 | `POST /v1/checklist` | `{stage, profile, model?}` | `{lawDbDate, items[{topic, stage, permitPhases?[], status, reason, refs[], answerHint?}]}` |
 | `GET /v1/articles/{ref}` | — | `Article` |
@@ -1067,6 +1067,8 @@ cLAWde·ArchiDB·Site Modeling·Structure Analysis는 각자의 저장소와 배
   - 구현(PLAN-46 T-218): `src/services/clawde-check.ts`의 `checkAnswer`는 받은 답을 고치지 않고 보일 값을 계산한다 — `verdict`(낮춘 판정), `downgraded`, `noExcerpt`(발췌나 링크가 없는 조항, '원문 없음'), `unverifiedReasons`(이유 번호), `constraints`(모든 `refs`가 `citations`에 있는 것만, jig가 받을 수 있는 것), `unverifiedConstraints`. 근거 수는 발췌·링크가 다 있는 조항만 센다. 받은 판정은 `answer_json`에 그대로 남는다.
   - 그림: 엔진이 저장 전에 서비스 주소와 같은 origin에서만 토큰을 붙여 받아 data URL로 바꾼다(답 하나에 6장, 한 장 2 MB까지). PNG는 파일 서명을 확인하고, SVG는 `script`·`foreignObject`·`iframe`·`object`·`embed`, `on*` 속성, `#`가 아닌 `href`, 바깥 `url()`을 지우며 DOCTYPE·ENTITY가 있으면 버린다. 받지 못하거나 정리할 수 없는 그림은 빼고 답은 남긴다.
   - 커넥터(`src/services/clawde.ts`)는 호출마다 시간 상한(기본 20초)을 두고 다시 시도하지 않는다. 연결 실패·시간 초과·5xx → `SERVICE_UNAVAILABLE`(상태 `unreachable`), 401 → `SERVICE_AUTH`(`login-required`), 404 → `NOT_FOUND`, 그 밖의 2xx 아님·JSON 아님·계약 위반 → `SERVICE_BAD_RESPONSE`(저장하지 않음). 레시피는 엔진이 켜져 있는 동안 `(id, version)`으로 캐시한다.
+  - 보완(2026-10-08, PLAN-48 T-240): `meta`의 선택 필드 `endpoints[]`(지금 답하는 끝점)·`plannedEndpoints[]`(계약에는 있으나 501인 끝점)는 끝점의 첫 경로 조각(`ask`) 또는 메서드와 경로(`POST /v1/ask`)로 쓴다. 엔진은 마지막 `meta`의 두 목록을 설정 파일에 두고 기능 표 `features {ask, checklist, contribute(=contributions), verify, golden, recipes}`를 만든다. `endpoints`가 없으면 `plannedEndpoints`에 든 것만 끄고, 둘 다 없으면(이전 서비스) 모두 켠다. 표는 설정 보기·`GET …/legal/profile`·`GET …/legal/answers`에 실린다. 꺼진 기능의 경로는 서비스에 보내지 않고 409 `SERVICE_NOT_IMPLEMENTED`이며 대화 도구에서도 빠진다(`legal_ask`·`legal_checklist`). 조항 보기·검색은 늘 켜져 있다. 응답 501은 `SERVICE_NOT_IMPLEMENTED`이고 그 기능을 다음 `meta`까지 끄며 상태는 `connected`로 둔다. 503 중 `error.code`가 `NO_PUBLICATION`·`PUBLISHING`이면 `SERVICE_NOT_READY`('서비스 준비 중', 보기의 `notReady: true`)이고 상태를 바꾸지 않는다. 그 밖의 5xx는 그대로 `SERVICE_UNAVAILABLE`. 단계별 법령은 이 두 오류에서도 받아 둔 목록을 보이고, 답 문장의 `/v1/verify`가 이 두 오류이면 '로컬 검증만'이다.
+  - 조항 ID: 서비스는 받을 때 법령명 띄어쓰기·가운뎃점 표기·약칭(`국토계획법` 등)을 흡수하고 응답의 `ref`는 늘 저장 형식(공백 없는 정식 법령명, 가운뎃점 `ㆍ`)이라 요청한 ref와 다를 수 있다. 엔진은 조항을 요청한 ref와 응답 ref 둘 다로 `legal_articles`에 두어 어느 쪽으로도 캐시에서 찾는다. 답의 `citations[].ref`는 응답 형식 그대로 저장한다.
 - **엔진 API.** `GET/PUT /api/v1/projects/:id/legal/profile`, `POST …/legal/ask {question, stage?, confirmSendHash?}` → `{answer, number}` 또는 `{needsConfirm: {items[], hash}}`, `GET …/legal/checklist?stage=`, `GET …/legal/answers[?number=]`, `POST …/legal/contribute {keys[]}`. 원격 세션은 `contribute`와 설정 쓰기가 403이다.
   - 구현(PLAN-46 T-219, `src/server/service-routes.ts` `legalRoutes`, `src/services/legal.ts`·`legal-profile.ts`, 입력은 `src/contracts/legal.ts`): `GET …/legal/profile` → `{stage, items[{key, label?, value, unit?, source, version?, excluded, basis?, notice?, updatedAt}], stages[]}`. `PUT …/legal/profile {values?: {[key]: {value, unit?}|null}, exclude?: {[key]: bool}, stage?}`은 값을 `source:'user'`로 쓰고(알림을 지움, `null`은 지움), 값이 바뀐 키를 쓴 답을 '다시 확인 필요'로 하며 `{…보기, changed[], stale[답 번호]}`를 돌려준다. 키는 점으로 이은 서비스 어휘이고 `vide:` 키·모르는 필드는 400이다. 원격 세션의 `PUT`은 403(묻기와 답 보기는 된다).
   - 다른 출처의 값(`LegalProfile.offer`, 서비스·모델·AI 추정)은 사용자 확정 키를 바꾸지 않고 `notice`만 남긴다. AI 추정(`source:'ai'`) 값은 보내지 않는다.

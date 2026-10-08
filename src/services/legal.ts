@@ -6,6 +6,7 @@ import {
   legalProfileUpdateSchema,
 } from '../contracts/legal.ts';
 import type { ClawdeChecklist, ClawdeStageId } from '../contracts/clawde.ts';
+import type { ClawdeFeature, ClawdeFeatures } from '../contracts/services.ts';
 import type { ClawdeClient } from './clawde.ts';
 import { LegalAnswers, type LegalAnswerView, type LegalSent } from './legal-answers.ts';
 import { LegalContributions } from './legal-contribute.ts';
@@ -35,6 +36,9 @@ export const legalStatuses: Record<string, number> = {
   LEGAL_WRITER_UNAVAILABLE: 503,
   LEGAL_NOT_CONTRIBUTABLE: 400,
 };
+
+/** A checklist call that failed this way shows the kept list instead (with its time). */
+const KEEP_ON = new Set(['SERVICE_UNAVAILABLE', 'SERVICE_NOT_READY', 'SERVICE_NOT_IMPLEMENTED']);
 
 export interface LegalAskResult {
   answer: LegalAnswerView;
@@ -106,10 +110,19 @@ export class LegalService {
       now,
     });
   }
-  /** Refused before anything is sent: the project is off, or the service is not connected. */
-  async assertCanSend(projectId: string) {
+  /**
+   * Refused before anything is sent: the project is off, the service is not connected, or (with
+   * `feature`) the service does not offer that feature yet (PLAN-48 T-240).
+   */
+  async assertCanSend(projectId: string, feature?: ClawdeFeature) {
     if (await this.settings.projectOff(projectId)) throw new DomainError('LEGAL_PROJECT_OFF');
     if (!(await this.settings.ready())) throw new DomainError('SERVICE_NOT_CONNECTED');
+    if (feature && !this.settings.features()[feature])
+      throw new DomainError('SERVICE_NOT_IMPLEMENTED');
+  }
+  /** The features the service answers now (`meta.endpoints` and 501s, PLAN-48 T-240). */
+  features(): ClawdeFeatures {
+    return this.settings.features();
   }
   /** Asks with exactly `sent` (the caller decided and confirmed what goes out). */
   async ask(
@@ -123,7 +136,7 @@ export class LegalService {
       const hit = this.answers.cached(projectId, question, sent, latest);
       if (hit) return { answer: hit, cached: true };
     }
-    await this.assertCanSend(projectId);
+    await this.assertCanSend(projectId, 'ask');
     const answer = await this.client.ask({
       question,
       stage: sent.stage,
@@ -222,6 +235,7 @@ export class LegalService {
       offline: this.settings.status === 'unreachable',
       status: (await this.settings.view()).clawde.status,
       projectOff: await this.settings.projectOff(projectId),
+      features: this.settings.features(),
     };
   }
   async get(projectId: string, number: number) {
@@ -251,6 +265,8 @@ export class LegalService {
   async certify(input: unknown) {
     if (!this.writer) throw new DomainError('LEGAL_WRITER_UNAVAILABLE');
     if (!(await this.settings.ready())) throw new DomainError('SERVICE_NOT_CONNECTED');
+    const on = this.settings.features();
+    if (!on.golden || !on.ask || !on.recipes) throw new DomainError('SERVICE_NOT_IMPLEMENTED');
     return this.writer.certify(input);
   }
 
@@ -268,6 +284,7 @@ export class LegalService {
       stages: this.client.lastMeta?.stages ?? [],
       permitPhases: this.client.lastMeta?.permitPhases ?? [],
       profileKeys: this.client.lastMeta?.profileKeys ?? [],
+      features: this.settings.features(),
     };
   }
   /** Reads `meta` once when this engine has not seen it (labels of stages, phases and keys). */
@@ -340,7 +357,7 @@ export class LegalService {
     // Unreachable at the last call: the kept list (stale if the profile changed), no new card.
     if (kept && !refresh && this.settings.status === 'unreachable') return view(kept, true);
     try {
-      await this.assertCanSend(projectId);
+      await this.assertCanSend(projectId, 'checklist');
     } catch (error) {
       if (kept) return view(kept, true);
       throw error;
@@ -353,8 +370,7 @@ export class LegalService {
     try {
       list = await this.client.checklist({ stage: chosen, profile: payload.profile });
     } catch (error) {
-      if (kept && error instanceof DomainError && error.code === 'SERVICE_UNAVAILABLE')
-        return view(kept, true);
+      if (kept && error instanceof DomainError && KEEP_ON.has(error.code)) return view(kept, true);
       throw error;
     }
     const cache: LegalChecklistCache = {
@@ -387,7 +403,8 @@ export class LegalService {
         return { answer, number: hit.number, cached: true };
       }
     }
-    await this.assertCanSend(projectId);
+    // A feature the service does not offer yet shows no '보낼 정보' card.
+    await this.assertCanSend(projectId, 'ask');
     if (payload.hash !== this.profile.confirmedHash(projectId)) {
       const card = this.profile.candidates(projectId, this.labels());
       if (confirmSendHash !== card.hash)
@@ -422,7 +439,8 @@ export class LegalService {
     const cached = this.answers.article(projectId, ref);
     if (cached) return { ...cached, cached: true };
     await this.assertCanSend(projectId);
+    // The service answers in its stored form (정식 법령명, 약칭 풀림): kept under both refs.
     const article = await this.client.article(ref);
-    return { ...this.answers.saveArticle(projectId, article), cached: false };
+    return { ...this.answers.saveArticle(projectId, article, ref), cached: false };
   }
 }

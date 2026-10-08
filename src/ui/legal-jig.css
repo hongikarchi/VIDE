@@ -182,6 +182,15 @@
   color: var(--text-1);
   font-weight: 600;
 }
+/* A feature the service does not offer yet (PLAN-48 T-240): dimmed, still openable. */
+.legal-tabs button[data-off='true'] {
+  opacity: 0.55;
+}
+.legal-off {
+  margin: 4px 0 0;
+  color: var(--text-3);
+  font-size: 12px;
+}
 
 /* Answer rows */
 .legal-answers {

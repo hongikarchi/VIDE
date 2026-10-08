@@ -145,8 +145,23 @@ async function confirmed<R extends object>(
   return again as Exclude<R, NeedsConfirm>;
 }
 
-/** The four handlers, bound to the conversation's project. */
+/**
+ * The four handlers, bound to the conversation's project. A feature the service does not offer yet
+ * (PLAN-48 T-240) leaves its tool out: legal_ask without `ask`, legal_checklist without
+ * `checklist`. Articles and earlier answers stay.
+ */
 export function legalToolHandlers(projectId: string, source: LegalToolSource) {
+  const handlers = allLegalToolHandlers(projectId, source);
+  const on = source.service.features();
+  const { legal_ask, legal_checklist, ...always } = handlers;
+  return {
+    ...(on.ask ? { legal_ask } : {}),
+    ...(on.checklist ? { legal_checklist } : {}),
+    ...always,
+  } as Partial<typeof handlers> & typeof always;
+}
+
+function allLegalToolHandlers(projectId: string, source: LegalToolSource) {
   const { service, turn } = source;
   return {
     legal_ask: async (

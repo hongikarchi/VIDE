@@ -211,6 +211,14 @@ export const clawdeMetaSchema = z.object({
     )
     .default([]),
   recipes: z.array(z.object({ id: nonEmpty, version: nonEmpty })).default([]),
+  /**
+   * The endpoints the service answers now and the ones it lists but answers 501 `NOT_IMPLEMENTED`
+   * (PLAN-48 T-240). Entries name an endpoint by its first path segment, alone (`ask`) or with the
+   * method and path (`POST /v1/ask`). Without `endpoints` every endpoint counts as available (an
+   * older service).
+   */
+  endpoints: z.array(nonEmpty).optional(),
+  plannedEndpoints: z.array(nonEmpty).optional(),
 });
 export type ClawdeMeta = z.infer<typeof clawdeMetaSchema>;
 

@@ -120,6 +120,8 @@ export class LegalContributions {
     const { keys } = legalContributeInputSchema.parse(input);
     if (await this.settings.projectOff(projectId)) throw new DomainError('LEGAL_PROJECT_OFF');
     if (!(await this.settings.ready())) throw new DomainError('SERVICE_NOT_CONNECTED');
+    // The service does not take contributions yet (PLAN-48 T-240): nothing goes.
+    if (!this.settings.features().contribute) throw new DomainError('SERVICE_NOT_IMPLEMENTED');
     const listed = new Map(this.view(projectId).map((item) => [item.key, item]));
     const chosen = [...new Set(keys)].map((key) => listed.get(key));
     if (chosen.some((item) => !item?.selectable)) throw new DomainError('LEGAL_NOT_CONTRIBUTABLE');

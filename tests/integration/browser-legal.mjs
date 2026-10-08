@@ -284,6 +284,39 @@ try {
   assert.equal(await openAnswer().getByRole('button', { name: '다시 쓰기' }).count(), 1);
   await page.unroute('**/legal/answers');
 
+  // 6b. An M1 service (PLAN-48 T-240): meta lists only meta·articles·search. [묻기] and 단계별 법령
+  // are dimmed with '서비스가 아직 이 기능을 제공하지 않습니다', the status stays '연결됨', answers stay.
+  await control({ endpoints: ['meta', 'articles', 'search'] });
+  await engine('/settings/services/clawde/check', 'POST');
+  const refused = await engine(`${legalBase}/ask`, 'POST', { question: '건폐율은 얼마인가요?' });
+  assert.equal(refused.error?.code ?? refused.code, 'SERVICE_NOT_IMPLEMENTED');
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
+  await page.getByRole('button', { name: 'JIG', exact: true }).click();
+  await card.getByRole('button', { name: '열기' }).click();
+  await jig.locator('.legal-entry').first().waitFor();
+  await jig.locator('.legal-off[data-feature="ask"]').waitFor();
+  assert.match(
+    await jig.locator('.legal-off[data-feature="ask"]').textContent(),
+    /서비스가 아직 이 기능을 제공하지 않습니다/,
+  );
+  assert.equal(await jig.locator('.legal-status').textContent(), '연결됨');
+  assert.equal(await box.isDisabled(), true);
+  assert.equal(await jig.getByRole('button', { name: '묻기', exact: true }).isDisabled(), true);
+  assert.equal(
+    await jig.getByRole('tab', { name: '단계별 법령' }).getAttribute('data-off'),
+    'true',
+  );
+  if (shot) await page.screenshot({ path: join(shot, 'legal-feature-off.png') });
+  await control({ endpoints: null });
+  await engine('/settings/services/clawde/check', 'POST');
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
+  await page.getByRole('button', { name: 'JIG', exact: true }).click();
+  await card.getByRole('button', { name: '열기' }).click();
+  await jig.locator('.legal-entry').first().waitFor();
+  assert.equal(await jig.locator('.legal-off').count(), 0);
+
   // 7. The service stops: a new question is refused with [다시 시도]; cached answers and the
   // checklist show '오프라인'.
   fake.child.kill();

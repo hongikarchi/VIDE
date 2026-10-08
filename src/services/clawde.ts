@@ -23,14 +23,18 @@ import {
   type ClawdeVerifyRequest,
   type ClawdeVerifyResult,
 } from '../contracts/clawde.ts';
+import { CLAWDE_FEATURES, type ClawdeFeature } from '../contracts/services.ts';
 import { sanitizeSvg } from './clawde-check.ts';
-import type { ServiceSettings } from './settings.ts';
+import { endpointName, type ServiceSettings } from './settings.ts';
 
 /**
  * The engine's cLAWde connector (ARCH-01 「cLAWde 연결 계약」, SPEC-13.12, PLAN-46 T-217·T-218).
  * Only the engine calls the service. Each call has a time limit and is never retried: a timeout or
  * network failure is SERVICE_UNAVAILABLE ('닿지 않음'), 401 is SERVICE_AUTH ('로그인 필요'), an
- * answer outside the contract is SERVICE_BAD_RESPONSE and is not used.
+ * answer outside the contract is SERVICE_BAD_RESPONSE and is not used. An endpoint the service does
+ * not offer yet (501 `NOT_IMPLEMENTED`, or left out of `meta.endpoints`) is SERVICE_NOT_IMPLEMENTED
+ * and a service up but not published yet (503 `NO_PUBLICATION`·`PUBLISHING`) is SERVICE_NOT_READY
+ * ('서비스 준비 중'); neither marks the service unreachable (PLAN-48 T-240).
  */
 export class ClawdeClient {
   private readonly settings: ServiceSettings;
@@ -91,6 +95,10 @@ export class ClawdeClient {
     // Only the service's own origin gets the token (a figure URL could point elsewhere).
     if (new URL(url).origin !== new URL(baseUrl).origin)
       throw new DomainError('SERVICE_BAD_RESPONSE');
+    // A feature the service does not answer yet is not called at all.
+    const feature = featureOf(url, baseUrl);
+    if (feature && !this.settings.features()[feature])
+      throw new DomainError('SERVICE_NOT_IMPLEMENTED');
     let response: Response;
     try {
       response = await this.fetcher(url, {
@@ -109,6 +117,21 @@ export class ClawdeClient {
       throw new DomainError('SERVICE_UNAVAILABLE');
     }
     if (response.ok) return response;
+    if (response.status === 501) {
+      await response.body?.cancel().catch(() => {});
+      if (feature) this.settings.reportNotImplemented(feature);
+      else await this.settings.report('connected');
+      throw new DomainError('SERVICE_NOT_IMPLEMENTED');
+    }
+    if (response.status === 503) {
+      const code = await errorCode(response);
+      if (code === 'NO_PUBLICATION' || code === 'PUBLISHING') {
+        this.settings.reportNotReady();
+        throw new DomainError('SERVICE_NOT_READY');
+      }
+      await this.settings.report('unreachable');
+      throw new DomainError('SERVICE_UNAVAILABLE');
+    }
     await response.body?.cancel().catch(() => {});
     if (response.status === 401) {
       await this.settings.report('login-required');
@@ -126,6 +149,7 @@ export class ClawdeClient {
   async meta(): Promise<ClawdeMeta> {
     const meta = await this.call('/v1/meta', clawdeMetaSchema);
     this.lastMeta = meta;
+    // Records the law DB date and which endpoints answer (features()).
     await this.settings.report('connected', meta);
     return meta;
   }
@@ -205,6 +229,26 @@ export class ClawdeClient {
       }
     }
     return { ...answer, figures };
+  }
+}
+
+/** The feature a service path belongs to (`/v1/ask` → `ask`); undefined for always-on paths. */
+function featureOf(url: string, baseUrl: string): ClawdeFeature | undefined {
+  const path = new URL(url).pathname;
+  const basePath = new URL(baseUrl).pathname.replace(/\/+$/, '');
+  if (!path.startsWith(basePath + '/v1/')) return undefined;
+  const name = endpointName(path.slice(basePath.length));
+  return (Object.keys(CLAWDE_FEATURES) as ClawdeFeature[]).find(
+    (feature) => CLAWDE_FEATURES[feature] === name,
+  );
+}
+/** `{error: {code}}` of a refused response, if it has one. */
+async function errorCode(response: Response) {
+  try {
+    const body = (await response.json()) as { error?: { code?: unknown } } | null;
+    return typeof body?.error?.code === 'string' ? body.error.code : undefined;
+  } catch {
+    return undefined;
   }
 }
 

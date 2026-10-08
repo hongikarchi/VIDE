@@ -11,6 +11,7 @@ import {
   type LegalAnswerView,
 } from './legal-answer-card.tsx';
 import type { ClawdeChecklist, ClawdeStageId, ClawdeVerdict } from '../contracts/clawde.ts';
+import type { ClawdeFeatures } from '../contracts/services.ts';
 import { LegalContribute } from './legal-contribute.tsx';
 import './legal-jig.css';
 
@@ -45,6 +46,8 @@ interface AnswersView {
   offline: boolean;
   status: string;
   projectOff: boolean;
+  /** What the service offers now (PLAN-48 T-240); absent from an older engine: all on. */
+  features?: ClawdeFeatures;
 }
 interface SendItem {
   key: string;
@@ -87,6 +90,16 @@ const PHASE_TEXT: Record<string, string> = {
   'construction-start': '착공',
   occupancy: '사용승인',
 };
+const ALL_ON: ClawdeFeatures = {
+  ask: true,
+  checklist: true,
+  contribute: true,
+  verify: true,
+  golden: true,
+  recipes: true,
+};
+/** A feature the service does not offer yet: dimmed with this line (PLAN-48 T-240). */
+export const FEATURE_OFF_TEXT = '서비스가 아직 이 기능을 제공하지 않습니다';
 const STATUS_TEXT: Record<ClawdeVerdict, string> = { ...VERDICT_TEXT, unknown: '확인 필요' };
 const CONNECTED_STATES = ['connected', 'unreachable', 'unchecked'];
 const QUIET = [
@@ -94,6 +107,8 @@ const QUIET = [
   'SERVICE_NOT_CONNECTED',
   'SERVICE_AUTH',
   'SERVICE_BAD_RESPONSE',
+  'SERVICE_NOT_IMPLEMENTED',
+  'SERVICE_NOT_READY',
   'LEGAL_PROJECT_OFF',
   'FORBIDDEN',
   'INVALID_INPUT',
@@ -106,6 +121,8 @@ const ERROR_TEXT: Record<string, string> = {
   SERVICE_NOT_CONNECTED: '법규 서비스가 연결되지 않았습니다',
   SERVICE_AUTH: '로그인 필요 · 설정 › 외부 서비스에서 다시 연결하세요',
   SERVICE_BAD_RESPONSE: '서비스 응답 오류 · 이 답은 저장하지 않았습니다',
+  SERVICE_NOT_IMPLEMENTED: FEATURE_OFF_TEXT,
+  SERVICE_NOT_READY: '서비스 준비 중 · 법령 DB를 아직 게시하지 않았습니다. 잠시 뒤 다시 시도하세요',
   LEGAL_PROJECT_OFF: '이 프로젝트는 법규 서비스에 보내지 않도록 설정되어 있습니다',
   FORBIDDEN: '법규 프로필은 이 PC의 VIDE 창에서만 고칠 수 있습니다',
   INVALID_INPUT: '입력 형식이 맞지 않습니다',
@@ -168,6 +185,8 @@ export function LegalJig({ projectId }: { projectId: string }) {
     return out;
   }, [profile]);
   const connected = !!answers && CONNECTED_STATES.includes(answers.status) && !answers.projectOff;
+  const features = answers?.features ?? ALL_ON;
+  const canAsk = connected && features.ask;
 
   /** Asks; a changed send list comes back as the card (nothing sent yet). */
   const ask = useCallback(
@@ -328,7 +347,7 @@ export function LegalJig({ projectId }: { projectId: string }) {
           maxLength={2000}
           placeholder="예: 우리 건물은 일조 사선 봐야 해?"
           value={question}
-          disabled={!connected}
+          disabled={!canAsk}
           onChange={(event) => setQuestion(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -357,11 +376,16 @@ export function LegalJig({ projectId }: { projectId: string }) {
           <button
             type="submit"
             className="legal-primary"
-            disabled={!connected || busy || !question.trim()}
+            disabled={!canAsk || busy || !question.trim()}
           >
             {busy ? '묻는 중…' : '묻기'}
           </button>
         </div>
+        {connected && !features.ask ? (
+          <p className="legal-off" data-feature="ask" role="status">
+            {FEATURE_OFF_TEXT} · 조항 보기와 받아 둔 답은 그대로 됩니다
+          </p>
+        ) : null}
         {askError ? (
           <p className="legal-error" role="alert">
             {askError.text}
@@ -409,6 +433,17 @@ export function LegalJig({ projectId }: { projectId: string }) {
             type="button"
             role="tab"
             aria-selected={view === id}
+            data-off={
+              (id === 'checklist' && !features.checklist) ||
+              (id === 'contribute' && !features.contribute) ||
+              undefined
+            }
+            title={
+              (id === 'checklist' && !features.checklist) ||
+              (id === 'contribute' && !features.contribute)
+                ? FEATURE_OFF_TEXT
+                : undefined
+            }
             onClick={() => setView(id)}
           >
             {label}
@@ -424,7 +459,7 @@ export function LegalJig({ projectId }: { projectId: string }) {
               <span className="legal-mark" data-mark="unsent">
                 보내지 않음
               </span>
-              <button type="button" disabled={!connected || busy} onClick={() => void ask(q)}>
+              <button type="button" disabled={!canAsk || busy} onClick={() => void ask(q)}>
                 다시 묻기
               </button>
             </div>
@@ -466,7 +501,7 @@ export function LegalJig({ projectId }: { projectId: string }) {
                       view={answer}
                       offline={answers.offline}
                       labels={labels}
-                      busy={busy || !connected}
+                      busy={busy || !canAsk}
                       onReask={() => void ask(answer.question, { refresh: true })}
                       onRewrite={() =>
                         void api(`${base}/answers/${answer.number}/rewrite`, 'POST', undefined, {
@@ -479,7 +514,7 @@ export function LegalJig({ projectId }: { projectId: string }) {
                       {needs.length ? (
                         <BackQuestions
                           needs={needs.slice(0, 3)}
-                          busy={busy || !connected}
+                          busy={busy || !canAsk}
                           onAnswer={async (values, assumed) => {
                             const ok = await putProfile({
                               values: Object.fromEntries(
@@ -508,13 +543,18 @@ export function LegalJig({ projectId }: { projectId: string }) {
         </div>
       ) : null}
 
+      {view === 'checklist' && !features.checklist ? (
+        <p className="legal-off" data-feature="checklist" role="status">
+          {FEATURE_OFF_TEXT}
+        </p>
+      ) : null}
       {view === 'checklist' ? (
         <StageChecklist
           key={`${stage}-${checklistKey}`}
           base={base}
           stage={stage}
           profile={profile}
-          connected={connected}
+          connected={canAsk}
           onStage={(next) => void changeStage(next)}
           onCard={(card) => setPending({ kind: 'checklist', card })}
           onOpen={openItem}
@@ -525,8 +565,13 @@ export function LegalJig({ projectId }: { projectId: string }) {
         <ProfileEditor profile={profile} onSave={putProfile} />
       ) : null}
 
+      {view === 'contribute' && !features.contribute ? (
+        <p className="legal-off" data-feature="contribute" role="status">
+          {FEATURE_OFF_TEXT}
+        </p>
+      ) : null}
       {view === 'contribute' ? (
-        <LegalContribute base={base} connected={connected} labels={labels} />
+        <LegalContribute base={base} connected={connected && features.contribute} labels={labels} />
       ) : null}
     </div>
   );

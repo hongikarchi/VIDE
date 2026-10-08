@@ -15,6 +15,30 @@ export const serviceStatusSchema = z.enum([
 ]);
 export type ServiceStatus = z.infer<typeof serviceStatusSchema>;
 
+/**
+ * The cLAWde features VIDE uses, each named by the service endpoint it calls (PLAN-48 T-240):
+ * 묻기 `ask`, 단계별 법령 `checklist`, cLAWde로 보내기 `contributions`, 답 문장 검증 `verify`, 모델 인증
+ * `golden`, 답 문장 레시피 `recipes`. Article view and search are always on.
+ */
+export const CLAWDE_FEATURES = {
+  ask: 'ask',
+  checklist: 'checklist',
+  contribute: 'contributions',
+  verify: 'verify',
+  golden: 'golden',
+  recipes: 'recipes',
+} as const;
+export type ClawdeFeature = keyof typeof CLAWDE_FEATURES;
+export const clawdeFeaturesSchema = z.object({
+  ask: z.boolean(),
+  checklist: z.boolean(),
+  contribute: z.boolean(),
+  verify: z.boolean(),
+  golden: z.boolean(),
+  recipes: z.boolean(),
+});
+export type ClawdeFeatures = z.infer<typeof clawdeFeaturesSchema>;
+
 export const clawdeSettingsViewSchema = z.object({
   baseUrl: z.string().nullable(),
   enabled: z.boolean(),
@@ -30,6 +54,13 @@ export const clawdeSettingsViewSchema = z.object({
   checkedAt: z.string().nullable(),
   /** Whether this PC is signed in to the VIDE account ([연결] needs it). */
   accountLinked: z.boolean(),
+  /**
+   * The service features the last `meta` (and any 501 since) says are answered now (PLAN-48
+   * T-240); a feature that is off is never called and its buttons are dimmed.
+   */
+  features: clawdeFeaturesSchema.optional(),
+  /** The last call found the service up but not ready (503 `NO_PUBLICATION`·`PUBLISHING`). */
+  notReady: z.boolean().optional(),
 });
 export type ClawdeSettingsView = z.infer<typeof clawdeSettingsViewSchema>;
 

@@ -725,6 +725,8 @@ const knownErrors = new Set([
   'SERVICE_UNAVAILABLE',
   'SERVICE_AUTH',
   'SERVICE_BAD_RESPONSE',
+  'SERVICE_NOT_IMPLEMENTED',
+  'SERVICE_NOT_READY',
   'SEND_NOT_CONFIRMED',
   'NO_VIEW',
   'LAYER_OPTION_UNAVAILABLE',
@@ -770,6 +772,10 @@ const errorHints: Record<string, string> = {
     'The legal service refused the login. Tell the user to connect again in 설정 › 외부 서비스.',
   SERVICE_BAD_RESPONSE:
     'The legal service answered outside its contract; the answer was not kept. Tell the user.',
+  SERVICE_NOT_IMPLEMENTED:
+    'The legal service does not offer this yet (서비스 준비 중). Nothing was asked; articles and earlier answers still read. Tell the user, and do not answer the legal question from memory as if it were the service.',
+  SERVICE_NOT_READY:
+    'The legal service is up but its law database is not published yet (서비스 준비 중). Nothing new was asked. Tell the user to try later.',
   GH_NOT_LOADED:
     'Grasshopper is not running in that Rhino. gh_open starts it (Auto); in Plan mode tell the user.',
   GH_NO_DOCUMENT:
