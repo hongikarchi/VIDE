@@ -197,6 +197,17 @@ function fill(db, p, n) {
   run("INSERT INTO legal_articles VALUES(?,'law:x/1','{}',?)", p, at);
   run("INSERT INTO legal_contributions VALUES(?,'site.area','h','r-1',?)", p, at);
   run(
+    "INSERT INTO compliance_roles VALUES(?,'link-1','layer','건물','mass',NULL,NULL,'person',?,NULL)",
+    p,
+    at,
+  );
+  run(
+    "INSERT INTO compliance_proposals VALUES(?,'pr-1','link-1','layer','Default','[]','{}','mass',NULL,NULL,'r','proposed',?,1)",
+    p,
+    at,
+  );
+  run('INSERT INTO compliance_roles_version VALUES(?,1)', p);
+  run(
     "INSERT INTO object_versions VALUES(?,?,'object','{}',?,3)",
     p,
     `v-${p}`,

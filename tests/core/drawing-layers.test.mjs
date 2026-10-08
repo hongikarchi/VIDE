@@ -101,8 +101,8 @@ test('copying a table keeps choices the other drawing can take and lists the res
   assert.deepEqual(dropped, ['가구']);
 });
 
-test('schema 15 keeps one read and one table per drawing path, revisions guard the table', () => {
-  assert.equal(schemaVersion, 15);
+test('schema 15+ keeps one read and one table per drawing path, revisions guard the table', () => {
+  assert.ok(schemaVersion >= 15);
   const store = new Store(':memory:');
   const project = store.createProject('도면 읽기');
   let tick = 0;

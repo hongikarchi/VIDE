@@ -2,7 +2,7 @@
 id: PLAN-48
 title: 법규 체크 — 설계 모델과 규제 조건 비교 (T-237~T-241)
 status: draft
-version: 0.2
+version: 0.3
 updated: 2026-10-08
 owner: agent:claude
 related: [SPEC-15, SPEC-12, SPEC-13, SPEC-07, ARCH-03, ARCH-01, DESIGN, PLAN-45, PLAN-46, C-05, C-06, FR-09, FR-14, FR-18, FR-22, FR-24, FR-25, AC-14, AC-20, AC-34, AC-44, HOST-RHINO]
@@ -119,7 +119,7 @@ T-237·T-238·T-239는 계약 고정 뒤 동시에 시작한다. T-239는 계약
 | 티켓 | 상태 | 증거 |
 |---|---|---|
 | 계약 | 완료(2026-10-08), 같은 날 적대적 검토로 보강(0.2): 좌표·지반 기준(`frame.groundZ`), 고른 대안(`plan.chosenOption`), 단위 모름 `toMeters: null`, 숨긴 역할 객체·쓰지 못한 객체의 역할과 모양, 설정값·수정 사항 형식(`by:'person'`만), 경우/구간 분리, 초과 번호, 분류 요약, 검사 목록 완전성·상태 수·적합 조건 검사 | `tests/contract/compliance-contract.test.mjs` 5개 통과 |
-| T-237 | 계획 | — |
+| T-237 | 구현·단위 검증 완료(2026-10-08). 실제 Rhino 문서 읽기는 T-241(숨은 Rhino 8)에서 확인. `vide/compliance-kit` 0.1.0(`conventions.ts`·`read-model.ts`·`proposals.ts`), 스키마 16(`compliance_roles`·`compliance_proposals`·`compliance_roles_version`), `src/services/compliance-roles.ts`, `src/server/compliance-routes.ts`(분류 기록·체크용 문서 읽기·제안 받기/정하기), jig 입력 종류 `host-document`(작업본 `hostDocuments`, 읽기 목적 `check`). 계약 변경 없음. 분류 확인 화면 부품은 T-239(`compliance-roles`)가 이 경로로 만든다. `AI_SEND_OFF`는 프로젝트 AI 전송 끔 설정이 아직 없어 쓰지 않음 | `tests/core/compliance-read.test.mjs` 8개(①~⑨·지문 변경·없는 기록·블록 대수·해치·제안 요약과 답 검사), `tests/server/compliance-roles.test.mjs` 4개(전체 읽기·숨김 판별·단계 입력·기록 판·형상 변경·제안 받기/빼기/바꾸기/버리기·AI 실패·단위 모름·원격 403·연결 없음) 통과 |
 | T-238 | 계획 | — |
 | T-239 | 계획 | — |
 | T-240 | 계획 | — |

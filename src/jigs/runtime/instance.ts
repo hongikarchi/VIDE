@@ -55,6 +55,21 @@ export interface InstanceBody {
   jigOutputs?: Record<string, JigOutputBinding>;
   /** The source each `jig-output` input had at the last kept run ('다시 계산 필요' when it moved). */
   jigOutputsUsed?: Record<string, JigOutputUse>;
+  /**
+   * `host-document` inputs by key (ARCH-03 §8.6): the last read the engine classified for this
+   * instance (the kept model and what it was read from).
+   */
+  hostDocuments?: Record<string, HostDocumentRef>;
+}
+export interface HostDocumentRef {
+  /** The kept model under `<data>/jigs/` and the hash of its read (`revisionKey` + `rolesVersion`). */
+  ref: string;
+  hash: string;
+  readId: string;
+  linkId: string;
+  revisionKey: string;
+  rolesVersion: number;
+  at: string;
 }
 export interface JigOutputBinding {
   instanceId: string;
@@ -149,5 +164,6 @@ export function bodyOf(value: unknown): InstanceBody {
     ...(body.siteData ? { siteData: body.siteData } : {}),
     ...(body.jigOutputs ? { jigOutputs: body.jigOutputs } : {}),
     ...(body.jigOutputsUsed ? { jigOutputsUsed: body.jigOutputsUsed } : {}),
+    ...(body.hostDocuments ? { hostDocuments: body.hostDocuments } : {}),
   };
 }

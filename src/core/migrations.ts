@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 /** v5 and later cannot be opened by an older installation (UNSUPPORTED_SCHEMA); see ARCH-03 §10.1. */
-export const schemaVersion = 15;
+export const schemaVersion = 16;
 export const baselineSchema = `
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
@@ -205,6 +205,24 @@ const drawingBackflow = `CREATE TABLE IF NOT EXISTS drawing_backflow_baselines(
   projectId TEXT NOT NULL REFERENCES projects(id), key TEXT NOT NULL, path TEXT NOT NULL,
   data TEXT NOT NULL, revision INTEGER NOT NULL, updatedAt TEXT NOT NULL,
   PRIMARY KEY(projectId, key)) WITHOUT ROWID;`;
+// 법규 체크 분류 (SPEC-15.4, ARCH-03 §8.6, PLAN-48 T-237): a person's (or an accepted AI) 검사 역할 per
+// layer path or object id of one linked document, with the object's geometry fingerprint when it was
+// confirmed; the AI proposals (object ids and their fingerprints as JSON, `seq` = the AI's order)
+// with their state; and the
+// project's classification version, one up per change.
+const complianceRoles = `CREATE TABLE IF NOT EXISTS compliance_roles(
+  projectId TEXT NOT NULL REFERENCES projects(id), documentKey TEXT NOT NULL,
+  scope TEXT NOT NULL CHECK(scope IN ('layer','object')), key TEXT NOT NULL, role TEXT NOT NULL,
+  floor TEXT, use TEXT, by TEXT NOT NULL CHECK(by IN ('person','ai-accepted')), at TEXT NOT NULL,
+  geometry_hash TEXT, PRIMARY KEY(projectId, documentKey, scope, key)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS compliance_proposals(projectId TEXT NOT NULL REFERENCES projects(id),
+  id TEXT NOT NULL, documentKey TEXT NOT NULL, scope TEXT NOT NULL CHECK(scope IN ('layer','group')),
+  layer TEXT NOT NULL, object_ids_json TEXT NOT NULL, hashes_json TEXT NOT NULL, role TEXT NOT NULL,
+  floor TEXT, use TEXT, reason TEXT NOT NULL,
+  state TEXT NOT NULL CHECK(state IN ('proposed','accepted','rejected')), created_at TEXT NOT NULL,
+  seq INTEGER NOT NULL, PRIMARY KEY(projectId, id)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS compliance_roles_version(projectId TEXT PRIMARY KEY REFERENCES projects(id),
+  version INTEGER NOT NULL) WITHOUT ROWID;`;
 export const migrations: Migration[] = [
   { version: 2, sql: baselineSchema },
   { version: 3, sql: hiddenRequests },
@@ -220,6 +238,7 @@ export const migrations: Migration[] = [
   { version: 13, sql: legalQa },
   { version: 14, sql: drawingBackflow },
   { version: 15, sql: drawingLayers },
+  { version: 16, sql: complianceRoles },
 ];
 
 /** Caller holds the exclusive controller lock. Never migrates user model files. */

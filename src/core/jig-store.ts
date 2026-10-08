@@ -149,7 +149,8 @@ export interface JigRead {
   revisionKey: string;
   layers: string[];
   includeHidden: boolean;
-  purpose: 'assembly' | 'pre-bake';
+  /** `check`: the 법규 체크 document read (SPEC-15.3 1, ARCH-03 §8.6). */
+  purpose: 'assembly' | 'pre-bake' | 'check';
   ref: string;
   at: string;
 }
@@ -159,7 +160,7 @@ const newRead = z
     revisionKey: text.min(1),
     layers: z.array(text),
     includeHidden: z.boolean(),
-    purpose: z.enum(['assembly', 'pre-bake']),
+    purpose: z.enum(['assembly', 'pre-bake', 'check']),
     ref: text.min(1),
   })
   .strict();

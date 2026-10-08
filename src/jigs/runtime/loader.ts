@@ -91,6 +91,9 @@ const LIBRARY_MODULES: Record<string, () => Promise<Record<string, unknown>>> = 
   // 규제 조건 rules, 2D 가능 영역 and 3D 외피 of the 규모검토 jigs (PLAN-45 T-209·T-210).
   'vide/massing-kit': () =>
     import('../official/massing-kit/index.ts') as Promise<Record<string, unknown>>,
+  // 법규 체크 model reading and role rules (PLAN-48 T-237); the check itself joins in T-238.
+  'vide/compliance-kit': () =>
+    import('../official/compliance-kit/index.ts') as Promise<Record<string, unknown>>,
   // SHP reading and PNU helpers only; public-data calls stay with the engine (keys, T-205).
   'vide/site-data': () =>
     import('../official/site-data/library.ts') as Promise<Record<string, unknown>>,

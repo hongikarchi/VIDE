@@ -910,8 +910,8 @@ function latestSyncOf(workspace: Workspace, projectId: string, link: DocumentLin
  * without host access filters the stored display Sync on the server. Nothing here touches the
  * Live Sync basis, the viewport or the request history.
  */
-async function readForJig(
-  context: JigRouteContext,
+export async function readForJig(
+  context: Pick<JigRouteContext, 'workspace' | 'links' | 'sdk'>,
   projectId: string,
   input: { linkId?: string; syncId?: string; layers: string[]; includeHidden: boolean },
 ): Promise<{ linkId: string; revisionKey: string; model: ReadModel }> {

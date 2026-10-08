@@ -133,6 +133,8 @@ interface ServerOptions {
    */
   siteDataOptions?: { fetch?: typeof fetch; environment?: NodeJS.ProcessEnv };
   /** Test seams for external services (SPEC-13.11): secret sealing, the account token, fetch. */
+  /** 법규 체크 역할 제안 (SPEC-15.4): a fake AI in tests; `null` = no AI on this PC. */
+  complianceOptions?: { propose?: ComplianceRouteContext['propose'] | null };
   serviceOptions?: {
     protector?: SecretProtector;
     account?: AccountTokens;
@@ -226,6 +228,12 @@ import { FinishStore } from '../core/finish-store.ts';
 import { finishRoutes, finishStatuses } from './finish-routes.ts';
 import { accountTokens, legalRoutes, serviceSettingsRoutes } from './service-routes.ts';
 import { LegalService, legalStatuses } from '../services/legal.ts';
+import { ComplianceRoles } from '../services/compliance-roles.ts';
+import {
+  complianceRoutes,
+  complianceStatuses,
+  type ComplianceRouteContext,
+} from './compliance-routes.ts';
 import { SecretStore, type SecretProtector } from '../services/secrets.ts';
 import {
   ServiceSettings,
@@ -351,6 +359,7 @@ const statuses: Record<string, number> = {
   ...drawingBackflowStatuses,
   ...serviceSettingsStatuses,
   ...legalStatuses,
+  ...complianceStatuses,
 };
 export async function startServer({
   filename,
@@ -377,6 +386,7 @@ export async function startServer({
   serviceOptions,
   sheetsReader,
   ctbSupportFolders,
+  complianceOptions,
 }: ServerOptions) {
   const { store, event: storeEvent } = await openStore(filename, storeSplit),
     bootstrap = randomBytes(32).toString('hex'),
@@ -893,6 +903,31 @@ export async function startServer({
       };
     return signedIn.value;
   };
+  // 법규 체크 분류 (SPEC-15.4, PLAN-48 T-237): the project's records and the one-shot AI role
+  // proposal with the user's own CLI (group summaries only, no coordinates).
+  const complianceRoles = new ComplianceRoles(store);
+  const complianceRunner = new CliRunner((provider) => execution.executable(provider), 5 * 60_000);
+  const proposeRoles: ComplianceRouteContext['propose'] =
+    complianceOptions?.propose !== undefined
+      ? (complianceOptions.propose ?? undefined)
+      : async (request) => {
+          const plan = modelPlan(
+            await signedInServices(),
+            (await execution.models())
+              .filter((model) => model.provider === 'codex-cli')
+              .map((model) => model.id),
+          );
+          if (!plan) throw new DomainError('COMPLIANCE_AI_UNAVAILABLE');
+          const files = request.files
+            .map((file) => `첨부 ${file.name}:\n${file.text}`)
+            .join('\n\n');
+          const reply = await complianceRunner.run({
+            role: 'extract',
+            choice: plan.extract,
+            prompt: `${request.body}\n\n${files}`,
+          });
+          return reply.text;
+        };
   // 자료 정리 (SPEC-08.9): the project folders into the knowledge DB, only when asked.
   const collector = new KnowledgeCollector({
     dataDirectory: dirname(filename),
@@ -2365,6 +2400,21 @@ export async function startServer({
         });
         return;
       }
+      // 법규 체크의 모델 읽기와 분류 (SPEC-15.3·15.4): reads at this PC, records per document.
+      if (
+        await complianceRoutes(url, request.method, {
+          workspace,
+          dataDirectory: dirname(filename),
+          body: () => body(request),
+          send,
+          remote,
+          roles: complianceRoles,
+          links,
+          sdk,
+          propose: proposeRoles,
+        })
+      )
+        return;
       if (
         await jigRoutes(url, request, {
           workspace,

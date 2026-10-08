@@ -152,6 +152,16 @@ const inputDecl = z.discriminatedUnion('kind', [
   // for this instance (address, candidates, chosen parcels, collection, SHP). Official jigs only;
   // steps read its parts as `input.<key>.<part>` (SITE_DATA_PARTS).
   z.object({ ...inputBase, kind: z.literal('site-data'), required: z.boolean() }).strict(),
+  // One linked host document read whole for a check (SPEC-15.3, ARCH-03 §8.6, PLAN-48 T-237): the
+  // engine reads it (purpose 'check') when asked and gives the step its classified model.
+  z
+    .object({
+      ...inputBase,
+      kind: z.literal('host-document'),
+      host: z.enum(['rhino']),
+      required: z.boolean().optional(),
+    })
+    .strict(),
   z
     .object({
       ...inputBase,
@@ -752,7 +762,7 @@ export function validateManifest(
       error('JIG_CAPABILITY_MISSING', 'capabilities', `${why}에는 ${name} 선언이 필요합니다`);
   };
   for (const input of manifest.inputs) {
-    if (input.kind === 'sync-layers' || input.kind === 'assembly')
+    if (input.kind === 'sync-layers' || input.kind === 'assembly' || input.kind === 'host-document')
       need('sync.read', `입력 ${input.key}`);
     if (input.kind === 'facts') need('facts.read', `입력 ${input.key}`);
     if (input.kind === 'jig-output') need('jig.read', `입력 ${input.key}`);

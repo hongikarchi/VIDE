@@ -23,6 +23,7 @@ import {
   bodyOf,
   emptyBody,
   type AssembledRole,
+  type HostDocumentRef,
   type InstanceBody,
   type Override,
   type SiteCopyRef,
@@ -590,7 +591,7 @@ export class JigRuntime {
       revisionKey: string;
       layers: string[];
       includeHidden: boolean;
-      purpose: 'assembly' | 'pre-bake';
+      purpose: 'assembly' | 'pre-bake' | 'check';
       model: ReadModel;
     },
   ): JigRead & { objectCount: number; layerTable: { fullPath: string; objectCount: number }[] } {
@@ -758,8 +759,80 @@ export class JigRuntime {
         inputs[input.key] = this.siteDataInput(body.siteData?.[input.key] ?? {});
       else if (input.kind === 'jig-output')
         inputs[input.key] = await this.jigOutputValue(projectId, input, body);
+      else if (input.kind === 'host-document') {
+        // The kept classified model (ARCH-03 §8.6); null until the engine has read the document.
+        const kept = body.hostDocuments?.[input.key];
+        inputs[input.key] = (kept && this.readGz(kept.ref)) ?? null;
+      }
     }
     return inputs;
+  }
+  /** A `jig-output` input's current value for this instance (the 법규 체크 read needs the limits). */
+  async jigOutputInput(projectId: string, instanceId: string, key: string): Promise<unknown> {
+    const instance = this.store.instance(projectId, instanceId);
+    const jig = await this.jigOf(instance);
+    const input = jig.manifest.inputs.find((i) => i.key === key);
+    if (!input || input.kind !== 'jig-output') throw new DomainError('NOT_FOUND');
+    return this.jigOutputValue(projectId, input, bodyOf(instance.body));
+  }
+  /** The declared inputs of an instance's jig (route checks). */
+  async inputsOf(projectId: string, instanceId: string) {
+    const instance = this.store.instance(projectId, instanceId);
+    return (await this.jigOf(instance)).manifest.inputs;
+  }
+  /**
+   * Keep the model the engine read and classified for a `host-document` input (ARCH-03 §8.6): the
+   * steps that read it go stale. Its fingerprint is the read's `revisionKey` + `rolesVersion` and
+   * the model's own content (a changed classification gives a different model).
+   */
+  async setHostDocument(
+    projectId: string,
+    instanceId: string,
+    key: string,
+    kept: {
+      model: unknown;
+      readId: string;
+      linkId: string;
+      revisionKey: string;
+      rolesVersion: number;
+    },
+  ): Promise<HostDocumentRef> {
+    const instance = this.store.instance(projectId, instanceId);
+    const jig = await this.jigOf(instance);
+    const input = jig.manifest.inputs.find((i) => i.key === key);
+    if (!input || input.kind !== 'host-document') throw new DomainError('NOT_FOUND');
+    const hash = hashValue([kept.revisionKey, kept.rolesVersion, hashValue(kept.model)]);
+    const ref = `models/${instanceId}/${key.replace(/[^A-Za-z0-9_.-]/g, '_')}-${hash.slice(0, 16)}.json.gz`;
+    this.writeGz(ref, kept.model);
+    const body = bodyOf(instance.body);
+    const previous = body.hostDocuments?.[key];
+    const entry: HostDocumentRef = {
+      ref,
+      hash,
+      readId: kept.readId,
+      linkId: kept.linkId,
+      revisionKey: kept.revisionKey,
+      rolesVersion: kept.rolesVersion,
+      at: new Date().toISOString(),
+    };
+    body.hostDocuments = { ...(body.hostDocuments ?? {}), [key]: entry };
+    if (previous?.hash !== hash)
+      this.markStale(jig, instanceId, this.graphOf(jig).affectedByInputs([key]));
+    this.bump(instanceId);
+    this.save(
+      instance,
+      body,
+      instance.status === 'new' ? 'new' : previous?.hash !== hash ? 'stale' : undefined,
+    );
+    return entry;
+  }
+  /** The kept classified model of a `host-document` input, with its reference; null when unread. */
+  hostDocument(projectId: string, instanceId: string, key: string) {
+    const instance = this.store.instance(projectId, instanceId);
+    const kept = bodyOf(instance.body).hostDocuments?.[key];
+    if (!kept) return null;
+    const model = this.readGz(kept.ref);
+    return model === undefined ? null : { ...kept, model };
   }
   /**
    * What a registered producer gives for a `jig-output` input (the legal jig's

@@ -17,6 +17,12 @@ import {
   type RouteTarget,
   type Service,
 } from '../ui/request-route.ts';
+// 법규 체크 역할 제안 (SPEC-15.4, PLAN-48 T-237): the same one-shot form as `inputRolesRequest`
+// below, built from the object group summaries of `vide/compliance-kit` (no coordinates).
+export {
+  checkComplianceRoles,
+  complianceRolesRequest,
+} from '../jigs/official/compliance-kit/proposals.ts';
 
 export const VIEW_ACTIONS = {
   hide: 'Hide these objects or turn their layer off in the view (숨겨, 안 보이게, 꺼, 가려).',
