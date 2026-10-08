@@ -22,6 +22,7 @@ import { makeAllowed, panelLayoutSchema, stageConfirmed } from '../../src/contra
 import { JigRegistry, officialJigRoot } from '../../src/jigs/runtime/loader.ts';
 import { selftestJig, validateJig } from '../../src/jigs/runtime/pack.ts';
 import { JIGS } from '../../src/jigs/catalog.ts';
+import { faceSampler } from '../../src/jigs/official/paneling-kit/sample.ts';
 import {
   closedCylinder,
   cylinderBand,
@@ -29,6 +30,7 @@ import {
   hypar,
   plane,
   previewSettings,
+  sampleFace,
   sampleOf,
   sphereBand,
 } from '../fixtures/paneling-surfaces.mjs';
@@ -277,9 +279,82 @@ test('sphere band: cells at the pole become triangles sharing one pole key', () 
   const poles = layout.panels.filter((p) => p.pole);
   assert.equal(poles.length, layout.counts.pole);
   for (const p of poles) {
-    assert.equal(p.uv.length, 3, p.id);
-    assert.ok(p.vertexKeys.includes('0:p:vMax'));
+    // A triangle on the surface, a quad in UV: the two pole vertices share the one pole key and
+    // the one point, and each keeps the u of its edge, so both edges into the pole are meridians.
+    assert.equal(p.uv.length, 4, p.id);
+    assert.equal(p.vertexKeys.filter((k) => k === '0:p:vMax').length, 2, p.id);
+    const distinct = new Set(p.corners.map((c) => c.map((x) => Math.round(x * 1e6) + 0).join()));
+    assert.equal(distinct.size, 3, p.id);
+    for (let i = 0; i < 4; i++) {
+      const j = (i + 1) % 4;
+      const intoPole = (p.vertexKeys[i] === '0:p:vMax') !== (p.vertexKeys[j] === '0:p:vMax');
+      if (intoPole) assert.ok(Math.abs(p.uv[i][0] - p.uv[j][0]) < 1e-12, `${p.id} meridian`);
+    }
     assert.equal(p.failure, null);
+  }
+});
+
+/** The largest distance on the surface between two panels along each edge they share (by keys),
+ *  at ¼, ½ and ¾ of it; edges into a pole are told apart by their UV like the members do. */
+function sharedEdgeGap(sample, layout) {
+  const s = faceSampler(sample.faces[0]);
+  const owners = new Map();
+  for (const p of layout.panels) {
+    if (p.failure) continue;
+    const n = p.uv.length;
+    for (let i = 0; i < n; i++) {
+      const a = p.vertexKeys[i],
+        b = p.vertexKeys[(i + 1) % n];
+      if (a === b) continue;
+      const fwd = a < b;
+      const ua = fwd ? p.uv[i] : p.uv[(i + 1) % n],
+        ub = fwd ? p.uv[(i + 1) % n] : p.uv[i];
+      const pts = [0.25, 0.5, 0.75].map((l) =>
+        s.point(ua[0] + (ub[0] - ua[0]) * l, ua[1] + (ub[1] - ua[1]) * l),
+      );
+      const key = fwd ? `${a}|${b}` : `${b}|${a}`;
+      if (!owners.has(key)) owners.set(key, []);
+      owners.get(key).push(pts);
+    }
+  }
+  let worst = 0,
+    pairs = 0;
+  for (const list of owners.values())
+    for (let x = 0; x < list.length; x++) {
+      // Pair each edge with its closest same-key edge (a pole fan has several).
+      let best = Infinity;
+      for (let y = 0; y < list.length; y++) {
+        if (x === y) continue;
+        best = Math.min(
+          best,
+          Math.max(...list[x].map((q, k) => Math.hypot(...q.map((c, d) => c - list[y][k][d])))),
+        );
+      }
+      if (Number.isFinite(best)) {
+        worst = Math.max(worst, best);
+        pairs++;
+      }
+    }
+  return { worst, pairs };
+}
+
+test('sphere poles: shared edges into the pole lie on one curve for both panels (grid, diamond)', () => {
+  // The reviewer's case: before, the pole vertex took one panel corner's UV, so the edge into the
+  // pole was a UV diagonal and missed its neighbour by up to 18.5 mm (diamond: 24 failed 'area 0'
+  // with a non-zero area).
+  const sample = sampleOf(sphereBand(5, -Math.PI / 6, { nu: 97, nv: 49 }));
+  for (const pattern of ['grid', 'diamond', 'triangle']) {
+    const result = layoutPanels(sample, previewSettings({ pattern }));
+    assert.equal(result.ok, true);
+    const { worst, pairs } = sharedEdgeGap(sample, result.layout);
+    assert.ok(pairs > 100, pattern);
+    assert.ok(worst < 1e-6, `${pattern}: shared edges ${worst} m apart`);
+    for (const p of result.layout.panels) {
+      if (p.failure?.code === 'degenerate' && /넓이가 0/.test(p.failure.message))
+        assert.equal(p.area, 0, `${p.id}: the failure says area 0, so the area is 0`);
+      if (!p.failure) assert.ok(p.area > 0, p.id);
+    }
+    assert.equal(result.layout.counts.failed, 0, pattern);
   }
 });
 
@@ -458,4 +533,63 @@ test('the official jig is built in: registry, validation, self-test; J-07 availa
   );
   const j07 = JIGS.find((j) => j.code === 'J-07');
   assert.equal(j07.status, 'available');
+});
+
+test('projected grid on a C-shaped face: outlines counter-clockwise from the reference normal', () => {
+  // The orientation was measured only at the middle of the (s, t) box; on a C or ring shape that
+  // point is off the face and the default +1 left every outline clockwise.
+  for (const span of [1.5, 0.5]) {
+    const face = sampleFace(
+      (u, v) => ({
+        p: [v * Math.cos(u), v * Math.sin(u), 0.3 * Math.sin(u)],
+        n: [0, 0, 1],
+        k: [0, 0],
+      }),
+      { domainU: [0, span * Math.PI], domainV: [5, 9], nu: 96, nv: 24 },
+    );
+    const sample = sampleOf(face);
+    const layout = lay(face, { measure: 'projected' });
+    const s = faceSampler(sample.faces[0]);
+    let checked = 0;
+    for (const p of layout.panels) {
+      if (p.failure) continue;
+      const n = [0, 0, 0];
+      p.corners.forEach((a, i) => {
+        const b = p.corners[(i + 1) % p.corners.length];
+        n[0] += (a[1] - b[1]) * (a[2] + b[2]);
+        n[1] += (a[2] - b[2]) * (a[0] + b[0]);
+        n[2] += (a[0] - b[0]) * (a[1] + b[1]);
+      });
+      const cu = p.uv.reduce((a, q) => a + q[0], 0) / p.uv.length;
+      const cv = p.uv.reduce((a, q) => a + q[1], 0) / p.uv.length;
+      const ref = s.normal(cu, cv);
+      assert.ok(n[0] * ref[0] + n[1] * ref[1] + n[2] * ref[2] > 0, `${span}π ${p.id}`);
+      checked++;
+    }
+    assert.ok(checked > 50, `${span}π: ${checked}`);
+  }
+});
+
+test('several faces: 목표와 다름 compares each panel with its own face module', () => {
+  // A closed cylinder stretches its module to the girth; a plane beside it keeps the target. Each
+  // face counted alone and together must agree (before, every face used face 0's module).
+  const cyl = closedCylinder(1, 6, { faceIndex: 0 });
+  const flat = plane(6, 3, { faceIndex: 1 });
+  const size = [3, 0.6];
+  const both = layoutPanels(sampleOf([cyl, flat]), previewSettings({ size }));
+  assert.equal(both.ok, true);
+  const alone = (face) => {
+    const r = layoutPanels(sampleOf([face]), previewSettings({ size }));
+    assert.equal(r.ok, true);
+    return r.layout;
+  };
+  const a = alone(cyl),
+    b = alone(flat);
+  assert.notDeepEqual(a.module, b.module, 'the cylinder fitted its module');
+  assert.equal(both.layout.counts.offTarget, a.counts.offTarget + b.counts.offTarget);
+  assert.deepEqual(
+    both.layout.faceModules.map((f) => f.faceIndex),
+    [0, 1],
+  );
+  assert.deepEqual(both.layout.faceModules[1].module, b.module);
 });

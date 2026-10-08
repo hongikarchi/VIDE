@@ -40,6 +40,7 @@ import {
   toneOf,
 } from '../../src/ui/paneling/model.ts';
 import { jigFor, OFFICIAL_TOOL_ROUTING } from '../../src/ui/request-route.ts';
+import { stageSources } from '../../src/jigs/runtime/paneling-confirmed.ts';
 import { panelingFixture, panelingParams } from '../fixtures/paneling-result.mjs';
 
 const PANEL = join(
@@ -148,12 +149,67 @@ test('settings fall to their stage and carry 물어볼 것 · 가정 by their so
   // 합치기 기준 is read only with 합치기, 투영 평면 only with 투영.
   const v = values(params);
   assert.equal(settingInUse({ key: 'mergeBelow' }, v), false);
-  assert.equal(settingInUse({ key: 'mergeBelow' }, { ...v, boundary: 'merge' }), true);
+  assert.equal(settingInUse({ key: 'mergeBelow' }, { ...v, boundaryRule: 'merge' }), true);
   assert.deepEqual(
     assumedOf(params, ['preview'], v).map((s) => s.key),
-    ['measure', 'axis', 'startCorner', 'flip', 'boundary'],
+    ['measure', 'axis', 'startCorner', 'flip', 'boundaryRule'],
   );
   assert.equal(plateHint(v), '판 1,190 × 590 mm = 크기 − 줄눈');
+});
+
+test('the screen fixture uses the manifest keys and choices, and counts 합치기 기준 like the engine', () => {
+  // The screen used the key 'boundary' while the manifest and the engine say 'boundaryRule', so with
+  // 자르기 the screen still counted, showed and asked 합치기 기준; its fixture had the same wrong key.
+  const manifest = JSON.parse(readFileSync(join(PANEL, '..', 'jig.json'), 'utf8'));
+  const decls = new Map(manifest.params.map((p) => [p.key, p]));
+  for (const setting of panelingParams()) {
+    const decl = decls.get(setting.key);
+    assert.ok(decl, `${setting.key} is a manifest setting`);
+    if (setting.choices)
+      assert.deepEqual(
+        setting.choices.map((c) => c.value).sort(),
+        decl.choices.map((c) => c.value).sort(),
+        setting.key,
+      );
+  }
+  const manifestParams = manifest.params.map((p) => ({
+    key: p.key,
+    title: p.title,
+    group: p.group,
+    type: p.type,
+    unit: p.unit ?? '',
+    displayUnit: p.display?.unit ?? p.unit ?? '',
+    value: p.default,
+    displayValue: p.default,
+    by: 'default',
+    at: '',
+    basis: p.basis,
+    ...(p.choices ? { choices: p.choices } : {}),
+  }));
+  for (const rule of ['trim', 'drop', 'merge']) {
+    const v = { ...values(manifestParams), boundaryRule: rule };
+    const screen = assumedOf(manifestParams, ['preview'], v).map((s) => s.key);
+    const engine = stageSources(
+      manifest.params,
+      Object.fromEntries(manifestParams.map((p) => [p.key, { value: v[p.key], by: 'default' }])),
+    ).assumed.preview;
+    assert.deepEqual(screen.sort(), [...engine].sort(), rule);
+    assert.equal(screen.includes('mergeBelow'), rule === 'merge', rule);
+    assert.equal(
+      stageQuestions(manifestParams, 'preview', v).some((q) => q.id === 'mergeBelow'),
+      rule === 'merge',
+    );
+  }
+  // 경계 처리 sits with the other stage-1 rows, not after them.
+  const order = settingsOfStage(manifestParams, 'preview').map((s) => s.key);
+  assert.equal(order.indexOf('boundaryRule') + 1, order.indexOf('mergeBelow'));
+  // No two question cards of a stage ask the same words (가로 · 세로, 판재 가로 · 세로).
+  for (const stage of ['preview', 'members', 'optimize']) {
+    const titles = stageQuestions(manifestParams, stage, values(manifestParams)).map(
+      (q) => q.title,
+    );
+    assert.equal(new Set(titles).size, titles.length, `${stage}: ${titles}`);
+  }
 });
 
 test('members and types are made only with confirmed values; the preview always', () => {

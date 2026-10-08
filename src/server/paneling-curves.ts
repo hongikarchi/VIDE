@@ -12,7 +12,12 @@ import { z } from 'zod';
 import { DomainError } from '../core/store.ts';
 import { isFileLink } from '../core/document-links.ts';
 import { renderTemplate } from '../jigs/bake/templates.ts';
-import { CURVE_ITEM_LIMIT, curveSetSchema, type CurveSet } from '../contracts/paneling.ts';
+import {
+  CURVE_ITEM_LIMIT,
+  CURVE_TOTAL_LIMIT,
+  curveSetSchema,
+  type CurveSet,
+} from '../contracts/paneling.ts';
 import { tileFromCurves } from '../jigs/official/paneling-kit/tile.ts';
 import { jigRuntimeFor } from './jig-routes.ts';
 import { readFailure, templateFailure, type ReadFailure } from './paneling-read.ts';
@@ -26,6 +31,7 @@ export const CURVE_FAILURES: Record<string, string> = {
   NOT_A_CURVE: '점·곡선이 아닌 객체가 있습니다 · 점과 곡선만 고르세요',
   CURVE_LIMIT: `점·곡선은 한 번에 ${CURVE_ITEM_LIMIT}개까지 고릅니다`,
   CURVE_POINT_LIMIT: '곡선 하나의 점이 4,096개를 넘습니다 · 곡선을 단순하게 바꾸세요',
+  CURVE_TOTAL_LIMIT: `고른 곡선의 점이 모두 ${CURVE_TOTAL_LIMIT.toLocaleString('en-US')}개를 넘습니다 · 곡선을 줄이거나 단순하게 바꾸세요`,
   PICK_NONE: 'Rhino에서 점·곡선을 고른 뒤 다시 누르세요',
   NOT_TILE: '타일 곡선이 아님',
 };

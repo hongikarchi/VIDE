@@ -29,6 +29,8 @@ Point3d Vec() { var x = F32(); var y = F32(); var z = F32(); return new Point3d(
 var deleteIds = new System.Collections.Generic.List<string>();
 var nDelete = I32();
 for (var i = 0; i < nDelete; i++) deleteIds.Add(Str());
+//@include face-hash.cs
+//@include surface-guard.cs
 // Block header: key prefix, typing fingerprint, budget, failure layer, shared attributes, definitions.
 var keyPrefix = Str(); var hash = Str(); var budgetMs = F64(); var failLayerPath = Str();
 var shared = new System.Collections.Generic.List<string[]>();

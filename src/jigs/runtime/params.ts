@@ -168,3 +168,17 @@ export function undoChange(
   const old = entry.old as ParamValue | null;
   return { key: entry.key, value: old?.value ?? decl.default, note: 'undo' };
 }
+
+/** The whole entry an undo puts back — who set it, on what basis and its status, not only the
+ *  value — so undoing a change back to an untouched default leaves it a default ('가정', SPEC-16.4
+ *  3·4), never a person's input. The undo itself is logged as the person's action. */
+export function undoRestore(entry: { old: unknown }): Omit<ParamValue, 'value' | 'at'> {
+  const old = entry.old as ParamValue | null;
+  if (!old) return { by: 'default' };
+  return {
+    by: old.by,
+    ...(old.ref ? { ref: old.ref } : {}),
+    ...(old.status ? { status: old.status } : {}),
+    ...(old.note ? { note: old.note } : {}),
+  };
+}

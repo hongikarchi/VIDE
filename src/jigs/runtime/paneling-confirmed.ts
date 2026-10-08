@@ -5,29 +5,15 @@
 // 투영 평면, SPEC-16.4 1) counts only while that value is chosen. The before-bake gate
 // `paneling-confirmed` and the make attributes (`vide-assumed`) read it from here.
 
-import { makeAllowed, type PanelingStage, type SettingSource } from '../../contracts/paneling.ts';
+import {
+  makeAllowed,
+  panelingSettingInUse,
+  type PanelingStage,
+  type SettingSource,
+} from '../../contracts/paneling.ts';
 import type { ParamValue } from './params.ts';
 
 export const PANELING_STAGES: readonly PanelingStage[] = ['preview', 'members', 'optimize'];
-/** Settings read only together with another value. */
-const WHEN: Record<string, { key: string; value: string }> = {
-  mergeBelow: { key: 'boundaryRule', value: 'merge' },
-  projection: { key: 'measure', value: 'projected' },
-};
-type Values = (key: string) => unknown;
-const opening = (v: Values) =>
-  [v('openNear'), v('openFar')].some((x) => typeof x === 'number' && x > 0);
-/** SPEC-16.4 1 / 16.13: the Voronoi seeds only with the Voronoi pattern; the opening settings only
- *  while one of the two ratios is above 0 (both 0 = no opening, nothing to confirm). */
-const WHEN_EXTRA: Record<string, (v: Values) => boolean> = {
-  jitter: (v) => v('pattern') === 'voronoi',
-  seed: (v) => v('pattern') === 'voronoi',
-  openNear: opening,
-  openFar: opening,
-  openRadius: opening,
-  openLevels: opening,
-};
-
 /** The stage of a setting by its manifest group, or undefined. */
 export function stageOfGroup(group: string | undefined): PanelingStage | undefined {
   const text = group ?? '';
@@ -37,8 +23,15 @@ export function stageOfGroup(group: string | undefined): PanelingStage | undefin
   return undefined;
 }
 
-/** The engine's `by` as the contract's 출처 (a default nobody touched is `assumed`). */
-export function sourceOfParam(by: ParamValue['by'] | undefined): SettingSource {
+/** The engine's `by` as the contract's 출처 (a default nobody touched is `assumed`). An AI value
+ *  counts as accepted only once a person confirmed it (`status: 'confirmed'`); until then it is
+ *  `assumed` — back on the question cards and the '가정' tags, and it keeps the make closed
+ *  (SPEC-16.4 3·4). */
+export function sourceOfParam(
+  by: ParamValue['by'] | undefined,
+  status?: ParamValue['status'],
+): SettingSource {
+  if (by === 'ai') return status === 'confirmed' ? 'ai-accepted' : 'assumed';
   switch (by) {
     case 'default':
     case undefined:
@@ -47,8 +40,6 @@ export function sourceOfParam(by: ParamValue['by'] | undefined): SettingSource {
       return 'question';
     case 'fact':
       return 'project-fact';
-    case 'ai':
-      return 'ai-accepted';
     default:
       return 'person';
   }
@@ -62,7 +53,7 @@ export interface StageSources {
 /** The sources of the settings in use, by stage. */
 export function stageSources(
   decls: readonly { key: string; group?: string }[],
-  params: Readonly<Record<string, Pick<ParamValue, 'value' | 'by'>>>,
+  params: Readonly<Record<string, Pick<ParamValue, 'value' | 'by' | 'status'>>>,
 ): StageSources {
   const out: StageSources = {
     settings: { preview: {}, members: {}, optimize: {} },
@@ -71,11 +62,8 @@ export function stageSources(
   for (const decl of decls) {
     const stage = stageOfGroup(decl.group);
     if (!stage) continue;
-    const when = WHEN[decl.key];
-    if (when && params[when.key] && params[when.key].value !== when.value) continue;
-    const extra = WHEN_EXTRA[decl.key];
-    if (extra && !extra((key) => params[key]?.value)) continue;
-    const source = sourceOfParam(params[decl.key]?.by);
+    if (!panelingSettingInUse(decl.key, (key) => params[key]?.value)) continue;
+    const source = sourceOfParam(params[decl.key]?.by, params[decl.key]?.status);
     out.settings[stage][decl.key] = { source };
     if (source === 'assumed') out.assumed[stage].push(decl.key);
   }

@@ -52,7 +52,7 @@ const FILES: Record<AnyTemplateName, string> = {
  * the read and make templates compute the face fingerprint with the very same host function
  * (`face-hash.cs`), and the two 패널링 make templates share one body (`panel-make.cs`).
  */
-export const INCLUDE_FILES = ['face-hash.cs', 'panel-make.cs'] as const;
+export const INCLUDE_FILES = ['face-hash.cs', 'panel-make.cs', 'surface-guard.cs'] as const;
 const INCLUDE = /^\/\/@include ([a-z0-9-]+\.cs)$/gm;
 export interface Template {
   name: AnyTemplateName;

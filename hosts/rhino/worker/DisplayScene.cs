@@ -198,7 +198,16 @@ internal sealed class DisplayScene
         if (offset < 0 || offset > ordered.Length || limit < 1 || limit > MaxPageObjects)
             throw new InvalidOperationException("INVALID_PAGE");
         var budget = 262144;
-        var items = ordered.Skip(offset).Take(limit).Select(obj => Snapshot(doc, obj, scale, ref budget)).ToList();
+        // The page's user-string budget is shared: when an object's strings no longer fit, the page
+        // ends before it and the next page reads it with a fresh budget, so no object is listed with
+        // its vide-key or vide-run cut off (a made object would look missing and be made again).
+        var items = new List<Item>();
+        foreach (var obj in ordered.Skip(offset).Take(limit))
+        {
+            var item = Snapshot(doc, obj, scale, ref budget, out var cut);
+            if (cut && items.Count > 0) break;
+            items.Add(item);
+        }
         var total = ordered.Length;
         var survey = ReadSurvey.Of(doc, ordered, scope);
         return () =>
@@ -231,8 +240,11 @@ internal sealed class DisplayScene
             if (visible.TryGetValue(id, out var obj))
             {
                 if (upserts == MaxPageObjects) break;
+                var item = Snapshot(doc, obj, scale, ref budget, out var cut);
+                // Out of the page's string budget: this object goes on the next page (see Page).
+                if (cut && entries.Count > 0) break;
                 upserts++;
-                entries.Add((id, Snapshot(doc, obj, scale, ref budget)));
+                entries.Add((id, item));
             }
             else entries.Add((id, null));
         }
@@ -255,8 +267,12 @@ internal sealed class DisplayScene
         };
     }
 
-    private Item Snapshot(RhinoDoc doc, RhinoObject obj, double scale, ref int remainingAttributes)
+    // `cut`: a user string was left out because the page's shared budget ran out (not the object's
+    // own limits). VIDE's reserved tags (vide-*) are taken first, so the object's own limits never
+    // drop them in favour of other strings.
+    private Item Snapshot(RhinoDoc doc, RhinoObject obj, double scale, ref int remainingAttributes, out bool cut)
     {
+        cut = false;
         var layer = doc.Layers[obj.Attributes.LayerIndex];
         var item = new Item
         {
@@ -266,11 +282,13 @@ internal sealed class DisplayScene
         };
         var bytes = 0;
         var strings = obj.Attributes.GetUserStrings();
-        foreach (var key in strings.AllKeys)
+        var keys = strings.AllKeys.Where(key => key != null).OrderBy(key => key!.StartsWith("vide-", StringComparison.Ordinal) ? 0 : 1);
+        foreach (var key in keys)
         {
             if (key == null) continue;
             var value = strings[key] ?? ""; var size = Encoding.UTF8.GetByteCount(key) + Encoding.UTF8.GetByteCount(value);
-            if (item.Attributes.Count >= 32 || bytes + size > 4096 || remainingAttributes < size || key.Length > 200 || value.Length > 4000) { item.AttributesComplete = false; continue; }
+            if (remainingAttributes < size) { item.AttributesComplete = false; cut = true; continue; }
+            if (item.Attributes.Count >= 32 || bytes + size > 4096 || key.Length > 200 || value.Length > 4000) { item.AttributesComplete = false; continue; }
             item.Attributes.Add([Encode(key), Encode(value)]); bytes += size; remainingAttributes -= size;
         }
         var geometry = obj.Geometry;

@@ -15,8 +15,9 @@
 //              share vertices by lattice key like the four above.
 //   voronoi    (SPEC-16.13 2) one seed per w × h cell, moved from the cell centre by a
 //              deterministic pseudo-random share (jitter) of the half cell; each cell is the seed's
-//              Voronoi polygon (bisectors with the 5 × 5 neighbouring seeds). Its vertices are named
-//              by the seeds equidistant from them (`vertices`), so the neighbours share them too.
+//              Voronoi polygon (bisectors with every seed within twice the cell reach, whatever w : h
+//              and jitter). Its vertices are named by the seeds equidistant from them (`vertices`),
+//              so the neighbours share them too.
 //
 // Raw rows and columns may start below 1 (the first staggered / diamond row reaches past the start
 // corner); the layout renumbers them so the smallest becomes 1 (SPEC-16.5 2).
@@ -250,17 +251,27 @@ function voronoiCells(
     const [jx, jy] = jitterOf(wrapI(i), wrapJ(j), seed);
     return [(i + 0.5) * w + (jx * jitter * w) / 2, (j + 0.5) * h + (jy * jitter * h) / 2];
   };
+  const eps = Math.max(w, h) * 1e-9;
+  const nameEps = Math.max(w, h) * 1e-7;
+  // Every point lies in some w × h cell whose seed is at most `reach` away (the seed sits within
+  // ±jitter/2 of its cell centre), so a seed's cell lies within `reach` of it and only seeds within
+  // 2·reach can bound it. The window, the starting box and the seeds past an open edge follow
+  // from that, for any w : h and jitter (a fixed ±2 window missed real neighbours of long cells
+  // and the cells overlapped).
+  const j01 = Math.min(Math.max(jitter, 0), 1);
+  const reach = Math.hypot(((1 + j01) / 2) * w, ((1 + j01) / 2) * h) * 1.001;
+  const di = Math.ceil((2 * reach) / w) + 1,
+    dj = Math.ceil((2 * reach) / h) + 1;
   const range = (R: Range, step: number, n: number): [number, number] => {
     if (R.closed) {
       const k0 = Math.round(R.lo / step);
       return [k0, k0 + n - 1];
     }
-    return [Math.floor(R.lo / step) - 1, Math.ceil(R.hi / step)];
+    const margin = Math.ceil(reach / step);
+    return [Math.floor(R.lo / step) - margin, Math.ceil(R.hi / step) + margin - 1];
   };
   const [i0, i1] = range(S, w, nS);
   const [j0, j1] = range(T, h, nT);
-  const eps = Math.max(w, h) * 1e-9;
-  const nameEps = Math.max(w, h) * 1e-7;
   const names = new Map<string, number>();
   const vertices: { name: string; at: Vec2 }[] = [];
   const cells: Cell[] = [];
@@ -268,15 +279,18 @@ function voronoiCells(
     for (let i = i0; i <= i1; i++) {
       const P = seedAt(i, j);
       const near: { id: string; at: Vec2 }[] = [];
-      for (let dj = -2; dj <= 2; dj++)
-        for (let di = -2; di <= 2; di++)
-          near.push({ id: `${wrapI(i + di)}.${wrapJ(j + dj)}`, at: seedAt(i + di, j + dj) });
-      // A box around the seed, then the side nearer to it of every bisector.
+      for (let b = -dj; b <= dj; b++)
+        for (let a = -di; a <= di; a++) {
+          const at = seedAt(i + a, j + b);
+          if (Math.hypot(at[0] - P[0], at[1] - P[1]) > 2 * reach) continue;
+          near.push({ id: `${wrapI(i + a)}.${wrapJ(j + b)}`, at });
+        }
+      // A box around the seed holding its whole cell, then the side nearer to it of every bisector.
       let poly: Vec2[] = [
-        [(i - 2) * w, (j - 2) * h],
-        [(i + 3) * w, (j - 2) * h],
-        [(i + 3) * w, (j + 3) * h],
-        [(i - 2) * w, (j + 3) * h],
+        [P[0] - reach, P[1] - reach],
+        [P[0] + reach, P[1] - reach],
+        [P[0] + reach, P[1] + reach],
+        [P[0] - reach, P[1] + reach],
       ];
       for (const q of near) {
         const dx = q.at[0] - P[0],

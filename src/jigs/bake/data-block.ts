@@ -32,6 +32,15 @@ export const isPanelTemplate = (name: string): name is PanelTemplateName =>
  * and one placement per panel. Its blocks carry a block header after the delete list (`BlockHeader`).
  */
 export const BLOCK_TEMPLATE = 'vide.bake.block-instances@1' as const;
+/** Templates whose data carry a surface guard right after the delete list (SPEC-16.9 2): the
+ *  object and the face fingerprints a 패널링 make was computed from; an empty object id = none. */
+export const GUARD_TEMPLATES = [
+  'vide.bake.curves@1',
+  'vide.bake.textdot@1',
+  'vide.bake.block-instances@1',
+] as const;
+export const isGuardTemplate = (name: string): name is (typeof GUARD_TEMPLATES)[number] =>
+  (GUARD_TEMPLATES as readonly string[]).includes(name);
 export const isBlockTemplate = (name: string): name is typeof BLOCK_TEMPLATE =>
   name === BLOCK_TEMPLATE;
 /** `vide-status` codes of a made panel (the template writes the word). */
@@ -221,6 +230,14 @@ export interface DataBlockHeader {
   surface?: SurfaceHeader;
   /** The block template only (`BLOCK_TEMPLATE`). */
   blocks?: BlockHeader;
+  /** `GUARD_TEMPLATES`: refuse to make anything when a face differs from its fingerprint (패널링
+   *  stage 1–3 lines, marks and blocks; the panel templates check through `surface`). */
+  guard?: SurfaceGuard;
+}
+/** The picked object and the fingerprints of its faces at read time (SPEC-16.3 2, 16.9 2). */
+export interface SurfaceGuard {
+  objectId: string;
+  faces: { index: number; hash: string }[];
 }
 
 /**
@@ -757,6 +774,14 @@ export function encodeDataBlock(
   for (const component of origin) w.f64(component);
   w.i32(header.deleteIds.length);
   for (const id of header.deleteIds) w.str(id);
+  if (isGuardTemplate(header.template)) {
+    w.str(header.guard?.objectId ?? '');
+    w.i32(header.guard?.faces.length ?? 0);
+    for (const face of header.guard?.faces ?? []) {
+      w.i32(face.index);
+      w.str(face.hash);
+    }
+  }
   if (isPanelTemplate(header.template)) {
     const surface = header.surface;
     if (!surface) throw new Error('BAKE_SURFACE_HEADER');
@@ -897,6 +922,12 @@ export function decodeDataBlock(bytes: Buffer): DecodedBlock {
   };
   const nDelete = i32();
   for (let i = 0; i < nDelete; i++) header.deleteIds.push(str());
+  if (isGuardTemplate(template)) {
+    const objectId = str();
+    const faces: SurfaceGuard['faces'] = [];
+    for (let n = i32(); n > 0; n--) faces.push({ index: i32(), hash: str() });
+    if (objectId) header.guard = { objectId, faces };
+  }
   if (isPanelTemplate(template)) {
     const objectId = str();
     const faces: SurfaceHeader['faces'] = [];

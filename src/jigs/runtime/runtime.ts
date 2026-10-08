@@ -43,6 +43,7 @@ import {
   storageUnit,
   toDisplay,
   undoChange,
+  undoRestore,
   type ParamChange,
   type ParamValue,
 } from './params.ts';
@@ -489,7 +490,14 @@ export class JigRuntime {
   async setParams(
     projectId: string,
     instanceId: string,
-    input: { values: ParamChange[]; by: ParamValue['by']; reason?: string; requestId?: string },
+    input: {
+      values: ParamChange[];
+      by: ParamValue['by'];
+      reason?: string;
+      requestId?: string;
+      /** Undo: the entries put back as they were (by, ref, status), keyed by setting. */
+      restore?: Record<string, Omit<ParamValue, 'value' | 'at'>>;
+    },
   ) {
     const instance = this.store.instance(projectId, instanceId);
     const jig = await this.jigOf(instance);
@@ -497,6 +505,12 @@ export class JigRuntime {
     const { next, entries, keys } = applyChanges(jig.manifest, body.params, input.values, {
       by: input.by,
     });
+    for (const entry of entries) {
+      const restore = input.restore?.[entry.key];
+      if (!restore) continue;
+      entry.new = { ...restore, value: entry.new.value, at: entry.new.at };
+      next[entry.key] = entry.new;
+    }
     const seqs = entries.map(
       (entry) =>
         this.store.appendParam(instanceId, {
@@ -541,6 +555,7 @@ export class JigRuntime {
       values: [change],
       by: 'user',
       reason: `undo:${seq}`,
+      restore: { [change.key]: undoRestore(entry) },
     });
   }
   paramLog(projectId: string, instanceId: string) {

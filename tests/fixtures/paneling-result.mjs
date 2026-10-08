@@ -239,6 +239,9 @@ export function panelingParams(by = {}, values = {}) {
         ['staggered', '엇갈림'],
         ['diamond', '마름모'],
         ['triangle', '삼각'],
+        ['hexagon', '육각'],
+        ['voronoi', '보로노이'],
+        ['tile', '사용자 타일'],
       ]),
       question: '패턴은 무엇으로 할까요?',
     }),
@@ -272,7 +275,7 @@ export function panelingParams(by = {}, values = {}) {
       ]),
     }),
     p('flip', '뒤집기', one, 'toggle', false),
-    p('boundary', '경계 처리', one, 'choice', 'trim', {
+    p('boundaryRule', '경계 처리', one, 'choice', 'trim', {
       choices: choices([
         ['trim', '자르기'],
         ['merge', '이웃에 합치기'],
@@ -299,6 +302,7 @@ export function panelingParams(by = {}, values = {}) {
       choices: choices([
         ['none', '없음'],
         ['best-fit', '패널별 최적 평면'],
+        ['pq', '전체 평면 사각 최적화(준비 중)'],
       ]),
     }),
     p('typeTol', '타입 허용 오차', three, 'length', 0.002),

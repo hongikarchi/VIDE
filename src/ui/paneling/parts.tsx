@@ -15,6 +15,7 @@ import {
   STAGES,
   answerValue,
   assumedOf,
+  defaultColorBy,
   exportMarks,
   exportName,
   headCells,
@@ -22,6 +23,7 @@ import {
   legendOf,
   makeGate,
   mmText,
+  openingScale,
   panelItems,
   panelRows,
   plateHint,
@@ -107,6 +109,11 @@ export function PanelingStages({ view, title }: { view: PanelingView; title?: st
                   {assumed && status.computed ? ` · 가정 ${assumed}` : ''}
                 </span>
               </button>
+              {state === 'failed' && status.reason ? (
+                <p className="pnl-rail-reason" role="alert" data-stage-reason={stage.id}>
+                  {status.reason}
+                </p>
+              ) : null}
             </li>
           );
         })}
@@ -256,8 +263,12 @@ function Questions({ view, onDone }: { view: PanelingView; onDone: () => void })
   );
   const [choices, setChoices] = useState<Record<string, { optionId?: string; text?: string }>>({});
   const [error, setError] = useState('');
+  const [sending, setSending] = useState(false);
+  // A second press before the screen shows '보내는 중' must not send the answers twice.
+  const inFlight = useRef(false);
   if (!questions.length) return null;
   const send = () => {
+    if (inFlight.current) return;
     const values: { key: string; value: number | string | boolean }[] = [];
     for (const q of questions) {
       const setting = view.settings.find((s) => s.key === q.id)!;
@@ -273,7 +284,14 @@ function Questions({ view, onDone }: { view: PanelingView; onDone: () => void })
       values.push({ key: q.id, value: got.value });
     }
     setError('');
-    void view.answer(values).then(onDone);
+    inFlight.current = true;
+    setSending(true);
+    // The cards close only when the engine took the answers; a refusal stays with its notice.
+    void view.answer(values).then((ok) => {
+      inFlight.current = false;
+      setSending(false);
+      if (ok) onDone();
+    });
   };
   return (
     <div className="pnl-questions" role="group" aria-label="빠진 값 질문">
@@ -285,7 +303,7 @@ function Questions({ view, onDone }: { view: PanelingView; onDone: () => void })
           count={questions.length}
           choice={choices[q.id] ?? {}}
           choose={(choice) => setChoices((current) => ({ ...current, [q.id]: choice }))}
-          disabled={false}
+          disabled={sending}
           freeLabel="직접 입력"
         />
       ))}
@@ -295,8 +313,15 @@ function Questions({ view, onDone }: { view: PanelingView; onDone: () => void })
         </p>
       ) : null}
       <div className="kit-actions">
-        <button type="button" className="kit-button" data-primary onClick={send}>
-          이 답으로 진행
+        <button
+          type="button"
+          className="kit-button"
+          data-primary
+          disabled={sending}
+          aria-busy={sending || undefined}
+          onClick={send}
+        >
+          {sending ? '보내는 중…' : '이 답으로 진행'}
         </button>
         <button type="button" className="kit-button" onClick={onDone}>
           닫기
@@ -329,7 +354,9 @@ export function PanelingSettings({
   const more = list.filter((s) => MORE_KEYS.has(s.key));
   const missing = assumedOf(list, [stage], view.values).length;
   const row = (setting: (typeof list)[number]) => {
-    const tag = tagOf(setting, status.computed);
+    // A setting on screen but not read now (both opening ratios 0) carries no tag, as it is not
+    // counted or asked either.
+    const tag = settingInUse(setting, view.values) ? tagOf(setting, status.computed) : undefined;
     return (
       <div key={setting.key} className="pnl-setting" data-tag={tag} data-source={sourceOf(setting)}>
         {/* The tag below says '물어볼 것'·'가정'; the row's own chip keeps only where it came from. */}
@@ -468,9 +495,7 @@ export function PanelingMake({
   return (
     <section className="kit-section pnl-make" data-make={meta.bake}>
       {previewAssumed ? (
-        <p className="kit-muted">
-          가정 값 {previewAssumed}개로 만듭니다 · 객체에 vide-assumed 표시
-        </p>
+        <p className="kit-muted">가정 값 {previewAssumed}개로 만듭니다 · 객체에 가정 표시</p>
       ) : null}
       <BakePart
         projectId={host.projectId}
@@ -513,6 +538,11 @@ export function PanelingSummary({ view, jig }: { view: PanelingView; jig: Instan
           )}
         </div>
       ) : null}
+      {status.failed && status.reason ? (
+        <p className="kit-notice" role="alert" data-stage-failed="">
+          {stageMeta(stage).no}단계 막힘 · {status.reason}
+        </p>
+      ) : null}
       {view.reads[stage].kind === 'invalid' ? (
         <p className="kit-notice" role="alert">
           이 단계의 결과가 형식과 달라 그리지 않았습니다.
@@ -527,7 +557,7 @@ export function PanelingSummary({ view, jig }: { view: PanelingView; jig: Instan
             </div>
             {cell.value === undefined ? (
               <div className="kit-kpi-value" data-empty>
-                — 계산 전
+                {status.failed ? '— 막힘' : '— 계산 전'}
               </div>
             ) : (
               <div className="kit-kpi-value">
@@ -580,7 +610,11 @@ export function PanelingResult({
   view: PanelingView;
   host: Pick<PanelHost, 'overlay' | 'focus' | 'onOverlayPick'>;
 }) {
-  const { results, stage, colorBy } = view;
+  const { results, stage } = view;
+  // 개구율 is a 색 기준 only when some panel has an opening.
+  const hasOpenings = !!openingScale(results.layout);
+  const colorChoices = COLOR_BY.filter((c) => c.id !== 'opening' || hasOpenings);
+  const colorBy = view.colorBy === 'opening' && !hasOpenings ? defaultColorBy(stage) : view.colorBy;
   const [tab, setTab] = useState<Tab>('panels');
   const [shown, setShown] = useState(PAGE);
   const flatnessTol =
@@ -632,6 +666,26 @@ export function PanelingResult({
   const exportable: ScheduleKind[] = typing ? ['panels', 'types', 'nodes', 'joints'] : ['panels'];
   const marks = { assumed, stale };
   const [reportNote, setReportNote] = useState('');
+  // The CSV menu floats over the table: it closes after a download, on a click outside and on Esc.
+  const csv = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const close = (event: Event) => {
+      const menu = csv.current;
+      if (!menu?.open) return;
+      if (
+        event instanceof KeyboardEvent
+          ? event.key === 'Escape'
+          : !menu.contains(event.target as Node)
+      )
+        menu.open = false;
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', close);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', close);
+    };
+  }, []);
   // 보고서(HTML, SPEC-16.11): the engine resolves the jig's frame `reports/paneling.json`.
   const exportReport = async () => {
     setReportNote('');
@@ -653,16 +707,20 @@ export function PanelingResult({
     }
   };
 
-  if (!results.layout)
+  if (!results.layout) {
+    const first = view.status.preview;
     return (
       <div className="pnl-drawer" data-empty="">
         <p className="kit-muted" role="status">
-          {view.surface
-            ? '1단계를 계산하면 패널이 여기에 보입니다.'
-            : '기준 면을 고르면 패널이 여기에 보입니다.'}
+          {first.failed
+            ? `막힘 · ${first.reason ?? '1단계를 계산하지 못했습니다'}`
+            : view.surface
+              ? '1단계를 계산하면 패널이 여기에 보입니다.'
+              : '기준 면을 고르면 패널이 여기에 보입니다.'}
         </p>
       </div>
     );
+  }
 
   const panelTable = (list: typeof rows, label: string) => (
     <table className="pnl-table" aria-label={label}>
@@ -742,14 +800,14 @@ export function PanelingResult({
             value={colorBy}
             onChange={(event) => view.setColorBy(event.target.value as typeof colorBy)}
           >
-            {COLOR_BY.map((c) => (
+            {colorChoices.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.label}
               </option>
             ))}
           </select>
         </label>
-        <details className="pnl-csv">
+        <details className="pnl-csv" ref={csv}>
           <summary className="kit-button">CSV ▾</summary>
           <div className="pnl-csv-menu">
             {exportable.map((kind) => (
@@ -758,13 +816,14 @@ export function PanelingResult({
                 type="button"
                 className="kit-button"
                 data-csv={kind}
-                onClick={() =>
+                onClick={() => {
                   download(
                     exportName(kind, new Date(), marks),
                     scheduleCsv(kind, results),
                     'text/csv;charset=utf-8',
-                  )
-                }
+                  );
+                  if (csv.current) csv.current.open = false;
+                }}
               >
                 {SCHEDULE_TITLES[kind]}
               </button>

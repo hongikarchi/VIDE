@@ -266,6 +266,7 @@ test('an instance computes, reuses cached steps, recomputes only what a setting 
   assert.equal(undone.instance.params.find((p) => p.key === 'spacingX').value, 6);
   const log = runtime.paramLog(project.id, created.id);
   assert.equal(log.at(-1).reason, `undo:${wider.seqs[0]}`);
+  assert.equal(log.at(-1).by, 'user', 'the undo itself is the person’s action');
   const fifth = await runtime.run(project.id, created.id, { mode: 'geometry' });
   assert.deepEqual(
     fifth.steps.map((s) => [s.status, s.cached]),
@@ -276,6 +277,27 @@ test('an instance computes, reuses cached steps, recomputes only what a setting 
       ['done', true],
     ],
   );
+
+  // Undo puts the whole old entry back: an untouched default stays a default (not a person's
+  // input), so a '가정' value cannot be laundered by changing and undoing it (SPEC-16.4 3·4).
+  const angleBefore = undone.instance.params.find((p) => p.key === 'angle');
+  assert.equal(angleBefore.by, 'default');
+  const aiAngle = await runtime.setParams(project.id, created.id, {
+    values: [{ key: 'angle', value: 5, status: 'ai' }],
+    by: 'ai',
+  });
+  const angleBack = await runtime.undo(project.id, created.id, aiAngle.seqs[0]);
+  const angleAfter = angleBack.instance.params.find((p) => p.key === 'angle');
+  assert.equal(angleAfter.value, angleBefore.value);
+  assert.equal(angleAfter.by, 'default');
+  assert.equal(angleAfter.status, undefined);
+  // Undoing back to a person's value keeps it the person's.
+  const back = await runtime.setParams(project.id, created.id, {
+    values: [{ key: 'spacingX', value: 7 }],
+    by: 'ai',
+  });
+  const personBack = await runtime.undo(project.id, created.id, back.seqs[0]);
+  assert.equal(personBack.instance.params.find((p) => p.key === 'spacingX').by, 'user');
 
   // Fixed and out-of-range settings are refused with their codes; nothing changes.
   await assert.rejects(

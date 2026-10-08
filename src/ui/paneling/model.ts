@@ -11,7 +11,9 @@ import {
   memberSetSchema,
   panelLayoutSchema,
   panelTypingSchema,
+  PANELING_SETTING_WHEN,
   SCHEDULE_COLUMNS,
+  panelingSettingInUse,
   type Member,
   type MemberSet,
   type Panel,
@@ -70,7 +72,7 @@ export const OVERLAY_PANELS = 'paneling-panels';
 
 /**
  * Settings of each stage by key (SPEC-16.4 1 표; the contract's settings flattened: `size` →
- * `width`·`height`, `direction` → `axis`·`startCorner`·`flip`, `boundary` → `boundary`·`mergeBelow`,
+ * `width`·`height`, `direction` → `axis`·`startCorner`·`flip`, `boundary` → `boundaryRule`·`mergeBelow`,
  * `stock` → `stockWidth`·`stockHeight`). A setting of another key falls to its group's words.
  */
 const STAGE_KEYS: Record<PanelingStage, readonly string[]> = {
@@ -83,7 +85,7 @@ const STAGE_KEYS: Record<PanelingStage, readonly string[]> = {
     'axis',
     'startCorner',
     'flip',
-    'boundary',
+    'boundaryRule',
     'mergeBelow',
     'jitter',
     'seed',
@@ -97,23 +99,9 @@ const STAGE_KEYS: Record<PanelingStage, readonly string[]> = {
 };
 /** 3단계 settings folded under '더 보기' (Design SCR-33). */
 export const MORE_KEYS: ReadonlySet<string> = new Set(['flatRadius', 'nodeAngleStep']);
-/** Settings read only with another value (SPEC-16.4 1: 합치기 기준 · 투영 평면). */
-export const WHEN: Record<string, { key: string; value: string }> = {
-  mergeBelow: { key: 'boundary', value: 'merge' },
-  projection: { key: 'measure', value: 'projected' },
-};
-const opening = (values: Readonly<Record<string, unknown>>) =>
-  [values.openNear, values.openFar].some((v) => typeof v === 'number' && v > 0);
-/** SPEC-16.4 1 / 16.13: the Voronoi seeds with the Voronoi pattern; the opening settings while one
- *  of the two ratios is above 0 (the engine's `paneling-confirmed` counts the same). */
-const WHEN_EXTRA: Record<string, (values: Readonly<Record<string, unknown>>) => boolean> = {
-  jitter: (v) => v.pattern === 'voronoi',
-  seed: (v) => v.pattern === 'voronoi',
-  openNear: opening,
-  openFar: opening,
-  openRadius: opening,
-  openLevels: opening,
-};
+/** Settings read only with another value (SPEC-16.4 1: 합치기 기준 · 투영 평면), shared with the
+ *  engine's `paneling-confirmed` so the screen and the gate count alike. */
+export const WHEN = PANELING_SETTING_WHEN;
 
 export function stageOf(setting: Pick<PanelSetting, 'key' | 'group'>): PanelingStage | undefined {
   for (const stage of STAGES) if (STAGE_KEYS[stage.id].includes(setting.key)) return stage.id;
@@ -137,8 +125,10 @@ export const stagesUpTo = (stage: PanelingStage) =>
 
 // ── 값의 출처 (SPEC-16.4 4) ───────────────────────────────────────────────────────────────────
 
-/** The engine's `by` of a setting as the contract's 출처. */
-export function sourceOf(setting: Pick<PanelSetting, 'by'>): SettingSource {
+/** The engine's `by` of a setting as the contract's 출처; an AI value nobody confirmed is still
+ *  '가정' (SPEC-16.4 3·4, same rule as the engine's `sourceOfParam`). */
+export function sourceOf(setting: Pick<PanelSetting, 'by' | 'status'>): SettingSource {
+  if (setting.by === 'ai') return setting.status === 'confirmed' ? 'ai-accepted' : 'assumed';
   switch (setting.by) {
     case 'default':
       return 'assumed';
@@ -146,8 +136,6 @@ export function sourceOf(setting: Pick<PanelSetting, 'by'>): SettingSource {
       return 'question';
     case 'fact':
       return 'project-fact';
-    case 'ai':
-      return 'ai-accepted';
     default:
       return 'person';
   }
@@ -165,10 +153,7 @@ export function settingInUse(
   setting: Pick<PanelSetting, 'key'>,
   values: Readonly<Record<string, unknown>>,
 ) {
-  const extra = WHEN_EXTRA[setting.key];
-  if (extra) return extra(values);
-  const when = WHEN[setting.key];
-  return !when || values[when.key] === undefined || values[when.key] === when.value;
+  return panelingSettingInUse(setting.key, (key) => values[key]);
 }
 /** Settings shown even when not counted: the two opening ratios turn the opening on (SPEC-16.13 4). */
 export const SHOWN_ALWAYS: ReadonlySet<string> = new Set(['openNear', 'openFar']);
@@ -363,10 +348,43 @@ export const COLOR_BY: readonly { id: ColorBy; label: string }[] = [
   { id: 'flatness', label: '평면도' },
   { id: 'opening', label: '개구율' },
 ];
-/** 개구율 bands of 19 % (SPEC-16.13 4: up to 95 %), one category tone each. */
+/** 개구율 colour classes from the layout's own target ratios (SPEC-16.13 4): one class per ratio
+ *  when they are few (단계 수 n ≥ 2 gives n), else five equal bands between the smallest and the
+ *  largest; none without openings. */
 const OPENING_BANDS = 5;
-const openingBand = (ratio: number) =>
-  Math.min(OPENING_BANDS - 1, Math.floor((ratio / 0.95) * OPENING_BANDS));
+interface OpeningScale {
+  /** The distinct ratios (0.1 % steps) when each has its own class, else null. */
+  levels: number[] | null;
+  lo: number;
+  hi: number;
+}
+const openingScales = new WeakMap<PanelLayout, OpeningScale | null>();
+export function openingScale(layout: PanelLayout | undefined): OpeningScale | null {
+  if (!layout) return null;
+  if (openingScales.has(layout)) return openingScales.get(layout)!;
+  const ratios = [
+    ...new Set(
+      layout.panels.flatMap((p) => (p.opening ? [Math.round(p.opening.ratio * 1000) / 1000] : [])),
+    ),
+  ].sort((a, b) => a - b);
+  const scale = ratios.length
+    ? {
+        levels: ratios.length <= OVERLAY_CATEGORIES ? ratios : null,
+        lo: ratios[0],
+        hi: ratios[ratios.length - 1],
+      }
+    : null;
+  openingScales.set(layout, scale);
+  return scale;
+}
+function openingBand(scale: OpeningScale, ratio: number): number {
+  const r = Math.round(ratio * 1000) / 1000;
+  if (scale.levels) return Math.max(0, scale.levels.indexOf(r));
+  const span = scale.hi - scale.lo;
+  return span > 0
+    ? Math.min(OPENING_BANDS - 1, Math.floor(((r - scale.lo) / span) * OPENING_BANDS))
+    : 0;
+}
 /** The 색 기준 a stage starts with. */
 export const defaultColorBy = (stage: PanelingStage): ColorBy =>
   stage === 'preview' ? 'deviation' : stage === 'members' ? 'failure' : 'type';
@@ -428,7 +446,9 @@ export function toneOf(
   const failure =
     panel.failure ?? index.member.get(panel.id)?.failure ?? index.typed.get(panel.id)?.failure;
   if (failure) return 'ov-clash';
-  const module = results.layout?.module ?? [panel.width, panel.height];
+  const module = results.layout?.faceModules?.find((f) => f.faceIndex === panel.faceIndex)
+    ?.module ??
+    results.layout?.module ?? [panel.width, panel.height];
   switch (colorBy) {
     case 'deviation':
       // Voronoi and tile panels are not of one size (counts.offTarget 0, SPEC-16.13).
@@ -457,10 +477,12 @@ export function toneOf(
       if (!typed || !tol) return 'ov-existing';
       return typed.flatness <= tol ? 'ok' : typed.flatness <= 2 * tol ? 'warn' : 'ng';
     }
-    case 'opening':
-      return panel.opening
-        ? (`ov-cat-${openingBand(panel.opening.ratio) + 1}` as OverlayTone)
+    case 'opening': {
+      const scale = openingScale(results.layout);
+      return panel.opening && scale
+        ? (`ov-cat-${(openingBand(scale, panel.opening.ratio) % OVERLAY_CATEGORIES) + 1}` as OverlayTone)
         : 'ov-existing';
+    }
   }
 }
 
@@ -536,14 +558,22 @@ export function legendOf(
       push('ng', '허용 오차의 2배 넘음');
       push('ov-existing', '타입 전');
       break;
-    case 'opening':
-      for (let b = 0; b < OPENING_BANDS; b++) {
-        const lo = Math.round((b * 95) / OPENING_BANDS),
-          hi = Math.round(((b + 1) * 95) / OPENING_BANDS);
-        push(`ov-cat-${b + 1}` as OverlayTone, `개구율 ${lo}~${hi}%`);
-      }
+    case 'opening': {
+      const scale = openingScale(layout);
+      const pct = (x: number) => `${Math.round(x * 1000) / 10}`;
+      if (scale?.levels)
+        scale.levels.forEach((r, b) =>
+          push(`ov-cat-${(b % OVERLAY_CATEGORIES) + 1}` as OverlayTone, `개구율 ${pct(r)}%`),
+        );
+      else if (scale)
+        for (let b = 0; b < OPENING_BANDS; b++) {
+          const lo = scale.lo + ((scale.hi - scale.lo) * b) / OPENING_BANDS,
+            hi = scale.lo + ((scale.hi - scale.lo) * (b + 1)) / OPENING_BANDS;
+          push(`ov-cat-${b + 1}` as OverlayTone, `개구율 ${pct(lo)}~${pct(hi)}%`);
+        }
       push('ov-existing', '개구 없음');
       break;
+    }
   }
   push('ov-clash', '실패');
   return rows;

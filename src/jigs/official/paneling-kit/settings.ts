@@ -207,7 +207,7 @@ const nonNegative = (value: unknown) =>
 /**
  * Stage-2 settings from the jig's flat setting values (thickness, thicknessSide, joint,
  * boundaryJoint, stockWidth, stockHeight; lengths in metres). A stock of 0 × 0 is 'no limit'
- * (null); only one side 0 counts as empty. Missing or invalid values take the recommendation as
+ * (null); one side 0 is no limit that way only (the other still checked). Missing or invalid values take the recommendation as
  * 'assumed', as do the keys listed in `assumed` (still on their default).
  */
 export function memberSettingsFromParams(
@@ -227,8 +227,7 @@ export function memberSettingsFromParams(
   const sw = nonNegative(params.stockWidth),
     sh = nonNegative(params.stockHeight);
   if (sw !== undefined && sh !== undefined) {
-    if (sw > 0 && sh > 0) given.stock = [sw, sh];
-    else if (sw === 0 && sh === 0) given.stock = null;
+    given.stock = sw > 0 || sh > 0 ? [sw, sh] : null;
   }
   const groups: Record<string, keyof MemberSettings> = {
     thickness: 'thickness',

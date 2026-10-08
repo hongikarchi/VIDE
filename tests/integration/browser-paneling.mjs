@@ -59,7 +59,7 @@ const AFTER = {
 };
 
 /** The fake engine: one instance of `vide/paneling` and what its routes answer. */
-function engine({ surface = false, values = {} } = {}) {
+function engine({ surface = false, values = {}, failPreview = false } = {}) {
   const state = {
     surface: surface ? read() : null,
     meshNext: false,
@@ -70,6 +70,8 @@ function engine({ surface = false, values = {} } = {}) {
     curves: { tile: null, attractors: null },
     curvePicks: [],
     openNext: false,
+    // The pattern is the tile and no tile was picked: stage 1 fails with the engine's reason.
+    failPreview,
     runs: [],
     puts: [],
     picks: [],
@@ -134,6 +136,30 @@ function engine({ surface = false, values = {} } = {}) {
             cached: false,
             ms: null,
             gates: [],
+          })),
+          outputs: {},
+          blocked: true,
+          superseded: false,
+        });
+      if (state.failPreview)
+        return json({
+          steps: ['preview', 'members', 'optimize'].map((id) => ({
+            id,
+            kind: 'code',
+            status: id === 'preview' ? 'failed' : 'blocked',
+            inputHash: 'h',
+            cached: false,
+            ms: id === 'preview' ? 1 : null,
+            gates: [],
+            ...(id === 'preview'
+              ? {
+                  error: {
+                    code: 'STEP_FAILED',
+                    message:
+                      'NO_TILE: 타일이 없습니다 · Rhino에서 닫힌 곡선을 고르고 [고른 곡선 쓰기]',
+                  },
+                }
+              : {}),
           })),
           outputs: {},
           blocked: true,
@@ -394,8 +420,11 @@ try {
   const jointCard = questions.locator('.qcard', { hasText: '줄눈을(를) 정해 주세요' });
   assert.equal(await jointCard.getByRole('radio', { name: /10 mm/ }).isChecked(), true);
   await jointCard.getByPlaceholder('직접 입력').fill('12');
-  await questions.getByRole('button', { name: '이 답으로 진행' }).click();
+  const putsBefore = fake.state.puts.length;
+  // A double press sends the answers once.
+  await questions.getByRole('button', { name: '이 답으로 진행' }).dblclick();
   await make.getByText('가정 값 5개를 확인하면 만들 수 있습니다').waitFor();
+  assert.equal(fake.state.puts.length, putsBefore + 1, 'one PUT for a double press');
   const answered = fake.state.puts.at(-1);
   assert.equal(answered.by, 'decision');
   assert.deepEqual(
@@ -406,13 +435,13 @@ try {
   // [가정 값 보기] goes to the stage holding them; '가정' → [이 값으로 확인] takes each as is.
   await make.getByRole('button', { name: '가정 값 보기' }).click();
   await panel.locator('.pnl-settings[data-stage="preview"]').waitFor();
-  for (const key of ['measure', 'axis', 'startCorner', 'flip', 'boundary']) {
+  for (const key of ['measure', 'axis', 'startCorner', 'flip', 'boundaryRule']) {
     await panel.locator(`[data-assumed="${key}"]`).click();
     await panel.getByRole('button', { name: '이 값으로 확인' }).click();
     await panel.locator(`[data-assumed="${key}"]`).waitFor({ state: 'detached' });
   }
   assert.deepEqual(fake.state.puts.at(-1), {
-    values: [{ key: 'boundary', value: 'trim' }],
+    values: [{ key: 'boundaryRule', value: 'trim' }],
     by: 'user',
   });
   assert.equal(fake.state.values.measure, 'arc-length', 'the value stays as it was');
@@ -493,6 +522,8 @@ try {
     csvFile.suggestedFilename(),
     new RegExp(`^패널링-패널-\\d{8}-\\d{4}-${note.split(' · ').join('-')}\\.csv$`),
   );
+  // The menu closes after the download (it floats over the table).
+  assert.equal(await drawer.locator('.pnl-csv').getAttribute('open'), null);
   const csvText = await readFile(await csvFile.path(), 'utf8');
   assert.ok(csvText.startsWith('﻿번호,면,행,열,경계,타입,등급,가로(mm),세로(mm)'));
   assert.equal(csvText.trimEnd().split('\r\n').length, 11);
@@ -534,6 +565,39 @@ try {
       ],
     );
     if (shot) await page.screenshot({ path: `${shot}/paneling-tile.png`, fullPage: true });
+    assert.deepEqual(errors, []);
+    await page.close();
+  }
+
+  // ── A stage that stops says why (the tile pattern without a tile) ────────────────────────
+  // The paneling rail replaces the generic step rail, so the engine's reason must show here:
+  // under the rail row, in the head and in the empty drawer, never as '계산 전'.
+  {
+    const { page, panel, errors } = await open(
+      browser,
+      {},
+      { surface: true, values: { pattern: 'tile', openNear: 0, openFar: 0 }, failPreview: true },
+    );
+    const reason = panel.locator('[data-stage-reason="preview"]');
+    await reason
+      .getByText('타일이 없습니다 · Rhino에서 닫힌 곡선을 고르고 [고른 곡선 쓰기]')
+      .waitFor();
+    assert.doesNotMatch((await reason.textContent()) ?? '', /NO_TILE/);
+    assert.match(
+      await panel.locator('.pnl-rail button[data-stage="preview"]').textContent(),
+      /막힘/,
+    );
+    // The head and the drawer sit in the centre column, beside the jig panel.
+    await page
+      .locator('[data-stage-failed]')
+      .getByText(/1단계 막힘 · 타일이 없습니다/)
+      .waitFor();
+    await page.locator('.pnl-kpis .kit-kpi[data-kpi="패널"]').getByText('— 막힘').waitFor();
+    await page
+      .locator('.pnl-drawer[data-empty]')
+      .getByText(/^막힘 · 타일이 없습니다/)
+      .waitFor();
+    assert.equal(await page.getByText('1단계를 계산하면 패널이 여기에 보입니다.').count(), 0);
     assert.deepEqual(errors, []);
     await page.close();
   }

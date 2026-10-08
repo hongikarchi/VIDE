@@ -543,3 +543,97 @@ test('the jig validates with the stage-3 makes and its report frame resolves wit
   );
   assert.equal(Object.keys(SCHEDULE_COLUMNS).length, 4);
 });
+
+test('stage-3 and line makes check the face fingerprint too: guard data and the template refuse first', () => {
+  // [타입 만들기] (blocks, marks, cuts) and the line makes carried no fingerprint, so after the face
+  // moved they still made blocks and marks at the old places while [부재 만들기] was refused.
+  const s = stages(hypar({ hole: false }), { size: [1.2, 0.6] });
+  const faces = s.sample.faces.map((f) => ({ index: f.faceIndex, hash: f.geometryHash }));
+  for (const [id, stepId, output] of [
+    ['types', 'optimize', s.typing],
+    ['connections', 'optimize', s.typing],
+    ['cuts', 'optimize', s.typing],
+    ['cut-numbers', 'optimize', s.typing],
+    ['joints', 'members', s.members],
+  ]) {
+    const rows = panelRows({
+      decl: decl(id),
+      stepId,
+      output,
+      layout: s.layout,
+      members: s.members,
+      sample: s.sample,
+      manifestParams: manifest.params,
+      params: params({ thickness: 0.05, joint: 0.01 }),
+      layerRoot: 'VIDE::패널링',
+    });
+    assert.deepEqual(rows.problems, [], id);
+    assert.deepEqual(rows.guard, { objectId: OBJECT, faces }, id);
+    const template = decl(id).template;
+    const [chunk] = renderChunks(
+      {
+        template,
+        jigId: 'vide/paneling',
+        instanceId: 'inst-1',
+        bakeId: id,
+        runId: 'run-1',
+        layerPath: 'VIDE::패널링::x',
+        deleteIds: ['6f1c2b1e-1111-4a6b-9c1d-0000000000aa'],
+        guard: rows.guard,
+        ...(rows.blocks ? { blocks: rows.blocks } : {}),
+      },
+      rows.items.slice(0, 5),
+    );
+    const block = Buffer.from(/FromBase64String\("([^"]+)"\)/.exec(chunk.code)[1], 'base64');
+    const decoded = decodeDataBlock(block);
+    assert.deepEqual(decoded.header.guard, rows.guard, id);
+    assert.deepEqual(decoded.header.deleteIds, ['6f1c2b1e-1111-4a6b-9c1d-0000000000aa']);
+    assert.equal(decoded.items.length, Math.min(5, rows.items.length));
+  }
+  // Without a sample there is nothing to check against: the line makes refuse.
+  const blind = panelRows({
+    decl: decl('joints'),
+    stepId: 'members',
+    output: s.members,
+    layout: s.layout,
+    sample: null,
+    manifestParams: manifest.params,
+    params: params(),
+    layerRoot: 'VIDE::패널링',
+  });
+  assert.match(blind.problems.join(), /기준 면 표본이 없습니다/);
+  // Other jigs' lines and marks carry no guard and decode as before.
+  for (const template of ['vide.bake.curves@1', 'vide.bake.textdot@1']) {
+    const plain = decodeDataBlock(
+      encodeDataBlock(
+        {
+          template,
+          jigId: 'x/y',
+          instanceId: 'i',
+          bakeId: 'b',
+          runId: 'r',
+          layerPath: 'VIDE::x',
+          deleteIds: [],
+        },
+        [],
+      ),
+    );
+    assert.equal(plain.header.guard, undefined);
+  }
+  // The template text: the fingerprint is checked before any layer, delete or object.
+  const hashText = readFileSync(
+    join(import.meta.dirname, '..', '..', 'src', 'jigs', 'bake', 'templates', 'face-hash.cs'),
+    'utf8',
+  )
+    .replace(/\r\n/g, '\n')
+    .replace(/\n$/, '');
+  for (const name of ['vide.bake.curves@1', 'vide.bake.textdot@1', 'vide.bake.block-instances@1']) {
+    const text = loadTemplate(name).text;
+    assert.doesNotMatch(text, /^\/\/@include/m, 'includes are expanded');
+    assert.equal(text.split(hashText).length, 2, `${name} carries the fingerprint text once`);
+    const refuse = text.indexOf('rejected = guardRejected');
+    assert.ok(refuse > 0, name);
+    for (const write of ['doc.Objects.Delete(', 'doc.Layers.Add(', 'doc.Objects.Add'])
+      assert.ok(text.indexOf(write) > refuse, `${name}: ${write} only after the fingerprint check`);
+  }
+});

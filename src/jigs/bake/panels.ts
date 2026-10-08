@@ -37,6 +37,7 @@ import { stageSources, stagesUpTo, stageOfStep } from '../runtime/paneling-confi
 import {
   blockHeaderProblems,
   isBlockTemplate,
+  isGuardTemplate,
   isPanelTemplate,
   PANEL_STATUS,
   surfaceHeaderProblems,
@@ -45,6 +46,7 @@ import {
   type BlockItem,
   type CurveItem,
   type PanelItem,
+  type SurfaceGuard,
   type SurfaceHeader,
   type TextDotItem,
   type Vec3,
@@ -88,6 +90,8 @@ export interface PanelRows {
   surface?: SurfaceHeader;
   /** The block template's header (stage 3). */
   blocks?: BlockHeader;
+  /** Lines, marks and blocks (`GUARD_TEMPLATES`): the face fingerprints to check before making. */
+  guard?: SurfaceGuard;
   problems: string[];
   /** The layout fingerprint in the keys. */
   layoutHash?: string;
@@ -148,6 +152,17 @@ export function panelRows(input: PanelRowsInput): PanelRows {
   const layout = isLayout(input.layout) ? input.layout : undefined;
   if (!layout) {
     problems.push('1단계 미리보기 결과가 없습니다');
+    return out;
+  }
+  // Every 패널링 make is computed from the sample of the picked face: the lines, marks and blocks
+  // check its fingerprints too, as the panel templates do (SPEC-16.9 2 '기준 면이 바뀜').
+  if (input.sample)
+    out.guard = {
+      objectId: input.sample.source.objectId,
+      faces: input.sample.faces.map((face) => ({ index: face.faceIndex, hash: face.geometryHash })),
+    };
+  else if (isGuardTemplate(decl.template)) {
+    problems.push('기준 면 표본이 없습니다 · 기준 면을 다시 읽으세요');
     return out;
   }
   const stage = stageOfStep(input.stepId);

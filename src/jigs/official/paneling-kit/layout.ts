@@ -5,9 +5,10 @@
 // SPIKE-2026-10-08-paneling §7) → the boundary rule (trim keeps cut panels, merge joins a small cut
 // panel to the uncut neighbour sharing its longest edge, drop keeps it listed as `dropped`) → rows
 // and columns renumbered from 1 → the outline on the surface (bicubic sample), its winding
-// counter-clockwise from the reference normal starting at the vertex nearest the start corner, poles
-// merged into triangles, and the measures of SPEC-16.2 공통 규칙 4 (width × height in the best-fit
-// plane along the pattern axis), area, '목표와 다름'.
+// counter-clockwise from the reference normal starting at the vertex nearest the start corner, pole
+// vertices under one key with their own UV (triangles on the surface), and the measures of
+// SPEC-16.2 공통 규칙 4 (width × height in the best-fit plane along the pattern axis), area,
+// '목표와 다름' (against each face's own module).
 //
 // Counts: `total` is every listed panel except dropped ones; `failed` the listed panels with a
 // failure other than `dropped`; `dropped` the cut panels the 'drop' rule took out (they stay in
@@ -111,13 +112,11 @@ export function layoutPanels(
   const multi = sample.faces.length > 1;
   const panels: Panel[] = [];
   const notes: string[] = [];
-  if (tile) {
-    const [cw, ch] = domains[0].cell;
-    if (tile.size[0] > cw + tol || tile.size[1] > ch + tol)
-      notes.push(
-        `타일이 칸보다 큼 · 외접 ${(tile.size[0] * 1000).toFixed(0)} × ${(tile.size[1] * 1000).toFixed(0)} mm`,
-      );
-  }
+  // The tile against every face's own cell (a closed face fits its cell to its girth).
+  if (tile && domains.some((d) => tile.size[0] > d.cell[0] + tol || tile.size[1] > d.cell[1] + tol))
+    notes.push(
+      `타일이 칸보다 큼 · 외접 ${(tile.size[0] * 1000).toFixed(0)} × ${(tile.size[1] * 1000).toFixed(0)} mm`,
+    );
   for (const domain of domains) {
     const prefix = multi ? `F${domain.faceIndex}-` : '';
     panels.push(...layoutFace(domain, settings, tol, prefix, tile));
@@ -140,6 +139,11 @@ export function layoutPanels(
     };
   const good = listed.filter((p) => !p.failure);
   const [mw, mh] = domains[0].module;
+  const moduleOf = new Map(domains.map((d) => [d.faceIndex, d.module] as const));
+  const offOwn = (p: Panel) => {
+    const [w, h] = moduleOf.get(p.faceIndex) ?? [mw, mh];
+    return offTarget(p, w, h);
+  };
   const opening = settings.opening?.value;
   const attractors = opening ? (extras.attractors ?? []) : [];
   if (opening)
@@ -161,7 +165,7 @@ export function layoutPanels(
       pole: listed.filter((p) => p.pole).length,
       failed: listed.filter((p) => p.failure).length,
       dropped: panels.length - listed.length,
-      offTarget: uneven ? 0 : listed.filter((p) => offTarget(p, mw, mh)).length,
+      offTarget: uneven ? 0 : listed.filter(offOwn).length,
     },
     sizeRange: good.length
       ? {
@@ -173,6 +177,14 @@ export function layoutPanels(
         }
       : { minW: 0, maxW: 0, minH: 0, maxH: 0, area: 0 },
     module: [mw, mh],
+    ...(multi
+      ? {
+          faceModules: domains.map((d) => ({
+            faceIndex: d.faceIndex,
+            module: [d.module[0], d.module[1]] as [number, number],
+          })),
+        }
+      : {}),
     coarseSample: domains.some((d) => d.coarse),
   };
   if (layout.coarseSample) notes.push('표본이 거칩니다 · 촘촘하게 다시 읽기');
@@ -685,23 +697,35 @@ function unionOutlines(a: Draft, b: Draft): { keys: string[]; st: Vec2[] } | nul
   return { keys, st };
 }
 
-/** +1 when counter-clockwise in (s, t) is counter-clockwise seen from the reference normal. */
+/** +1 when counter-clockwise in (s, t) is counter-clockwise seen from the reference normal, −1
+ *  when clockwise, 0 when no point of the range lands on the face (then each panel decides from its
+ *  own outline). Measured at the first (s, t) — the middle, then a 9 × 9 grid — whose small cross
+ *  lands on the face: the middle of a C-shaped or ring-shaped projected outline is off the face. */
 function orientation(domain: Domain, flip: number): number {
-  const sm = (domain.sRange[0] + domain.sRange[1]) / 2;
-  const tm = (domain.tRange[0] + domain.tRange[1]) / 2;
+  const [s0, s1] = domain.sRange;
+  const [t0, t1] = domain.tRange;
   const d = Math.max(domain.cell[0], domain.cell[1]) * 1e-2;
   const at = (s: number, t: number) => {
     const hit = domain.toUV(s, t);
-    return hit ? domain.sampler.point(hit.uv[0], hit.uv[1]) : null;
+    return hit && !hit.folded ? domain.sampler.point(hit.uv[0], hit.uv[1]) : null;
   };
-  const centre = domain.toUV(sm, tm);
-  const ps = at(sm + d, tm),
-    ms = at(sm - d, tm),
-    pt = at(sm, tm + d),
-    mt = at(sm, tm - d);
-  if (!centre || !ps || !ms || !pt || !mt) return 1;
-  const n = scale3(domain.sampler.normal(centre.uv[0], centre.uv[1]), flip);
-  return dot3(cross3(sub3(ps, ms), sub3(pt, mt)), n) >= 0 ? 1 : -1;
+  const tries: Vec2[] = [[(s0 + s1) / 2, (t0 + t1) / 2]];
+  for (let j = 0; j < 9; j++)
+    for (let i = 0; i < 9; i++)
+      tries.push([s0 + ((s1 - s0) * (i + 0.5)) / 9, t0 + ((t1 - t0) * (j + 0.5)) / 9]);
+  for (const [sm, tm] of tries) {
+    const centre = domain.toUV(sm, tm);
+    if (!centre || centre.folded) continue;
+    const ps = at(sm + d, tm),
+      ms = at(sm - d, tm),
+      pt = at(sm, tm + d),
+      mt = at(sm, tm - d);
+    if (!ps || !ms || !pt || !mt) continue;
+    const n = scale3(domain.sampler.normal(centre.uv[0], centre.uv[1]), flip);
+    const c = dot3(cross3(sub3(ps, ms), sub3(pt, mt)), n);
+    if (c !== 0 && Number.isFinite(c)) return c > 0 ? 1 : -1;
+  }
+  return 0;
 }
 
 function buildPanel(
@@ -718,6 +742,16 @@ function buildPanel(
 ): Panel {
   let st = d.st.slice(),
     keys = d.keys.slice();
+  if (!sign) {
+    // No face-wide orientation: the outline's own winding against the reference normal.
+    const ps = st.map(pointAt).filter((p) => !p.missing);
+    if (ps.length >= 3) {
+      const nw = newell(ps.map((p) => p.xyz));
+      const cu = ps.reduce((a, p) => a + p.uv[0], 0) / ps.length,
+        cv = ps.reduce((a, p) => a + p.uv[1], 0) / ps.length;
+      if (dot3(nw, scale3(domain.sampler.normal(cu, cv), flip)) < 0) sign = -1;
+    }
+  }
   if (sign < 0) {
     st.reverse();
     keys.reverse();
@@ -745,33 +779,34 @@ function buildPanel(
       p.missing ? { uv, xyz: sampler.point(uv[0], uv[1]), folded: false, missing: true } : p,
     );
   }
-  // Poles: every vertex on a collapsed side takes that side's one key, and neighbouring vertices
-  // at the pole merge into one (a triangle panel, SPEC-16.5 1).
+  // Poles (SPEC-16.5 1): every vertex on a collapsed side takes that side's one key but keeps its
+  // own UV, so an edge running into the pole stays the curve it was in (s, t) — the meridian of a
+  // grid cell — and the neighbour sharing it (same two keys) lies on the same curve on the surface.
+  // On the surface the pole vertices are one point (a triangle panel); in UV the panel keeps its
+  // collapsed edge. Only vertices at the same UV point merge.
   keys = keys.map((k, i) => {
     const side = domain.poleOf(points[i].uv);
     return side ? `${d.face}:p:${side}` : k;
   });
-  let pole = false;
-  const atPole = (a: number, b: number) =>
-    keys[a] === keys[b] && keys[a].includes(':p:') && dist3(points[a].xyz, points[b].xyz) <= tol;
+  const sp = domain.sampler;
+  const uvScale = Math.max(sp.u1 - sp.u0, sp.v1 - sp.v0);
+  const same = (a: number, b: number) =>
+    keys[a] === keys[b] &&
+    Math.hypot(points[a].uv[0] - points[b].uv[0], points[a].uv[1] - points[b].uv[1]) <=
+      uvScale * 1e-12;
   const keepIdx: number[] = [];
   for (let i = 0; i < points.length; i++) {
-    if (keepIdx.length && atPole(keepIdx[keepIdx.length - 1], i)) {
-      pole = true;
-      continue;
-    }
+    if (keepIdx.length && same(keepIdx[keepIdx.length - 1], i)) continue;
     keepIdx.push(i);
   }
-  while (keepIdx.length > 1 && atPole(keepIdx[0], keepIdx[keepIdx.length - 1])) {
-    keepIdx.pop();
-    pole = true;
-  }
-  if (keepIdx.length >= 3) {
+  while (keepIdx.length > 1 && same(keepIdx[0], keepIdx[keepIdx.length - 1])) keepIdx.pop();
+  const collapsed = keepIdx.length < 3;
+  if (!collapsed) {
     st = keepIdx.map((i) => st[i]);
     keys = keepIdx.map((i) => keys[i]);
     points = keepIdx.map((i) => points[i]);
-  } else if (!failure)
-    failure = { code: 'degenerate', message: '꼭짓점이 한 점으로 모여 넓이가 0' };
+  }
+  const pole = keys.some((k, i) => k.includes(':p:') && k === keys[(i + 1) % keys.length]);
   // Start at the vertex nearest the start corner (ties: smaller t, then smaller s).
   let first = 0;
   for (let i = 1; i < st.length; i++) {
@@ -843,7 +878,14 @@ function buildPanel(
       area += Math.hypot(c[0], c[1], c[2]) / 2;
     }
   }
-  if (!failure && area <= tol * tol) failure = { code: 'degenerate', message: '패널 넓이가 0' };
+  // The message and the area agree: a panel failing as 'area 0' reports 0.
+  const zero = collapsed || area <= tol * tol;
+  if (!failure && zero)
+    failure = {
+      code: 'degenerate',
+      message: pole ? '꼭짓점이 극점 한 점으로 모여 넓이가 0' : '패널 넓이가 0',
+    };
+  if (zero) area = 0;
   const finite = (x: number) => (Number.isFinite(x) ? x : 0);
   return {
     id,
@@ -861,4 +903,17 @@ function buildPanel(
     area: finite(area),
     failure,
   };
+}
+
+/** Newell's normal of a closed 3D outline (its length is twice the projected area). */
+function newell(ring: readonly Vec3[]): Vec3 {
+  const n: Vec3 = [0, 0, 0];
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i],
+      b = ring[(i + 1) % ring.length];
+    n[0] += (a[1] - b[1]) * (a[2] + b[2]);
+    n[1] += (a[2] - b[2]) * (a[0] + b[0]);
+    n[2] += (a[0] - b[0]) * (a[1] + b[1]);
+  }
+  return n;
 }

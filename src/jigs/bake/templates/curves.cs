@@ -26,6 +26,12 @@ Curve ReadCurve()
     var polyline = new PolylineCurve(points);
     return polyline.GetLength() > tolerance ? polyline : null;
 }
+// The delete list, then the surface guard: a 패널링 make whose face changed makes nothing.
+var deleteIds = new System.Collections.Generic.List<string>();
+var nDelete = I32();
+for (var i = 0; i < nDelete; i++) deleteIds.Add(Str());
+//@include face-hash.cs
+//@include surface-guard.cs
 // The output layer (SPEC-07.12 2, ARCH-03 §9.5): every level of layerPath is found under its own
 // parent (never by name elsewhere, never at the root unless it is the first level) and made there,
 // on and unlocked, when missing. Existing levels keep their properties. Up to 8 levels.
@@ -41,10 +47,10 @@ foreach (var layerName in layerNames)
     layerParent = doc.Layers[layerIndex].Id;
 }
 // Delete only the GUIDs VIDE listed, and only when they carry this instance's and bake's tags.
-var removed = 0; var nDelete = I32();
-for (var i = 0; i < nDelete; i++)
+var removed = 0;
+foreach (var deleteId in deleteIds)
 {
-    var id = Guid.Parse(Str()); var existing = doc.Objects.FindId(id);
+    var id = Guid.Parse(deleteId); var existing = doc.Objects.FindId(id);
     if (existing == null) continue;
     if (existing.Attributes.GetUserString("vide-instance") != instanceId || existing.Attributes.GetUserString("vide-bake") != bakeId) continue;
     if (doc.Objects.Delete(id, true)) removed++;

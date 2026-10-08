@@ -112,7 +112,7 @@
       "basis": {
         "status": "to-ask",
         "note": "SPEC-16.4 추천값 1,200 mm",
-        "question": "패널 크기(가로 × 세로)는 얼마로 할까요?"
+        "question": "패널 가로(패턴 축 방향)는 얼마로 할까요?"
       },
       "affects": ["preview"]
     },
@@ -141,7 +141,7 @@
       "basis": {
         "status": "to-ask",
         "note": "SPEC-16.4 추천값 600 mm",
-        "question": "패널 크기(가로 × 세로)는 얼마로 할까요?"
+        "question": "패널 세로(패턴 축과 직각)는 얼마로 할까요?"
       },
       "affects": ["preview"]
     },
@@ -548,7 +548,7 @@
     {
       "key": "stockWidth",
       "title": "판재 한도 가로",
-      "help": "0이면 한도 없음. 판재 한도를 넘는 패널은 나누지 않고 '판재 초과'로 표시합니다(90° 돌려 들어가면 초과 아님).",
+      "help": "0이면 이 방향은 한도 없음(가로·세로 모두 0이면 판재 한도 없음). 판재 한도를 넘는 패널은 나누지 않고 '판재 초과'로 표시합니다(90° 돌려 들어가면 초과 아님).",
       "group": "2단계 부재",
       "type": "length",
       "unit": "m",
@@ -565,14 +565,14 @@
       "basis": {
         "status": "to-ask",
         "note": "SPEC-16.4 추천값 없음(0)",
-        "question": "판재 크기 한도가 있나요?"
+        "question": "판재 한도 가로는 몇 mm인가요? (한도가 없으면 0)"
       },
       "affects": ["members"]
     },
     {
       "key": "stockHeight",
       "title": "판재 한도 세로",
-      "help": "0이면 한도 없음.",
+      "help": "0이면 이 방향은 한도 없음(가로·세로 모두 0이면 판재 한도 없음).",
       "group": "2단계 부재",
       "type": "length",
       "unit": "m",
@@ -589,7 +589,7 @@
       "basis": {
         "status": "to-ask",
         "note": "SPEC-16.4 추천값 없음(0)",
-        "question": "판재 크기 한도가 있나요?"
+        "question": "판재 한도 세로는 몇 mm인가요? (한도가 없으면 0)"
       },
       "affects": ["members"]
     },

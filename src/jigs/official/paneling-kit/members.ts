@@ -3,10 +3,14 @@
 // Per panel of the layout (same order; dropped and stage-1 failures stay listed with their failure):
 //   1. 줄눈: every outline edge shared with a neighbour (same two vertex keys, SPEC-16.5 5) moves in by
 //      joint/2 measured ON THE SURFACE; an edge on the face boundary/trim moves 0 ('flush') or
-//      joint/2 ('half'). The surface amount becomes a 2D (UV) distance with the local scale of the
-//      sample (the Jacobian: the part of J·ν across J·e) at both ends and the middle of the edge; a
-//      straight line fitted to those three gives the moved edge, and consecutive moved edges meet in
-//      the new corners. So the reduction differs from shrinking a fixed 2D distance.
+//      joint/2 ('half'). At both ends and the middle of the edge the UV step that moves the amount
+//      on the surface square across the edge comes from the sample's Jacobian; a straight line
+//      fitted to the moved points is the moved edge (an end where the surface collapses — a pole, a
+//      folded side — is left out, and no move passes the panel's own width). Consecutive moved
+//      edges meet in the new corners; an edge whose moved piece turns round is taken out and its
+//      neighbours meet instead (an offset polygon). A plate outside its panel, a moved edge running
+//      far past its amount or a gap far past the joint fails as `degenerate`. A pole's collapsed
+//      edge (two equal pole keys) gets no joint; edges into a pole are paired by their UV.
 //   2. 면으로 옮기기: the reduced UV outline goes back on the surface (bicubic sample).
 //   3. 줄눈 틈: across every shared edge, at both ends and the middle, the distance between the two
 //      moved edges on the surface → `jointGap` [min, max]; off target by more than max(1 mm, 10 %)
@@ -30,6 +34,7 @@ import {
 } from '../../../contracts/paneling.ts';
 import { buildDomain, type Domain } from './domain.ts';
 import { fingerprint } from './hash.ts';
+import { openingRim } from './opening.ts';
 import { faceSampler, type FaceSampler } from './sample.ts';
 import { settingValues } from './settings.ts';
 import {
@@ -51,6 +56,10 @@ import {
 export const THICKNESS_CURVATURE_LIMIT = 0.7;
 /** Joint gap off its target by more than max(this, 10 % of the joint) is '고르지 않음'. */
 export const JOINT_UNEVEN_MIN = 0.001;
+/** The rim an opening keeps inside the joint-reduced plate (SPEC-16.13 4), metres. */
+export const OPENING_PLATE_RIM = 0.005;
+/** A joint gap over this many joints (plus 1 mm) fails the plate as `degenerate`. */
+export const JOINT_GAP_LIMIT = 4;
 const MESH_VERTEX_LIMIT = 4096;
 const JOINT_LINE_POINTS = 5;
 
@@ -141,6 +150,7 @@ export function buildMembers(
     if (!listed[pi]) return;
     const n = p.vertexKeys.length;
     for (let i = 0; i < n; i++) {
+      if (p.vertexKeys[i] === p.vertexKeys[(i + 1) % n]) continue; // a pole's collapsed edge
       const k = `${p.faceIndex}#${edgeKey(p.vertexKeys[i], p.vertexKeys[(i + 1) % n])}`;
       const list = owners.get(k) ?? [];
       list.push({ panel: pi, edge: i });
@@ -150,11 +160,34 @@ export function buildMembers(
   const partnerOf = (pi: number, i: number): EdgeRef | null => {
     const p = panels[pi];
     const n = p.vertexKeys.length;
+    if (p.vertexKeys[i] === p.vertexKeys[(i + 1) % n]) return null;
     const list = owners.get(
       `${p.faceIndex}#${edgeKey(p.vertexKeys[i], p.vertexKeys[(i + 1) % n])}`,
     );
-    return list?.find((r) => r.panel !== pi) ?? null;
+    const others = list?.filter((r) => r.panel !== pi) ?? [];
+    if (others.length <= 1) return others[0] ?? null;
+    // Several edges with the same two keys: the edges into a pole (every pole vertex has the one
+    // key), e.g. a diamond's fan. The partner is the one running along the same UV curve.
+    const ctx = ctxOf(p.faceIndex);
+    const a = p.uv[i],
+      b = p.uv[(i + 1) % n];
+    let best: EdgeRef | null = null,
+      bestD = Infinity;
+    for (const r of others) {
+      const q = panels[r.panel];
+      const c = q.uv[r.edge],
+        d = q.uv[(r.edge + 1) % q.uv.length];
+      const dd = uvDist(ctx, a, d) + uvDist(ctx, b, c);
+      if (dd < bestD) {
+        best = r;
+        bestD = dd;
+      }
+    }
+    return best;
   };
+  /** A pole's collapsed edge (both keys the pole's): it has no length on the surface, so no joint. */
+  const collapsedEdge = (p: PanelLayout['panels'][number], i: number) =>
+    p.vertexKeys[i] === p.vertexKeys[(i + 1) % p.vertexKeys.length];
 
   // 1. Joint reduction in UV.
   const reduced: (Reduced | null)[] = [];
@@ -167,14 +200,36 @@ export function buildMembers(
     }
     const ctx = ctxOf(p.faceIndex);
     const amounts = p.uv.map((_, i) =>
-      partnerOf(pi, i) ? joint / 2 : boundaryJoint === 'half' ? joint / 2 : 0,
+      collapsedEdge(p, i)
+        ? 0
+        : partnerOf(pi, i)
+          ? joint / 2
+          : boundaryJoint === 'half'
+            ? joint / 2
+            : 0,
     );
     const r = reduceOutline(ctx, p.uv as Vec2[], amounts);
-    if (!r) {
+    const bad = r ? (plateOutOfPanel(r.uv, p.uv as Vec2[]) ?? ranAway(ctx, p, r, amounts)) : null;
+    if (!r || bad) {
       reduced.push(null);
       failures.push({
         code: 'degenerate',
-        message: `줄눈(${round1(joint * 1000)} mm)이 패널보다 커서 판이 남지 않음`,
+        message: r
+          ? `줄눈 축소가 맞지 않음(${bad}) · 극점이나 접힌 변 가까이`
+          : `줄눈(${round1(joint * 1000)} mm)이 패널보다 커서 판이 남지 않음`,
+      });
+      return;
+    }
+    // The stage-1 opening must stay inside the plate the joint left (SPEC-16.13 4).
+    const rim = p.opening ? openingRim(ctx.sampler, p.opening.uv as Vec2[], r.uv) : Infinity;
+    if (rim < OPENING_PLATE_RIM) {
+      reduced.push(r);
+      failures.push({
+        code: 'degenerate',
+        message:
+          rim < 0
+            ? '개구가 줄눈으로 줄어든 판 밖으로 나감 · 개구율이나 줄눈을 줄이세요'
+            : `개구와 판 가장자리 사이가 ${round1(rim * 1000)} mm뿐 · 개구율이나 줄눈을 줄이세요`,
       });
       return;
     }
@@ -210,13 +265,6 @@ export function buildMembers(
           const xa = ctx.sampler.point(pa[0], pa[1]),
             xb = ctx.sampler.point(pb[0], pb[1]);
           line.push(roundVec([(xa[0] + xb[0]) / 2, (xa[1] + xb[1]) / 2, (xa[2] + xb[2]) / 2]));
-          if (k === 0 || k === 2 || k === 4) {
-            const gap = dist3(xa, xb);
-            for (const owner of [pi, other.panel]) {
-              gaps[owner][0] = Math.min(gaps[owner][0], gap);
-              gaps[owner][1] = Math.max(gaps[owner][1], gap);
-            }
-          }
         } else {
           const a = p.uv[i],
             b = p.uv[(i + 1) % n];
@@ -225,6 +273,16 @@ export function buildMembers(
           );
         }
       }
+      if (ra && rb)
+        for (const lam of stationsOf(ka, kb)) {
+          const pa = acrossPoint(p.uv as Vec2[], ra, i, lam);
+          const pb = acrossPoint(q.uv as Vec2[], rb, other.edge, 1 - lam);
+          const gap = dist3(ctx.sampler.point(pa[0], pa[1]), ctx.sampler.point(pb[0], pb[1]));
+          for (const owner of [pi, other.panel]) {
+            gaps[owner][0] = Math.min(gaps[owner][0], gap);
+            gaps[owner][1] = Math.max(gaps[owner][1], gap);
+          }
+        }
       joints.push({ keys: ka < kb ? [ka, kb] : [kb, ka], line });
     }
   });
@@ -243,6 +301,13 @@ export function buildMembers(
     const jointUneven =
       !!jointGap &&
       Math.max(Math.abs(jointGap[0] - joint), Math.abs(jointGap[1] - joint)) > unevenBy;
+    // A gap far past the joint means a moved edge went wrong (a pole, a folded side), not an
+    // uneven joint: the plate is not trusted.
+    if (!failure && jointGap && jointGap[1] > JOINT_GAP_LIMIT * joint + JOINT_UNEVEN_MIN)
+      failure = {
+        code: 'degenerate',
+        message: `줄눈 틈 ${round1(jointGap[1] * 1000)} mm가 줄눈(${round1(joint * 1000)} mm)의 ${JOINT_GAP_LIMIT}배를 넘음 · 극점이나 접힌 변 가까이`,
+      };
     const uv = (r ? r.uv : (p.uv as Vec2[])).map((x) => [x[0], x[1]] as Vec2);
     if (!r) {
       return {
@@ -306,13 +371,21 @@ const round1 = (x: number) => Math.round(x * 10) / 10;
 const round9 = (x: number) => Math.round(x * 1e9) / 1e9 + 0;
 const roundVec = (p: Vec3): Vec3 => [round6(p[0]), round6(p[1]), round6(p[2])];
 
-/** Stock check either way round (SPEC-16.2: 90° turned fits → not over). */
+/** Stock check either way round (SPEC-16.2: 90° turned fits → not over); a side of 0 has no limit
+ *  (SPEC-16.6 4). */
 export function overStockOf(w: number, h: number, stock: readonly [number, number], tol = 0) {
-  const fits = (a: number, b: number) => w <= a + tol && h <= b + tol;
+  const fits = (a: number, b: number) => (a <= 0 || w <= a + tol) && (b <= 0 || h <= b + tol);
   return !fits(stock[0], stock[1]) && !fits(stock[1], stock[0]);
 }
 
 // ── geometry on the sample ────────────────────────────────────────────────────────────────────
+
+/** UV distance with the closed directions wrapped by their period. */
+function uvDist(ctx: FaceCtx, a: readonly number[], b: readonly number[]): number {
+  const wrap = (x: number, period: number) =>
+    period > 0 ? Math.abs(x - period * Math.round(x / period)) : Math.abs(x);
+  return Math.hypot(wrap(a[0] - b[0], ctx.periodU), wrap(a[1] - b[1], ctx.periodV));
+}
 
 function partials(ctx: FaceCtx, u: number, v: number): [Vec3, Vec3] {
   const s = ctx.sampler;
@@ -321,9 +394,11 @@ function partials(ctx: FaceCtx, u: number, v: number): [Vec3, Vec3] {
   return [su, sv];
 }
 
-/** UV distance across the edge direction `e` (unit, UV) that moves `amount` on the surface. */
-function uvAmount(ctx: FaceCtx, at: Vec2, e: Vec2, nu: Vec2, amount: number): number {
-  if (amount === 0) return 0;
+/** The UV step that moves one metre on the surface square across the edge direction `e` (unit,
+ *  UV) at `at`, toward the side of `nu`: the pseudo-inverse of the Jacobian applied to the surface
+ *  direction normal × edge tangent. With it, `scale` = the surface length per UV unit across the
+ *  edge (near a pole or a folded side it goes to 0). */
+function acrossStep(ctx: FaceCtx, at: Vec2, e: Vec2, nu: Vec2): { step: Vec2; scale: number } {
   const [su, sv] = partials(ctx, at[0], at[1]);
   const te: Vec3 = [
     su[0] * e[0] + sv[0] * e[1],
@@ -338,72 +413,229 @@ function uvAmount(ctx: FaceCtx, at: Vec2, e: Vec2, nu: Vec2, amount: number): nu
   const tt = dot3(te, te);
   const across = tt > 0 ? sub3(tn, scale3(te, dot3(tn, te) / tt)) : tn;
   const m = len3(across);
-  return m > 1e-12 ? amount / m : NaN;
+  if (!(m > 0) || !Number.isFinite(m)) return { step: [0, 0], scale: 0 };
+  // Solve [Su Sv]·δ = across / m in the least-squares sense (2 × 2 normal equations).
+  const a3 = scale3(across, 1 / m);
+  const g11 = dot3(su, su),
+    g12 = dot3(su, sv),
+    g22 = dot3(sv, sv);
+  const r1 = dot3(su, a3),
+    r2 = dot3(sv, a3);
+  const det = g11 * g22 - g12 * g12;
+  const step: Vec2 =
+    det > 1e-18 * (g11 * g22 || 1)
+      ? [(g22 * r1 - g12 * r2) / det, (g11 * r2 - g12 * r1) / det]
+      : [nu[0] / m, nu[1] / m];
+  return { step, scale: m };
 }
 
-/** Move every edge of a UV outline inward by its surface amount; null when no plate is left. */
+/** A station (an end or the middle of an edge) whose across scale is under this share of the
+ *  edge's largest is degenerate — a pole or a folded side — and is not used, so the UV move cannot
+ *  run away there (SPEC-16.6 1). */
+const DEGENERATE_SCALE = 0.05;
+
+/** The moved line of edge a→b for a surface `amount`: each station (ends, middle) moves `amount`
+ *  on the surface square across the edge; the line is the least-squares fit through the moved
+ *  stations, or with a degenerate end the line through the other end and the middle. No station
+ *  moves past the panel's own UV width across the edge. Null when nothing is usable. */
+function edgeMove(
+  ctx: FaceCtx,
+  a: Vec2,
+  b: Vec2,
+  e: Vec2,
+  nu: Vec2,
+  amount: number,
+  width: number,
+): [Vec2, Vec2] | null {
+  if (amount === 0) return [a, b];
+  const ex = b[0] - a[0],
+    ey = b[1] - a[1];
+  const xs = [0, 0.5, 1];
+  const steps = xs.map((lam) => acrossStep(ctx, [a[0] + ex * lam, a[1] + ey * lam], e, nu));
+  const top = Math.max(...steps.map((s) => s.scale));
+  if (!(top > 1e-12)) return null;
+  const use = [0, 1, 2].filter((k) => steps[k].scale >= top * DEGENERATE_SCALE);
+  if (!use.length) return null;
+  const moved = xs.map((lam, k): Vec2 => {
+    const { step } = steps[k];
+    // The part across the edge decides the cap; the step is shortened as a whole.
+    const across = (step[0] * nu[0] + step[1] * nu[1]) * amount;
+    const f = across > width && across > 0 ? width / across : 1;
+    return [a[0] + ex * lam + step[0] * amount * f, a[1] + ey * lam + step[1] * amount * f];
+  });
+  let p0: Vec2, p1: Vec2;
+  if (use.length === 3) {
+    // Least-squares line through the three moved stations at λ = 0, ½, 1.
+    const fit = (c: 0 | 1) => {
+      const slope = moved[2][c] - moved[0][c];
+      const mean = (moved[0][c] + moved[1][c] + moved[2][c]) / 3;
+      return [mean - slope / 2, mean + slope / 2];
+    };
+    const [u0, u1] = fit(0),
+      [v0, v1] = fit(1);
+    p0 = [u0, v0];
+    p1 = [u1, v1];
+  } else if (use.length === 2) {
+    const [i, j] = use;
+    const at = (lam: number): Vec2 => {
+      const t = (lam - xs[i]) / (xs[j] - xs[i]);
+      return [
+        moved[i][0] + (moved[j][0] - moved[i][0]) * t,
+        moved[i][1] + (moved[j][1] - moved[i][1]) * t,
+      ];
+    };
+    p0 = at(0);
+    p1 = at(1);
+  } else {
+    const k = use[0];
+    const d: Vec2 = [moved[k][0] - (a[0] + ex * xs[k]), moved[k][1] - (a[1] + ey * xs[k])];
+    p0 = [a[0] + d[0], a[1] + d[1]];
+    p1 = [b[0] + d[0], b[1] + d[1]];
+  }
+  // Never outward and never past the width (the ends of an extrapolated line).
+  const clamp = (p: Vec2, o: Vec2): Vec2 => {
+    const across = (p[0] - o[0]) * nu[0] + (p[1] - o[1]) * nu[1];
+    const c = Math.min(Math.max(across, 0), width);
+    return [p[0] + nu[0] * (c - across), p[1] + nu[1] * (c - across)];
+  };
+  return [clamp(p0, a), clamp(p1, b)];
+}
+
+/**
+ * Move every edge of a UV outline inward by its surface amount (an offset polygon): the moved
+ * lines meet in the new corners; an edge whose moved piece turns round (a short trim piece, a
+ * 0–6 mm Voronoi edge, the collapsed edge at a pole) is taken out and its neighbours meet instead,
+ * again until none turns round. Null only when fewer than three edges or no area are left. The
+ * plate may so have fewer vertices than the panel (its keys then no longer match one to one).
+ */
 function reduceOutline(ctx: FaceCtx, uv: Vec2[], amounts: number[]): Reduced | null {
   const n = uv.length;
   const w = Math.sign(area2(uv)) || 1;
   const lines: [Vec2, Vec2][] = [];
   const normals: Vec2[] = [];
   const dirs: Vec2[] = [];
+  const active: number[] = [];
   for (let i = 0; i < n; i++) {
     const a = uv[i],
       b = uv[(i + 1) % n];
     const ex = b[0] - a[0],
       ey = b[1] - a[1];
     const L = Math.hypot(ex, ey);
-    if (L === 0) return null;
-    const e: Vec2 = [ex / L, ey / L];
+    const e: Vec2 = L > 0 ? [ex / L, ey / L] : [1, 0];
     const nu: Vec2 = w > 0 ? [-e[1], e[0]] : [e[1], -e[0]];
-    const ds = [0, 0.5, 1].map((lam) =>
-      uvAmount(ctx, [a[0] + ex * lam, a[1] + ey * lam], e, nu, amounts[i]),
-    );
-    const ok = ds.filter(Number.isFinite);
-    let d0: number, d1: number;
-    if (ok.length === 3) {
-      // Least-squares line through (0, d0), (½, d½), (1, d1).
-      const slope = ds[2] - ds[0];
-      const mean = (ds[0] + ds[1] + ds[2]) / 3;
-      d0 = mean - slope / 2;
-      d1 = mean + slope / 2;
-    } else if (ok.length) {
-      d0 = d1 = ok.reduce((x, y) => x + y, 0) / ok.length;
-    } else return null;
-    lines.push([
-      [a[0] + nu[0] * d0, a[1] + nu[1] * d0],
-      [b[0] + nu[0] * d1, b[1] + nu[1] * d1],
-    ]);
     normals.push(nu);
     dirs.push(e);
+    if (L === 0) {
+      lines.push([a, b]);
+      continue;
+    }
+    // The panel's own UV width across this edge: no move may pass it.
+    let width = 0;
+    for (const p of uv) width = Math.max(width, (p[0] - a[0]) * nu[0] + (p[1] - a[1]) * nu[1]);
+    const line = edgeMove(ctx, a, b, e, nu, amounts[i], width);
+    if (!line) return null;
+    lines.push(line);
+    active.push(i);
   }
-  const out: Vec2[] = [];
-  for (let i = 0; i < n; i++) {
-    const prev = lines[(i - 1 + n) % n],
-      cur = lines[i];
-    const hit = intersect(prev, cur);
-    if (hit) out.push(hit);
-    else {
+  const cornersOf = (edges: number[]): Vec2[] =>
+    edges.map((cur, j) => {
+      const prev = lines[edges[(j - 1 + edges.length) % edges.length]];
+      const hit = intersect(prev, lines[cur]);
+      if (hit) return hit;
       // Collinear neighbours (a T point): the two moved ends, averaged.
       const a = prev[1],
-        b = cur[0];
-      out.push([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
-    }
+        b = lines[cur][0];
+      return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    });
+  let out: Vec2[] = [];
+  for (;;) {
+    if (active.length < 3) return null;
+    out = cornersOf(active);
+    // The edge that turned round the most (its new length over its old, most negative) goes.
+    let worst = -1,
+      worstBy = 0;
+    active.forEach((i, j) => {
+      const a = out[j],
+        b = out[(j + 1) % out.length];
+      const along = (b[0] - a[0]) * dirs[i][0] + (b[1] - a[1]) * dirs[i][1];
+      const L = Math.hypot(uv[(i + 1) % n][0] - uv[i][0], uv[(i + 1) % n][1] - uv[i][1]);
+      const by = along / L;
+      if (along <= 0 && (worst < 0 || by < worstBy)) {
+        worst = j;
+        worstBy = by;
+      }
+    });
+    if (worst < 0) break;
+    active.splice(worst, 1);
   }
-  // A plate is left when the winding holds, every edge keeps its direction and nothing crosses.
+  // A plate is left when the winding holds and nothing crosses.
   const area = area2(out);
   if (Math.sign(area) !== w || Math.abs(area) <= Math.abs(area2(uv)) * 1e-9) return null;
-  for (let i = 0; i < n; i++) {
-    const a = out[i],
-      b = out[(i + 1) % n];
-    const e = dirs[i];
-    const dx = b[0] - a[0],
-      dy = b[1] - a[1];
-    if (dx * e[0] + dy * e[1] <= 0) return null;
-  }
   if (selfCrosses(out)) return null;
   return { uv: out, lines, normals };
+}
+
+/** The checks after the reduction (a moved edge that ran away): the plate's UV inside the panel's
+ *  UV bounding box and its UV area not over the panel's. The reason, or null when it holds. */
+function plateOutOfPanel(plate: Vec2[], panel: Vec2[]): string | null {
+  let u0 = Infinity,
+    u1 = -Infinity,
+    v0 = Infinity,
+    v1 = -Infinity;
+  for (const [u, v] of panel) {
+    u0 = Math.min(u0, u);
+    u1 = Math.max(u1, u);
+    v0 = Math.min(v0, v);
+    v1 = Math.max(v1, v);
+  }
+  const slack = Math.max(u1 - u0, v1 - v0) * 1e-6;
+  if (
+    plate.some(
+      ([u, v]) =>
+        !Number.isFinite(u) ||
+        !Number.isFinite(v) ||
+        u < u0 - slack ||
+        u > u1 + slack ||
+        v < v0 - slack ||
+        v > v1 + slack,
+    )
+  )
+    return '판 꼭짓점이 패널 밖';
+  if (Math.abs(area2(plate)) > Math.abs(area2(panel)) * (1 + 1e-6)) return '판이 패널보다 큼';
+  return null;
+}
+
+/** Gap stations along an edge a→b: both ends and the middle, moved off an end at a pole (every
+ *  plate meets that one point, so the distance there says nothing of the joint). */
+const stationsOf = (ka: string, kb: string) => [
+  ka.includes(':p:') ? 0.1 : 0,
+  0.5,
+  kb.includes(':p:') ? 0.9 : 1,
+];
+
+/** A moved edge that went much further on the surface than its amount (a pole, a folded side):
+ *  the reason, or null. Measured at the gap stations from the edge to its moved line. */
+function ranAway(
+  ctx: FaceCtx,
+  panel: PanelLayout['panels'][number],
+  r: Reduced,
+  amounts: number[],
+): string | null {
+  const uv = panel.uv as Vec2[];
+  const n = uv.length;
+  for (let i = 0; i < n; i++) {
+    if (!amounts[i]) continue;
+    const a = uv[i],
+      b = uv[(i + 1) % n];
+    for (const lam of stationsOf(panel.vertexKeys[i], panel.vertexKeys[(i + 1) % n])) {
+      const m = ctx.sampler.point(a[0] + (b[0] - a[0]) * lam, a[1] + (b[1] - a[1]) * lam);
+      const q = acrossPoint(uv, r, i, lam);
+      const moved = dist3(m, ctx.sampler.point(q[0], q[1]));
+      if (!Number.isFinite(moved) || moved > JOINT_GAP_LIMIT * amounts[i] + JOINT_UNEVEN_MIN)
+        return `변이 ${Math.round(moved * 1000)} mm 움직임`;
+    }
+  }
+  return null;
 }
 
 function intersect(p: [Vec2, Vec2], q: [Vec2, Vec2]): Vec2 | null {
@@ -436,17 +668,12 @@ function selfCrosses(ring: Vec2[]): boolean {
   return false;
 }
 
-/** The point on the moved edge `i` straight across (along the inward UV normal) from the original
- *  edge's point at `lam`. */
-function acrossPoint(uv: Vec2[], r: Reduced, i: number, lam: number): Vec2 {
-  const a = uv[i],
-    b = uv[(i + 1) % uv.length];
-  const m: Vec2 = [a[0] + (b[0] - a[0]) * lam, a[1] + (b[1] - a[1]) * lam];
-  const nu = r.normals[i];
-  const hit = intersect([m, [m[0] + nu[0], m[1] + nu[1]]], r.lines[i]);
-  return hit ?? m;
+/** The point on the moved edge `i` that the original edge's point at `lam` moved to (the moved
+ *  line is parametrised like the edge, so this is the point across on the surface). */
+function acrossPoint(_uv: Vec2[], r: Reduced, i: number, lam: number): Vec2 {
+  const [p, q] = r.lines[i];
+  return [p[0] + (q[0] - p[0]) * lam, p[1] + (q[1] - p[1]) * lam];
 }
-
 /** SPEC-16.2 공통 규칙 4 and SPEC-16.7 1 on the plate: width × height along the pattern axis in the
  *  best-fit plane of the check points (corners, edge middles, centre), and the flatness. */
 function plateSize(ctx: FaceCtx, uv: Vec2[], flip: number) {

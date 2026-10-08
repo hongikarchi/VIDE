@@ -41,6 +41,7 @@ import { runDocumentSync } from '../../src/server/document-sync.ts';
 import { SyncCoalescer } from '../../src/server/sync-coalesce.ts';
 import { routeJigsOf, skillCatalog } from '../../src/server/skill-catalog.ts';
 import { decisiveRoute, instanceRouteContext, requestValues } from '../../src/ui/request-route.ts';
+import { STAGES } from '../../src/ui/paneling/model.ts';
 import {
   SCHEDULE_COLUMNS,
   memberSetSchema,
@@ -90,7 +91,10 @@ var band = Surface.CreateExtrusion(arc.ToNurbsCurve(), new Vector3d(0, 0, 2)).To
 var bandId = doc.Objects.AddBrep(band, new Rhino.DocObjects.ObjectAttributes { Name = "band" });
 var box = Mesh.CreateFromBox(new BoundingBox(new Point3d(50, 0, 0), new Point3d(51, 1, 1)), 1, 1, 1);
 var meshId = doc.Objects.AddMesh(box, new Rhino.DocObjects.ObjectAttributes { Name = "mesh" });
-return saddleId + "," + bandId + "," + meshId;`;
+// A person's tile: two closed squares drawn flat on XY (SPEC-16.13 3), off to the side.
+Guid Square(double x0) { var sq = new Polyline(new[] { new Point3d(x0, -5, 0), new Point3d(x0 + 0.45, -5, 0), new Point3d(x0 + 0.45, -4.55, 0), new Point3d(x0, -4.55, 0), new Point3d(x0, -5, 0) }); return doc.Objects.AddPolyline(sq, new Rhino.DocObjects.ObjectAttributes { Name = "tile" }); }
+var tileA = Square(60); var tileB = Square(60.5);
+return saddleId + "," + bandId + "," + meshId + "," + tileA + "," + tileB;`;
 
 const wait = async (fn, timeout = 180000) => {
   const end = Date.now() + timeout;
@@ -116,7 +120,7 @@ try {
   worker = await launchRhinoWorker({ ...options, directory: join(directory, 'create') });
   const built = await worker.execute(randomUUID(), 0, BUILD);
   assert.equal(built.ok, true, JSON.stringify(built).slice(0, 1500));
-  const [saddleId, bandId, meshId] = String(built.value).split(',');
+  const [saddleId, bandId, meshId, tileA, tileB] = String(built.value).split(',');
   await worker.stop();
   worker = undefined;
   const attachedDirectory = join(directory, 'attached');
@@ -537,9 +541,14 @@ result=dict(rows=rows,solids=solids,faces=faces,blocks=blocks,defs=defs,assumed=
   };
   log('saddle', JSON.stringify(result.saddle));
 
+  // The screen's buttons (src/ui/paneling/model.ts STAGES): [미리보기 만들기] = preview + openings,
+  // [부재 만들기] = members + joints, [타입 만들기] = types + connections + cuts + cut-numbers.
+  const makeIds = Object.fromEntries(
+    STAGES.map((stage) => [stage.id, [stage.bake, ...(stage.also ?? [])]]),
+  );
   // [미리보기 만들기] ≈ 5천 panels, one [되돌리기].
   const census0 = await census(iid);
-  const preview = await bake(['preview'], 'preview 5k');
+  const preview = await bake(makeIds.preview, 'preview 5k');
   assert.equal(preview.status, 200, JSON.stringify(preview.data).slice(0, 1500));
   const previewOut = preview.data.bake.bakes[0];
   const census1 = await census(iid);
@@ -557,7 +566,7 @@ result=dict(rows=rows,solids=solids,faces=faces,blocks=blocks,defs=defs,assumed=
     },
   };
   // [부재 만들기]: closed solids and joint lines; the preview faces stay.
-  const membersMade = await bake(['members', 'joints'], 'members 5k');
+  const membersMade = await bake(makeIds.members, 'members 5k');
   assert.equal(membersMade.status, 200, JSON.stringify(membersMade.data).slice(0, 1500));
   const census2 = await census(iid);
   const [solidOut, jointOut] = membersMade.data.bake.bakes;
@@ -583,7 +592,10 @@ result=dict(rows=rows,solids=solids,faces=faces,blocks=blocks,defs=defs,assumed=
     ),
   ).bake.map((b) => b.id);
   result.declaredMakes = declared;
-  const typeIds = declared.filter((id) => !['preview', 'members', 'joints'].includes(id));
+  // The stage-3 button's makes as the screen runs them (not every other declaration: 'openings'
+  // belongs to [미리보기 만들기]).
+  const typeIds = makeIds.optimize.filter((id) => declared.includes(id));
+  assert.deepEqual(typeIds, ['types', 'connections', 'cuts', 'cut-numbers']);
   if (typeIds.length) {
     const types = await bake(typeIds, 'types');
     assert.equal(types.status, 200, JSON.stringify(types.data).slice(0, 1500));
@@ -603,6 +615,49 @@ result=dict(rows=rows,solids=solids,faces=faces,blocks=blocks,defs=defs,assumed=
   } else result.makes.types = { pending: 'T-257: the jig declares no types make yet' };
   result.makes.preview.undoMs = await undoOf(iid, preview);
   assert.deepEqual((await census(iid)).rows, census0.rows, 'every make is gone');
+
+  // A person's tile, [부재 만들기] twice: every solid Rhino made is recorded (a read page's shared
+  // string budget once dropped the vide-key of some, which then counted as failures without a
+  // reason and were made again as duplicates by the next make).
+  await action(
+    `doc.Objects.UnselectAll()
+doc.Objects.Select(System.Guid('${tileA}'))
+doc.Objects.Select(System.Guid('${tileB}'))
+result=True`,
+  );
+  const tileRead = await call('POST', `${base}/paneling/curves/read`, {
+    instanceId: iid,
+    key: 'tile',
+  });
+  assert.equal(tileRead.data.ok, true, JSON.stringify(tileRead.data));
+  await setAll({ pattern: 'tile', width: 1, height: 0.5 });
+  const tiled = memberSetSchema.parse((await run('members')).outputs.members);
+  const tileFirst = await bake(makeIds.members, 'tile members');
+  assert.equal(tileFirst.status, 200, JSON.stringify(tileFirst.data).slice(0, 1500));
+  const tileOut = tileFirst.data.bake.bakes[0];
+  const explained = new Set((tileOut.failures ?? []).map((f) => f.key));
+  const unexplained = tileOut.failed.filter((key) => !explained.has(key));
+  const tileCensus1 = await census(iid);
+  const tileAgain = await bake(makeIds.members, 'tile members again');
+  assert.equal(tileAgain.status, 200, JSON.stringify(tileAgain.data).slice(0, 1500));
+  const tileCensus2 = await census(iid);
+  result.tile = {
+    plates: tiled.members.filter((m) => !m.failure).length,
+    added: tileOut.added.length,
+    failed: tileOut.failed.length,
+    unexplained: unexplained.length,
+    solids: [tileCensus1.solids, tileCensus2.solids],
+  };
+  log('tile', JSON.stringify(result.tile));
+  assert.equal(unexplained.length, 0, `made but not recorded: ${unexplained.slice(0, 5)}`);
+  assert.ok(tileOut.added.length > 1000, `${tileOut.added.length}`);
+  assert.equal(tileCensus2.solids, tileCensus1.solids, 'the same make again adds no duplicate');
+  assert.deepEqual(tileCensus2.rows, tileCensus1.rows);
+  await undoOf(iid, tileAgain);
+  await undoOf(iid, tileFirst);
+  assert.deepEqual((await census(iid)).rows, census0.rows, 'the tile makes are gone');
+  await setAll({ pattern: 'grid', width: 0.36, height: 0.33 });
+  await run();
 
   // ── ③ 실패 주입 ───────────────────────────────────────────────────────────────────────────────
   // More types than allowed: at most 3, the rest marked over the tolerance.
@@ -688,6 +743,8 @@ result=dict(rows=rows,solids=solids,faces=faces,blocks=blocks,defs=defs,assumed=
   assert.equal(kept.data.picked.objectId.toLowerCase(), saddleId.toLowerCase());
   result.failures.units = noUnits.data.code;
   // The face moved after the read: '기준 면이 바뀜', the make refused with nothing made.
+  // All three stages current first, so the makes below reach the templates (not BAKE_NOT_COMPUTED).
+  await run();
   const unchanged = await call('GET', `${base}/paneling/surface?instanceId=${iid}`);
   result.failures.watching = unchanged.data.watching;
   await move(saddleId, 0.001);
@@ -705,6 +762,14 @@ result=dict(rows=rows,solids=solids,faces=faces,blocks=blocks,defs=defs,assumed=
   assert.equal(refused.data.code, 'BAKE_SURFACE_CHANGED');
   assert.deepEqual((await census(iid)).rows, beforeRefused.rows, 'nothing made');
   result.failures.surfaceChanged = refused.data.code;
+  // [타입 만들기] and the joint lines check the face as well: refused, nothing made.
+  for (const ids of [makeIds.optimize, ['joints']]) {
+    const stale = await bake(ids, `${ids.join('+')} after a face change`);
+    assert.equal(stale.status, 409, JSON.stringify(stale.data).slice(0, 800));
+    assert.equal(stale.data.code, 'BAKE_SURFACE_CHANGED');
+    assert.deepEqual((await census(iid)).rows, beforeRefused.rows, `${ids}: nothing made`);
+  }
+  result.failures.typesSurfaceChanged = 'BAKE_SURFACE_CHANGED';
   // [다시 읽기] takes the moved face; the mark clears.
   const reread = await call('POST', `${base}/paneling/surface/read`, {
     instanceId: iid,
@@ -827,9 +892,10 @@ result=dict(rows=rows,solids=solids,faces=faces,blocks=blocks,defs=defs,assumed=
   await drawer.getByRole('tab', { name: /^결합부/ }).click();
   await drawer.getByRole('table', { name: '노드 타입' }).getByText('N-01').waitFor();
   // CSV of the real schedule: the contract head, one row per panel.
-  await drawer.locator('.pnl-csv > summary').click();
   const csv = {};
   for (const kind of ['panels', 'types', 'nodes', 'joints']) {
+    // The menu closes after each download (it floats over the table): open it again.
+    await drawer.locator('.pnl-csv > summary').click();
     const [file] = await Promise.all([
       page.waitForEvent('download'),
       drawer.locator(`[data-csv="${kind}"]`).click(),

@@ -71,6 +71,12 @@
 .pnl-rail button[data-state='failed'] .pnl-rail-state {
   color: var(--warn);
 }
+.pnl-rail-reason {
+  margin: 0 0 var(--s1);
+  padding: 0 var(--s2);
+  color: var(--warn);
+  font-size: var(--fs-eyebrow);
+}
 
 /* --- 기준 면 --------------------------------------------------------------------------------- */
 .pnl-surface {

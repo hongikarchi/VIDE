@@ -17,6 +17,7 @@ if (doc.ModelUnitSystem == UnitSystem.None) throw new Exception("UNKNOWN_UNITS: 
 var toM = RhinoMath.UnitScale(doc.ModelUnitSystem, UnitSystem.Meters);
 var tol = doc.ModelAbsoluteTolerance;
 var items = new System.Collections.Generic.List<object>();
+var total = 0;
 for (var n = 0; n < count; n++)
 {
     var text = Str();
@@ -27,6 +28,7 @@ for (var n = 0; n < count; n++)
     if (geometry is Rhino.Geometry.Point point)
     {
         var p = point.Location;
+        if (++total > 65536) throw new Exception("CURVE_TOTAL_LIMIT: 점이 모두 65,536개를 넘습니다");
         items.Add(new { objectId = text, kind = "point", closed = false, flatXY = true, points = new[] { p.X * toM, p.Y * toM, p.Z * toM } });
         continue;
     }
@@ -42,6 +44,8 @@ for (var n = 0; n < count; n++)
     var pts = new System.Collections.Generic.List<Point3d>(polyline);
     if (closed && pts.Count > 1 && pts[0].DistanceTo(pts[pts.Count - 1]) <= tol) pts.RemoveAt(pts.Count - 1);
     if (pts.Count > 4096) throw new Exception("CURVE_POINT_LIMIT: 곡선 하나의 점이 4,096개를 넘습니다");
+    total += pts.Count;
+    if (total > 65536) throw new Exception("CURVE_TOTAL_LIMIT: 점이 모두 65,536개를 넘습니다");
     var z0 = pts[0].Z;
     var flat = true;
     foreach (var q in pts) if (Math.Abs(q.Z - z0) > tol) { flat = false; break; }

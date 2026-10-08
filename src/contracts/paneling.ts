@@ -119,6 +119,9 @@ export type SurfaceSample = z.infer<typeof surfaceSampleSchema>;
 /** Points per read item and items per read (`vide.read.curves@1`). */
 export const CURVE_POINT_LIMIT = 4096;
 export const CURVE_ITEM_LIMIT = 200;
+/** Points of one read in all (SPEC-16.13 3·4, as the surface read's 65,536): under the worker's
+ *  result frame, and few enough for the live 개구 distances. */
+export const CURVE_TOTAL_LIMIT = 65536;
 
 /** Rhino points and curves a person picked, read as points and polylines in world metres. */
 export const curveSetSchema = z
@@ -148,7 +151,11 @@ export const curveSetSchema = z
           .strict(),
       )
       .min(1)
-      .max(CURVE_ITEM_LIMIT),
+      .max(CURVE_ITEM_LIMIT)
+      .refine(
+        (items) => items.reduce((n, item) => n + item.points.length, 0) <= CURVE_TOTAL_LIMIT,
+        `points of one read over ${CURVE_TOTAL_LIMIT}`,
+      ),
   })
   .strict();
 export type CurveSet = z.infer<typeof curveSetSchema>;
@@ -263,7 +270,13 @@ export const memberSettingsSchema = z
     /** Edges on the face boundary/trim: `flush` keeps them, `half` moves them in by joint/2. */
     boundaryJoint: sourced(z.enum(['flush', 'half'])),
     /** Stock sheet width × height, metres; null = no limit. Compared either way round. */
-    stock: sourced(z.tuple([finite.positive(), finite.positive()]).nullable()),
+    /** Stock width × height, metres; 0 on one side = no limit that way (SPEC-16.6 4), null = none. */
+    stock: sourced(
+      z
+        .tuple([finite.nonnegative(), finite.nonnegative()])
+        .refine((s) => s[0] > 0 || s[1] > 0, 'a stock of 0 × 0 is null (no limit)')
+        .nullable(),
+    ),
   })
   .strict();
 export type MemberSettings = z.infer<typeof memberSettingsSchema>;
@@ -291,6 +304,36 @@ export function stageConfirmed(settings: Record<string, { source: SettingSource 
 
 export type PanelingStage = 'preview' | 'members' | 'optimize';
 type StageSettings = Record<string, { source: SettingSource }>;
+
+/** Settings read only together with another jig value (SPEC-16.4 1: 합치기 기준 with 합치기, 투영 평면
+ *  with 투영), by the jig's setting keys. The engine's gate and the screen both count with this. */
+export const PANELING_SETTING_WHEN: Readonly<Record<string, { key: string; value: string }>> = {
+  mergeBelow: { key: 'boundaryRule', value: 'merge' },
+  projection: { key: 'measure', value: 'projected' },
+};
+const openingOn = (value: (key: string) => unknown) =>
+  [value('openNear'), value('openFar')].some((x) => typeof x === 'number' && x > 0);
+/** SPEC-16.4 1 / 16.13: the Voronoi seeds only with the Voronoi pattern; the opening settings only
+ *  while one of the two ratios is above 0 (both 0 = no opening, nothing to confirm). */
+const PANELING_SETTING_WHEN_EXTRA: Readonly<
+  Record<string, (value: (key: string) => unknown) => boolean>
+> = {
+  jitter: (v) => v('pattern') === 'voronoi',
+  seed: (v) => v('pattern') === 'voronoi',
+  openNear: openingOn,
+  openFar: openingOn,
+  openRadius: openingOn,
+  openLevels: openingOn,
+};
+/** Is the jig setting `key` read with these values (a missing deciding value counts as read)? */
+export function panelingSettingInUse(key: string, value: (key: string) => unknown): boolean {
+  const extra = PANELING_SETTING_WHEN_EXTRA[key];
+  if (extra) return extra(value);
+  const when = PANELING_SETTING_WHEN[key];
+  if (!when) return true;
+  const decided = value(when.key);
+  return decided === undefined || decided === when.value;
+}
 
 /** May this stage be made in Rhino (SPEC-16.4 3)? Preview always (tagged `vide-assumed`); members and
  *  typing only when that stage and every earlier stage is confirmed. Freshness (no '다시 계산 필요')
@@ -397,8 +440,22 @@ export const panelLayoutSchema = z
     sizeRange: z
       .object({ minW: finite, maxW: finite, minH: finite, maxH: finite, area: finite })
       .strict(),
-    /** Module actually used when a closed direction rounded the count (SPEC-16.5 1), else the target. */
+    /** Module actually used when a closed direction rounded the count (SPEC-16.5 1), else the target
+     *  — of the first face; with several faces each face's own is in `faceModules`. */
     module: z.tuple([finite.positive(), finite.positive()]),
+    /** Several faces: the module per face (a closed face fits its own to its girth); '목표와 다름'
+     *  compares each panel with its face's. */
+    faceModules: z
+      .array(
+        z
+          .object({
+            faceIndex: z.number().int().nonnegative(),
+            module: z.tuple([finite.positive(), finite.positive()]),
+          })
+          .strict(),
+      )
+      .max(64)
+      .optional(),
     /** Sample spacing is coarser than half the module (SPEC-16.3 2). */
     coarseSample: z.boolean(),
   })

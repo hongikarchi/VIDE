@@ -27,6 +27,7 @@ import {
   plane,
   previewSettings,
   sampleOf,
+  sphereBand,
 } from '../fixtures/paneling-surfaces.mjs';
 
 const MM = 0.001;
@@ -299,10 +300,16 @@ test('settings from the jig params: given values keep their source, stock 0 × 0
   assert.deepEqual(s.thicknessSide, { value: 'outside', source: 'assumed' });
   const t = memberSettingsFromParams({ stockWidth: 1.2, stockHeight: 2.4 });
   assert.deepEqual(t.stock, { value: [1.2, 2.4], source: 'person' });
-  assert.equal(
-    memberSettingsFromParams({ stockWidth: 1.2, stockHeight: 0 }).stock.source,
-    'assumed',
-  );
+  // One side 0 limits the other side only (it was dropped silently and nothing was checked).
+  const one = memberSettingsFromParams({ stockWidth: 0, stockHeight: 2.4 });
+  assert.deepEqual(one.stock, { value: [0, 2.4], source: 'person' });
+  assert.equal(overStockOf(3, 2.5, [0, 2.4]), true, '3 × 2.5 fits 2.4 neither way');
+  assert.equal(overStockOf(3, 2.0, [0, 2.4]), false);
+  assert.equal(overStockOf(2.0, 3, [0, 2.4]), false, 'turned 90°');
+  const over = run(plane(6, 5), { size: [3, 2.5] }, { joint: 0, stock: one.stock.value }).set;
+  assert.equal(over.overStock.length, 4);
+  const fine = run(plane(6, 4), { size: [3, 2] }, { joint: 0, stock: one.stock.value }).set;
+  assert.deepEqual(fine.overStock, []);
 });
 
 test('the members step reads step.preview; without it the reason is given', () => {
@@ -347,4 +354,62 @@ test('the official jig runs the members step in its self-test', async () => {
     report.cases.every((c) => c.ok),
     JSON.stringify(report.cases.filter((c) => !c.ok)),
   );
+});
+
+test('sphere pole: the joint reduction stays inside each panel and the gaps stay finite', () => {
+  // The reviewer's case: at the pole |Su| → 0 sent the UV move to ~6e7, plates 30 times their panel
+  // and gaps of 3e16 m; others failed as 'joint bigger than the panel'.
+  const { layout, set } = run(sphereBand(5, -Math.PI / 6, { nu: 97, nv: 49 }));
+  const panels = new Map(layout.panels.map((p) => [p.id, p]));
+  const box = (uv) => [
+    Math.min(...uv.map((p) => p[0])),
+    Math.max(...uv.map((p) => p[0])),
+    Math.min(...uv.map((p) => p[1])),
+    Math.max(...uv.map((p) => p[1])),
+  ];
+  const ratios = [];
+  for (const m of set.members) {
+    const p = panels.get(m.panelId);
+    assert.equal(m.failure, null, `${m.panelId}: ${m.failure?.message}`);
+    const [u0, u1, v0, v1] = box(p.uv);
+    for (const [u, v] of m.uv)
+      assert.ok(u >= u0 - 1e-9 && u <= u1 + 1e-9 && v >= v0 - 1e-9 && v <= v1 + 1e-9, m.panelId);
+    assert.ok(m.area <= p.area * (1 + 1e-6), `${m.panelId}: plate ${m.area} > panel ${p.area}`);
+    assert.ok(m.jointGap && m.jointGap[1] < 0.02, `${m.panelId}: gap ${m.jointGap}`);
+    if (p.pole) ratios.push(m.area / p.area);
+  }
+  assert.equal(ratios.length, 23);
+  // A 74 × 269 mm pole triangle with a 10 mm joint keeps about three quarters of its area.
+  for (const r of ratios) assert.ok(r > 0.7 && r < 0.9, `pole plate share ${r}`);
+  // Diamond and triangle cells fan into the pole: no runaway either.
+  for (const pattern of ['diamond', 'triangle']) {
+    const out = run(sphereBand(5, -Math.PI / 6, { nu: 97, nv: 49 }), { pattern });
+    const byPanel = new Map(out.layout.panels.map((p) => [p.id, p]));
+    for (const m of out.set.members) {
+      if (m.failure) continue;
+      assert.ok(m.area <= byPanel.get(m.panelId).area * (1 + 1e-6), `${pattern} ${m.panelId}`);
+      assert.ok(m.jointGap === null || m.jointGap[1] < 0.02, `${pattern} ${m.panelId}`);
+    }
+  }
+});
+
+test('a very short edge does not fail a wide plate: it drops out of the offset outline', () => {
+  // Before, one moved edge turning round failed the whole plate: on the trimmed hypar P-13-15
+  // (0.72 m², shortest edge 6.6 mm) and 19 Voronoi cells of 0.6 m² and more.
+  const hy = run(hypar({ nu: 96, nv: 64 }));
+  const layoutOk = new Set(hy.layout.panels.filter((p) => !p.failure).map((p) => p.id));
+  const falseFails = hy.set.members.filter((m) => layoutOk.has(m.panelId) && m.failure);
+  assert.deepEqual(
+    falseFails.map((m) => m.panelId),
+    [],
+  );
+  const vor = run(plane(30, 20, { nu: 32, nv: 32 }), {
+    pattern: 'voronoi',
+    voronoi: { jitter: 0.5, seed: 1 },
+  });
+  const areas = new Map(vor.layout.panels.map((p) => [p.id, p.area]));
+  for (const m of vor.set.members)
+    if (areas.get(m.panelId) > 0.05) assert.equal(m.failure, null, `${m.panelId}`);
+  // The plate of a panel with a cut-off corner has fewer vertices than the panel.
+  assert.ok(vor.set.members.some((m, i) => m.uv.length < vor.layout.panels[i].uv.length));
 });

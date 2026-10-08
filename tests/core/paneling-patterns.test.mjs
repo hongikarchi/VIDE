@@ -5,14 +5,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   attractorDistance,
+  buildMembers,
   layoutPanels,
   membersStep,
   openingRatio,
   optimizeStep,
   previewSettingsFromParams,
   previewStep,
+  resolveMemberSettings,
   tileFromCurves,
 } from '../../src/jigs/official/paneling-kit/index.ts';
+import { patternCells } from '../../src/jigs/official/paneling-kit/patterns.ts';
+import { addOpenings, insideUV } from '../../src/jigs/official/paneling-kit/opening.ts';
+import { faceSampler } from '../../src/jigs/official/paneling-kit/sample.ts';
 import {
   OPENING_MAX,
   curveSetSchema,
@@ -22,7 +27,7 @@ import {
 } from '../../src/contracts/paneling.ts';
 import { panelRows } from '../../src/jigs/bake/panels.ts';
 import { stageSources } from '../../src/jigs/runtime/paneling-confirmed.ts';
-import { settingInUse, settingShown, toneOf } from '../../src/ui/paneling/model.ts';
+import { legendOf, settingInUse, settingShown, toneOf } from '../../src/ui/paneling/model.ts';
 import { officialJigRoot } from '../../src/jigs/runtime/loader.ts';
 import { validateJig } from '../../src/jigs/runtime/pack.ts';
 import { readFileSync } from 'node:fs';
@@ -494,15 +499,28 @@ test('가정 gate: Voronoi seeds count only with Voronoi, opening settings only 
   });
 });
 
-test('the 개구율 colour: bands of the target ratio, none without an opening', () => {
+test('the 개구율 colour: one class per target ratio of the layout (단계 수), none without an opening', () => {
   const { layout } = lay(plane(2, 1), { size: [1, 1] });
-  const results = { layout };
-  assert.equal(toneOf(layout.panels[0], results, 'opening'), 'ov-existing');
-  const withOpening = {
-    ...layout.panels[0],
-    opening: { ratio: 0.9, actual: 0.9, uv: [], corners: [] },
+  assert.equal(toneOf(layout.panels[0], { layout }, 'opening'), 'ov-existing');
+  assert.deepEqual(
+    legendOf({ layout }, 'opening').map((r) => r.text),
+    ['개구 없음'],
+  );
+  // Three steps (openLevels 3): three classes named by their ratios, not five fixed 19 % bands.
+  const open = (p, ratio) => ({ ...p, opening: { ratio, actual: ratio, uv: [], corners: [] } });
+  const three = lay(plane(3, 1), { size: [1, 1] }).layout;
+  const stepped = {
+    ...three,
+    panels: three.panels.map((p, i) => open(p, [0.2, 0.5, 0.8][i])),
   };
-  assert.equal(toneOf(withOpening, results, 'opening'), 'ov-cat-5');
+  assert.deepEqual(
+    stepped.panels.map((p) => toneOf(p, { layout: stepped }, 'opening')),
+    ['ov-cat-1', 'ov-cat-2', 'ov-cat-3'],
+  );
+  assert.deepEqual(
+    legendOf({ layout: stepped }, 'opening').map((r) => r.text),
+    ['개구율 20%', '개구율 50%', '개구율 80%'],
+  );
 });
 
 test('the official jig declares the tile and attractor inputs, the new settings and the openings make', async () => {
@@ -526,4 +544,138 @@ test('the official jig declares the tile and attractor inputs, the new settings 
     (await validateJig(dir, { source: 'builtin' })).issues.filter((i) => i.level === 'error'),
     [],
   );
+});
+
+test('Voronoi with long cells and full jitter: the cells tile the region without overlap', () => {
+  // A fixed ±2-cell neighbour window missed real neighbours of non-square cells, so their
+  // bisectors were missing and the cells overlapped (2 × 0.5, jitter 0.9: +24.7 m² over 600 m²).
+  const clip = (poly, x0, x1, y0, y1) => {
+    let ring = poly;
+    for (const [axis, at, below] of [
+      [0, x0, false],
+      [0, x1, true],
+      [1, y0, false],
+      [1, y1, true],
+    ]) {
+      const out = [];
+      for (let k = 0; k < ring.length; k++) {
+        const a = ring[k],
+          b = ring[(k + 1) % ring.length];
+        const ina = below ? a[axis] <= at : a[axis] >= at;
+        const inb = below ? b[axis] <= at : b[axis] >= at;
+        if (ina) out.push(a);
+        if (ina !== inb) {
+          const t = (at - a[axis]) / (b[axis] - a[axis]);
+          out.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]);
+        }
+      }
+      ring = out;
+      if (!ring.length) break;
+    }
+    return ring;
+  };
+  const area = (r) =>
+    r.reduce(
+      (a, p, i) => a + p[0] * r[(i + 1) % r.length][1] - r[(i + 1) % r.length][0] * p[1],
+      0,
+    ) / 2;
+  for (const [w, h, jitter, seed] of [
+    [1, 1, 0.9, 7],
+    [1.2, 0.6, 1, 7],
+    [2, 0.5, 0.5, 1],
+    [2, 0.5, 0.9, 1],
+    [0.5, 2, 1, 3],
+  ]) {
+    const set = patternCells('voronoi', [w, h], [0, 30], [0, 20], false, false, { jitter, seed });
+    const sum = set.cells.reduce((a, c) => a + Math.abs(area(clip(c.st, 0, 30, 0, 20))), 0);
+    assert.ok(Math.abs(sum - 600) < 1e-6, `${w} × ${h} jitter ${jitter}: ${sum - 600} m² over`);
+  }
+  // Through the layout too: the panels' areas add up to the face.
+  const layout = voronoi(
+    plane(30, 20, { nu: 32, nv: 32 }),
+    { jitter: 0.9, seed: 1 },
+    {
+      size: [2, 0.5],
+    },
+  );
+  assert.ok(Math.abs(areaOf(layout) - 600) < 1e-6, `${areaOf(layout) - 600}`);
+});
+
+test('attractor openings stay inside the panel and inside the joint-reduced plate', () => {
+  // 0.95 on 1.2 × 0.6 panels left a 7.6 mm rim, so a 20 mm joint put every opening outside the
+  // plate; now the opening keeps OPENING_RIM to the panel edge and stage 2 checks the plate.
+  const sample = sampleOf(plane(7, 3.5));
+  const settings = {
+    ...previewSettings(),
+    opening: { value: { near: 0.95, far: 0.95, radius: 10, levels: 0 }, source: 'person' },
+  };
+  const attractors = [{ points: [[0, 0, 0]], closed: false }];
+  const laid = layoutPanels(sample, settings, { attractors });
+  assert.equal(laid.ok, true);
+  const members = buildMembers(
+    sample,
+    laid.layout,
+    settings,
+    resolveMemberSettings({
+      thickness: 0.05,
+      thicknessSide: 'outside',
+      joint: 0.02,
+      boundaryJoint: 'flush',
+      stock: null,
+    }),
+  ).members;
+  const byId = new Map(members.members.map((m) => [m.panelId, m]));
+  let opened = 0;
+  for (const p of laid.layout.panels) {
+    if (!p.opening) continue;
+    opened++;
+    const m = byId.get(p.id);
+    assert.equal(m.failure, null, `${p.id}: ${m.failure?.message}`);
+    for (const q of p.opening.uv) {
+      assert.ok(insideUV(q, p.uv), `${p.id}: opening inside the panel`);
+      assert.ok(insideUV(q, m.uv), `${p.id}: opening inside the plate`);
+    }
+    assert.ok(p.opening.actual < 0.95 && p.opening.actual > 0.8, `${p.id}: ${p.opening.actual}`);
+  }
+  assert.equal(opened, 36);
+  // A joint that eats the rim fails the member and says why, never a plate with the hole outside.
+  const wide = buildMembers(
+    sample,
+    laid.layout,
+    settings,
+    resolveMemberSettings({
+      thickness: 0.05,
+      thicknessSide: 'outside',
+      joint: 0.04,
+      boundaryJoint: 'half',
+      stock: null,
+    }),
+  ).members;
+  assert.ok(wide.members.some((m) => /개구/.test(m.failure?.message ?? '')));
+
+  // A concave (L-shaped) outline: the opening is shrunk about a point inside it and stays inside.
+  const L = [
+    [0, 0],
+    [2, 0],
+    [2, 0.5],
+    [0.5, 0.5],
+    [0.5, 2],
+    [0, 2],
+  ];
+  const panel = {
+    id: 'P-1-1',
+    faceIndex: 0,
+    uv: L,
+    corners: L.map(([x, y]) => [x, y, 0]),
+    area: 1.75,
+    failure: null,
+  };
+  addOpenings(
+    [panel],
+    new Map([[0, faceSampler(plane(3, 3))]]),
+    { near: 0.6, far: 0.6, radius: 1, levels: 0 },
+    [],
+  );
+  assert.ok(panel.opening, 'the L panel gets an opening');
+  for (const q of panel.opening.uv) assert.ok(insideUV(q, L), 'inside the L');
 });

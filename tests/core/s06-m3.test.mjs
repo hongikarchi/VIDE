@@ -446,8 +446,19 @@ test('바로 적용: the confirmed plans bake straight in the document, one undo
     store,
     direct,
     runtime: { recordRead: () => ({ id: uuid() }) },
-    read: async () => ({ linkId: 'L', revisionKey: 'r', model: { scene: [...doc.values()] } }),
+    // `cut`: the read lost the tags of every other object (a page's shared string budget, as the
+    // Rhino scene page did before it ended pages there).
+    read: async () => ({
+      linkId: 'L',
+      revisionKey: 'r',
+      model: {
+        scene: [...doc.values()].map((row, i) =>
+          cut && i % 2 ? { ...row, attributes64: [] } : row,
+        ),
+      },
+    }),
   };
+  let cut = false;
   const outputs = { lines: again.outputs.bakePlan, members: again.outputs.bakeMembers };
   const bake = async (prior = {}) => {
     const runId = uuid();
@@ -533,4 +544,20 @@ test('바로 적용: the confirmed plans bake straight in the document, one undo
   assert.ok(undone.records.every((id) => records.get(id).appliedAt === null));
   assert.equal(doc.size, made + 1);
   assert.ok(Object.values(one.recs.lines.items).every((item) => doc.has(item.nativeId)));
+
+  // A read whose tags came back incomplete does not turn made objects into failures: the receipt
+  // says what was made, so every one is recorded and the next bake replaces it instead of adding
+  // a duplicate.
+  cut = true;
+  const three = await bake();
+  assert.ok(
+    three.made.summary.bakes.every((b) => b.failed === 0 || b.failed?.length === 0),
+    JSON.stringify(three.made.summary.bakes.map((b) => b.failed)),
+  );
+  const recorded = Object.values(three.recs).flatMap((r) => Object.values(r.items));
+  assert.ok(recorded.length > 0 && recorded.every((item) => doc.has(item.nativeId)));
+  cut = false;
+  const size = doc.size;
+  await bake(three.recs);
+  assert.equal(doc.size, size, 'the same bake again replaces, never duplicates');
 });

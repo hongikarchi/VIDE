@@ -27,6 +27,7 @@ import {
   unsafeArgs,
   type BakeItem,
   type BlockHeader,
+  type SurfaceGuard,
   type SurfaceHeader,
 } from './data-block.ts';
 import { bakeDeclOf, bakeDeclsOf, builtinOutput, isBuiltinBake } from './builtin.ts';
@@ -108,6 +109,7 @@ interface DeclItems {
   stepId: string;
   surface?: SurfaceHeader;
   blocks?: BlockHeader;
+  guard?: SurfaceGuard;
   deviationLimit?: number;
 }
 export interface BakeSummary {
@@ -313,6 +315,7 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
         stepId,
         surface: rows.surface,
         blocks: rows.blocks,
+        guard: rows.guard,
         deviationLimit: rows.deviationLimit,
       };
     }
@@ -367,7 +370,16 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
         step.slot === 'confirm-target' &&
         view.steps.find((s) => s.id === step.id)?.status === 'confirmed',
     );
-  for (const { decl, items, inputHash, stepId, surface, blocks, deviationLimit } of extracted) {
+  for (const {
+    decl,
+    items,
+    inputHash,
+    stepId,
+    surface,
+    blocks,
+    guard,
+    deviationLimit,
+  } of extracted) {
     const layerPath = layerPathOf(view.body.layerRoot, decl);
     layers.push(layerPath);
     // Missing levels are made by the template (ARCH-03 §9.5); only the path text must be usable.
@@ -442,6 +454,7 @@ export async function prepareBake(ctx: BakeContext, input: BakeInput): Promise<P
               deleteIds: plan.deleteIds,
               ...(surface ? { surface } : {}),
               ...(blocks ? { blocks } : {}),
+              ...(guard ? { guard } : {}),
             },
             plan.create,
           );
@@ -759,10 +772,13 @@ export async function runDirectBake(
       })
     : undefined;
   const found = new Map<string, { nativeId: string; hash: string; layer: string }>();
+  const byNative = new Map<string, { nativeId: string; hash: string; layer: string }>();
   if (read)
-    for (const object of readObjects(read.model).values())
+    for (const object of readObjects(read.model).values()) {
+      byNative.set(object.nativeId.toLowerCase(), object);
       if (object.tags['vide-run'] === prepared.runId && object.tags['vide-key'])
         found.set(`${object.tags['vide-bake']}\u0000${object.tags['vide-key']}`, object);
+    }
   const appliedAt = new Date().toISOString();
   const bakes: BakeOutcome[] = [];
   let index = 0;
@@ -785,8 +801,14 @@ export async function runDirectBake(
       // Failed panels left on the failure layer have an object, but they are failures all the same.
       if (receipt.success && receipt.data.reasons) failed.push(...receipt.data.failed);
       for (const key of [...chunk.keys, ...extra]) {
-        const object = found.get(`${decl.id}\u0000${key}`);
-        const nativeId = object?.nativeId ?? (read ? undefined : ids?.get(key));
+        // The template's receipt says what it made; the read adds the hash and layer. A read whose
+        // tags came back incomplete (a page's string budget) never turns a made object into a
+        // failure: it would be missing from the record and made again by the next bake.
+        const receipted = ids?.get(key);
+        const object =
+          found.get(`${decl.id}\u0000${key}`) ??
+          (receipted ? byNative.get(receipted.toLowerCase()) : undefined);
+        const nativeId = object?.nativeId ?? receipted;
         if (!nativeId) {
           failed.push(key);
           continue;

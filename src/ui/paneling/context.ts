@@ -181,6 +181,9 @@ interface Shared {
 class Store {
   state: Shared = { stage: 'preview', reveal: 0 };
   private listeners = new Set<() => void>();
+  /** The run the surface and curves were last read for: the six parts of the panel share one
+   *  store, so one read per run instead of one per part. */
+  private readFor: number | undefined | 'none' = 'none';
   constructor(
     readonly projectId: string,
     readonly instanceId: string,
@@ -190,8 +193,19 @@ class Store {
   }
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return () => {
+      this.listeners.delete(listener);
+      // The panel closed: read again when it opens.
+      if (!this.listeners.size) this.readFor = 'none';
+    };
   };
+  /** Read the surface and the curves once for this run (every part asks; the first one reads). */
+  refresh(revision: number | undefined) {
+    if (this.readFor === revision) return;
+    this.readFor = revision;
+    void this.readSurface();
+    void this.readCurves();
+  }
   snapshot = () => this.state;
   set(next: Partial<Shared>) {
     this.state = { ...this.state, ...next };
@@ -294,16 +308,18 @@ class Store {
   async setValues(
     values: { key: string; value: number | string | boolean }[],
     by: 'user' | 'decision',
-  ) {
-    if (!values.length) return;
+  ): Promise<boolean> {
+    if (!values.length) return true;
     this.set({ notice: undefined });
     try {
       await api(`${this.base}/params`, 'PUT', { values, by });
       window.dispatchEvent(
         new CustomEvent(JIG_PARAMS_CHANGED, { detail: { instanceId: this.instanceId } }),
       );
+      return true;
     } catch (error) {
       this.set({ notice: messageOf(error) });
+      return false;
     }
   }
 }
@@ -319,6 +335,8 @@ export interface StageStatus {
   computed: boolean;
   stale: boolean;
   failed: boolean;
+  /** Why a failed stage stopped: the engine's message without its code, else the blocking checks. */
+  reason?: string;
   /** The output is there but does not pass the contract (not drawn). */
   invalid: boolean;
 }
@@ -347,7 +365,8 @@ export interface PanelingView {
   curvesError: Record<string, string>;
   pickCurves: (key: string, mode: 'pick' | 'clear') => Promise<void>;
   confirm: (keys: readonly string[]) => Promise<void>;
-  answer: (values: { key: string; value: number | string | boolean }[]) => Promise<void>;
+  /** Resolves true when the engine took the answers, false when it refused (the notice says why). */
+  answer: (values: { key: string; value: number | string | boolean }[]) => Promise<boolean>;
   reveal: number;
   showAssumed: (stage: PanelingStage) => void;
   notice?: string;
@@ -355,6 +374,19 @@ export interface PanelingView {
   /** The work copy's API path (`…/reports/paneling`, SPEC-16.11). */
   base: string;
 }
+
+/** The reason a stage stopped, as the generic step rail gives it: the engine's message (layout,
+ *  tile, missing surface …) without its `CODE:` prefix, else the blocking check messages. */
+export function stageReason(
+  report: { error?: { code: string; message: string } | null; gates?: readonly Gate[] } | undefined,
+  step: { gates?: readonly Gate[] } | undefined,
+): string | undefined {
+  if (report?.error?.message) return report.error.message.replace(/^[A-Z][A-Z0-9_]*:\s*/, '');
+  const gates = report?.gates ?? step?.gates ?? [];
+  const blocking = gates.filter((g) => !g.ok && g.level === 'block').map((g) => g.message);
+  return blocking.join(' · ') || undefined;
+}
+type Gate = { ok: boolean; level?: string; message: string };
 
 export function usePaneling({
   projectId,
@@ -373,8 +405,7 @@ export function usePaneling({
   const shared = useSyncExternalStore(store.subscribe, store.snapshot);
   const revision = jig.lastRun?.getTime();
   useEffect(() => {
-    void store.readSurface();
-    void store.readCurves();
+    store.refresh(revision);
   }, [store, revision]);
 
   const preview = data.outputs.preview,
@@ -417,16 +448,18 @@ export function usePaneling({
       const report = jig.reports[id];
       const read = reads[id];
       const changedBefore = stagesUpTo(id).some((s) => pendingStages.has(s));
+      const failed =
+        report?.status === 'failed' ||
+        report?.status === 'gate-failed' ||
+        step?.status === 'failed';
       return [
         id,
         {
           computed: read.kind === 'ok',
           invalid: read.kind === 'invalid',
           stale: jig.stale.has(id) || step?.status === 'stale' || changedBefore,
-          failed:
-            report?.status === 'failed' ||
-            report?.status === 'gate-failed' ||
-            step?.status === 'failed',
+          failed,
+          reason: failed ? stageReason(report, step) : undefined,
         },
       ];
     }),
@@ -436,14 +469,15 @@ export function usePaneling({
   const setColorBy = useCallback((colorBy: ColorBy) => store.set({ colorBy }), [store]);
   const select = useCallback((selected: string | undefined) => store.set({ selected }), [store]);
   const confirm = useCallback(
-    (keys: readonly string[]) =>
-      store.setValues(
+    async (keys: readonly string[]) => {
+      await store.setValues(
         keys.flatMap((key) => {
           const setting = settings.find((s) => s.key === key);
           return setting ? [{ key, value: setting.value }] : [];
         }),
         'user',
-      ),
+      );
+    },
     [store, settings],
   );
   const answer = useCallback(

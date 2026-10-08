@@ -14,6 +14,7 @@ import { panelingRoutes } from '../../src/server/paneling-routes.ts';
 import { curvesReadBlock, curvesReadBody } from '../../src/server/paneling-curves.ts';
 import { loadTemplate, renderTemplate } from '../../src/jigs/bake/templates.ts';
 import { importPack, packJig } from '../../src/jigs/runtime/pack.ts';
+import { CURVE_TOTAL_LIMIT, curveSetSchema } from '../../src/contracts/paneling.ts';
 
 // PLAN-49 T-260 (SPEC-16.13 3·4): '타일 고르기' and '어트랙터 고르기' with a fake Rhino — the official
 // read template `vide.read.curves@1` (only the data block substituted), its answer kept as the
@@ -26,6 +27,8 @@ const TILE_A = randomUUID();
 const TILE_B = randomUUID();
 const POINT = randomUUID();
 const OPEN = randomUUID();
+/** An object set whose points add up past the per-read total (the template refuses it). */
+const DENSE = randomUUID();
 
 /** Decode the object ids a body carries (what the C# template reads). */
 function idsOf(code) {
@@ -73,6 +76,12 @@ function fakeRhino() {
       assert.equal(target.instance, INSTANCE);
       const block = idsOf(code);
       host.calls.push(block);
+      if (block.ids.includes(DENSE))
+        return {
+          ok: false,
+          code: 'EXECUTION_FAILED',
+          message: 'CURVE_TOTAL_LIMIT: 점이 모두 65,536개를 넘습니다',
+        };
       const missing = block.ids.find((id) => !OBJECTS[id]);
       if (missing)
         return {
@@ -322,4 +331,42 @@ test('curves read failures: nothing selected, an unknown object, remote sessions
   assert.equal(remote.code, 'FORBIDDEN');
   const unknown = await f.call('GET', `${f.base}/paneling/curves?instanceId=${f.iid}&key=nope`);
   assert.equal(unknown.code, 'NOT_FOUND');
+});
+
+test('curves read: a total point limit per read, in the template, the reason and the contract', async (t) => {
+  // 200 curves of 4,096 points passed each per-curve check but made one read of ~819k points, over
+  // the worker's result frame, and failed without a reason a person could act on.
+  const text = loadTemplate('vide.read.curves@1').text;
+  assert.ok(text.includes('if (total > 65536) throw new Exception("CURVE_TOTAL_LIMIT'));
+  const f = await fixture(t);
+  f.host.selection = [DENSE];
+  const refused = await f.call('POST', `${f.base}/paneling/curves/read`, {
+    instanceId: f.iid,
+    key: 'attractors',
+  });
+  assert.equal(refused.data.ok, false);
+  assert.equal(refused.data.code, 'CURVE_TOTAL_LIMIT');
+  assert.match(refused.data.message, /65,536/);
+  const items = (n) =>
+    Array.from({ length: n }, () => ({
+      objectId: randomUUID(),
+      kind: 'polyline',
+      closed: false,
+      flatXY: true,
+      points: Array.from({ length: 4096 }, (_, k) => [k, 0, 0]),
+    }));
+  const set = (n) => ({
+    schema: 'vide.paneling.curves@1',
+    source: {
+      linkId: 'l',
+      documentKey: 'd',
+      readAt: '2026-10-08T00:00:00.000Z',
+      toMeters: 1,
+      absTol: 0.00001,
+    },
+    items: items(n),
+  });
+  assert.equal(curveSetSchema.safeParse(set(16)).success, true, '65,536 points');
+  assert.equal(curveSetSchema.safeParse(set(17)).success, false, 'over the total');
+  assert.equal(CURVE_TOTAL_LIMIT, 65536);
 });

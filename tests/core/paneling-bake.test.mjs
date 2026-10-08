@@ -24,6 +24,8 @@ import {
 } from '../../src/jigs/bake/panels.ts';
 import { runDirectBake } from '../../src/jigs/bake/bake.ts';
 import { runGates } from '../../src/jigs/runtime/gates.ts';
+import { sourceOfParam } from '../../src/jigs/runtime/paneling-confirmed.ts';
+import { sourceOf } from '../../src/ui/paneling/model.ts';
 import { validateManifest } from '../../src/jigs/runtime/manifest.ts';
 import { makeKey, memberSetSchema, PANEL_ATTRS } from '../../src/contracts/paneling.ts';
 import { faceSampler, layoutPanels } from '../../src/jigs/official/paneling-kit/index.ts';
@@ -505,6 +507,30 @@ test('paneling-confirmed: a preview is always allowed; members wait until stages
   assert.deepEqual(run('members', { typeTol: 'default' }).blocked, []);
   // A decision answered by a question card counts as given.
   assert.deepEqual(run('members', { thickness: 'decision' }).blocked, []);
+  // An AI value (jig_set: by 'ai', no status or status 'ai') is a proposal nobody accepted: it is
+  // still '가정' and keeps the members make closed; once a person confirmed it, it counts.
+  const withAi = (status) => {
+    const ps = params({});
+    for (const key of ['thickness', 'joint'])
+      ps[key] = { ...ps[key], by: 'ai', ...(status ? { status } : {}) };
+    return runGates([{ use: 'paneling-confirmed' }], 'before-bake', {
+      manifest,
+      stepId: 'members',
+      inputs: {},
+      params: ps,
+    });
+  };
+  for (const status of [undefined, 'ai']) {
+    const gate = withAi(status);
+    assert.deepEqual(gate.blocked, ['paneling-confirmed'], `status ${status}`);
+    assert.deepEqual(gate.results[0].failed.sort(), ['joint', 'thickness']);
+  }
+  assert.deepEqual(withAi('confirmed').blocked, []);
+  assert.equal(sourceOfParam('ai'), 'assumed');
+  assert.equal(sourceOfParam('ai', 'confirmed'), 'ai-accepted');
+  // The screen counts the same way.
+  assert.equal(sourceOf({ by: 'ai' }), 'assumed');
+  assert.equal(sourceOf({ by: 'ai', status: 'confirmed' }), 'ai-accepted');
 });
 
 test('direct make: a body refused because the face changed undoes the bodies before it and says so', async () => {
