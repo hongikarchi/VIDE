@@ -2,8 +2,8 @@
 id: PLAN
 title: VIDE 실행 로드맵
 status: review
-version: 0.256
-updated: 2026-10-07
+version: 0.257
+updated: 2026-10-09
 owner: agent:codex
 related: [ARCH-01, PLAN-02, PLAN-03, PLAN-22, PLAN-23, PLAN-24, PLAN-25, PLAN-26, PLAN-27, PLAN-29, PLAN-31, ADR-033, ADR-022, ADR-025, ADR-026, ADR-027, ADR-028, ADR-029, ADR-030, SPEC-00, SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, SPEC-06, SPEC-07, PLAN-30, PLAN-33, ADR-035, PLAN-32, ADR-034, PLAN-35, ADR-037, PLAN-36, PLAN-37, PLAN-38, PLAN-39, PLAN-40]
 ---
@@ -134,7 +134,7 @@ T-001~018의 번호·지원 증거는 유지한다. 각 티켓의 현재 결과�
 
 **지금 진행 중**
 
-- 2026-10-08 [PLAN-51](PLAN-51-verify-loop.md) 검증–수정 반복 루프 라운드 1(T-264~T-268) 측정·기록 완료([VERIFY](../tdd/VERIFY-2026-10-08-loop-round-1.md)): 개발 엔진의 핵심 편집 경로(R1-COLOR 3/3·A/B 5/5)는 통과했으나 설치본 0.2.31의 사용자 문장 시나리오는 하나도 통과하지 못했다. P0 5(T-269~T-273) · P1 1(T-274) · P2 2(T-275·T-276), 시험 도구 결함 4(T-277~T-280), 졸업 0/10. 수정 웨이브(T-269~T-281, PLAN-51 §5): 구현·단위·브라우저 시험과 개발 엔진 L0 route-only 5/5(R1-A 3/3 Sync jig) 완료, L1·L1' 재측정과 T-276·T-281은 남음. 다음 행동: 0.2.32 릴리스(사용자 지정 시각) → 라운드 2(설치본에서 페르소나 재실행 + MCP 기준선).
+- 2026-10-09 [PLAN-51](PLAN-51-verify-loop.md) 검증–수정 반복 루프 라운드 2(설치본 0.2.32, [VERIFY](../tdd/VERIFY-2026-10-09-loop-round-2.md); 라운드 1은 [VERIFY](../tdd/VERIFY-2026-10-08-loop-round-1.md)): route-only는 7/7 PASS(R1-A가 Sync jig로 감)였으나 스코어카드는 P0 5 · PASS 1(R1-NOTE)이고, CAD를 먼저 연결해 페르소나 요청이 모두 ZWCAD로 가서 R1-HIDE·D·C·B의 L1 판정은 오염됐다. 라운드 1 P0 중 T-272만 해소, T-269·T-270·T-271·T-273은 부분이며 새 티켓은 T-282~T-286(법규 읽기 실패의 'VIDE 내부 오류' 표시, Sync jig 비교 Rhino 0개, 사본의 옛 연결 ID로 다른 프로젝트 Link 경로 변경, ZWCAD 첫 Sync 151 s, 페르소나 런 호스트 구성)이다. 졸업 0/10. 다음 행동: 다른 프로젝트 `실사용 검증 20261007` Link 경로를 되돌릴지 사용자 결정 → T-286으로 런 설계를 고친 뒤 Rhino만 연결해 R1-HIDE·D·C·B 재측정 → P0(T-270·T-271/T-282·T-273·T-283·T-284) 수정 → rhino MCP 등록 → 기준선 측정 → 라운드 3, 졸업 전 사용자 동승 1회.
 
 - 2026-10-07 [PLAN-12 §8](PLAN-12-field-fixes.md) 실사용 결함 수정·0.2.27 배포 검증: [실제 데스크톱 검수](../tdd/VERIFY-2026-10-07-desktop-product-audit.md). Rhino 연결창·핀, CAD 변경 감지·Undo·변경분 갱신, Sync 화면 갱신·재연결 세션, Undo 요약 응답·CLI 호환·진행 상태를 수정했다. 실제 CAD 사본 편집·표시 갱신2.4초(전체 재읽기0회)·한 번 Undo 통과. 최종 verify 1,109+71개 및 공유 서비스·브라우저·패키지 데스크톱 시험 통과. 0.2.27 공개 게시·로컬 설치(exit0)·Rhino/CAD 플러그인 갱신·설치본 재실행 완료(`f6b37a5`). 최초 대형 Sync 지연·Rhino 기존 이름 저장 환경·복합 작업의 남은 확인은 VERIFY에 유지하며 전체 기능 통과로 집계하지 않는다.
 
