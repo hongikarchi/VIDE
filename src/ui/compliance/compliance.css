@@ -72,6 +72,17 @@
   display: grid;
   gap: var(--s2);
 }
+.cmp-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+.cmp-summary-head .cmp-run-button,
+.cmp-drawer .cmp-run-button {
+  width: auto;
+  padding-inline: var(--s4);
+}
 .cmp-stale {
   display: flex;
   flex-wrap: wrap;

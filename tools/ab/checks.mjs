@@ -93,6 +93,10 @@ export function evaluate(checks, state) {
         const n = (changes.removed ?? []).length;
         return result(n <= check.max, `removed ${n}`);
       }
+      case 'modifiedMin': {
+        const n = (changes.modified ?? []).length;
+        return result(n >= (check.min ?? 1), `modified ${n}`);
+      }
       case 'layer': {
         const list = onLayer(objects, check.layer);
         if (check.count !== undefined && list.length !== check.count)
@@ -181,27 +185,140 @@ export function evaluate(checks, state) {
         );
       }
       default:
+        // Record-level checks are judged by recordCheck once the request has ended.
+        if (RECORD_CHECKS.has(check.type)) return result(true, 'read from the record');
         return result(false, 'unknown check ' + check.type);
     }
   });
 }
 
-/** Changes between two scene dumps by object id (Rhino ids survive in a live document). */
+const countOf = (value) => (Array.isArray(value) ? value.length : Number(value) || 0);
+const MISREPORT_WORDS = /실패|하지 못했|할 수 없|다시 연결|오류/;
+
+/**
+ * Misreport flags of one results.json record (PLAN-51 contract item 3). Pure.
+ * M1: succeeded but the last activity entry is an error. M2: a change was expected and the run
+ * succeeded, yet nothing was applied and no change was counted. M4: an execution ended unknown or
+ * failed while the request succeeded. M3 (suspect only): the answer opens with failure wording.
+ * `changes` may hold counts (results.json) or id lists (checks state).
+ * @returns {{ flags: string[], suspects: string[], answerDominates: boolean }}
+ */
+export function misreport(record) {
+  const succeeded = record?.state === 'succeeded';
+  const executions = Array.isArray(record?.executions) ? record.executions : [];
+  const tail = Array.isArray(record?.activityTail) ? record.activityTail : [];
+  const flags = [];
+  if (succeeded && tail.length && tail[tail.length - 1]?.kind === 'error') flags.push('M1');
+  const changes = record?.changes;
+  const noChanges =
+    changes == null ||
+    ['added', 'removed', 'modified'].every((key) => countOf(changes[key]) === 0);
+  if (
+    record?.expectChange === true &&
+    succeeded &&
+    !executions.some((e) => e?.state === 'applied') &&
+    noChanges
+  )
+    flags.push('M2');
+  if (succeeded && executions.some((e) => e?.state === 'unknown' || e?.state === 'failed'))
+    flags.push('M4');
+  const suspects = MISREPORT_WORDS.test(String(record?.answer ?? '').slice(0, 300)) ? ['M3'] : [];
+  const stages = record?.stages;
+  const answerDominates = Boolean(
+    stages &&
+      Number.isFinite(stages.answerMs) &&
+      Number.isFinite(stages.totalMs) &&
+      stages.totalMs > 0 &&
+      stages.answerMs >= 0.5 * stages.totalMs,
+  );
+  return { flags, suspects, answerDominates };
+}
+
+/**
+ * The route against the plan. Target must be equal, and the jig too when the plan names one.
+ * Expected 'note' (a meeting note or summary, R1-NOTE) accepts 'note', 'app', 'ask', or
+ * 'document' when the scenario has no host (the request then reaches no file): PLAN-51 §3 only
+ * asks that it is no host work and no jig (T-279). No decision (null), 'view', 'param', 'legal',
+ * 'make' or a jig is a mismatch (PLAN-51 contract 1).
+ */
+export function routeCheck(expected, route, host) {
+  if (!expected) return { type: 'route', ok: true, detail: 'no expected route' };
+  if (!route) return { type: 'route', ok: false, detail: 'no route' };
+  const got = `${route.target}${route.jig ? ' ' + route.jig : ''}`;
+  if (expected.target === 'note') {
+    const ok =
+      ['note', 'app', 'ask'].includes(route.target) || (route.target === 'document' && !host);
+    return { type: 'route', ok, detail: ok ? got : `expected a note, got ${got}` };
+  }
+  const ok =
+    route.target === expected.target && (expected.jig == null || route.jig === expected.jig);
+  return {
+    type: 'route',
+    ok,
+    detail: ok ? got : `expected ${expected.target}${expected.jig ? ' ' + expected.jig : ''}, got ${got}`,
+  };
+}
+
+/** Check types read from the results.json record itself, not from the candidate scene. */
+export const RECORD_CHECKS = new Set(['reconnectHonest']);
+const RECONNECT_CODES = new Set(['STALE_CONNECTION', 'DOCUMENT_MISMATCH']);
+
+/**
+ * A record-level check (T-279). `reconnectHonest` (R1-RECONNECT): after the document was reopened
+ * the request either ends failed with STALE_CONNECTION or DOCUMENT_MISMATCH, or succeeds on the
+ * re-linked document; never 'succeeded' with an error as the last activity (the '응답 완료' lie).
+ * The code is read from `record.end.code`, else the last error activity's code.
+ */
+export function recordCheck(check, record) {
+  const result = (ok, detail) => ({ type: check.type, ok, detail });
+  if (check.type !== 'reconnectHonest') return result(false, 'unknown check ' + check.type);
+  const state = record?.end?.state ?? record?.state ?? null;
+  const tail = Array.isArray(record?.activityTail) ? record.activityTail : [];
+  const lastError = [...tail].reverse().find((entry) => entry?.kind === 'error');
+  const code = record?.end?.code ?? lastError?.code ?? null;
+  if (state === 'failed')
+    return RECONNECT_CODES.has(code)
+      ? result(true, `failed ${code}`)
+      : result(false, `failed with ${code ?? 'no code'}, expected STALE_CONNECTION or DOCUMENT_MISMATCH`);
+  if (state === 'succeeded')
+    return tail.at(-1)?.kind === 'error'
+      ? result(false, `succeeded but the last activity is an error${code ? ' ' + code : ''}`)
+      : result(true, 'succeeded on the re-linked document');
+  return result(false, `state ${state ?? 'none'}`);
+}
+
+/**
+ * Changes between two scene dumps by object id (Rhino ids survive in a live document). A row is
+ * modified when its geometry (bounds, geometryHash) or its attributes (name, layer, displayColor,
+ * materialColor, attributes64) differ — a colour change moves neither bounds nor name (hosts/rhino/worker/
+ * DisplayScene.cs rows carry displayColor, layerColor, attributes64 and geometryHash). A field
+ * missing on both rows (older dumps, dump_scene.py) counts as equal.
+ */
 export function diff(beforeRows, afterRows) {
   const old = new Map(beforeRows.map((r) => [r.id, r]));
   const now = new Map(afterRows.map((r) => [r.id, r]));
-  const differs = (a, b) =>
+  const box = (r) => [...(r.origin ?? []), ...(r.boundsSize ?? [])];
+  const geometryDiffers = (a, b) =>
+    a.geometryHash !== b.geometryHash ||
+    box(a).length !== box(b).length ||
+    box(a).some((v, i) => Math.abs(v - box(b)[i]) > 0.01);
+  const attributesDiffer = (a, b) =>
     a.name64 !== b.name64 ||
     a.layer64 !== b.layer64 ||
-    [...a.origin, ...a.boundsSize].some(
-      (v, i) => Math.abs(v - [...b.origin, ...b.boundsSize][i]) > 0.01,
-    );
+    a.displayColor !== b.displayColor ||
+    a.materialColor !== b.materialColor ||
+    JSON.stringify(a.attributes64 ?? null) !== JSON.stringify(b.attributes64 ?? null);
+  const modified = [];
+  for (const r of afterRows) {
+    if (!old.has(r.id)) continue;
+    const geometry = geometryDiffers(old.get(r.id), r);
+    const attributes = attributesDiffer(old.get(r.id), r);
+    if (geometry || attributes) modified.push({ id: r.id, geometry, attributes, nativeIdentity: false });
+  }
   return {
     added: afterRows.filter((r) => !old.has(r.id)).map((r) => r.id),
     removed: beforeRows.filter((r) => !now.has(r.id)).map((r) => r.id),
-    modified: afterRows
-      .filter((r) => old.has(r.id) && differs(old.get(r.id), r))
-      .map((r) => ({ id: r.id, geometry: true, attributes: true, nativeIdentity: false })),
+    modified,
   };
 }
 /**

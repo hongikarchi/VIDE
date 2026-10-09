@@ -18,6 +18,7 @@
     "test": "node --test tests/core/*.test.mjs tests/ai/*.test.mjs tests/server/*.test.mjs tests/contract/*.test.mjs",
     "docs:build": "npm --prefix tools/docs run build",
     "docs:check": "npm --prefix tools/docs run check",
+    "ab:scorecard": "node tools/ab/scorecard.mjs",
     "package:windows": "node src/desktop/build.mjs",
     "backup": "node src/desktop/backup.mjs",
     "typecheck:ui": "tsc -p tsconfig.ui.json",

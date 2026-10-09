@@ -2,8 +2,8 @@
 id: PLAN-19
 title: 요청 경로(VIDE 화면 / 파일)와 함께 보낼 이전 대화
 status: review
-version: 0.3
-updated: 2026-09-29
+version: 0.4
+updated: 2026-10-08
 owner: agent:claude
 related: [PLAN, SPEC-02, DESIGN, RESEARCH-02, FR-04, FR-08]
 ---
@@ -20,6 +20,7 @@ related: [PLAN, SPEC-02, DESIGN, RESEARCH-02, FR-04, FR-08]
 4. 이전 대화 선별: `src/ai/context-selector.ts`가 이전 대화가 6개를 넘으면 Jev(Noul 질문, 최근 20개)로 관련 대화를 고르고 바로 앞 대화를 늘 넣는다. `src/server/execution.ts`가 이를 써서 `conversation` 항목을 만들고 진단 기록에 `context`(방법·개수·시간)를 남긴다. 키는 모델 선택과 같은 곳(`TYPESAFE_API_KEY` 또는 `<데이터>/typesafe.env`)에서 읽는다.
 
 5. 경로 판정을 Jev로(2026-09-29 사용자 요청 "규칙으로 하니까 칩을 눌러야 하는 횟수가 너무 많아"): `src/ai/request-router.ts`, 서버 `POST …/route`, 화면은 보낼 때 판정(칩 제거)하고 화면만 처리 알림에 'AI 작업으로 보내기'. 키 없음·실패·확신 낮음은 규칙. 보내는 대화 하나당 길이 제한.
+6. 2026-10-08 [PLAN-51](PLAN-51-verify-loop.md) T-269·T-270(구현·단위·브라우저 시험 완료, L0·L1 재측정 전): '모델링이랑 도면 맞춰줘' 같은 모델↔도면 맞춤 말은 규칙으로 Sync jig를 열고(`reconcilesModelDrawing`, Sync 상태 질문은 AI), 화면 경로 대상은 부재 말(보·기둥·슬래브 등)을 레이어 이름(beam·column·slab 등)으로 찾으며, 그래도 비면 레이어 고르기 카드와 뒤의 '문서를 바꾸는 AI 작업으로 보내기'를 보인다(SPEC-02.17의 1~3).
 
 ## 검증
 

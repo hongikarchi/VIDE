@@ -12,6 +12,7 @@ import { EditorSessions } from '../../hosts/rhino/editor-sessions.ts';
 import { resumeEditor } from '../../hosts/rhino/editor-channel.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { applyDisplayDelta } from '../../src/core/display-delta.ts';
+import { connectScriptLines } from '../../tools/ab/rhino-connect.mjs';
 
 const model = resolve(process.argv[2] || '.vide/sync-perf/model.3dm');
 const copies = relative(resolve('.vide'), model);
@@ -66,7 +67,8 @@ try:
     assert Rhino.RhinoDoc.ReadFile(${JSON.stringify(slash(model))},read)
     doc=Rhino.RhinoDoc.ActiveDoc
     Rhino.PlugIns.PlugIn.LoadPlugIn(${JSON.stringify(slash(options.plugin))})
-    assert Rhino.RhinoApp.RunScript('_VIDEConnect',False)
+    # _VIDEConnect now opens the project-pick modal (T-277): attach by reflection instead.
+${connectScriptLines({ doc: 'doc' })}
     Rhino.RhinoApp.Idle+=idle
     report('ready',dict(ok=True,objects=doc.Objects.Count))
 except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback.format_exc()))
@@ -224,6 +226,7 @@ try {
     );
   let basis = display;
   const live = [];
+  result.liveSync = live; // partial entries survive a failed comparison (result.json in finally)
   for (const command of ['move', 'moveBlock', 'delete', 'add', 'layerColor', 'undo']) {
     await action(command);
     let delta, deltaMs;
@@ -245,9 +248,12 @@ try {
     });
     basis = { ...full };
   }
-  result.liveSync = live;
-  await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result, null, 2));
+} catch (error) {
+  result.error = String(error?.message ?? error).slice(0, 300);
+  throw error;
 } finally {
   await host?.stop();
+  // Written on failure too, so the timings measured before it are kept.
+  await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
 }

@@ -154,6 +154,7 @@ export const OFFICIAL_JIG_ROUTING: Record<string, { intent: string; words: strin
       '도면 모델 비교',
       '정합 검토',
     ],
+    // '정합 맞춰', '도면 모델 맞추' and the like: reconcilesModelDrawing below (questions excluded).
   },
   knowledge: {
     intent:
@@ -171,6 +172,22 @@ export const OFFICIAL_JIG_ROUTING: Record<string, { intent: string; words: strin
     words: ['모델 변경 반영', '도면에 반영', '도면 역반영', '역반영', '도곽 미리보기', '도곽 찾기'],
   },
 };
+
+const RECONCILE_NOT =
+  /(확대|줌|zoom|옮겨|옮기|이동|바꿔|바꾸|변경|색|위치|높이|회전|스케일|scale|크기|늘려|줄여|키워|삭제|지워)/i;
+/**
+ * The Sync jig's reconcile intent (T-269, SPEC-02.17 1): 맞춰·맞추·맞춤 with 모델(링) and 도면·CAD in
+ * either order ("모델링이랑 도면 맞춰줘", "도면을 모델에 맞춰"). A question about the state
+ * ("맞춰졌어?", "sync 됐어?") is not it: Sync questions go to the AI (T-188, ADR-031).
+ */
+export function reconcilesModelDrawing(body: string) {
+  if (/\?|맞춰\s*(졌|져|진)|왜|어디|뭐야|알려/.test(body)) return false;
+  // With an edit verb or a zoom word the words ask for document or screen work (SPEC-02.17 1):
+  // "도면에 맞춰 모델 색 바꿔줘", "모델 도면 맞춰 줌해줘". "맞춰 보여" alone stays the jig.
+  if (RECONCILE_NOT.test(body)) return false;
+  if (/정합\s*맞/.test(body)) return true;
+  return /맞(춰|추|춤)/.test(body) && /모델/.test(body) && /(도면|cad|캐드)/i.test(body);
+}
 
 /**
  * Words of official tool jigs (instance jigs) that open them from a request (SPEC-07.18), merged
@@ -610,6 +627,16 @@ export function jigFor(body: string, jigs: readonly RouteJig[] | undefined) {
       if (skill && (acting || (!phrase && (squashed.length < 2 || QUESTION.test(body))))) continue;
       score = Math.max(score, phrase ? 2 : 1);
     }
+    // The reconcile phrasing opens the Sync jig like a phrase, unless the words name the file or
+    // a screen action other than fit ("맞춰 보여" is no zoom request here).
+    if (
+      jig.id === 'sync' &&
+      score < 2 &&
+      !FILE_WORDS.test(body) &&
+      !viewActions.some(([action, pattern]) => action !== 'fit' && pattern.test(body)) &&
+      reconcilesModelDrawing(body)
+    )
+      score = 2;
     if (score > (best?.score ?? 0)) best = { jig, score };
   }
   return best;
@@ -682,6 +709,91 @@ export function decisiveRoute(body: string, context: RouteContext = {}): Route |
   return undefined;
 }
 
+/**
+ * Building words → words of layer names (T-270, SPEC-02.17 1): "보만 남기고" finds "3D::S-Beam".
+ * Matched per layer path segment, ignoring case.
+ */
+const MEMBER_WORDS: [string, string[]][] = [
+  ['보', ['beam', 'girder', '보', '거더']],
+  ['기둥', ['column', 'col', '기둥']],
+  ['슬래브', ['slab', '바닥판', '슬래브']],
+  ['벽', ['wall', '벽']],
+  ['지붕', ['roof', '지붕']],
+  ['창', ['window', '창']],
+  ['문', ['door', '문']],
+  ['계단', ['stair', '계단']],
+  ['축선', ['grid', 'axis', '축선']],
+];
+/** Layer name parts that name a Korean building word besides the word itself ("옹벽" is no "벽"). */
+const MEMBER_COMPOUNDS: Record<string, string[]> = {
+  보: ['큰보', '작은보', '지중보', '테두리보', '철골보', '캔틸레버보'],
+  기둥: ['철골기둥', '콘크리트기둥'],
+  벽: ['벽체', '내벽', '외벽', '전단벽', '코어벽'],
+  슬래브: ['바닥슬래브', '지붕슬래브'],
+  창: ['창호', '창문'],
+};
+/**
+ * A building word standing alone in the request. "보" also needs a particle (만·을·를·와·과·랑·하고)
+ * or a space after it, so "보이게"·"보여"·"보는"·"보도" are not it.
+ */
+const memberWord = (word: string) =>
+  word === '보' ? `(?<![가-힣])보(?=만|을|를|와|과|랑|이랑|하고|\\s|$)` : alone(word);
+const segments = (layer: string) =>
+  layer
+    .toLowerCase()
+    .split(/::|[|/\\]/)
+    .filter(Boolean);
+/**
+ * A layer segment names the word: Korean as a whole part of the segment ("S-보", "보-1F") or a listed
+ * compound ("작은보"; not "도면정보", "옹벽"); English as a word part.
+ */
+function segmentNames(segment: string, word: string) {
+  if (/[가-힣]/.test(word)) {
+    const names = [word, ...(MEMBER_COMPOUNDS[word] ?? [])];
+    return segment.split(/[^가-힣a-z0-9]+/).some((part) => names.includes(part));
+  }
+  return segment
+    .split(/[^a-z0-9]+/)
+    .some((part) =>
+      word.length >= 4 ? part.includes(word) : new RegExp(`^${word}(s|\\d.*)?$`).test(part),
+    );
+}
+/** The layers a request's building words name ("보" → S-Beam, 구조::큰보). */
+export function memberLayers(body: string, layers: readonly string[]) {
+  const words = MEMBER_WORDS.filter(([word]) => new RegExp(memberWord(word)).test(body)).flatMap(
+    ([, names]) => names,
+  );
+  if (!words.length) return [];
+  return layers.filter((layer) =>
+    segments(layer).some((segment) => words.some((word) => segmentNames(segment, word))),
+  );
+}
+/**
+ * Layers to pick from when a screen request found no objects (T-270, SPEC-02.17 2): up to 8 layers
+ * holding a word of the request, else the top-level layers; each with its objects.
+ */
+export function layerChoices(body: string, objects: readonly RouteObject[]) {
+  const all = [...new Set(objects.map((o) => text(o.layer)).filter(Boolean))];
+  const tokens = body
+    .toLowerCase()
+    .split(/\s+/)
+    .map((token) => token.replace(/[만을를들은는이가도]$/, ''))
+    .filter((token) => token.length >= 2 && !viewActions.some(([, p]) => p.test(token)));
+  const named = all.filter((layer) => tokens.some((token) => layer.toLowerCase().includes(token)));
+  const picked = named.length
+    ? named.map((layer) => ({
+        layer,
+        ids: objects.filter((o) => text(o.layer) === layer).map((o) => o.id),
+      }))
+    : [...new Set(all.map((layer) => layer.split('::')[0]))].map((top) => ({
+        layer: top,
+        ids: objects
+          .filter((o) => text(o.layer) === top || text(o.layer).startsWith(top + '::'))
+          .map((o) => o.id),
+      }));
+  return picked.slice(0, 8);
+}
+
 /** Objects named by the request: by kind words, then layer names, then object names. */
 function subjectOf(body: string, objects: readonly RouteObject[]) {
   const lower = body.toLowerCase();
@@ -699,6 +811,15 @@ function subjectOf(body: string, objects: readonly RouteObject[]) {
       ids: objects.filter((o) => text(o.layer) === layer).map((o) => o.id),
       subject: '레이어 ' + layer,
     };
+  const members = memberLayers(body, layers);
+  if (members.length) {
+    const ids = objects.filter((o) => members.includes(text(o.layer))).map((o) => o.id);
+    if (ids.length)
+      return {
+        ids,
+        subject: '레이어 ' + members[0] + (members.length > 1 ? ` 외 ${members.length - 1}개` : ''),
+      };
+  }
   const named = objects.filter((o) => {
     const name = text(o.name);
     return name.length >= 2 && lower.includes(name.toLowerCase());

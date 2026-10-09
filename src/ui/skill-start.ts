@@ -111,8 +111,16 @@ export interface SkillStart {
   aiRequest?: string;
   /** What the computation left for a person (human steps waiting, failures). */
   summary?: { done: number; waiting: string[]; failed: string[] };
-  /** The address the request names, for a jig with a `site-data` input (SPEC-12.3의 1). */
-  site?: { key: string; query: string };
+  /** Steps a person presses that the computation left (a `manual` step such as '법규 체크'). */
+  left?: string[];
+  /**
+   * The address looked up for a jig with a `site-data` input (SPEC-12.3의 6): the one the request
+   * names, else the project's known site address (the latest workbook whose target a person
+   * confirmed). The project name is never taken for an address.
+   */
+  site?: { key: string; query: string; from: 'request' | 'project' };
+  /** No address anywhere: the panel asks in the input's address card (the input key). */
+  siteAsk?: string;
 }
 
 const code = (error: unknown) => (error as { code?: unknown } | null)?.code;
@@ -127,6 +135,10 @@ interface InstanceRow {
   updatedAt?: string;
   createdAt?: string;
 }
+interface SiteState {
+  query?: string | null;
+  targets?: { pnus?: string[]; by?: string } | null;
+}
 interface InstanceView {
   id: string;
   title: string;
@@ -134,6 +146,7 @@ interface InstanceView {
   params?: unknown;
   steps?: { id: string; title?: string; kind?: string; status?: string }[];
   inputs?: { key: string; kind?: string }[];
+  body?: { siteData?: Record<string, SiteState> };
 }
 interface ConversationRow {
   id: string | null;
@@ -147,12 +160,41 @@ async function instances(deps: SkillDeps, jigId: string) {
   const reply = (await deps.api(path(deps, '/jig-instances'))) as { instances?: InstanceRow[] };
   return (reply?.instances ?? []).filter((row) => row.jigId === jigId);
 }
-const latest = (rows: readonly InstanceRow[]) =>
+const newestFirst = (rows: readonly InstanceRow[]) =>
   [...rows].sort((a, b) =>
     String(b.updatedAt ?? b.createdAt ?? '').localeCompare(
       String(a.updatedAt ?? a.createdAt ?? ''),
     ),
-  )[0];
+  );
+const latest = (rows: readonly InstanceRow[]) => newestFirst(rows)[0];
+
+/** A workbook's site address when a person confirmed its target parcels (else null). */
+function confirmedSiteAddress(view: InstanceView, key: string): string | null {
+  const state = view.body?.siteData?.[key];
+  const pnus = state?.targets?.pnus ?? [];
+  if (!pnus.length) return null;
+  const confirmed =
+    state?.targets?.by === 'user' ||
+    (view.steps ?? []).some((step) => step.kind === 'human' && step.status === 'confirmed');
+  if (!confirmed) return null;
+  return state?.query?.trim() || pnus[0];
+}
+
+/**
+ * ② of SPEC-12.3의 6: the project's known site address — the latest other workbook of the same
+ * jig whose target parcels a person confirmed (project facts hold no address statement today).
+ */
+async function projectSiteAddress(deps: SkillDeps, jigId: string, except: string, key: string) {
+  const rows = newestFirst(await instances(deps, jigId)).filter((row) => row.id !== except);
+  for (const row of rows.slice(0, 10)) {
+    const view = (await deps
+      .api(path(deps, `/jig-instances/${encodeURIComponent(row.id)}`))
+      .catch(() => undefined)) as InstanceView | undefined;
+    const address = view && confirmedSiteAddress(view, key);
+    if (address) return address;
+  }
+  return null;
+}
 
 /** The conversation the jig works in: the given one, one already on the instance, or a new one. */
 async function bindConversation(
@@ -232,6 +274,41 @@ function summarize(report: SkillRunReport | undefined, titles: Map<string, strin
       .filter((step) => ['failed', 'gate-failed'].includes(step.status))
       .map((step) => name(step.id)),
   };
+}
+
+/**
+ * Steps a person presses next (SPEC-02.17 2): a `manual` step the run left (`skipped`, e.g.
+ * '법규 체크') and a host step that is due ('Rhino에 만들기'). Confirmed human steps, steps blocked
+ * behind a waiting one and a superseded run's skips are not left for a press.
+ */
+export function leftSteps(report: SkillRunReport | undefined, titles: Map<string, string>) {
+  if (!report) return undefined;
+  return report.steps
+    .filter(
+      (step) =>
+        (step.status === 'skipped' && !report.superseded) ||
+        (step.status === 'waiting' && step.kind === 'host'),
+    )
+    .map((step) => titles.get(step.id) ?? step.id);
+}
+
+/**
+ * The route row's status once the AI turn after a start has ended (SPEC-02.17 2, T-272): the
+ * turn's end and the work copy's state, so the row never stays at 'AI가 요약하는 중'. undefined
+ * while the turn is still queued or running.
+ */
+export function skillTurnStatus(state: string, start: SkillStart | undefined): string | undefined {
+  if (state === 'queued' || state === 'running') return undefined;
+  const turn =
+    state === 'succeeded'
+      ? '응답 완료'
+      : state === 'cancelled' || state === 'interrupted'
+        ? '응답 중단'
+        : '응답 실패';
+  if (!start || start.legacy) return `${turn} · 열림`;
+  const parts = [turn, `작업본 '${start.instanceTitle}' 열림`];
+  for (const title of start.left ?? []) parts.push(`'${title}' 전`);
+  return parts.join(' · ');
 }
 
 /** Record in the conversation's ledger (SPEC-02.19 1); a failure never stops the start. */
@@ -380,10 +457,20 @@ async function open(
   start.instanceTitle = view.title;
   if (start.until) start.untilTitle = titles.get(start.until) ?? start.until;
   start.values = skillValues(options.request, view.params, entry.fromRequest);
-  // Site modeling: the address in the words is looked up as the computation starts.
+  // Site modeling (SPEC-12.3의 6): ① the address in the words, ② the project's known site address,
+  // ③ ask in the panel's address card. It is looked up as the computation starts.
   const siteInput = (view.inputs ?? []).find((input) => input.kind === 'site-data');
-  const query = siteInput && options.request ? addressFromRequest(options.request) : null;
-  if (siteInput && query) start.site = { key: siteInput.key, query };
+  if (siteInput) {
+    const key = siteInput.key;
+    const named = options.request ? addressFromRequest(options.request) : null;
+    const own = view.body?.siteData?.[key];
+    if (named) start.site = { key, query: named, from: 'request' };
+    else if (!own?.query && !own?.targets?.pnus?.length) {
+      const known = await projectSiteAddress(deps, entry.id, start.instanceId, key);
+      if (known) start.site = { key, query: known, from: 'project' };
+      else start.siteAsk = key;
+    }
+  }
   const conversation = await bindConversation(deps, entry, start.instanceId, options);
   start.conversationId = conversation.id;
   start.conversationCreated = conversation.created;
@@ -448,6 +535,7 @@ async function run(
   })) as SkillRunReport;
   start.report = report;
   start.summary = summarize(report, titles);
+  start.left = leftSteps(report, titles);
   start.pending = false;
   await record(deps, start.conversationId, {
     appAction: 'skill_start',
@@ -466,7 +554,10 @@ async function run(
         }
       : {}),
     until: start.until ?? null,
-    ...(start.site ? { siteQuery: start.site.query } : {}),
+    ...(start.site ? { siteQuery: start.site.query, siteQueryFrom: start.site.from } : {}),
+    ...(start.siteAsk
+      ? { siteAsk: '대지 주소나 PNU를 jig 화면 맨 위 대상 필지 칸에 넣어 주세요' }
+      : {}),
     computed: start.summary,
   });
   return start;
@@ -561,6 +652,16 @@ export function skillChecklist(start: SkillStart): { text: string; done: boolean
     items.push({
       text: value.ok ? `설정값 ${value.text}` : value.text,
       done: !start.pending && value.ok,
+    });
+  if (start.site)
+    items.push({
+      text: `대지 주소 '${start.site.query}'(${start.site.from === 'request' ? '요청 글' : '프로젝트에서 확정한 주소'})로 필지 찾기`,
+      done: !start.pending && !!start.report,
+    });
+  else if (start.siteAsk)
+    items.push({
+      text: '대지 주소 입력 — jig 화면 맨 위 대상 필지 칸에 주소나 PNU를 넣으세요',
+      done: false,
     });
   items.push({
     text: start.untilTitle ? `'${start.untilTitle}' 앞까지 계산` : '사람 확인 전까지 계산',

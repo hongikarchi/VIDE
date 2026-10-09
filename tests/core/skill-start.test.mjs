@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
   continueSkill,
   revertSkill,
+  leftSteps,
   skillChecklist,
+  skillTurnStatus,
   startSkill,
 } from '../../src/ui/skill-start.ts';
 
@@ -321,4 +323,209 @@ test('[일반 대화로] never unbinds a conversation that was already on the in
   assert.equal(start.boundExisting, false);
   await revertSkill(h.deps, start);
   assert.ok(!h.calls.some(([, p]) => p.endsWith('/unbind')));
+});
+
+test('skillTurnStatus (T-272, SPEC-02.17 2): the row settles when the AI turn ends', () => {
+  const start = {
+    legacy: false,
+    instanceTitle: '작업본 1',
+    left: ['법규 체크'],
+  };
+  // Still going: no change, the row keeps 'AI가 요약하는 중'.
+  assert.equal(skillTurnStatus('queued', start), undefined);
+  assert.equal(skillTurnStatus('running', start), undefined);
+  assert.equal(
+    skillTurnStatus('succeeded', start),
+    "응답 완료 · 작업본 '작업본 1' 열림 · '법규 체크' 전",
+  );
+  assert.equal(
+    skillTurnStatus('failed', { ...start, left: [] }),
+    "응답 실패 · 작업본 '작업본 1' 열림",
+  );
+  assert.equal(skillTurnStatus('cancelled', start).startsWith('응답 중단'), true);
+  assert.equal(skillTurnStatus('succeeded', undefined), '응답 완료 · 열림');
+  for (const state of ['succeeded', 'failed', 'cancelled', 'interrupted', 'unknown'])
+    assert.doesNotMatch(skillTurnStatus(state, start), /요약하는 중/);
+});
+
+// SPEC-12.3의 6 (T-273): the site address — ① the request's words, ② the project's confirmed
+// site address (the latest other workbook whose target a person confirmed), ③ ask in the panel.
+const siteJig = {
+  id: 'vide/site-model',
+  name: '사이트 모델링',
+  kind: 'instance',
+  scope: 'official',
+  version: '0.2.1',
+  invocation: 'auto',
+  open: { reuse: 'new' },
+  fromRequest: [],
+  autorun: { until: 'first-hard', step: 'confirmTarget' },
+};
+function siteHarness(stored = {}) {
+  const calls = [];
+  const rows = Object.keys(stored).map((id, i) => ({
+    id,
+    jigId: siteJig.id,
+    title: `작업본 ${i + 1}`,
+    updatedAt: stored[id].updatedAt,
+  }));
+  const siteView = (id) => ({
+    id,
+    title: id,
+    jig: { id: siteJig.id, name: siteJig.name },
+    params: [],
+    inputs: [{ key: 'site', kind: 'site-data' }],
+    steps: [
+      { id: 'candidates', title: '필지 후보', kind: 'code', status: 'done' },
+      {
+        id: 'confirmTarget',
+        title: '대상 필지 확정',
+        kind: 'human',
+        status: stored[id]?.confirmed ? 'confirmed' : 'waiting',
+      },
+    ],
+    body: { siteData: stored[id]?.site ? { site: stored[id].site } : {} },
+  });
+  const api = async (path, method = 'GET', data) => {
+    const rest = path.replace('/projects/p1', '');
+    calls.push([method, rest, data]);
+    if (rest === '/jig-instances' && method === 'GET') return { instances: rows };
+    if (rest === '/jig-instances' && method === 'POST') {
+      rows.push({ id: 'fresh', jigId: data.jig, title: data.title, updatedAt: 'z' });
+      return siteView('fresh');
+    }
+    if (/^\/jig-instances\/[^/]+$/.test(rest)) return siteView(rest.split('/').at(-1));
+    if (rest.endsWith('/run')) return report;
+    if (rest === '/conversations' && method === 'GET') return [];
+    if (rest === '/conversations' && method === 'POST') return { id: 'c-new' };
+    return { ok: true };
+  };
+  const deps = {
+    api,
+    projectId: () => 'p1',
+    catalog: async () => [siteJig],
+    openTab: () => {},
+    closeTab: () => {},
+    isTabOpen: () => false,
+    legacyTab: () => undefined,
+    preferRun: () => {},
+    paramsChanged: () => {},
+    waitForRun: async () => report,
+    conversations: { active: () => null, select: () => {}, refresh: async () => {} },
+  };
+  const lookups = () =>
+    calls.filter(([method, rest]) => method === 'POST' && rest.endsWith('/site-data/site/lookup'));
+  return { deps, calls, lookups };
+}
+
+test('site address ①: the address in the request wins over the project one', async () => {
+  const h = siteHarness({
+    old: {
+      updatedAt: '2026-10-01',
+      confirmed: true,
+      site: { query: '합성동 1-1', targets: { pnus: ['1111010100100010001'], by: 'user' } },
+    },
+  });
+  const start = await startSkill(h.deps, siteJig.id, {
+    mode: 'auto',
+    request: '가나동 12-3 대지 모델링해 줘',
+  });
+  assert.deepEqual(start.site, { key: 'site', query: '가나동 12-3', from: 'request' });
+  assert.equal(start.siteAsk, undefined);
+  assert.deepEqual(
+    h.lookups().map(([, , data]) => data.query),
+    ['가나동 12-3'],
+  );
+});
+
+test('site address ②: no address in the words → the latest confirmed workbook of the project', async () => {
+  const h = siteHarness({
+    older: {
+      updatedAt: '2026-09-01',
+      confirmed: true,
+      site: { query: '합성동 9-9', targets: { pnus: ['1111010100100090009'], by: 'user' } },
+    },
+    newer: {
+      updatedAt: '2026-10-01',
+      confirmed: true,
+      site: { query: '합성동 1-1', targets: { pnus: ['1111010100100010001'], by: 'proposal' } },
+    },
+    // A later workbook with an address nobody confirmed is not the project's address.
+    unconfirmed: {
+      updatedAt: '2026-10-05',
+      site: { query: '다른동 5', targets: { pnus: ['1111010100100050000'], by: 'proposal' } },
+    },
+  });
+  const start = await startSkill(h.deps, siteJig.id, {
+    mode: 'auto',
+    request: '지금 우리 프로젝트 주변 사이트 모델링 해줘',
+  });
+  assert.equal(start.instanceId, 'fresh');
+  assert.deepEqual(start.site, { key: 'site', query: '합성동 1-1', from: 'project' });
+  assert.deepEqual(
+    h.lookups().map(([, , data]) => data.query),
+    ['합성동 1-1'],
+  );
+  assert.ok(
+    skillChecklist(start).some((item) => /합성동 1-1.*프로젝트에서 확정한 주소/.test(item.text)),
+  );
+});
+
+test('site address ③: no address anywhere → nothing looked up, the panel asks', async () => {
+  const h = siteHarness({ draft: { updatedAt: '2026-10-01', site: { query: '가나동 3' } } });
+  const start = await startSkill(h.deps, siteJig.id, {
+    mode: 'auto',
+    request: '지금 우리 프로젝트 주변 사이트 모델링 해줘',
+  });
+  assert.equal(start.site, undefined);
+  assert.equal(start.siteAsk, 'site');
+  assert.equal(h.lookups().length, 0);
+  const ledger = h.calls.find(([, rest]) => rest.endsWith('/ledger'));
+  assert.match(ledger[2].body.siteAsk, /대상 필지 칸/);
+  const ask = skillChecklist(start).find((item) => /대지 주소 입력/.test(item.text));
+  assert.equal(ask?.done, false);
+});
+
+test('leftSteps (SPEC-02.17 2): only steps a person presses — manual skips and due host steps', () => {
+  const titles = new Map([
+    ['confirmTarget', '대상 필지 확정'],
+    ['collect', '수집'],
+    ['check', '법규 체크'],
+    ['bake', 'Rhino에 만들기'],
+    ['roles', '역할 확정'],
+  ]);
+  // A confirmed human step and steps blocked behind a waiting one are not '전'.
+  const report = {
+    steps: [
+      { id: 'confirmTarget', kind: 'human', status: 'confirmed' },
+      { id: 'roles', kind: 'human', status: 'waiting' },
+      { id: 'collect', kind: 'code', status: 'blocked' },
+      { id: 'bake', kind: 'host', status: 'blocked' },
+      { id: 'check', kind: 'code', status: 'skipped' },
+    ],
+  };
+  assert.deepEqual(leftSteps(report, titles), ['법규 체크']);
+  // A host step that is due is left for a press.
+  assert.deepEqual(
+    leftSteps(
+      {
+        steps: [
+          { id: 'confirmTarget', kind: 'human', status: 'confirmed' },
+          { id: 'collect', kind: 'code', status: 'done' },
+          { id: 'bake', kind: 'host', status: 'waiting' },
+        ],
+      },
+      titles,
+    ),
+    ['Rhino에 만들기'],
+  );
+  // A superseded run's skips are not presses.
+  assert.deepEqual(
+    leftSteps(
+      { superseded: true, steps: [{ id: 'check', kind: 'code', status: 'skipped' }] },
+      titles,
+    ),
+    [],
+  );
+  assert.equal(leftSteps(undefined, titles), undefined);
 });

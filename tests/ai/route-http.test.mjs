@@ -112,6 +112,12 @@ test('/route sends only the fixed items, honours the switch and decides rule wor
     assert.deepEqual([own.json.target, own.json.param], ['param', 'spanMax']);
     const account = await route({ body: 'codex 로그인해줘', subjects: [] });
     assert.deepEqual([account.json.app, account.json.provider], ['login', 'codex-cli']);
+    // T-269: the reconcile phrasing opens the Sync jig by rule, without Jev.
+    const reconcile = await route({ body: '모델링이랑 도면 맞춰줘', subjects: [] });
+    assert.deepEqual(
+      [reconcile.json.target, reconcile.json.by, reconcile.json.jig],
+      ['jig', 'rules', 'sync'],
+    );
     assert.equal(sent.length, 1);
     // FR-18: the notice's switch. Off: rules only, no Jev call at all.
     assert.deepEqual((await api('/settings/routing')).json, { jev: true, key: true });

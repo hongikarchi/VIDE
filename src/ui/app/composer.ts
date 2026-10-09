@@ -31,6 +31,7 @@ import {
   type Route,
   routeRequest,
   routeSubjects,
+  layerChoices,
   routeQuery,
   routeAnswer,
   jevRoute,
@@ -41,7 +42,13 @@ import {
 } from '../request-route.ts';
 import { skillRouteJigs } from '../skill-catalog.ts';
 import { api, errors } from '../gateway.ts';
-import { type SkillStart, startSkill, continueSkill, revertSkill } from '../skill-start.ts';
+import {
+  type SkillStart,
+  startSkill,
+  continueSkill,
+  revertSkill,
+  skillTurnStatus,
+} from '../skill-start.ts';
 import { activeWorkspace, setWorkspace } from '../workspaces.ts';
 import { hostlessFromScreen } from '../screen-hostless.ts';
 import {
@@ -432,7 +439,11 @@ export async function sendSkillTurn(body: string, sendMode: WorkMode) {
   if (workState.shownSkill && sent) {
     workState.shownSkill.aiRequest = sent.id;
     if (workState.shownSkill.start) workState.shownSkill.start.aiRequest = sent.id;
-    renderSkillRow({ status: 'AI가 요약하는 중' });
+    // A turn that already ended (read before this line) settles at once (T-272).
+    const state = (sent as { request?: { state?: string } }).request?.state;
+    renderSkillRow({
+      status: (state && skillTurnStatus(state, workState.shownSkill.start)) || 'AI가 요약하는 중',
+    });
   }
   // Something typed meanwhile stays in the composer.
   if (typed.trim() && typed !== body && !draftState.state.body) {
@@ -599,10 +610,26 @@ export function runViewRequest(route: Route, body: string) {
   // Sending it to the AI after all: undo the view change and send the same words.
   const toAi = (undo: () => void) => sendToAi(route, body, undo);
   if (view.action !== 'unhide' && !view.ids.length) {
-    messageWithAction(
-      '화면에서 어떤 객체인지 찾지 못했습니다. 객체를 고른 뒤 다시 보내거나, AI에게 맡기세요.',
-      'AI 작업으로 보내기',
-      toAi(() => {}),
+    // No objects found (T-270, SPEC-02.17 2·3): pick a layer first; the AI, which edits the
+    // document, comes last and says so.
+    const choices = layerChoices(body, routeObjects());
+    messageWithActions(
+      '화면에서 어떤 객체인지 찾지 못했습니다. 레이어를 고르면 화면에만 적용합니다 · 원본은 그대로입니다.',
+      [
+        ...choices.map((choice) => ({
+          label: choice.layer,
+          run: () =>
+            runViewRequest(
+              {
+                ...route,
+                view: { action: view.action, ids: choice.ids, subject: '레이어 ' + choice.layer },
+              },
+              body,
+            ),
+        })),
+        { label: '문서를 바꾸는 AI 작업으로 보내기', run: toAi(() => {}) },
+      ],
+      { keep: true },
     );
     return;
   }

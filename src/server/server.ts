@@ -2428,6 +2428,7 @@ export async function startServer({
           links,
           sdk,
           propose: proposeRoles,
+          log: (event, data) => diagnostics.write(event, data),
         })
       )
         return;

@@ -43,6 +43,6 @@ export function CompliancePart({
     case 'compliance-summary':
       return <ComplianceSummary view={view} jig={jig} />;
     case 'compliance-result':
-      return <ComplianceResultPart view={view} host={host} />;
+      return <ComplianceResultPart view={view} host={host} jig={jig} />;
   }
 }

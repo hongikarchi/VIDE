@@ -64,6 +64,8 @@ export interface ComplianceRouteContext {
    * when no AI is available on this PC. Never given coordinates (SPEC-15.4 1).
    */
   propose?: (request: ReturnType<typeof complianceRolesRequest>) => Promise<string>;
+  /** The engine log (diagnostics): one `compliance-read` timing line per read (T-274). */
+  log?: (event: string, data: Record<string, unknown>) => void;
 }
 
 const id = z.string().min(1).max(200);
@@ -281,8 +283,11 @@ export async function readForCheck(
   const link = ctx.links.get(projectId, linkId);
   if (link.host !== 'rhino') throw new DomainError('INVALID_INPUT');
   const reader = { workspace: ctx.workspace, links: ctx.links, sdk: ctx.sdk };
+  // T-274: where the time of a read goes (two host reads, classification, the kept copies).
+  const t0 = performance.now();
   const full = await readForJig(reader, projectId, { linkId, layers: [], includeHidden: true });
   const shown = await readForJig(reader, projectId, { linkId, layers: [], includeHidden: false });
+  const tRead = performance.now();
   const visible = new Set(
     ((shown.model.scene ?? []) as Record<string, unknown>[]).map((row) =>
       String(row.nativeId).toLowerCase(),
@@ -291,6 +296,7 @@ export async function readForCheck(
   const hiddenIds = ((full.model.scene ?? []) as Record<string, unknown>[])
     .map((row) => String(row.nativeId))
     .filter((nativeId) => !visible.has(nativeId.toLowerCase()));
+  const tRecord = performance.now();
   const record = rt.recordRead(projectId, input.instanceId, {
     linkId: full.linkId,
     revisionKey: full.revisionKey,
@@ -299,6 +305,7 @@ export async function readForCheck(
     purpose: 'check',
     model: full.model,
   });
+  const tClassify = performance.now();
   const documentKey = full.linkId;
   const rolesVersion = ctx.roles.version(projectId);
   const source = (full.model.sourceDocument ?? {}) as { units?: unknown };
@@ -322,12 +329,24 @@ export async function readForCheck(
     chosenOption: limits?.plan.chosenOption ?? null,
     includeHidden,
   });
+  const tKeep = performance.now();
   await rt.setHostDocument(projectId, input.instanceId, decl.key, {
     model: out.model,
     readId: record.id,
     linkId: full.linkId,
     revisionKey: full.revisionKey,
     rolesVersion,
+  });
+  const tEnd = performance.now();
+  ctx.log?.('compliance-read', {
+    objects: Array.isArray(full.model.scene) ? full.model.scene.length : 0,
+    readMs: Math.round(tRead - t0),
+    hiddenMs: Math.round(tRecord - tRead),
+    recordMs: Math.round(tClassify - tRecord),
+    classifyMs: Math.round(tKeep - tClassify),
+    keepMs: Math.round(tEnd - tKeep),
+    ms: Math.round(tEnd - t0),
+    rssMb: Math.round(process.memoryUsage().rss / 1048576),
   });
   return {
     readId: record.id,

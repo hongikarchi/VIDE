@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "goalFrame": "선배가 이 프로그램으로 다음 일을 해 두라고 했습니다: «{body}»",
+  "scenarios": [
+    {
+      "id": "R1-HIDE",
+      "body": "보만 남기고 다 숨겨줘",
+      "expertSteps": 2,
+      "goalEvidence": "3D 화면에 보(BEAM 레이어 객체)만 보이고 나머지가 숨겨짐. AI 요청 없이 바뀌고 되돌리기가 가능함",
+      "expect": { "aiRequests": 0 }
+    },
+    {
+      "id": "R1-D",
+      "body": "구조 검토하고 싶은데 파악해줘",
+      "expertSteps": 3,
+      "goalEvidence": "구조 검토용 jig 하나가 열려 현재 모델의 기둥·보 파악 결과를 보여 줌. 일반 AI 답문만으로는 불인정"
+    },
+    {
+      "id": "R1-A",
+      "body": "모델링이랑 도면 맞춰줘",
+      "expertSteps": 4,
+      "goalEvidence": "Sync jig가 열리거나 Rhino·CAD 맞춤 방식을 고르는 선택 카드가 보임. 일반 AI 편집으로 흐르면 실패"
+    },
+    {
+      "id": "R1-B",
+      "body": "지금 우리 프로젝트 주변 사이트 모델링 해줘",
+      "expertSteps": 4,
+      "goalEvidence": "vide/site-model jig가 열려 대상 필지·주변 건물 범위를 보여 줌(만들기 전까지). 주소를 사람이 직접 쳐야 하면 P2"
+    },
+    {
+      "id": "R1-C",
+      "body": "법규검토하고, 지금 우리 건물 설계에서 법규 위반 사항 없는지 확인해줘",
+      "expertSteps": 4,
+      "goalEvidence": "vide/compliance-check jig가 열리고 결과 표가 판정 가능·판단 필요·사람 입력 필요를 구분해 보여 줌. 즉흥 AI 답이면 실패"
+    }
+  ]
+}

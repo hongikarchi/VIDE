@@ -109,6 +109,7 @@ try {
     '텍스트만 남기고 숨겨줘': { target: 'view', action: 'isolate', subject: 'kind:문자' },
     '해치 지워줘': { target: 'document' },
     'A-HATCH 꺼줘': { target: 'view', action: 'hide', subject: 'layer:A-HATCH' },
+    '보만 남기고 다 숨겨줘': { target: 'view', action: 'isolate' },
   };
   await page.route('**/route', async (route) => {
     const sent = JSON.parse(route.request().postData());
@@ -146,6 +147,31 @@ try {
   await page.locator('#message .message-action').filter({ hasText: 'AI 작업으로 보내기' }).click();
   await page.waitForFunction(() => window.videViewport.hiddenCount() === 0);
   for (let i = 0; i < 40 && !posted.length; i++) await page.waitForTimeout(50);
+  assert.deepEqual(posted, ['A-HATCH 꺼줘']);
+  // T-270: Jev says isolate but names no group; "보" finds the S-BEAM layer, nothing is sent.
+  await page.locator('#body').fill('보만 남기고 다 숨겨줘');
+  await page.locator('#request').click();
+  await page.waitForFunction(() => window.videViewport.hiddenCount() === 4);
+  assert.match(await page.locator('#message').textContent(), /레이어 S-BEAM 4개/);
+  await page.locator('#body').fill('모두 다시 보여줘');
+  await page.locator('#request').click();
+  await page.waitForFunction(() => window.videViewport.hiddenCount() === 0);
+  // Nothing found: a layer pick card, the document-editing AI last; picking a layer applies it.
+  await page.locator('#body').fill('창만 남기고 다 숨겨줘');
+  await page.locator('#request').click();
+  const picks = page.locator('#message .message-action');
+  await picks.filter({ hasText: '문서를 바꾸는' }).waitFor();
+  assert.deepEqual(await picks.allTextContents(), [
+    'A-ANNO',
+    'S-BEAM',
+    'A-HATCH',
+    '문서를 바꾸는 AI 작업으로 보내기',
+  ]);
+  await picks.filter({ hasText: 'S-BEAM' }).click();
+  await page.waitForFunction(() => window.videViewport.hiddenCount() === 4);
+  await page.locator('#body').fill('모두 다시 보여줘');
+  await page.locator('#request').click();
+  await page.waitForFunction(() => window.videViewport.hiddenCount() === 0);
   assert.deepEqual(posted, ['A-HATCH 꺼줘']);
   // File work goes to the AI.
   await page.locator('#body').fill('해치 지워줘');

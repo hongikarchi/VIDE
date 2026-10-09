@@ -13,6 +13,7 @@ import { AttachedZwcadDocuments } from '../../hosts/zwcad/attached-documents.ts'
 import { startServer } from '../../src/server/server.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { runDirectory } from './run-directory.mjs';
+import { connectScriptLines } from '../../tools/ab/rhino-connect.mjs';
 
 const directory = runDirectory('linked-open-compare');
 await mkdir(join(directory, 'zwcad-connections'), { recursive: true });
@@ -39,7 +40,7 @@ const ready = join(directory, 'rhino-ready.json');
 const script = join(directory, 'fixture.py');
 await writeFile(
   script,
-  `import Rhino, json, traceback
+  `import Rhino, System, json, traceback
 try:
     doc=Rhino.RhinoDoc.ActiveDoc
     doc.ModelUnitSystem=Rhino.UnitSystem.Millimeters
@@ -48,7 +49,8 @@ try:
         a=Rhino.DocObjects.ObjectAttributes();a.LayerIndex=index;a.Name='B%d'%(i+1)
         doc.Objects.AddLine(Rhino.Geometry.Line(x0+${offset[0]},y0+${offset[1]},${offset[2]},x1+${offset[0]},y1+${offset[1]},${offset[2]}),a)
     Rhino.PlugIns.PlugIn.LoadPlugIn(${JSON.stringify(slash(options.plugin))})
-    assert Rhino.RhinoApp.RunScript('_VIDEConnect',False)
+    # _VIDEConnect opens the project-pick modal (T-277): attach by reflection instead.
+${connectScriptLines({ doc: 'doc' })}
     with open(${JSON.stringify(slash(ready))},'w') as f:json.dump(dict(ok=True),f)
 except Exception as e:
     with open(${JSON.stringify(slash(ready))},'w') as f:json.dump(dict(ok=False,error=str(e),trace=traceback.format_exc()),f)

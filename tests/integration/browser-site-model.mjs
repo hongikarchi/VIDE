@@ -27,8 +27,43 @@ try {
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (m) => m.type() === 'error' && errors.push('console: ' + m.text()));
   await page.route('**/api/v1/host', (route) => route.fulfill({ json: { available: false } }));
+  // T-273 (SPEC-12.3의 6 ③): the sentence names no address and the project has none — the jig
+  // opens with the address field first, its reason and the cursor in it; nothing is sent.
+  await page.route(/\/requests$/, (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    return route.fulfill({ status: 409, json: { code: 'PROJECT_BUSY' } });
+  });
+  await page.route(/\/route$/, (route) =>
+    route.fulfill({
+      json: { target: 'jig', by: 'rules', jig: 'vide/site-model', jigName: '사이트 모델링' },
+    }),
+  );
   await page.goto(app.launchUrl);
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
+  await page.locator('#body').fill('지금 우리 프로젝트 주변 사이트 모델링 해줘');
+  await page.locator('#request').click();
+  const opened = page.locator('[data-jig-panel="vide/site-model"] .site-picker').first();
+  await opened.locator('.site-ask').waitFor();
+  assert.equal(
+    (await opened.locator('.site-ask').textContent()).trim(),
+    '대지 주소나 PNU를 넣어 주세요 — 프로젝트에 저장된 주소가 없습니다',
+  );
+  await page.waitForFunction(
+    () => document.activeElement?.getAttribute('aria-label') === '주소·지번·PNU',
+  );
+  assert.equal(fake.calls.length, 0, 'nothing looked up without an address');
+  assert.match(await page.locator('#route-card').textContent(), /대지 주소 입력 — jig 화면 맨 위/);
+  const askedFirst = await page.evaluate(() => {
+    const panel = document.querySelector('[data-jig-panel="vide/site-model"]');
+    const picker = panel.querySelector('.site-picker');
+    const rail = panel.querySelector('.kit-rail');
+    return !!(picker.compareDocumentPosition(rail) & Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+  assert.ok(askedFirst, 'the address card comes before the steps');
+  await page.unroute(/\/route$/);
+  // Close that tab: the rest works on an instance opened from the JIG list.
+  await page.locator('button[title^="이 탭 닫기"]').click();
+  await page.locator('[data-jig-panel="vide/site-model"]').waitFor({ state: 'detached' });
 
   // JIG → the official 사이트 모델링 card (J-01 shows once) → a new instance.
   await page.getByRole('button', { name: 'JIG', exact: true }).click();
@@ -40,7 +75,7 @@ try {
   assert.match(await card.textContent(), /공식/);
   await card.getByRole('button', { name: '새로 열기' }).click();
   await card.getByLabel('출력 레이어').fill('VIDE::대지');
-  await card.getByRole('button', { name: '열기', exact: true }).click();
+  await card.locator('.jig-new').getByRole('button', { name: '열기', exact: true }).click();
   const panel = dialog.locator('[data-jig-panel="vide/site-model"]');
   await panel.waitFor();
   const picker = panel.locator('.site-picker');
@@ -127,9 +162,14 @@ try {
   assert.ok(await picker.getByRole('button', { name: '다시 가져오기' }).isDisabled());
   await picker.getByRole('button', { name: '다시 켜기' }).click();
   await picker.getByLabel(/이 프로젝트에서 공공 자료 끄기/).waitFor();
-  assert.deepEqual(errors, []);
+  // The AI turn after the T-273 start is refused by the stub above (409); nothing else may fail.
+  assert.deepEqual(
+    errors.filter((e) => !/status of 409/.test(e)),
+    [],
+  );
   console.log(
     JSON.stringify({
+      askedForAddress: true,
       noticeFirst: true,
       question: true,
       unconfirmedThenConfirmed: true,

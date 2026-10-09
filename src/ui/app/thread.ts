@@ -18,7 +18,7 @@ import { WorkThread } from '../work-view.tsx';
 import { linkedRequestDraft, interventionTargetDraft } from '../linked-draft.ts';
 import { reviewsOf, openReview } from '../reviews.tsx';
 import { jigRouteText } from '../request-route.ts';
-import { skillChecklist, startSkill } from '../skill-start.ts';
+import { skillChecklist, skillTurnStatus, startSkill } from '../skill-start.ts';
 import {
   AgendaTurns,
   AGENDA_CHANGED,
@@ -653,6 +653,12 @@ export async function poll(
     }
     const m = draftState.state.messages.find((x) => x.id === id);
     if (m) m.request = request;
+    // The jig start's AI turn ended: the route row settles (SPEC-02.17 2, T-272).
+    const shown = workState.shownSkill;
+    if (shown?.aiRequest === id) {
+      const status = skillTurnStatus(request.state, shown.start);
+      if (status) renderSkillRow({ status });
+    }
     // Screen actions the AI asked for in this conversation turn (jig_open, ui_go).
     const turnConversation = (request.input as { conversationId?: unknown }).conversationId;
     if (typeof turnConversation === 'string')

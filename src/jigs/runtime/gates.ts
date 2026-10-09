@@ -261,13 +261,36 @@ const requiredInputKeys = (manifest: JigManifest, stepId: string) => {
   return keys;
 };
 
+/**
+ * The person-readable 'inputs-present' message (T-275, SPEC-07.18 inputs-present): each missing
+ * input by its declared title and where to put it in. The keys stay in the result's `failed` list
+ * only; an input without a title shows its key.
+ */
+export function missingInputsMessage(manifest: JigManifest, keys: readonly string[]) {
+  let roles = false;
+  const named = keys.map((key) => {
+    const [inputKey, roleKey] = key.split('.');
+    const input = manifest.inputs.find((i) => i.key === inputKey);
+    const role =
+      input?.kind === 'assembly' && roleKey
+        ? input.roles.find((r) => r.role === roleKey)
+        : undefined;
+    if (role) roles = true;
+    const title = role?.title ?? (roleKey ? undefined : input?.title);
+    return title ?? key;
+  });
+  return `필요한 입력이 없습니다: ${named.join(', ')}${
+    roles ? ' — 역할 카드에서 레이어를 고르거나 [입력 조립]을 여세요' : ''
+  }`;
+}
+
 const checks: Record<GateName, Check> = {
   'inputs-present': (ctx) => {
     const failed = requiredInputKeys(ctx.manifest, ctx.stepId).filter((key) => {
       const value = at(ctx.inputs, key);
       return value === undefined || value === null || (Array.isArray(value) && !value.length);
     });
-    return { failed, message: failed.length ? `필요한 입력이 없습니다: ${failed.join(', ')}` : '' };
+    return { failed, message: failed.length ? missingInputsMessage(ctx.manifest, failed) : '' };
   },
   'inputs-confirmed': (ctx) => {
     const failed = Object.entries(ctx.assembly ?? {})

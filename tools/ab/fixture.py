@@ -51,6 +51,14 @@ for i in range(3):
     box = Box(Plane.WorldXY, Interval(xs[i], xs[i + 1]), Interval(-150, 150), Interval(3100, 3600))
     doc.Objects.AddBrep(box.ToBrep(), attrs(beam, 'B%d' % (i + 1)))
 
+# One column for PLAN-51 R1-COLOR ("이 기둥 빨간색으로 바꿔줘" pins the S-COLUMN object): 500 x 500,
+# 1F to 2F, east of the grid (off every intersection, so R1's 12 grid columns are unaffected).
+column = layer('S-COLUMN', D.Color.FromArgb(90, 90, 90))
+doc.Objects.AddBrep(
+    Box(Plane.WorldXY, Interval(21750, 22250), Interval(5750, 6250), Interval(0, 3100)).ToBrep(),
+    attrs(column, 'C-PIN'),
+)
+
 # 2F slab: 18000 x 12000 x 200, top at 3600.
 doc.Objects.AddBrep(
     Box(Plane.WorldXY, Interval(0, 18000), Interval(0, 12000), Interval(3400, 3600)).ToBrep(),

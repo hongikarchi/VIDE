@@ -199,7 +199,17 @@ export interface SourceNow {
   needsRecompute: boolean;
   /** Its output moved after this instance last computed (the runtime's own comparison). */
   moved: boolean;
+  /** The runtime has a value to give (a work copy's output or a service's). */
+  ready?: boolean;
 }
+/**
+ * The limits source was read and has no work copy to give (null: no such input; no instance id
+ * and not ready: no '건축 가능 영역·매스' work copy). undefined = not read yet or unknown.
+ */
+export function limitsMissing(limits: SourceNow | null | undefined): boolean {
+  return limits === null || (limits !== undefined && !limits.instanceId && limits.ready === false);
+}
+
 export interface CurrentInputs {
   /** The project's classification store version now (undefined = not known). */
   rolesVersion?: number;

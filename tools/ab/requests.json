@@ -8,6 +8,7 @@
       "S-GRID": "7 axis lines: 4 along Y at x = 0, 6000, 12000, 18000 (names A..D) and 3 along X at y = 0, 6000, 12000 (names 1..3)",
       "S-BEAM": "3 beams on the 2F grid line y = 0, 300 wide x 500 deep, top at z = 3600",
       "S-SLAB": "1 slab 18000 x 12000 x 200, top at z = 3600 (2F)",
+      "S-COLUMN": "1 column C-PIN 500 x 500, z 0..3100, at x 21750..22250, y 5750..6250 (east of the grid; pinned by PLAN-51 R1-COLOR)",
       "LEVEL": "3 named points: '1F FL+0', '2F FL+3600', '3F FL+7200'",
       "A-RAIL-GUIDE": "1 open curve on the 2F slab edge (arc from (0,12000) through (9000,13500) to (18000,12000), z = 3600)"
     }

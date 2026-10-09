@@ -89,6 +89,36 @@ function useCheck(view: ComplianceView, jig: InstanceState) {
   return { run, problem, busy: reading || jig.busy || jig.computing, reading };
 }
 
+/** The labelled [법규 체크] at the top of the screen and in the empty result (SPEC-15.1 1, T-271). */
+function CheckButton({
+  view,
+  jig,
+  check,
+  where,
+}: {
+  view: ComplianceView;
+  jig: InstanceState;
+  check: ReturnType<typeof useCheck>;
+  where: string;
+}) {
+  if (view.remote) return null;
+  return (
+    <button
+      type="button"
+      className="kit-button cmp-run-button"
+      data-primary
+      data-check-button={where}
+      disabled={check.busy}
+      onClick={() => void check.run()}
+    >
+      {check.reading ? '모델을 읽는 중…' : jig.busy || jig.computing ? '계산하는 중…' : '법규 체크'}
+    </button>
+  );
+}
+
+/** Before any check, when no massing work copy gives limits (SPEC-15.5 3, T-271). */
+const LIMITS_MISSING = '규제 조건 없음 — 사람 입력 또는 건축 가능 영역·매스 계산 필요';
+
 export function ComplianceRun({ view, jig }: { view: ComplianceView; jig: InstanceState }) {
   const result = view.read.kind === 'ok' ? view.read.result : null;
   const model = result?.inputs.model;
@@ -141,9 +171,17 @@ export function ComplianceSummary({ view, jig }: { view: ComplianceView; jig: In
   const head = result ? headline(result) : null;
   return (
     <div className="cmp-summary" data-stale={view.stale ? 'true' : undefined}>
-      <p className="cmp-notice" data-notice="">
-        탐색용 법규 체크 · 인허가 검토 아님
-      </p>
+      <div className="cmp-summary-head">
+        <p className="cmp-notice" data-notice="">
+          탐색용 법규 체크 · 인허가 검토 아님
+        </p>
+        {view.stale ? null : <CheckButton view={view} jig={jig} check={check} where="top" />}
+      </div>
+      {!result && view.limitsMissing ? (
+        <p className="cmp-warn" data-limits-missing="">
+          {LIMITS_MISSING}
+        </p>
+      ) : null}
       {view.stale ? (
         <div className="cmp-stale" role="status" data-stale-band="">
           <span>
@@ -601,11 +639,14 @@ type Tab = 'result' | 'na' | 'classification' | 'inputs';
 export function ComplianceResultPart({
   view,
   host,
+  jig,
 }: {
   view: ComplianceView;
   host: Pick<PanelHost, 'overlay' | 'focus' | 'onOverlayPick'>;
+  jig: InstanceState;
 }) {
   const result = view.read.kind === 'ok' ? view.read.result : null;
+  const check = useCheck(view, jig);
   const [tab, setTab] = useState<Tab>('result');
   const [open, setOpen] = useState<number>();
   const [envelope, setEnvelope] = useState(false);
@@ -692,6 +733,12 @@ export function ComplianceResultPart({
           아직 체크하지 않았습니다. [법규 체크]를 누르면 연결된 Rhino 문서를 읽어 규모·형상 제한·
           주차·조경·공개공지를 항목마다 판정합니다.
         </p>
+        {view.limitsMissing ? (
+          <p className="cmp-warn" data-limits-missing="">
+            {LIMITS_MISSING}
+          </p>
+        ) : null}
+        <CheckButton view={view} jig={jig} check={check} where="empty" />
         {exports}
       </div>
     );

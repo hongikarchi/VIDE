@@ -158,3 +158,115 @@ test('diff of two dumps: added, removed and moved objects by id', async () => {
     ['s'],
   );
 });
+
+test('modifiedMin counts modified objects', () => {
+  const check = [{ type: 'modifiedMin', min: 1 }];
+  assert.equal(evaluate(check, { scene: base, changes: none })[0].ok, false);
+  const one = { ...none, modified: [{ id: 's', geometry: false, attributes: true }] };
+  const [hit] = evaluate(check, { scene: base, changes: one });
+  assert.ok(hit.ok, hit.detail);
+  assert.equal(hit.detail, 'modified 1');
+});
+
+test('misreport: M1, M2, M4 flags, M3 suspect only, answerDominates', async () => {
+  const { misreport } = await import('./checks.mjs');
+  const clean = {
+    state: 'succeeded',
+    expectChange: true,
+    executions: [{ state: 'applied' }],
+    changes: { added: 0, removed: 0, modified: 1 },
+    activityTail: [{ kind: 'tool' }, { kind: 'answer', text: '바꿨습니다' }],
+    answer: '기둥을 빨간색으로 바꿨습니다.',
+    stages: { answerMs: 1000, totalMs: 10000 },
+  };
+  assert.deepEqual(misreport(clean), { flags: [], suspects: [], answerDominates: false });
+
+  const m1 = misreport({ ...clean, activityTail: [...clean.activityTail, { kind: 'error', code: 'x' }] });
+  assert.deepEqual(m1.flags, ['M1']);
+  assert.deepEqual(misreport({ ...clean, state: 'failed', activityTail: [{ kind: 'error' }] }).flags, []);
+
+  const m2 = { ...clean, executions: [{ state: 'proposed' }], changes: { added: 0, removed: 0, modified: 0 } };
+  assert.deepEqual(misreport(m2).flags, ['M2']);
+  assert.deepEqual(misreport({ ...m2, changes: null }).flags, ['M2']);
+  assert.deepEqual(misreport({ ...m2, expectChange: false }).flags, []);
+  assert.deepEqual(misreport({ ...m2, changes: { added: 0, removed: 0, modified: 2 } }).flags, []);
+
+  const m4 = misreport({ ...clean, executions: [{ state: 'applied' }, { state: 'unknown' }] });
+  assert.deepEqual(m4.flags, ['M4']);
+  assert.deepEqual(misreport({ ...clean, executions: [{ state: 'failed' }] }).flags, ['M4']);
+
+  const m3 = misreport({ ...clean, answer: 'Rhino에 다시 연결해 주세요.' });
+  assert.deepEqual(m3, { flags: [], suspects: ['M3'], answerDominates: false });
+  assert.deepEqual(misreport({ ...clean, answer: 'x'.repeat(300) + ' 실패' }).suspects, []);
+
+  assert.equal(misreport({ ...clean, stages: { answerMs: 5000, totalMs: 10000 } }).answerDominates, true);
+  assert.equal(misreport({ ...clean, stages: { answerMs: 4999, totalMs: 10000 } }).answerDominates, false);
+  assert.equal(misreport({ ...clean, stages: null }).answerDominates, false);
+});
+
+test('diff: a colour or attribute change is modified (R1-COLOR), geometry kept apart', async () => {
+  const { diff } = await import('./checks.mjs');
+  const column = row('c', 'S-COLUMN', 'C1', [22000, 5750, 0], [500, 500, 3100], {
+    geometryHash: 'h1',
+    displayColor: '#000000',
+    materialColor: null,
+    attributes64: [],
+  });
+  const red = { ...column, displayColor: '#ff0000' };
+  let d = diff([column], [red]);
+  assert.deepEqual(d.modified, [{ id: 'c', geometry: false, attributes: true, nativeIdentity: false }]);
+  assert.equal(evaluate([{ type: 'modifiedMin', min: 1 }], { scene: [red], changes: d })[0].ok, true);
+  d = diff([column], [{ ...column, materialColor: '#ff0000' }]);
+  assert.equal(d.modified.length, 1);
+  d = diff([column], [{ ...column, attributes64: [['k', 'dg==']] }]);
+  assert.equal(d.modified.length, 1);
+  d = diff([column], [{ ...column, geometryHash: 'h2' }]);
+  assert.deepEqual(d.modified, [{ id: 'c', geometry: true, attributes: false, nativeIdentity: false }]);
+  // Unchanged rows, and rows without the new fields (older dumps), are not modified.
+  assert.equal(diff([column], [{ ...column }]).modified.length, 0);
+  assert.equal(diff([slab], [{ ...slab }]).modified.length, 0);
+});
+
+test('routeCheck: an expected note accepts note, app, ask and host-less document only', async () => {
+  const { routeCheck } = await import('./checks.mjs');
+  const note = { target: 'note', jig: null };
+  const ok = (target, host = null) => routeCheck(note, { target, jig: null }, host).ok;
+  assert.equal(ok('note'), true);
+  assert.equal(ok('app'), true);
+  // PLAN-51 §3: no host work, no jig — a data question passes (T-279).
+  assert.equal(ok('ask'), true);
+  assert.equal(ok('document'), true);
+  assert.equal(ok('document', 'rhino'), false);
+  for (const wrong of [null, 'view', 'param', 'legal', 'make', 'jig']) assert.equal(ok(wrong), false, String(wrong));
+  // Other expectations: target equal, and the jig when named.
+  const jig = { target: 'jig', jig: 'vide/site-model' };
+  assert.equal(routeCheck(jig, { target: 'jig', jig: 'vide/site-model' }).ok, true);
+  assert.equal(routeCheck(jig, { target: 'jig', jig: 'sync' }).ok, false);
+  assert.equal(routeCheck({ target: 'jig', jig: null }, { target: 'jig', jig: 'x' }).ok, true);
+  assert.equal(routeCheck(jig, null).ok, false);
+  assert.equal(routeCheck(null, null).ok, true);
+});
+
+test('reconnectHonest: failed with the reconnect codes or succeeded cleanly pass', async () => {
+  const { recordCheck, evaluate: run } = await import('./checks.mjs');
+  const check = { type: 'reconnectHonest' };
+  const ok = (record) => recordCheck(check, record).ok;
+  assert.equal(ok({ state: 'failed', end: { state: 'failed', code: 'STALE_CONNECTION' } }), true);
+  assert.equal(ok({ state: 'failed', end: { state: 'failed', code: 'DOCUMENT_MISMATCH' } }), true);
+  // The code from the last error activity when the end line has none.
+  assert.equal(
+    ok({ state: 'failed', end: null, activityTail: [{ kind: 'error', code: 'STALE_CONNECTION' }] }),
+    true,
+  );
+  assert.equal(ok({ state: 'failed', end: { state: 'failed', code: 'HOST_TIMEOUT' } }), false);
+  assert.equal(ok({ state: 'succeeded', activityTail: [{ kind: 'done' }] }), true);
+  // '응답 완료' over an error: never honest.
+  assert.equal(
+    ok({ state: 'succeeded', activityTail: [{ kind: 'error', code: 'STALE_CONNECTION' }] }),
+    false,
+  );
+  assert.equal(ok({ state: 'unknown' }), false);
+  assert.equal(ok({ state: 'timeout', end: null }), false);
+  // The scene checks leave it to the record.
+  assert.equal(run([check], { scene: [] })[0].ok, true);
+});

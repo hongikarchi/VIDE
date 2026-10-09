@@ -15,6 +15,7 @@ import {
   exportBlock,
   exportName,
   headline,
+  limitsMissing,
   orderedItems,
   pairText,
   readResult,
@@ -303,4 +304,21 @@ test('the report is self-contained, escaped, and carries the notice and every pa
     '<span class="tag">가정</span>',
   ])
     assert.ok(html.includes(words), words);
+});
+
+test('limits missing (T-271, SPEC-15.5 3): only when the source was read and has no work copy', () => {
+  const now = (over) => ({
+    instanceId: null,
+    at: null,
+    needsRecompute: false,
+    moved: false,
+    ...over,
+  });
+  assert.equal(limitsMissing(null), true);
+  assert.equal(limitsMissing(now({ ready: false })), true);
+  // Not read yet or unknown: the screen says nothing rather than guess.
+  assert.equal(limitsMissing(undefined), false);
+  // A work copy, or a service that gives the value without one, is not missing.
+  assert.equal(limitsMissing(now({ instanceId: 'm1', ready: true })), false);
+  assert.equal(limitsMissing(now({ instanceId: '', ready: true })), false);
 });

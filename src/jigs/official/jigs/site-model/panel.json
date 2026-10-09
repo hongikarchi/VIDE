@@ -2,11 +2,11 @@
   "layout": "jig-run",
   "left": [
     {
-      "part": "step-rail"
-    },
-    {
       "part": "site-picker",
       "input": "inputs.site"
+    },
+    {
+      "part": "step-rail"
     },
     {
       "part": "param-group"

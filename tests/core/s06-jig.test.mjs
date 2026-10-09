@@ -546,3 +546,14 @@ test('scale: a 60 × 40 m slab over 70 footings and three basin beams lays out i
   assert.ok(out.columns.count >= 20);
   assert.ok(out.axes.spans.every((s) => s.length <= 12 + 1e-9));
 });
+
+test('T-275: the inputs-present message names the declared role titles and where to put them in', async () => {
+  const { missingInputsMessage } = await import('../../src/jigs/runtime/gates.ts');
+  const { manifest } = await loadJig(JIG);
+  assert.equal(
+    missingInputsMessage(manifest, ['site.slab', 'site.existingFootings']),
+    '필요한 입력이 없습니다: 슬래브 경계, 기존 기초 — 역할 카드에서 레이어를 고르거나 [입력 조립]을 여세요',
+  );
+  // A key the manifest does not declare stays as it is, without the role hint.
+  assert.equal(missingInputsMessage(manifest, ['other']), '필요한 입력이 없습니다: other');
+});

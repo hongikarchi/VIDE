@@ -51,7 +51,7 @@ const css = output
 assert.ok(code, 'fixture bundle');
 
 /** The fake engine: one instance of `vide/compliance-check` and what its routes answer. */
-function engine() {
+function engine(initial = {}) {
   const state = {
     checked: false,
     runs: [],
@@ -65,6 +65,9 @@ function engine() {
     runFails: false,
     revision: 'rhino|doc-합성|7',
     putRoles: [],
+    rolesWithoutKey: 0,
+    noLimits: false,
+    ...initial,
   };
   const param = (key, title, type, value) => ({
     key,
@@ -199,12 +202,29 @@ function engine() {
       });
     }
     const out = /^\/projects\/p1\/jig-instances\/i1\/jig-outputs\/(\w+)$/.exec(path);
+    // No '건축 가능 영역·매스' work copy (T-271): the runtime answers with no current instance.
+    if (out && out[1] === 'limits' && state.noLimits)
+      return json({
+        ...source('limits', 'vide/buildable-mass', 'x', 'x'),
+        current: null,
+        ready: false,
+        reason: '앞 jig의 작업본이 없습니다',
+      });
     if (out)
       return json(
         out[1] === 'limits'
           ? source('limits', 'vide/buildable-mass', 'mass-1', '매스 A')
           : source('siteModel', 'vide/site-model', 'site-1', '대지 1'),
       );
+    // As the engine does (compliance-routes.ts): no document key is INVALID_INPUT.
+    if (
+      path === '/projects/p1/compliance/roles' &&
+      method === 'GET' &&
+      !url.searchParams.get('documentKey')
+    ) {
+      state.rolesWithoutKey++;
+      return json({ code: 'INVALID_INPUT', message: 'INVALID_INPUT' }, 400);
+    }
     if (path === '/projects/p1/compliance/roles' && method === 'GET')
       return json({
         records: [
@@ -319,7 +339,7 @@ async function open(browser, options = {}) {
   page.setDefaultTimeout(15000);
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (m) => m.type() === 'error' && errors.push('console: ' + m.text()));
-  const fake = engine();
+  const fake = engine(options.engine);
   await page.route(`${ORIGIN}/api/v1/**`, (route) => fake.answer(route));
   await page.route(`${ORIGIN}/fixture.mjs`, (route) =>
     route.fulfill({ contentType: 'text/javascript', body: code }),
@@ -331,10 +351,11 @@ async function open(browser, options = {}) {
     }),
   );
   await page.goto(`${ORIGIN}/`);
+  const { engine: _engine, ...mountOptions } = options;
   await page.evaluate(async (options) => {
     const { mount } = await import('/fixture.mjs');
     window.compliance = mount(options);
-  }, options);
+  }, mountOptions);
   const panel = page.locator('[data-jig-panel="vide/compliance-check"]');
   await panel.waitFor();
   return { page, panel, fake, errors };
@@ -374,10 +395,18 @@ try {
   // Both earlier results are named by the jig-source cards.
   await panel.locator('.jig-source', { hasText: '매스 A' }).waitFor();
   await panel.locator('.jig-source', { hasText: '대지 1' }).waitFor();
+  // T-271: a labelled [법규 체크] at the top and in the empty result, not only in the words.
+  await panel.locator('[data-check-button="top"]').waitFor();
+  await drawer.locator('[data-check-button="empty"]').waitFor();
+  assert.equal(await panel.locator('[data-check-button="top"]').textContent(), '법규 체크');
+  // Roles are never asked for without the document key (the 400 of R1-C).
+  assert.equal(fake.state.rolesWithoutKey, 0, 'no roles request without a document key');
+  assert.equal(await panel.locator('[data-limits-missing]').count(), 0, 'limits are there');
+  assert.equal(await panel.getByText('분류 기록을 읽지 못했습니다').count(), 0);
 
   // ── [법규 체크]: a read that fails stops with its reason, nothing runs ─────────────────────
   fake.state.readFails = true;
-  await panel.getByRole('button', { name: '법규 체크', exact: true }).click();
+  await panel.getByRole('button', { name: '법규 체크', exact: true }).first().click();
   await panel
     .locator('[data-check-failed]')
     .getByText('연결된 Rhino 문서가 없거나')
@@ -635,7 +664,12 @@ try {
 
   // ── A remote screen: views only (SPEC-15.16) ──────────────────────────────────────────────
   {
-    const { page, panel, errors, fake } = await open(browser, { remote: true });
+    // A remote screen never reads the document, so the classification is asked for with the kept
+    // result's document key (none before a check: the engine refuses roles without one, T-271).
+    const { page, panel, errors, fake } = await open(browser, {
+      remote: true,
+      engine: { checked: true },
+    });
     await panel.getByText('법규 체크는 작업 PC 화면에서 합니다.').waitFor();
     assert.equal(await panel.getByRole('button', { name: '법규 체크', exact: true }).count(), 0);
     assert.equal(await panel.getByRole('button', { name: '역할 제안 받기' }).count(), 0);
@@ -654,10 +688,25 @@ try {
     await page.close();
   }
 
+  // ── No '건축 가능 영역·매스' work copy (T-271, SPEC-15.5 3): said before any check ──────────
+  {
+    const { page, panel, errors, fake } = await open(browser, { engine: { noLimits: true } });
+    const missing = panel.locator('[data-limits-missing]');
+    await missing.first().waitFor();
+    assert.match(
+      await missing.first().textContent(),
+      /규제 조건 없음 — 사람 입력 또는 건축 가능 영역·매스 계산 필요/,
+    );
+    await panel.locator('[data-check-button="top"]').waitFor();
+    assert.equal(fake.state.rolesWithoutKey, 0);
+    assert.deepEqual(errors, []);
+    await page.close();
+  }
+
   // ── A narrow jig column (420 px and less): rows in two lines ─────────────────────────────
   {
     const { page, panel, errors } = await open(browser, { width: 400 });
-    await panel.getByRole('button', { name: '법규 체크', exact: true }).click();
+    await panel.getByRole('button', { name: '법규 체크', exact: true }).first().click();
     const narrow = panel.getByRole('table', { name: '법규 체크 결과' });
     await narrow.waitFor();
     const first = narrow.locator('tr.cmp-row').first();

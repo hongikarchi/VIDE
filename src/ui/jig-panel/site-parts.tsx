@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { api } from '../gateway.ts';
 import { Card } from '../question-card.tsx';
@@ -10,7 +10,8 @@ import { messageOf, type InstanceState } from './instance.ts';
 // card, here with a small map of the candidates) with [PNU 직접 입력], the chosen parcels (합필:
 // add by PNU) and [대상 필지 확정], [가져오기]/[다시 가져오기] with the changes of a new copy to take
 // or leave, and the SHP files put in for this instance. Values come from the engine routes
-// (`…/site-data/:key/*`); the steps recompute after each change.
+// (`…/site-data/:key/*`); the steps recompute after each change. With no address anywhere (SPEC-12.3의
+// 6 ③) the address field comes first with its reason and the cursor in it.
 
 const noticeSchema = z.object({
   notice: z.object({
@@ -173,6 +174,17 @@ export function SitePicker({
     jig.reports.confirmTarget?.status ??
     jig.view?.steps.find((s) => s.id === 'confirmTarget')?.status;
   const confirmed = confirmStatus === 'confirmed';
+  // ③ of SPEC-12.3의 6: no address in the request nor in the project — ask here, not in the chat.
+  const asking = !state.query && !targets.length;
+  const field = useRef<HTMLInputElement>(null);
+  const focused = useRef(false);
+  const waiting = busy || jig.busy;
+  useEffect(() => {
+    // Once, when the field can take the cursor (it is disabled while the steps compute).
+    if (!asking || waiting || focused.current || !field.current) return;
+    focused.current = true;
+    field.current.focus();
+  }, [asking, waiting]);
 
   const readNotice = useCallback(async () => {
     try {
@@ -304,13 +316,39 @@ export function SitePicker({
     });
   };
 
-  const disabled = busy || jig.busy;
+  const disabled = waiting;
   const points = (candidates?.candidates ?? []).flatMap((c) =>
     c.point ? [{ pnu: c.pnu, point: c.point as [number, number] }] : [],
   );
   return (
     <section className="kit-section site-picker" aria-label={title ?? '대상 필지'}>
       <h4>{title ?? '대상 필지'}</h4>
+      {asking ? (
+        <p className="kit-banner site-ask" role="note">
+          대지 주소나 PNU를 넣어 주세요 — 프로젝트에 저장된 주소가 없습니다
+        </p>
+      ) : null}
+      <form
+        className="site-search"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (query.trim()) void lookup();
+        }}
+      >
+        <input
+          ref={field}
+          type="text"
+          aria-label="주소·지번·PNU"
+          placeholder="주소·지번·PNU (예: ○○동 123-4)"
+          maxLength={200}
+          value={query}
+          disabled={disabled}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <button type="submit" className="kit-button" disabled={disabled || !query.trim()}>
+          찾기
+        </button>
+      </form>
       {notice && !notice.off && !notice.confirmed ? (
         <div className="kit-confirm site-notice" role="group" aria-label="공공 자료 전송 안내">
           <strong>공공 자료원에 보내기 전에 확인하세요</strong>
@@ -370,26 +408,6 @@ export function SitePicker({
         </label>
       ) : null}
 
-      <form
-        className="site-search"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (query.trim()) void lookup();
-        }}
-      >
-        <input
-          type="text"
-          aria-label="주소·지번·PNU"
-          placeholder="주소·지번·PNU (예: ○○동 123-4)"
-          maxLength={200}
-          value={query}
-          disabled={disabled}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        <button type="submit" className="kit-button" disabled={disabled || !query.trim()}>
-          찾기
-        </button>
-      </form>
       {candidates?.checks.length ? (
         <ul className="kit-issues">
           {candidates.checks.map((check) => (

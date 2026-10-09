@@ -1509,8 +1509,16 @@ function SyncJig({ context }: { context: JigContext }) {
           {busy ? '계산 중…' : '정렬·비교 실행'}
         </button>
       </div>
-      {!rhinoSources.length || !cadSources.length ? (
-        <small>Rhino 문서와 ZWCAD 도면을 각각 한 번 Sync하면 여기서 고를 수 있습니다.</small>
+      {/* One host linked (T-269): say which side is missing and where to link it. */}
+      {!cadSources.length ? (
+        <p role="status" className="sync-missing">
+          도면(CAD)이 연결되지 않았습니다 — 연결 파일에서 CAD를 연결하세요.
+        </p>
+      ) : null}
+      {!rhinoSources.length ? (
+        <p role="status" className="sync-missing">
+          모델(Rhino)이 연결되지 않았습니다 — 연결 파일에서 Rhino를 연결하세요.
+        </p>
       ) : null}
       {result ? (
         <div className="jig-layer-pickers">

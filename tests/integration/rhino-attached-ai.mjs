@@ -9,6 +9,7 @@ import { startServer } from '../../src/server/server.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { linkOpenDocument } from './link-helper.mjs';
 import { runDirectory } from './run-directory.mjs';
+import { connectScriptLines } from '../../tools/ab/rhino-connect.mjs';
 import { soleDb } from '../fixtures/store.mjs';
 const directory = runDirectory('rhino-attached-ai');
 await mkdir(directory, { recursive: true });
@@ -20,7 +21,7 @@ const connections = join(directory, 'rhino-connections');
 const script = join(directory, 'fixture.py');
 await writeFile(
   script,
-  `import Rhino, json, traceback
+  `import Rhino, System, json, traceback
 try:
     doc=Rhino.RhinoDoc.ActiveDoc
     assert doc.Objects.Count==0
@@ -28,7 +29,8 @@ try:
     attributes=Rhino.DocObjects.ObjectAttributes();attributes.Name='VIDE AI roundtrip';attributes.SetUserString('Role','Mass')
     native=doc.Objects.AddBox(Rhino.Geometry.Box(Rhino.Geometry.BoundingBox(0,0,0,2000,3000,4000)),attributes)
     Rhino.PlugIns.PlugIn.LoadPlugIn(${JSON.stringify(options.plugin.replaceAll('\\', '/'))})
-    assert Rhino.RhinoApp.RunScript('_VIDEConnect',False)
+    # _VIDEConnect opens the project-pick modal (T-277): attach by reflection instead.
+${connectScriptLines({ doc: 'doc' })}
     assert Rhino.RhinoApp.RunScript('_VIDEPanel',False)
     with open(${JSON.stringify(join(directory, 'ready.json').replaceAll('\\', '/'))},'w') as f:json.dump(dict(ok=True,nativeId=str(native)),f)
 except Exception as e:

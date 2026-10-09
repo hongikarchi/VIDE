@@ -14,6 +14,7 @@ import { SdkExecution } from '../../src/server/sdk-execution.ts';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { runDirectory } from './run-directory.mjs';
+import { connectScriptLines } from '../../tools/ab/rhino-connect.mjs';
 const directory = runDirectory('rhino-attached');
 await mkdir(directory, { recursive: true });
 const options = sdkOptions(directory),
@@ -70,7 +71,8 @@ try:
     native=doc.Objects.AddBox(Rhino.Geometry.Box(Rhino.Geometry.BoundingBox(0,0,0,2000,3000,4000)),a)
     before=doc.Modified
     loaded,pid=Rhino.PlugIns.PlugIn.LoadPlugIn(plugin)
-    assert Rhino.RhinoApp.RunScript('_VIDEConnect',False)
+    # _VIDEConnect opens the project-pick modal (T-277): attach by reflection instead.
+${connectScriptLines({ doc: 'doc' })}
     assert doc.Modified==before and doc.ModelUnitSystem==Rhino.UnitSystem.Millimeters
     assert doc.Objects.FindId(native).Attributes.GetUserString('vide-id') is None
     Rhino.RhinoApp.Idle+=idle

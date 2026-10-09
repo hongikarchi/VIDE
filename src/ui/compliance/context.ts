@@ -10,7 +10,13 @@ import { api } from '../gateway.ts';
 import { remoteSession } from '../remote-panel.ts';
 import { resolve, type PanelData } from '../jig-panel/bindings.ts';
 import { messageOf, type InstanceState, type StepReport } from '../jig-panel/instance.ts';
-import { readResult, staleReasons, type ResultRead, type SourceNow } from './model.ts';
+import {
+  limitsMissing,
+  readResult,
+  staleReasons,
+  type ResultRead,
+  type SourceNow,
+} from './model.ts';
 
 // What the 법규 체크 parts share (SPEC-15.13, Design SCR-32): the result of the `check` step, the
 // earlier results the instance reads now (`…/jig-outputs/:key`, as the `jig-source` cards read
@@ -114,6 +120,7 @@ const nowOf = (state: SourceState): SourceNow => ({
   at: state.current?.at ?? null,
   needsRecompute: !!state.current && state.current.status !== 'done',
   moved: state.stale,
+  ready: state.ready,
 });
 
 class Store {
@@ -182,8 +189,16 @@ class Store {
     this.readOnce = reading.catch(() => undefined);
     return reading;
   }
-  /** Read the sources and the classification again (queued behind a read in flight). */
+  private latest?: {
+    inputs: readonly { key: string; kind: string; from?: unknown }[];
+    documentKey?: string;
+  };
+  /**
+   * Read the sources and the classification again (queued behind a read in flight). The queued
+   * read uses the latest arguments: the document key often arrives while the first read is out.
+   */
   refresh(inputs: readonly { key: string; kind: string; from?: unknown }[], documentKey?: string) {
+    this.latest = { inputs, documentKey };
     if (this.reading) {
       this.again = true;
       return this.reading;
@@ -192,7 +207,8 @@ class Store {
       try {
         do {
           this.again = false;
-          await this.read(inputs, documentKey);
+          const { inputs: now, documentKey: key } = this.latest!;
+          await this.read(now, key);
         } while (this.again);
       } finally {
         this.reading = undefined;
@@ -230,8 +246,15 @@ class Store {
           }
         }),
     );
+    // No document key yet (the first read is still on its way — a chat-opened workbook gets here
+    // before it): the records are asked for once the read names the document (SPEC-15.1 2, T-271).
+    if (!documentKey) {
+      next.rolesError = undefined;
+      this.set(next);
+      return;
+    }
     try {
-      const query = documentKey ? `?documentKey=${encodeURIComponent(documentKey)}` : '';
+      const query = `?documentKey=${encodeURIComponent(documentKey)}`;
       const roles = rolesSchema.parse(await api(`${base}/compliance/roles${query}`));
       next.roles = roles;
       next.rolesError = undefined;
@@ -265,6 +288,8 @@ export interface ComplianceView {
   reasons: string[];
   /** The massing work copy must be computed again first (the check would only say 사람 입력 필요). */
   limitsNeedRecompute: boolean;
+  /** No '건축 가능 영역·매스' work copy to read limits from (SPEC-15.5 3): the check would say 사람 입력 필요. */
+  limitsMissing: boolean;
   roles?: RolesState;
   rolesError?: string;
   remote: boolean;
@@ -360,6 +385,7 @@ export function useCompliance({
     stale: reasons.length > 0,
     reasons,
     limitsNeedRecompute: !!shared.limits?.needsRecompute,
+    limitsMissing: limitsMissing(shared.limits),
     roles: shared.roles,
     rolesError: shared.rolesError,
     remote: isRemote,

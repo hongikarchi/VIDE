@@ -314,3 +314,94 @@ test('the open jig instance settings become routing context; the query carries t
   assert.equal(goesToAi({ target: 'document', reason: '' }), true);
   assert.equal(goesToAi({ target: 'ask', reason: '' }), true);
 });
+
+// ── T-269: the reconcile phrasing opens the Sync jig; Sync questions stay with the AI. ──
+test('model and drawing reconcile words open the Sync jig; Sync questions do not', async () => {
+  const { decisiveRoute, officialRouteJigs } = await import('../../src/ui/request-route.ts');
+  const jigs = { jigs: officialRouteJigs() };
+  for (const body of [
+    '모델링이랑 도면 맞춰줘',
+    '도면이랑 모델 맞춰 줘',
+    'CAD를 모델에 맞추고 싶어',
+    '정합 맞춰줘',
+    '모델 도면 맞춰 보여줘',
+  ]) {
+    const route = decisiveRoute(body, jigs);
+    assert.deepEqual([route?.target, route?.jig?.id], ['jig', 'sync'], body);
+  }
+  for (const body of ['sync 됐어?', '모델이랑 도면 맞춰졌어?', '모델 도면 맞춰진 거 알려줘'])
+    assert.equal(decisiveRoute(body, jigs), undefined, body);
+  // File words keep their precedence.
+  assert.equal(decisiveRoute('도면에서 모델 맞춰줘', jigs)?.target, 'document');
+  // A view word other than fit is a screen request, not the jig.
+  assert.notEqual(routeRequest('모델 도면 맞춰서 보만 남기고 숨겨', [], [], jigs).target, 'jig');
+});
+
+// ── T-270: building words find their layers; an empty view offers layers to pick. ──
+test('building words find layers by synonyms per path segment', async () => {
+  const { memberLayers, layerChoices } = await import('../../src/ui/request-route.ts');
+  const layers = ['3D::S-Beam', '3D::S-Slab', 'S-COLUMN', '구조::작은보', '보도', 'A-COLOR'];
+  assert.deepEqual(memberLayers('보만 남기고 다 숨겨줘', layers), ['3D::S-Beam', '구조::작은보']);
+  assert.deepEqual(memberLayers('기둥 숨겨줘', layers), ['S-COLUMN']);
+  assert.deepEqual(memberLayers('슬래브만 보여줘', layers), ['3D::S-Slab']);
+  assert.deepEqual(memberLayers('보여줘', layers), []);
+  const objects = layers.map((layer, i) => ({ id: 'o' + i, type: 'Brep', layer }));
+  const hide = routeRequest('보만 남기고 다 숨겨줘', objects);
+  assert.deepEqual(hide.view, {
+    action: 'isolate',
+    ids: ['o0', 'o3'],
+    subject: '레이어 3D::S-Beam 외 1개',
+  });
+  // Nothing found: layers holding a word of the request, else the top-level layers.
+  const none = routeRequest('창만 남기고 다 숨겨줘', objects);
+  assert.deepEqual(none.view?.ids, []);
+  assert.deepEqual(
+    layerChoices('창만 남기고 다 숨겨줘', objects).map((choice) => choice.layer),
+    ['3D', 'S-COLUMN', '구조', '보도', 'A-COLOR'],
+  );
+  assert.deepEqual(layerChoices('3D만 남겨', objects), [
+    { layer: '3D::S-Beam', ids: ['o0'] },
+    { layer: '3D::S-Slab', ids: ['o1'] },
+  ]);
+  assert.deepEqual(
+    layerChoices('S-Slab 숨겨', objects).map((choice) => choice.layer),
+    ['3D::S-Slab'],
+  );
+});
+
+// ── T-270 review: '보' only as a word ("보이게"·"보는"·"보도" are not it), layers by whole parts. ──
+test('member words skip 보이게/보는/보도 and layers like 도면정보/옹벽', async () => {
+  const { memberLayers } = await import('../../src/ui/request-route.ts');
+  const layers = ['S-COLUMN', 'S-BEAM', '도면정보', '옹벽', '구조::큰보', 'S-보', '벽체', 'A-WALL'];
+  assert.deepEqual(memberLayers('기둥만 보이게 해줘', layers), ['S-COLUMN']);
+  assert.deepEqual(memberLayers('벽만 보이게 해줘', layers), ['벽체', 'A-WALL']);
+  assert.deepEqual(memberLayers('보도 숨겨줘', layers), []);
+  assert.deepEqual(memberLayers('보는 방향 기둥 숨겨', layers), ['S-COLUMN']);
+  assert.deepEqual(memberLayers('기둥만 보여줘', layers), ['S-COLUMN']);
+  assert.deepEqual(memberLayers('보만 남기고 다 숨겨줘', layers), ['S-BEAM', '구조::큰보', 'S-보']);
+  assert.deepEqual(memberLayers('보랑 기둥 숨겨', layers), [
+    'S-COLUMN',
+    'S-BEAM',
+    '구조::큰보',
+    'S-보',
+  ]);
+  const objects = layers.map((layer, i) => ({ id: 'o' + i, type: 'Brep', layer }));
+  assert.deepEqual(routeRequest('기둥만 보이게 해줘', objects).view?.ids, ['o0']);
+});
+
+// ── T-269 review: reconcile words with an edit verb or a zoom word are not the Sync jig. ──
+test('reconcile words with edit verbs or zoom words do not open the Sync jig', async () => {
+  const { decisiveRoute, officialRouteJigs } = await import('../../src/ui/request-route.ts');
+  const jigs = { jigs: officialRouteJigs() };
+  for (const body of [
+    '모델이랑 도면 맞춰서 확대해줘',
+    '모델 도면 맞춰 줌해줘',
+    '모델을 도면 높이에 맞춰 옮겨줘',
+    '도면에 맞춰 모델 색 바꿔줘',
+    '도면 기준으로 모델 기둥 위치 맞춰줘',
+  ]) {
+    assert.notEqual(decisiveRoute(body, jigs)?.jig?.id, 'sync', body);
+    assert.notEqual(routeRequest(body, [], [], jigs).jig?.id, 'sync', body);
+  }
+  assert.equal(decisiveRoute('모델링이랑 도면 맞춰줘', jigs)?.jig?.id, 'sync');
+});

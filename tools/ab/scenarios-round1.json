@@ -1,0 +1,153 @@
+{
+  "version": 1,
+  "note": "PLAN-51 §3 round-1 scenarios; bodies are the user's own sentences, verbatim. route-only rows ask /route only (no conversation, no request). Expected route 'note' accepts note, app, ask, or document when the scenario has no host (§3: no host work, no jig); no decision, view, param, legal, make or a jig is a mismatch — see routeCheck in checks.mjs. R1-RECONNECT is judged by the reconnectHonest record check (recordCheck in checks.mjs).",
+  "scenarios": [
+    {
+      "id": "R1-D",
+      "title": "구조 검토 진입",
+      "body": "구조 검토하고 싶은데 파악해줘",
+      "kind": "route-only",
+      "host": null,
+      "expect": {
+        "route": {
+          "target": "jig",
+          "jig": null
+        },
+        "change": false
+      },
+      "note": "Which structure jig should open is not decided (S-06 and J-09 both claim it, PLAN-51 §3): the record's route.jig shows which one opened.",
+      "expectedFail": false,
+      "repeat": 1,
+      "alertMs": 10000
+    },
+    {
+      "id": "R1-A",
+      "title": "모델링·도면 맞추기",
+      "body": "모델링이랑 도면 맞춰줘",
+      "kind": "route-only",
+      "host": null,
+      "expect": {
+        "route": {
+          "target": "jig",
+          "jig": "sync"
+        },
+        "change": false
+      },
+      "note": "T-269: the reconcile phrasing opens the Sync jig by rule (SPEC-02.17 1). A general AI document edit is P0.",
+      "expectedFail": false,
+      "repeat": 3,
+      "alertMs": 10000
+    },
+    {
+      "id": "R1-C",
+      "title": "법규 위반 확인",
+      "body": "법규검토하고, 지금 우리 건물 설계에서 법규 위반 사항 없는지 확인해줘",
+      "kind": "route-only",
+      "host": null,
+      "expect": {
+        "route": {
+          "target": "jig",
+          "jig": "vide/compliance-check"
+        },
+        "change": false
+      },
+      "expectedFail": false,
+      "repeat": 1,
+      "alertMs": 10000
+    },
+    {
+      "id": "R1-B",
+      "title": "주변 사이트 모델링",
+      "body": "지금 우리 프로젝트 주변 사이트 모델링 해줘",
+      "kind": "route-only",
+      "host": null,
+      "expect": {
+        "route": {
+          "target": "jig",
+          "jig": "vide/site-model"
+        },
+        "change": false
+      },
+      "expectedFail": false,
+      "repeat": 1,
+      "alertMs": 10000
+    },
+    {
+      "id": "R1-NOTE",
+      "title": "회의 요약",
+      "body": "오늘 회의 내용 요약해줘",
+      "kind": "route-only",
+      "host": null,
+      "expect": {
+        "route": {
+          "target": "note",
+          "jig": null
+        },
+        "change": false
+      },
+      "expectedFail": false,
+      "repeat": 1,
+      "alertMs": 10000,
+      "note": "PLAN-51 §3: not host work and no jig. 'ask' (자료 질문) passes since T-279."
+    },
+    {
+      "id": "R1-COLOR",
+      "title": "기둥 색 변경",
+      "body": "이 기둥 빨간색으로 바꿔줘",
+      "kind": "request",
+      "host": "rhino",
+      "pin": {
+        "layer": "S-COLUMN",
+        "role": "target"
+      },
+      "note": "Runs on a synthetic Rhino document linked and synced in the run's project. The pin is required: 이 기둥 must refer to the S-COLUMN object (fixture.py builds C-PIN). When the base Sync has no object on S-COLUMN the request is not sent, the record notes pinMissing and the attempt is untested.",
+      "expect": {
+        "route": null,
+        "change": true
+      },
+      "expectedFail": false,
+      "repeat": 3,
+      "alertMs": 30000,
+      "checks": [
+        {
+          "type": "added",
+          "min": 0,
+          "max": 0
+        },
+        {
+          "type": "removedMax",
+          "max": 0
+        },
+        {
+          "type": "modifiedMin",
+          "min": 1
+        }
+      ]
+    },
+    {
+      "id": "R1-RECONNECT",
+      "title": "문서를 다시 연 뒤 요청",
+      "body": "이 기둥 빨간색으로 바꿔줘",
+      "kind": "request",
+      "host": "rhino",
+      "pin": {
+        "layer": "S-COLUMN",
+        "role": "target"
+      },
+      "note": "Before the attempt the linked Rhino document is reopened (tools/ab/host-session.mjs action 'reopen'). Pass: the request ends failed with STALE_CONNECTION or DOCUMENT_MISMATCH, or succeeds on the re-linked document; 'succeeded' with an error as the last activity fails (T-279).",
+      "expect": {
+        "route": null,
+        "change": true,
+        "reconnect": true
+      },
+      "expectedFail": false,
+      "repeat": 1,
+      "alertMs": 30000,
+      "checks": [
+        {
+          "type": "reconnectHonest"
+        }
+      ]
+    }
+  ]
+}
