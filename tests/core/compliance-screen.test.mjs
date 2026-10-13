@@ -17,7 +17,10 @@ import {
   headline,
   limitsMissing,
   orderedItems,
+  LINK_CHOICE,
+  LINK_CLOSED,
   pairText,
+  readFailureText,
   readResult,
   reportHtml,
   resultCsv,
@@ -321,4 +324,26 @@ test('limits missing (T-271, SPEC-15.5 3): only when the source was read and has
   // A work copy, or a service that gives the value without one, is not missing.
   assert.equal(limitsMissing(now({ instanceId: 'm1', ready: true })), false);
   assert.equal(limitsMissing(now({ instanceId: '', ready: true })), false);
+});
+
+// PLAN-51 T-282: a model read refused by the engine says why and what to do, never '내부 오류'.
+test('a read with no open Rhino document names the next action (SPEC-15.1 2)', () => {
+  for (const code of ['HOST_UNAVAILABLE', 'STALE_CONNECTION']) {
+    const text = readFailureText(Object.assign(new Error('x'), { code }));
+    assert.equal(text, LINK_CLOSED, code);
+    assert.ok(text.includes('Rhino에서 문서를 열고 연결(Link)한 뒤 다시 누르세요'));
+    assert.doesNotMatch(text, /내부 오류|서버 오류/);
+  }
+  // Anything else keeps its own text.
+  assert.equal(
+    readFailureText(Object.assign(new Error('x'), { code: 'INTERNAL_ERROR' })),
+    undefined,
+  );
+  assert.equal(readFailureText(new Error('x')), undefined);
+});
+
+test('several open Rhino links ask for a pick at the top (SPEC-15.1 2)', () => {
+  const text = readFailureText(Object.assign(new Error('x'), { code: 'LINK_CHOICE_REQUIRED' }));
+  assert.equal(text, LINK_CHOICE);
+  assert.match(text, /맨 위에서 읽을 문서를 고르세요/);
 });

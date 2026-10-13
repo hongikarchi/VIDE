@@ -78,6 +78,18 @@
   justify-content: space-between;
   gap: var(--s3);
 }
+/* Which Rhino document the read uses when several are open (SPEC-15.1 2, T-282). */
+.cmp-link-pick {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: var(--fs-eyebrow);
+  color: var(--muted);
+}
+.cmp-link-pick select {
+  min-width: 0;
+  max-width: 100%;
+}
 .cmp-summary-head .cmp-run-button,
 .cmp-drawer .cmp-run-button {
   width: auto;

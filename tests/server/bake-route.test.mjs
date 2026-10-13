@@ -5,14 +5,14 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
-import { Store } from '../../src/core/store.ts';
+import { DomainError, Store } from '../../src/core/store.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 import { JigStore } from '../../src/core/jig-store.ts';
 import { DocumentLinks } from '../../src/core/document-links.ts';
 import { Execution } from '../../src/server/execution.ts';
 import { documentHolder } from '../../src/contracts/request-scope.ts';
 import { SdkExecution } from '../../src/server/sdk-execution.ts';
-import { closeJigRuntime, jigRoutes } from '../../src/server/jig-routes.ts';
+import { closeJigRuntime, jigRoutes, jigStatuses } from '../../src/server/jig-routes.ts';
 import { importPack, packJig } from '../../src/jigs/runtime/pack.ts';
 import { decodeDataBlock } from '../../src/jigs/bake/data-block.ts';
 import { bakeJobOf, pendingBakeJobs } from '../../src/jigs/bake/bake.ts';
@@ -1188,4 +1188,17 @@ test('bake (direct): a failed read after the run keeps the objects and the recei
   const retry = await f.call('POST', `${base}/${iid}/bakes/${record.id}/baseline`);
   assert.equal(retry.status, 200, JSON.stringify(retry.data));
   assert.equal(retry.data.recorded, columns.length);
+});
+
+test('a jig read of a closed Link answers the host code as a classified 409, not a 500 (T-282)', async (t) => {
+  const f = fixture(t);
+  const { base, iid, link } = await ready(f);
+  for (const code of ['HOST_UNAVAILABLE', 'STALE_CONNECTION']) {
+    f.failNextRead(Object.assign(new Error(code), { code }));
+    await assert.rejects(
+      f.call('POST', `${base}/${iid}/reads`, { linkId: link.id, layers: [], purpose: 'assembly' }),
+      (error) => error instanceof DomainError && error.code === code,
+    );
+  }
+  assert.equal(jigStatuses.HOST_UNAVAILABLE, 409);
 });

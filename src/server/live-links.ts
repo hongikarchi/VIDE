@@ -8,6 +8,7 @@
 import {
   isFileLink,
   matchOpenDocuments,
+  windowKey,
   type MatchHow,
   type DocumentLink,
   type DocumentLinks,
@@ -34,22 +35,79 @@ export type LinkMatches<D extends OpenDocument = OpenDocument> = Map<
 /**
  * The links list's matcher. `prefer` (a host turn's target) only breaks a tie the matcher leaves:
  * a row whose own window is gone, reconnected by path while that file is open in two windows,
- * goes to the target window (otherwise the first one listed).
+ * goes to the target window (otherwise the first one listed). `claimed`: the windows other
+ * projects' rows hold (`matchProjects`, T-284), taken here only by their own row.
  */
 export function matchLinks<D extends OpenDocument>(
   links: DocumentLink[],
   open: readonly D[],
   prefer?: { host: string } & OpenTarget,
+  claimed?: ReadonlySet<string>,
 ): LinkMatches<D> {
   const preferred = (item: D) =>
     !!prefer &&
     (item.host ?? 'rhino') === prefer.host &&
     item.instance === prefer.instance &&
     item.id === prefer.documentId;
-  return matchOpenDocuments(links, [
-    ...open.filter(preferred),
-    ...open.filter((item) => !preferred(item)),
-  ]);
+  return matchOpenDocuments(
+    links,
+    [...open.filter(preferred), ...open.filter((item) => !preferred(item))],
+    claimed,
+  );
+}
+/** One project's link rows, for matching open windows across projects. */
+export interface ProjectRows {
+  id: string;
+  rows: DocumentLink[];
+}
+/**
+ * Every project's matcher at once (SPEC-01.11 1, T-284): one open window is a live row of one
+ * project. A window a project's row holds as its own (same window) is taken only by that row. A
+ * window that several projects reach only by a stored id or path (a document carrying several
+ * projects' link ids, reopened without a Link) goes to the row most recently tied to a document
+ * (`updatedAt`, then `linkedAt`, then id); the other projects' rows read as closed.
+ */
+export function matchProjects<D extends OpenDocument>(
+  projects: readonly ProjectRows[],
+  open: readonly D[],
+  prefer?: { host: string } & OpenTarget,
+): Map<string, LinkMatches<D>> {
+  const holders = new Map<string, Set<string>>();
+  for (const project of projects)
+    for (const row of project.rows) {
+      if (isFileLink(row)) continue;
+      const key = windowKey(row.host, row.instance, row.documentId);
+      holders.set(key, (holders.get(key) ?? new Set()).add(project.id));
+    }
+  const result = new Map<string, LinkMatches<D>>();
+  const contenders = new Map<D, { projectId: string; row: DocumentLink }[]>();
+  for (const project of projects) {
+    const claimed = new Set(
+      [...holders].filter(([, ids]) => [...ids].some((id) => id !== project.id)).map(([k]) => k),
+    );
+    const matched = matchLinks(project.rows, open, prefer, claimed);
+    result.set(project.id, matched);
+    for (const [rowId, entry] of matched) {
+      if (entry.session) continue;
+      const row = project.rows.find((item) => item.id === rowId)!;
+      contenders.set(entry.document, [
+        ...(contenders.get(entry.document) ?? []),
+        { projectId: project.id, row },
+      ]);
+    }
+  }
+  for (const entries of contenders.values()) {
+    if (new Set(entries.map((entry) => entry.projectId)).size < 2) continue;
+    const winner = [...entries].sort(
+      (a, b) =>
+        b.row.updatedAt.localeCompare(a.row.updatedAt) ||
+        b.row.linkedAt.localeCompare(a.row.linkedAt) ||
+        b.row.id.localeCompare(a.row.id),
+    )[0];
+    for (const entry of entries)
+      if (entry !== winner) result.get(entry.projectId)!.delete(entry.row.id);
+  }
+  return result;
 }
 /**
  * Matches the open documents to the project's link rows and lets each matched row follow its
@@ -72,7 +130,19 @@ export async function followOpenDocuments<D extends OpenDocument>(
       (await isOwnedOpen(link).catch(() => false))
     )
       ownedOpen.add(link.id);
-  const matched = matchLinks(links.list(projectId), open, prefer);
+  // A window another project holds, or one another project reaches by a more recent link, is not
+  // this project's to take or follow (SPEC-01.11 1, T-284).
+  const others = new Map<string, DocumentLink[]>();
+  for (const row of links.rowsElsewhere(projectId))
+    others.set(row.projectId, [...(others.get(row.projectId) ?? []), row]);
+  const matched = matchProjects(
+    [
+      { id: projectId, rows: links.list(projectId) },
+      ...[...others].map(([id, rows]) => ({ id, rows })),
+    ],
+    open,
+    prefer,
+  ).get(projectId)!;
   for (const [id, { document, session, how }] of matched)
     if (session || !ownedOpen.has(id)) links.follow(projectId, id, document, how);
   return { rows: links.list(projectId), matched, ownedOpen };

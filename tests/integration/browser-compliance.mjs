@@ -62,6 +62,13 @@ function engine(initial = {}) {
     proposed: 0,
     reads: 0,
     readFails: false,
+    // T-282: two open Rhino links and no pick yet → LINK_CHOICE_REQUIRED; `picked` = the read's linkId.
+    twoLinks: false,
+    picked: null,
+    // T-282: the engine answers HOST_UNAVAILABLE (no open Rhino document).
+    hostClosed: false,
+    // T-282 (wave 2): two open links, the read uses the remembered one without asking.
+    rememberedTwo: false,
     runFails: false,
     revision: 'rhino|doc-합성|7',
     putRoles: [],
@@ -243,13 +250,55 @@ function engine(initial = {}) {
         version: state.rolesVersion,
         proposals: [proposal()],
       });
+    if (path === '/projects/p1/compliance/links' && method === 'GET' && state.rememberedTwo)
+      return json({
+        links: [
+          { id: 'l-r2a', documentName: 'r2-작업.3dm', open: true },
+          { id: 'l-r2b', documentName: 'r2-비교.3dm', open: true },
+        ],
+        chosen: state.picked ?? 'l-r2a',
+      });
+    // One open Rhino link: no picker.
+    if (path === '/projects/p1/compliance/links' && method === 'GET' && !state.twoLinks)
+      return json({ links: [{ id: LINK, documentName: '합성.3dm', open: true }], chosen: LINK });
+    if (path === '/projects/p1/compliance/links' && method === 'GET')
+      return json({
+        links: [
+          { id: 'l-r1', documentName: 'R1 닫힌 문서.3dm', open: false },
+          { id: 'l-r2a', documentName: 'r2-작업.3dm', open: true },
+          { id: 'l-r2b', documentName: 'r2-비교.3dm', open: true },
+        ],
+        chosen: state.picked,
+      });
     if (path === '/projects/p1/compliance/read' && method === 'POST') {
       state.reads++;
+      if (state.hostClosed)
+        return json(
+          {
+            code: 'HOST_UNAVAILABLE',
+            reason: '연결된 Rhino 문서가 열려 있지 않습니다',
+            links: [{ id: 'l-r1', documentName: 'R1 닫힌 문서.3dm', open: false }],
+          },
+          409,
+        );
+      if (state.twoLinks && !body?.linkId)
+        return json(
+          {
+            code: 'LINK_CHOICE_REQUIRED',
+            reason: '열린 Rhino 연결이 여럿입니다',
+            links: [
+              { id: 'l-r2a', documentName: 'r2-작업.3dm', open: true },
+              { id: 'l-r2b', documentName: 'r2-비교.3dm', open: true },
+            ],
+          },
+          409,
+        );
+      if (body?.linkId) state.picked = body.linkId;
       if (state.readFails)
         return json({ code: 'HOST_NOT_CONNECTED', message: 'HOST_NOT_CONNECTED' }, 409);
       return json({
         readId: `r${state.reads}`,
-        linkId: LINK,
+        linkId: state.rememberedTwo || state.twoLinks ? (body?.linkId ?? 'l-r2a') : LINK,
         documentKey: 'doc-합성',
         revisionKey: state.revision,
         readAt: '2026-10-08T09:30:00.000Z',
@@ -417,6 +466,47 @@ try {
     'no check without a read',
   );
   fake.state.readFails = false;
+  // ── T-282: no open Rhino document / two open links → reason and picker, never '내부 오류' ──
+  fake.state.hostClosed = true;
+  await panel.locator('[data-check-button="top"]').click();
+  await panel
+    .locator('[data-check-failed]')
+    .getByText('Rhino에서 문서를 열고 연결(Link)한 뒤 다시 누르세요', { exact: false })
+    .first()
+    .waitFor();
+  fake.state.hostClosed = false;
+  fake.state.twoLinks = true;
+  await panel
+    .getByRole('button', { name: /법규 체크/ })
+    .first()
+    .click();
+  await panel
+    .locator('[data-check-failed]')
+    .getByText('맨 위에서 읽을 문서를 고르세요', { exact: false })
+    .first()
+    .waitFor();
+  const picker = panel.locator('[data-link-pick] select');
+  await picker.waitFor();
+  assert.deepEqual(
+    await picker.locator('option:not([disabled])').allTextContents(),
+    ['r2-작업.3dm', 'r2-비교.3dm'],
+    'only the open links are offered',
+  );
+  assert.equal(await panel.getByText(/내부 오류|서버 오류/).count(), 0, 'no internal error');
+  assert.ok(
+    fake.state.runs.every((r) => r.mode !== 'confirmed'),
+    'no check without a read',
+  );
+  const readsBefore = fake.state.reads;
+  await picker.selectOption('l-r2b');
+  for (
+    let i = 0;
+    i < 100 && !(fake.state.picked === 'l-r2b' && fake.state.reads > readsBefore);
+    i++
+  )
+    await page.waitForTimeout(50);
+  assert.equal(fake.state.picked, 'l-r2b', 'the pick reads the chosen document');
+  assert.equal(await picker.inputValue(), 'l-r2b');
   // ── [법규 체크] ───────────────────────────────────────────────────────────────────────
   await panel
     .getByRole('button', { name: /법규 체크/ })
@@ -699,6 +789,29 @@ try {
     );
     await panel.locator('[data-check-button="top"]').waitFor();
     assert.equal(fake.state.rolesWithoutKey, 0);
+    assert.deepEqual(errors, []);
+    await page.close();
+  }
+
+  // ── T-282 wave 2: the remembered link is read while another is open — the picker names it ──
+  {
+    const { page, panel, errors, fake } = await open(browser, { engine: { rememberedTwo: true } });
+    await panel.locator('[data-check-button="top"]').click();
+    const picker = panel.locator('[data-link-pick="read"]');
+    await picker.waitFor();
+    assert.match(await picker.textContent(), /읽은 Rhino 문서/);
+    assert.equal(await picker.locator('select').inputValue(), 'l-r2a');
+    const readsBefore = fake.state.reads;
+    await picker.locator('select').selectOption('l-r2b');
+    for (
+      let i = 0;
+      i < 100 && !(fake.state.picked === 'l-r2b' && fake.state.reads > readsBefore);
+      i++
+    )
+      await page.waitForTimeout(50);
+    assert.equal(fake.state.picked, 'l-r2b', 'the other open document can be picked');
+    await panel.locator('[data-link-pick="read"] select').waitFor();
+    assert.equal(await panel.locator('[data-link-pick] select').inputValue(), 'l-r2b');
     assert.deepEqual(errors, []);
     await page.close();
   }

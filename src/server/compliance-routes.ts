@@ -5,7 +5,9 @@
 //
 //   GET  /api/v1/projects/:id/compliance/roles?documentKey=      → {records, version, proposals}
 //   PUT  …/compliance/roles {documentKey, set[], remove[], instanceId?} → same
-//   POST …/compliance/read {instanceId, linkId?, key?, includeHidden?} → what the read classified
+//   POST …/compliance/read {instanceId, linkId?, key?, includeHidden?} → what the read classified,
+//        or 409 {code: HOST_UNAVAILABLE | LINK_CHOICE_REQUIRED, reason, links} (SPEC-15.1 2, T-282)
+//   GET  …/compliance/links?instanceId=                          → {links, chosen} (the read's pick)
 //   POST …/compliance/proposals {instanceId, key?}               → {proposals, rejected}
 //   POST …/compliance/proposals/:pid {action, role?, floor?, use?, exclude?} → {proposal, …view}
 //   GET  …/compliance/revision?linkId=                           → {linkId, revisionKey|null, reason?}
@@ -21,7 +23,7 @@ import {
   type ComplianceLimits,
 } from '../contracts/compliance.ts';
 import { DomainError } from '../core/store.ts';
-import type { DocumentLinks } from '../core/document-links.ts';
+import { isFileLink, type DocumentLink, type DocumentLinks } from '../core/document-links.ts';
 import type { Workspace } from '../core/workspace.ts';
 import { JigStore } from '../core/jig-store.ts';
 import { layersOf, type ReadModel } from '../jigs/runtime/runtime.ts';
@@ -38,6 +40,7 @@ import {
   readForJig,
   type JigRouteContext,
 } from './jig-routes.ts';
+import { followOpenDocuments, type OpenDocument } from './live-links.ts';
 
 export const complianceStatuses: Record<string, number> = {
   HOST_NOT_CONNECTED: 409,
@@ -45,7 +48,36 @@ export const complianceStatuses: Record<string, number> = {
   COMPLIANCE_NOT_READ: 409,
   AI_SEND_OFF: 409,
   COMPLIANCE_AI_UNAVAILABLE: 503,
+  LINK_CHOICE_REQUIRED: 409,
 };
+
+/** One Rhino link the read could use, as the screen's picker and failure text name it. */
+export interface ComplianceLinkCandidate {
+  id: string;
+  documentName: string;
+  /** A Rhino window holds the document now (a file opened in VIDE reads from its copy). */
+  open: boolean;
+}
+/** Shown when no open Rhino document can be read (SPEC-15.1 2 '읽을 연결 고르기'). */
+export const LINK_CLOSED_TEXT =
+  '연결된 Rhino 문서가 열려 있지 않습니다 — Rhino에서 문서를 열고 연결(Link)한 뒤 다시 누르세요';
+export const LINK_CHOICE_TEXT =
+  '열린 Rhino 연결이 여럿입니다 — 법규 체크 화면 맨 위에서 읽을 문서를 고르세요';
+/**
+ * A read refused with a reason and the next action (SPEC-15.1 2, T-282): no open Rhino link, the
+ * chosen one closed or not answering (`HOST_UNAVAILABLE`), or several open (`LINK_CHOICE_REQUIRED`).
+ * The route answers 409 with the links; it never reads as an internal error.
+ */
+export class ComplianceReadRefusal extends DomainError {
+  readonly links: ComplianceLinkCandidate[];
+  constructor(code: 'HOST_UNAVAILABLE' | 'LINK_CHOICE_REQUIRED', links: ComplianceLinkCandidate[]) {
+    super(code);
+    this.links = links;
+  }
+  get reason() {
+    return this.code === 'LINK_CHOICE_REQUIRED' ? LINK_CHOICE_TEXT : LINK_CLOSED_TEXT;
+  }
+}
 
 export interface ComplianceRouteContext {
   workspace: Workspace;
@@ -58,6 +90,14 @@ export interface ComplianceRouteContext {
   sdk?: JigRouteContext['sdk'] & {
     /** The attached connection's change token and revision (no document read). */
     fingerprint?: (target: { instance: string; documentId: number }) => Promise<unknown>;
+    /**
+     * The Rhino windows open now (`editors.list(true)`, `editors.has`): which links can be read.
+     * Absent (a host-less test), every listed Rhino link counts as open.
+     */
+    editors?: {
+      list: (attachedOnly?: boolean) => Promise<{ documents?: OpenDocument[] } | null>;
+      has?: (instance: string) => Promise<boolean | undefined>;
+    };
   };
   /**
    * Runs one AI prompt (the request body and its attached JSON) and returns the reply text; absent
@@ -161,7 +201,7 @@ export async function complianceRoutes(
   ctx: ComplianceRouteContext,
 ) {
   const match =
-    /^\/api\/v1\/projects\/([^/]+)\/compliance\/(roles|read|proposals|revision)(?:\/([^/]+))?$/.exec(
+    /^\/api\/v1\/projects\/([^/]+)\/compliance\/(roles|read|proposals|revision|links)(?:\/([^/]+))?$/.exec(
       url.pathname,
     );
   if (!match) return false;
@@ -205,7 +245,37 @@ export async function complianceRoutes(
   }
   if (area === 'read' && !sub && method === 'POST') {
     if (ctx.remote) throw new DomainError('FORBIDDEN');
-    send(200, await readForCheck(ctx, projectId, readInput.parse(await ctx.body())));
+    try {
+      send(200, await readForCheck(ctx, projectId, readInput.parse(await ctx.body())));
+    } catch (error) {
+      if (!(error instanceof ComplianceReadRefusal)) throw error;
+      ctx.log?.('compliance-read-refused', {
+        code: error.code,
+        links: error.links.length,
+        open: error.links.filter((l) => l.open).length,
+      });
+      send(409, { code: error.code, reason: error.reason, links: error.links });
+    }
+    return true;
+  }
+  // The Rhino links the read could use and the one it would pick now (the screen's picker).
+  if (area === 'links' && !sub && method === 'GET') {
+    if (ctx.remote) throw new DomainError('FORBIDDEN');
+    const instanceId = url.searchParams.get('instanceId');
+    if (!instanceId) throw new DomainError('INVALID_INPUT');
+    const { candidates } = await rhinoLinks(ctx, projectId);
+    let chosen: string | null = null;
+    try {
+      chosen = await chooseLink(
+        ctx,
+        projectId,
+        undefined,
+        await remembered(ctx, projectId, instanceId),
+      );
+    } catch (error) {
+      if (!(error instanceof DomainError)) throw error;
+    }
+    send(200, { links: candidates, chosen });
     return true;
   }
   if (area === 'proposals' && !sub && method === 'POST') {
@@ -273,20 +343,30 @@ export async function readForCheck(
     {}) as Record<string, { value?: unknown }>;
   const includeHidden = input.includeHidden ?? params.includeHidden?.value === true;
   const previous = rt.hostDocument(projectId, input.instanceId, decl.key);
-  const rhino = (ctx.links?.list(projectId) ?? []).filter((l) => l.host === 'rhino' && !l.hidden);
-  const linkId =
-    input.linkId ??
-    limits?.frame.linkId ??
-    previous?.linkId ??
-    (rhino.length === 1 ? rhino[0].id : undefined);
-  if (!linkId || !ctx.links || !ctx.sdk) throw new DomainError('HOST_NOT_CONNECTED');
-  const link = ctx.links.get(projectId, linkId);
-  if (link.host !== 'rhino') throw new DomainError('INVALID_INPUT');
+  // SPEC-15.1 2 '읽을 연결 고르기' (T-282): only an open Rhino link is read.
+  const linkId = await chooseLink(ctx, projectId, input.linkId, [
+    previous?.linkId,
+    limits?.frame.linkId,
+  ]);
+  if (!ctx.links || !ctx.sdk) throw new DomainError('HOST_NOT_CONNECTED');
   const reader = { workspace: ctx.workspace, links: ctx.links, sdk: ctx.sdk };
   // T-274: where the time of a read goes (two host reads, classification, the kept copies).
   const t0 = performance.now();
-  const full = await readForJig(reader, projectId, { linkId, layers: [], includeHidden: true });
-  const shown = await readForJig(reader, projectId, { linkId, layers: [], includeHidden: false });
+  let full: Awaited<ReturnType<typeof readForJig>>;
+  let shown: Awaited<ReturnType<typeof readForJig>>;
+  try {
+    full = await readForJig(reader, projectId, { linkId, layers: [], includeHidden: true });
+    shown = await readForJig(reader, projectId, { linkId, layers: [], includeHidden: false });
+  } catch (error) {
+    // The window closed or Rhino stopped answering between the pick and the read.
+    const code = (error as { code?: unknown } | null)?.code;
+    if (code === 'HOST_UNAVAILABLE' || code === 'STALE_CONNECTION')
+      throw new ComplianceReadRefusal(
+        'HOST_UNAVAILABLE',
+        (await rhinoLinks(ctx, projectId)).candidates,
+      );
+    throw error;
+  }
   const tRead = performance.now();
   const visible = new Set(
     ((shown.model.scene ?? []) as Record<string, unknown>[]).map((row) =>
@@ -388,6 +468,87 @@ export async function readForCheck(
       })),
     ],
   };
+}
+
+/**
+ * The project's Rhino links with whether each can be read now (SPEC-15.1 2): a link a Rhino window
+ * holds (matched as the links list matches it, rows following Save As — live-links.ts), a work
+ * copy VIDE opened, or a file opened in VIDE. `candidates` leaves out rows taken out of the list.
+ */
+async function rhinoLinks(ctx: ComplianceRouteContext, projectId: string) {
+  const links = ctx.links;
+  if (!links)
+    return {
+      rows: [] as DocumentLink[],
+      candidates: [] as ComplianceLinkCandidate[],
+      isOpen: (_link: DocumentLink) => false,
+    };
+  const editors = ctx.sdk?.editors;
+  let openIds: Set<string> | null = null;
+  if (editors && links.list(projectId).some((l) => l.host === 'rhino')) {
+    const answer = await editors.list(true).catch(() => null);
+    const documents = (answer?.documents ?? []).filter((d) => (d.host ?? 'rhino') === 'rhino');
+    const { matched, ownedOpen } = await followOpenDocuments(
+      links,
+      projectId,
+      documents,
+      async (link) => (link.host === 'rhino' ? await editors.has?.(link.instance) : false),
+    );
+    openIds = new Set([...matched.keys(), ...ownedOpen]);
+  }
+  const rows = links.list(projectId).filter((l) => l.host === 'rhino');
+  const isOpen = (link: DocumentLink) =>
+    isFileLink(link) || openIds === null || openIds.has(link.id);
+  const candidates: ComplianceLinkCandidate[] = rows
+    .filter((l) => !l.hidden)
+    .map((l) => ({ id: l.id, documentName: l.name, open: isOpen(l) }));
+  return { rows, candidates, isOpen };
+}
+
+/** The links this instance read last and its massing work copy read, in that order. */
+async function remembered(ctx: ComplianceRouteContext, projectId: string, instanceId: string) {
+  const rt = runtimeOf(ctx);
+  const { input: decl, inputs } = await documentInput(ctx, projectId, instanceId);
+  const limitsDecl = inputs.find(
+    (i) =>
+      i.kind === 'jig-output' && i.from.jig === 'vide/buildable-mass' && i.from.output === 'limits',
+  );
+  const limits = limitsDecl
+    ? limitsOf(await rt.jigOutputInput(projectId, instanceId, limitsDecl.key).catch(() => null))
+    : null;
+  return [rt.hostDocument(projectId, instanceId, decl.key)?.linkId, limits?.frame.linkId];
+}
+
+/**
+ * Which Rhino link the read uses (SPEC-15.1 2 '읽을 연결 고르기', T-282): the person's pick when it
+ * is open (closed → `HOST_UNAVAILABLE`); else the first open one of what this instance read last
+ * and what the massing work copy read; else the only open Rhino link. Several open → the person
+ * picks (`LINK_CHOICE_REQUIRED`); none open → `HOST_UNAVAILABLE`; no Rhino link at all →
+ * `HOST_NOT_CONNECTED`.
+ */
+async function chooseLink(
+  ctx: ComplianceRouteContext,
+  projectId: string,
+  chosen: string | undefined,
+  remembered: (string | null | undefined)[],
+): Promise<string> {
+  if (!ctx.links || !ctx.sdk) throw new DomainError('HOST_NOT_CONNECTED');
+  const { rows, candidates, isOpen } = await rhinoLinks(ctx, projectId);
+  if (chosen) {
+    const link = ctx.links.get(projectId, chosen);
+    if (link.host !== 'rhino') throw new DomainError('INVALID_INPUT');
+    if (!isOpen(link)) throw new ComplianceReadRefusal('HOST_UNAVAILABLE', candidates);
+    return link.id;
+  }
+  for (const id of remembered) {
+    const link = id ? rows.find((row) => row.id === id) : undefined;
+    if (link && isOpen(link)) return link.id;
+  }
+  const open = candidates.filter((c) => c.open);
+  if (open.length === 1) return open[0].id;
+  if (open.length > 1) throw new ComplianceReadRefusal('LINK_CHOICE_REQUIRED', open);
+  if (!candidates.length) throw new DomainError('HOST_NOT_CONNECTED');
+  throw new ComplianceReadRefusal('HOST_UNAVAILABLE', candidates);
 }
 
 /** [역할 제안 받기] (SPEC-15.4 1~2): one AI run over the group summaries of the last read. */

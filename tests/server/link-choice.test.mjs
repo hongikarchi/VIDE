@@ -641,3 +641,114 @@ test('Rhino: the stored id comes through attachedStatus and [분리] writes the 
     ],
   );
 });
+
+/** Another project with a closed ZWCAD row of the original file and one Sync (T-284). */
+async function otherProject(app, api) {
+  const other = await api('/projects', 'POST', { name: '실사용 검증' });
+  const at = new Date(Date.now() - 86_400_000).toISOString();
+  const db = soleDb(app.store, other.id);
+  db.prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)').run(
+    'theirs',
+    other.id,
+    'zwcad',
+    'cad.dwg',
+    'D:\\real\\cad.dwg',
+    '1:1:closed-long-ago',
+    1,
+    at,
+    at,
+  );
+  return { other, base: `/projects/${other.id}/links` };
+}
+
+test("a copy carrying another project's link id: new row here, the other project's row untouched (T-284)", async (t) => {
+  const windows = [
+    { instance: W1, name: 'cad.dwg', path: 'D:\\loop\\cad.dwg', linkIds: ['theirs'] },
+  ];
+  const { app, api, base } = await zwcadEngine(t, windows);
+  const { base: otherBase } = await otherProject(app, api);
+  const linked = await api(base, 'POST', { host: 'zwcad', instance: W1, documentId: 1, ask: true });
+  assert.equal(linked.status, 201);
+  assert.notEqual(linked.id, 'theirs');
+  const mine = await api(base);
+  assert.deepEqual(
+    mine.map((row) => [row.id === linked.id, row.connection?.instance, row.notice]),
+    [[true, W1, { kind: 'foreign' }]],
+  );
+  // The other project's row neither follows the copy nor reads as open.
+  const theirs = (await api(otherBase)).find((row) => row.id === 'theirs');
+  assert.equal(theirs.path, 'D:\\real\\cad.dwg');
+  assert.equal(theirs.connection, null);
+  assert.equal(theirs.notice, undefined);
+  await api(`${base}/${linked.id}/dismiss`, 'POST', {});
+  assert.equal((await api(base))[0].notice, undefined);
+});
+
+test("a Link takes the window back from another project's row that followed it first (T-284)", async (t) => {
+  const windows = [
+    { instance: W1, name: 'cad.dwg', path: 'D:\\loop\\cad.dwg', linkIds: ['theirs'] },
+  ];
+  const { app, api, base } = await zwcadEngine(t, windows);
+  const { base: otherBase } = await otherProject(app, api);
+  // Opened without a Link: the other project's list reconnects its row by the stored id (ADR-030).
+  const before = (await api(otherBase)).find((row) => row.id === 'theirs');
+  assert.equal(before.path, 'D:\\loop\\cad.dwg');
+  assert.equal(before.connection?.instance, W1);
+  // The person links the window to this project: the other row returns to its own file, closed.
+  const linked = await api(base, 'POST', { host: 'zwcad', instance: W1, documentId: 1, ask: true });
+  assert.equal(linked.status, 201);
+  assert.notEqual(linked.id, 'theirs');
+  const theirs = (await api(otherBase)).find((row) => row.id === 'theirs');
+  assert.equal(theirs.path, 'D:\\real\\cad.dwg');
+  assert.equal(theirs.connection, null);
+  assert.equal(theirs.notice, undefined);
+  const mine = await api(base);
+  assert.deepEqual(
+    mine.map((row) => [row.connection?.instance, row.notice?.kind]),
+    [[W1, 'foreign']],
+  );
+});
+
+test('the same project keeps its rule: its own stored id reconnects its row, no foreign note (T-284)', async (t) => {
+  const windows = [
+    { instance: W1, name: 'cad.dwg', path: 'D:\\loop\\cad.dwg', linkIds: ['theirs'] },
+  ];
+  const { app, api, base, project } = await zwcadEngine(t, windows);
+  await otherProject(app, api);
+  const at = new Date(Date.now() - 86_400_000).toISOString();
+  soleDb(app.store, project.id)
+    .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
+    .run('mine', project.id, 'zwcad', 'cad.dwg', 'D:\\w\\cad.dwg', '1:1:old', 1, at, at);
+  windows[0].linkIds = ['theirs', 'mine'];
+  const linked = await api(base, 'POST', {
+    host: 'zwcad',
+    instance: W1,
+    documentId: 1,
+    ask: true,
+    storedId: 'mine',
+  });
+  assert.equal(linked.status, 201);
+  assert.equal(linked.id, 'mine');
+  // Not a new row: no foreign note.
+  assert.notEqual((await api(base)).find((row) => row.id === 'mine').notice?.kind, 'foreign');
+});
+
+test("a document carrying two projects' ids, reopened without a Link, is live in the most recently linked project only (T-284)", async (t) => {
+  const windows = [
+    { instance: W1, name: 'cad.dwg', path: 'D:\\loop\\cad.dwg', linkIds: ['theirs', 'mine'] },
+  ];
+  const { app, api, base, project } = await zwcadEngine(t, windows);
+  const { base: otherBase } = await otherProject(app, api);
+  // This project's row was linked an hour ago, after the other project's (a day ago); both closed.
+  const at = new Date(Date.now() - 3_600_000).toISOString();
+  soleDb(app.store, project.id)
+    .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
+    .run('mine', project.id, 'zwcad', 'cad.dwg', 'D:\\w\\cad.dwg', '1:1:closed-mine', 1, at, at);
+  // The other project's list is read first: it neither takes nor follows the window.
+  const theirs = (await api(otherBase)).find((row) => row.id === 'theirs');
+  assert.equal(theirs.connection, null);
+  assert.equal(theirs.path, 'D:\\real\\cad.dwg');
+  const mine = (await api(base)).find((row) => row.id === 'mine');
+  assert.equal(mine.connection?.instance, W1);
+  assert.equal((await api(otherBase)).find((row) => row.id === 'theirs').path, 'D:\\real\\cad.dwg');
+});

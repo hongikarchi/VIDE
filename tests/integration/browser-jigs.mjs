@@ -524,6 +524,47 @@ try {
   await dialog.locator('.jig-relation').waitFor();
   assert.ok(await dialog.getByLabel('R1 선택').isChecked());
   assert.equal(await syncTab.getAttribute('aria-selected'), 'true');
+  assert.equal(await dialog.locator('[data-sync-empty]').count(), 0);
+  // A Rhino Sync of solids only (T-283): the jig says why there is nothing to compare instead of
+  // a bare 'Rhino 0개'.
+  const solids = ['Brep', 'Brep', 'Extrusion'].map((type, i) => ({
+    id: 's' + i,
+    nativeId: '1000000' + i,
+    nativeType: type,
+    vertices: [i, 0, 0, i + 1, 0, 0, i + 1, 1, 0],
+    indices: [0, 1, 2],
+    layer64: b64('철골'),
+  }));
+  insert('rhino-solids', 'rhino', {
+    scene: solids,
+    objects: solids.map((row) => ({
+      id: row.id,
+      name: row.nativeType,
+      kind: 'native',
+      nativeId: row.nativeId,
+    })),
+    sourceDocument: { name: 'solids.3dm', capturedAt: 'test', instance: '3', documentId: 2 },
+  });
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
+  await page.getByRole('button', { name: 'JIG', exact: true }).click();
+  await dialog
+    .locator('.jig-card[data-status="available"]', { hasText: 'Sync · 도면↔모델' })
+    .getByRole('button', { name: '열기', exact: true })
+    .click();
+  const rhinoPicker = dialog.getByLabel('Rhino Sync');
+  const solidsValue = await rhinoPicker
+    .locator('option', { hasText: 'solids.3dm' })
+    .getAttribute('value');
+  await rhinoPicker.selectOption(solidsValue);
+  await dialog.getByRole('button', { name: '정렬·비교 실행' }).click();
+  const empty = dialog.locator('[data-sync-empty="Rhino"]');
+  await empty.waitFor();
+  assert.equal(
+    await empty.textContent(),
+    'Rhino Sync에 비교할 직선 요소가 없습니다 — 객체 3개(Brep 2 · Extrusion 1)에 선·폴리선이 없습니다. 면·솔리드·블록은 비교하지 않습니다.',
+  );
+  assert.equal(await dialog.locator('[data-sync-empty="CAD"]').count(), 0);
   assert.deepEqual(errors, []);
   console.log('JIG tab checks passed');
 } finally {

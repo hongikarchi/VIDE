@@ -93,3 +93,37 @@ test('evenly repeated beams without a reference are reported as ambiguous; an an
   assert.ok(Math.abs(fixed.alignment.translation[1] + 48) < 1e-3);
   assert.equal(fixed.summary.rhinoOnly, 1);
 });
+
+test('a side without straight elements says what it read (T-283)', () => {
+  const solids = {
+    scene: [
+      ...[0, 1, 2].map((i) => ({
+        id: 'b' + i,
+        nativeType: 'Brep',
+        vertices: [0, 0, 0, 1, 0, 0, 1, 1, 0],
+        indices: [0, 1, 2],
+        layer64: b64('철골'),
+      })),
+      { id: 'i0', nativeType: 'InstanceReference', layer64: b64('3D') },
+    ],
+  };
+  const result = runSync(solids, cadResult, {});
+  assert.equal(result.counts.rhino, 0);
+  assert.deepEqual(result.rhinoLayers, []);
+  assert.deepEqual(result.read.rhino, {
+    objects: 4,
+    comparable: 0,
+    skipped: [
+      { type: 'Brep', count: 3 },
+      { type: 'InstanceReference', count: 1 },
+    ],
+  });
+  assert.equal(result.read.cad.objects, 4);
+  assert.equal(result.read.cad.comparable, 4);
+  // Nothing stored at all (a pruned or empty Sync) reads as 0 objects.
+  assert.equal(runSync({ scene: [] }, cadResult, {}).read.rhino.objects, 0);
+  // Chosen layers without elements: the Sync still has comparable elements elsewhere.
+  const picked = runSync(rhinoResult(), cadResult, { rhinoLayers: ['없음'] });
+  assert.equal(picked.counts.rhino, 0);
+  assert.equal(picked.read.rhino.comparable, 5);
+});

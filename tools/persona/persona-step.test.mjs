@@ -216,5 +216,124 @@ test('apiAllowed keeps the persona inside its project', async () => {
     assert.equal(ok('POST', path), false, path);
   assert.equal(ok('PUT', '/api/v1/settings/routing'), false);
   // Other origins are not the engine's API (navigations are aborted elsewhere).
-  assert.equal(apiAllowed({ method: 'POST', url: 'https://example.com/api/v1/x', origin, projectId: 'p1' }).allow, true);
+  assert.equal(
+    apiAllowed({ method: 'POST', url: 'https://example.com/api/v1/x', origin, projectId: 'p1' })
+      .allow,
+    true,
+  );
+});
+
+test('ask_operator is parsed with its field; a bad field is refused (T-286)', async () => {
+  const ask = parseStep(
+    JSON.stringify({
+      ...good,
+      action: { type: 'ask_operator', field: 'address', question: '대지 주소가 어떻게 되나요?' },
+    }),
+  );
+  assert.deepEqual(ask.action, {
+    type: 'ask_operator',
+    field: 'address',
+    question: '대지 주소가 어떻게 되나요?',
+  });
+  assert.throws(
+    () => parseStep(JSON.stringify({ ...good, action: { type: 'ask_operator' } })),
+    /action.field/,
+  );
+  assert.throws(
+    () =>
+      parseStep(
+        JSON.stringify({ ...good, action: { type: 'ask_operator', field: '어느 버튼을 눌러요' } }),
+      ),
+    /action.field/,
+  );
+  // The fake persona asks; personaStep returns the action like any other.
+  setup([JSON.stringify({ ...good, action: { type: 'ask_operator', field: 'project_name' } })]);
+  const step = await personaStep({
+    goal: 'g',
+    screenshotPath: screenshot,
+    personaFile,
+    claude: fake,
+  });
+  assert.deepEqual(step.action, { type: 'ask_operator', field: 'project_name' });
+});
+
+test('operator answers come from the operator block and reach later prompts (T-286)', async () => {
+  const { operatorAnswer, stepPrompt, MAX_OPERATOR_ANSWERS } = await import('./persona-step.mjs');
+  const operator = { address: '서울특별시 중구 태평로1가 31' };
+  assert.deepEqual(
+    operatorAnswer(operator, { type: 'ask_operator', field: 'address', question: '주소?' }),
+    {
+      field: 'address',
+      question: '주소?',
+      answer: '서울특별시 중구 태평로1가 31',
+    },
+  );
+  assert.deepEqual(operatorAnswer(operator, { type: 'ask_operator', field: 'button' }), {
+    field: 'button',
+    answer: null,
+    reason: 'unknown',
+  });
+  assert.equal(operatorAnswer(operator, { field: 'constructor' }).answer, null); // own keys only
+  assert.equal(
+    operatorAnswer(operator, { field: 'address' }, MAX_OPERATOR_ANSWERS).reason,
+    'limit',
+  );
+  // The told fact stays in the prompt after it falls out of the last three steps.
+  const told = {
+    field: 'address',
+    question: '대지 주소가 어떻게 되나요?',
+    answer: operator.address,
+  };
+  const history = [
+    {
+      step: 1,
+      persona: { ...good, action: { type: 'ask_operator', field: 'address' } },
+      operatorAnswers: [told],
+    },
+    ...[2, 3, 4].map((n) => ({ step: n, persona: good })),
+  ];
+  const prompt = stepPrompt('g', history);
+  assert.match(
+    prompt,
+    /선배에게 물어서 들은 것:\n- 대지 주소가 어떻게 되나요\?: 서울특별시 중구 태평로1가 31/,
+  );
+  assert.doesNotMatch(prompt, /1단계 —/);
+  assert.match(stepPrompt('g', history.slice(0, 1)), /1단계 — .*선배 답: 서울특별시/);
+  assert.doesNotMatch(stepPrompt('g', []), /선배에게 물어서 들은 것/);
+});
+
+test('hostsCheck refuses a foreign or missing open host link (T-286)', async () => {
+  const { hostsCheck } = await import('./persona-step.mjs');
+  const rhino = {
+    id: 'r1',
+    host: 'rhino',
+    name: 'small.3dm',
+    kind: 'host',
+    connection: { live: true },
+  };
+  const cad = {
+    id: 'c1',
+    host: 'zwcad',
+    name: 'cad.dwg',
+    kind: 'host',
+    connection: { live: false },
+  };
+  const closedCad = { ...cad, id: 'c0', connection: null };
+  const file = { id: 'f1', host: 'zwcad', kind: 'file', connection: { live: false } };
+  assert.equal(hostsCheck([rhino, closedCad, file], ['rhino']).ok, true);
+  const contaminated = hostsCheck([rhino, cad], ['rhino']);
+  assert.equal(contaminated.ok, false);
+  assert.match(contaminated.reason, /zwcad link c1 'cad\.dwg' is open/);
+  assert.deepEqual(
+    contaminated.open.map((l) => l.id),
+    ['r1', 'c1'],
+  );
+  assert.match(hostsCheck([closedCad], ['rhino']).reason, /no open rhino link/);
+  assert.match(hostsCheck([rhino], ['rhino', 'zwcad']).reason, /no open zwcad link/);
+  assert.equal(hostsCheck([rhino, cad], ['rhino', 'zwcad']).ok, true);
+  // Every scenario names its hosts; only R1-A uses CAD; R1-B carries the site address.
+  const plan = JSON.parse(await readFile(join(here, 'scenarios.json'), 'utf8'));
+  for (const s of plan.scenarios)
+    assert.deepEqual(s.hosts, s.id === 'R1-A' ? ['rhino', 'zwcad'] : ['rhino'], s.id);
+  assert.match(plan.scenarios.find((s) => s.id === 'R1-B').operator.address, /태평로/);
 });

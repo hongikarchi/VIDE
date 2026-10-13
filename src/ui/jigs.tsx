@@ -67,6 +67,11 @@ const syncApplySchema = z
       .default([]),
   })
   .passthrough();
+const syncReadSchema = z.object({
+  objects: z.number(),
+  comparable: z.number(),
+  skipped: z.array(z.object({ type: z.string(), count: z.number() })),
+});
 const syncSchema = z.object({
   alignment: z.object({
     rotation: z.number(),
@@ -118,9 +123,31 @@ const syncSchema = z.object({
   rhinoLayers: z.array(z.object({ name: z.string(), count: z.number() })),
   cadLayers: z.array(z.object({ name: z.string(), count: z.number() })),
   counts: z.object({ rhino: z.number(), cad: z.number() }),
+  read: z.object({ rhino: syncReadSchema, cad: syncReadSchema }).optional(),
   cadUnits: z.string(),
 });
 type Sync = z.infer<typeof syncSchema>;
+/**
+ * Why one side has nothing to compare (T-283, SPEC-05.8): no stored objects read, objects but no
+ * straight elements (with the types read), or none on the chosen layers. Empty when it has some.
+ */
+function syncEmptyReason(
+  side: 'Rhino' | 'CAD',
+  compared: number,
+  read: z.infer<typeof syncReadSchema> | undefined,
+): string {
+  if (compared > 0 || !read) return '';
+  if (!read.objects)
+    return `${side} Sync에서 저장된 객체를 읽지 못했습니다 — ${side}를 다시 Sync한 뒤 실행하세요.`;
+  if (read.comparable > 0) return `고른 ${side} 레이어에 비교할 직선 요소가 없습니다.`;
+  const n = (v: number) => v.toLocaleString('ko-KR');
+  const types = read.skipped
+    .slice(0, 4)
+    .map((t) => `${t.type} ${n(t.count)}`)
+    .join(' · ');
+  const rest = read.skipped.length > 4 ? ' 등' : '';
+  return `${side} Sync에 비교할 직선 요소가 없습니다 — 객체 ${n(read.objects)}개(${types}${rest})에 선·폴리선이 없습니다. 면·솔리드·블록은 비교하지 않습니다.`;
+}
 /** A stored Sync's rows of one document object (`GET …/requests/:r/objects?native=`). */
 const syncRowsSchema = z.object({
   objects: z.array(z.object({ id: z.string(), nativeId: z.string().optional() }).passthrough()),
@@ -1527,6 +1554,20 @@ function SyncJig({ context }: { context: JigContext }) {
         </div>
       ) : null}
       {notice ? <p role="status">{notice}</p> : null}
+      {result
+        ? (['Rhino', 'CAD'] as const).map((side) => {
+            const reason = syncEmptyReason(
+              side,
+              side === 'Rhino' ? result.counts.rhino : result.counts.cad,
+              side === 'Rhino' ? result.read?.rhino : result.read?.cad,
+            );
+            return reason ? (
+              <p key={side} role="status" className="sync-missing" data-sync-empty={side}>
+                {reason}
+              </p>
+            ) : null;
+          })
+        : null}
       {a ? (
         <section className="jig-relation">
           <h3>위치 관계 (Rhino → CAD)</h3>

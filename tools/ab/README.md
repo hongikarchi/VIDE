@@ -105,3 +105,4 @@ node tools/ab/host-session.mjs --no-host [--dir .vide/loop/<run>]     # route-on
 
 - 호스트가 있으면 에이전트가 띄운 Rhino에서 사본을 열고 DEV 플러그인을 붙인 뒤 엔진이 `POST /links`로 Link하고 첫 Sync를 기다린다. Rhino·ZWCAD가 이미 떠 있으면 시작하지 않는다(`--no-host`는 확인하지 않음).
 - **대화창 없는 연결(T-277):** `_VIDEConnect`는 이제 프로젝트 선택 모달을 띄워 무인 Rhino를 멈춘다. `rhino-connect.mjs`의 `connectScriptLines()`가 `Vide.Worker.AttachedConnection.Connect(doc)`를 리플렉션으로 부르는 IronPython 줄을 만든다. `host-session.mjs`와 `tests/integration/rhino-sync-perf.mjs`가 쓴다. `rhino-attached.mjs`·`rhino-attached-ai.mjs`·`linked-open-compare.mjs`는 아직 `_VIDEConnect`를 부른다.
+- **설치 엔진의 페르소나 런(L1)에서 사본을 Link할 때**는 이 하네스 대신 `tools/persona/host-link.ps1`을 쓴다(T-286: 프로젝트 선택·'닫힌 연결 파일이 있습니다' 창 무인 처리, 연결 ID 확인, ZWCAD 포함). 사용법·한계는 [tools/persona/README.md](../persona/README.md) '호스트 구성과 운영자 정보'.

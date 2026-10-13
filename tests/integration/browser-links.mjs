@@ -268,7 +268,8 @@ try {
   // engine side is tests/server/link-choice.test.mjs.
   const actions = [];
   let followed = true,
-    merged = false;
+    merged = false,
+    foreign = false;
   await page.unroute(linksUrl);
   await page.route(linksUrl, async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
@@ -287,7 +288,9 @@ try {
           lastSync: { requestId: captured.id, at: at(0) },
           ...(followed
             ? { notice: { kind: 'followed', reason: 'renamed', from: 'old.3dm', to: 'new.3dm' } }
-            : {}),
+            : foreign
+              ? { notice: { kind: 'foreign' } }
+              : {}),
         },
       ],
     });
@@ -319,6 +322,24 @@ try {
   await duplicate.getByRole('button', { name: '합치기' }).click();
   await page.waitForFunction(() => !document.querySelector('[data-link-id="link-plan-1"]'));
   assert.deepEqual(actions[1], ['merge', 'link-plan-1', 'link-new']);
+  // A new row for a document that carried another project's link id says so once (T-284).
+  await page.route('**/api/v1/projects/*/links/*/dismiss', async (route) => {
+    actions.push(['dismiss', linkOf(route)]);
+    foreign = false;
+    await route.fulfill({ json: {} });
+  });
+  foreign = true;
+  const foreignNote = page.locator(
+    '.link-row[data-link-id="link-new"] .link-note[data-note="foreign"]',
+  );
+  await foreignNote.waitFor();
+  assert.match(
+    await foreignNote.textContent(),
+    /다른 프로젝트의 연결 ID가 있던 문서 — 새 연결 파일로 추가함/,
+  );
+  await foreignNote.getByRole('button', { name: '확인' }).click();
+  await foreignNote.waitFor({ state: 'detached' });
+  assert.deepEqual(actions[2], ['dismiss', 'link-new']);
   await page.unroute(linksUrl);
   assert.deepEqual(errors, []);
   // Hidden files leave the space on every start (SPEC-01.11 4, T-096): with no saved draft, and

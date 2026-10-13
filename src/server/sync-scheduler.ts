@@ -14,7 +14,7 @@ import { isFileLink, type DocumentLink, type DocumentLinks } from '../core/docum
 import type { Workspace } from '../core/workspace.ts';
 import type { StoredWork } from '../contracts/stored-work.ts';
 import { linkRequests } from './link-removal.ts';
-import { matchLinks, type OpenDocument } from './live-links.ts';
+import { matchProjects, type OpenDocument } from './live-links.ts';
 import { LIVE_RETRY } from './live-sync.ts';
 
 export type SyncState = 'idle' | 'syncing' | 'held' | 'waiting' | 'failed';
@@ -224,8 +224,11 @@ export class SyncScheduler {
         typeof document.instance === 'string',
     );
     if (this.stopped) return;
+    // One window is a live row of one project (SPEC-01.11 1, T-284): a window another project's
+    // row holds, or one a more recent link of another project reaches, is never synced here.
+    const matches = matchProjects(projects, open);
     for (const project of projects) {
-      const matched = matchLinks(project.rows, open);
+      const matched = matches.get(project.id)!;
       const requests = this.options.workspace.list(project.id);
       for (const row of project.rows) {
         const found = matched.get(row.id);

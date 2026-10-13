@@ -54,6 +54,7 @@ export const linkRowSchema = z.object({
         to: z.string(),
       }),
       z.object({ kind: z.literal('stored') }),
+      z.object({ kind: z.literal('foreign') }),
     ])
     .optional(),
   /** Cleanup offered for a closed row: merge into the open row of its window, or take it out. */
@@ -539,6 +540,13 @@ function LinkNote({ link, ...props }: Props & { link: LinkRow }) {
       ) : notice?.kind === 'stored' ? (
         <>
           <span>연결 ID를 문서에 저장했습니다. 저장하면 다음에도 이어집니다</span>
+          <button type="button" className="link-button" onClick={() => props.onDismiss(link)}>
+            확인
+          </button>
+        </>
+      ) : notice?.kind === 'foreign' ? (
+        <>
+          <span>다른 프로젝트의 연결 ID가 있던 문서 — 새 연결 파일로 추가함</span>
           <button type="button" className="link-button" onClick={() => props.onDismiss(link)}>
             확인
           </button>

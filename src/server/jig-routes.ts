@@ -109,7 +109,22 @@ export const jigStatuses: Record<string, number> = {
   BAKE_UNDO_NOT_LATEST: 409,
   BAKE_UNDO_FAILED: 409,
   BAKE_SURFACE_CHANGED: 409,
+  /** A jig read of a closed Link or a Rhino that stopped answering (T-282 follow-up). */
+  HOST_UNAVAILABLE: 409,
 };
+/** Host connection codes a jig read passes on as classified failures, never a 500 (T-282). */
+const HOST_READ_CODES = new Set(['HOST_UNAVAILABLE', 'STALE_CONNECTION', 'HOST_BUSY']);
+/** The host SDK's connection errors as DomainErrors: the route answers their code (T-282). */
+async function hostRead<T>(read: () => Promise<T>): Promise<T> {
+  try {
+    return await read();
+  } catch (error) {
+    const code = (error as { code?: unknown } | null)?.code;
+    if (!(error instanceof DomainError) && typeof code === 'string' && HOST_READ_CODES.has(code))
+      throw new DomainError(code);
+    throw error;
+  }
+}
 /** What the person can do about a blocked before-bake gate (Design SCR-13 결과 서랍). */
 const bakeHints: Record<string, string> = {
   'hidden-target': 'Rhino에서 레이어를 켠 뒤 다시 누르세요',
@@ -992,7 +1007,7 @@ export async function readForJig(
         .at(-1);
       const copy = latest ? fileImport.safeParse(latest.result) : undefined;
       if (!copy?.success) throw new DomainError('STALE_REFERENCE');
-      const read = await sdk.importFile(copy.data.filename, () => {}, [], scope);
+      const read = await hostRead(() => sdk.importFile(copy.data.filename, () => {}, [], scope));
       const { changes: _changes, ...model } = read;
       return {
         linkId: link.id,
@@ -1000,9 +1015,8 @@ export async function readForJig(
         model: model as unknown as ReadModel,
       };
     }
-    const read = await sdk.readLayers(
-      { instance: link.instance, documentId: link.documentId },
-      scope,
+    const read = await hostRead(() =>
+      sdk.readLayers({ instance: link.instance, documentId: link.documentId }, scope),
     );
     return {
       linkId: link.id,

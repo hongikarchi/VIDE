@@ -77,10 +77,16 @@ const listOf = (value: unknown): Iterable<Record<string, unknown>> =>
  * `scene`/`objects` may be stored lists read one row at a time (`Workspace.lazy`, T-129); with
  * `layers`, rows of other layers are skipped before their coordinates are read.
  */
+/** What `elements` read from a Sync: its stored objects and, per type, those without straight edges. */
+export interface ReadStats {
+  objects: number;
+  skipped: Map<string, number>;
+}
 export function elements(
   result: Record<string, unknown>,
   host: 'rhino' | 'zwcad',
   layers?: readonly string[],
+  stats?: ReadStats,
 ): Element[] {
   const wanted = layers && new Set(layers);
   const names = new Map<string, string | undefined>();
@@ -89,6 +95,7 @@ export function elements(
   const out: Element[] = [];
   for (const row of listOf(result.scene)) {
     if (wanted && !wanted.has(b64(row.layer64))) continue;
+    if (stats) stats.objects++;
     const flat =
       Array.isArray(row.line) && (row.line as number[]).length >= 6
         ? (row.line as number[])
@@ -107,7 +114,13 @@ export function elements(
           [pairs[i + 3], pairs[i + 4], pairs[i + 5]],
         ]);
     const useful = segments.filter(([a, b]) => distance(a, b) > 1e-6);
-    if (!useful.length) continue;
+    if (!useful.length) {
+      if (stats) {
+        const type = String(row.nativeType ?? 'Object');
+        stats.skipped.set(type, (stats.skipped.get(type) ?? 0) + 1);
+      }
+      continue;
+    }
     out.push({
       id: String(row.id),
       nativeId: String(row.nativeId ?? row.id),
@@ -566,8 +579,9 @@ export function runSync(
   cadResult: Record<string, unknown>,
   options: SyncOptions & { rhinoLayers?: string[]; cadLayers?: string[] } = {},
 ) {
-  const allRhino = elements(rhinoResult, 'rhino'),
-    allCad = elements(cadResult, 'zwcad');
+  const read = { rhino: emptyStats(), cad: emptyStats() };
+  const allRhino = elements(rhinoResult, 'rhino', undefined, read.rhino),
+    allCad = elements(cadResult, 'zwcad', undefined, read.cad);
   const pick = (list: Element[], layers?: string[]) =>
     layers?.length ? list.filter((e) => layers.includes(e.layer)) : list;
   const rhino = pick(allRhino, options.rhinoLayers),
@@ -584,5 +598,19 @@ export function runSync(
     rhinoLayers: layerList(allRhino),
     cadLayers: layerList(allCad),
     counts: { rhino: rhino.length, cad: cad.length },
+    // Why a side may have nothing to compare (T-283): stored objects read, comparable elements
+    // of all layers, and the types of the objects without straight edges (most first).
+    read: {
+      rhino: readSummary(read.rhino, allRhino.length),
+      cad: readSummary(read.cad, allCad.length),
+    },
   };
 }
+const emptyStats = (): ReadStats => ({ objects: 0, skipped: new Map() });
+const readSummary = (read: ReadStats, comparable: number) => ({
+  objects: read.objects,
+  comparable,
+  skipped: [...read.skipped]
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type)),
+});

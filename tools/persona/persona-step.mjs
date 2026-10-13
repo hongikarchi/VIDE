@@ -124,7 +124,9 @@ export async function runClaude({ claude = 'claude', system, content, timeoutMs 
   }
 }
 
-const ACTIONS = new Set(['click', 'type', 'wait', 'declare_stuck', 'done']);
+const ACTIONS = new Set(['click', 'type', 'wait', 'ask_operator', 'declare_stuck', 'done']);
+/** The fact an `ask_operator` names: a short ASCII key such as `address` or `project_name`. */
+const FIELD = /^[a-z][a-z0-9_]{0,39}$/;
 const strings = (value) => Array.isArray(value) && value.every((v) => typeof v === 'string');
 
 /** Parses and validates one persona answer; throws with the reason when it is not usable. */
@@ -149,6 +151,11 @@ export function parseStep(text) {
       problems.push('action.x/y');
     if (action.type === 'type' && typeof action.text !== 'string') problems.push('action.text');
     if (
+      action.type === 'ask_operator' &&
+      !(typeof action.field === 'string' && FIELD.test(action.field))
+    )
+      problems.push('action.field');
+    if (
       action.type === 'type' &&
       action.x != null &&
       !(inside(action.x, VIEWPORT.width) && inside(action.y, VIEWPORT.height))
@@ -166,8 +173,18 @@ export function parseStep(text) {
     action: {
       type: action.type,
       ...(action.x != null ? { x: action.x, y: action.y } : {}),
-      ...(typeof action.text === 'string' ? { text: action.text } : {}),
+      ...(typeof action.text === 'string' && action.type !== 'ask_operator'
+        ? { text: action.text }
+        : {}),
       ...(action.submit === true ? { submit: true } : {}),
+      ...(action.type === 'ask_operator'
+        ? {
+            field: action.field,
+            ...(typeof action.question === 'string'
+              ? { question: action.question.slice(0, 200) }
+              : {}),
+          }
+        : {}),
     },
     confidence: value.confidence,
     stuck: value.stuck,
@@ -181,7 +198,7 @@ export const STEP_SCHEMA = `{
   "sees": "화면에서 지금 보이는 것 한두 문장",
   "reads": ["화면 글을 그대로 옮긴 문자열", "..."],
   "unknownWords": ["처음 보는 말"],
-  "action": { "type": "click | type | wait | declare_stuck | done", "x": 0, "y": 0, "text": "type일 때 입력할 글", "submit": false },
+  "action": { "type": "click | type | wait | ask_operator | declare_stuck | done", "x": 0, "y": 0, "text": "type일 때 입력할 글", "submit": false, "field": "ask_operator일 때 물을 사실(address, project_name 등)", "question": "ask_operator일 때 선배에게 하는 질문 한 문장" },
   "confidence": 0.0,
   "stuck": false,
   "wrongTurn": false,
@@ -191,13 +208,31 @@ export const STEP_SCHEMA = `{
 
 const summary = (step) =>
   `${step.step}단계 — 본 것: ${step.persona?.sees ?? step.sees ?? ''} / 한 행동: ${JSON.stringify(step.persona?.action ?? step.action ?? {})}` +
-  ((step.persona?.stuck ?? step.stuck) ? ' / 막힘' : '');
+  ((step.persona?.stuck ?? step.stuck) ? ' / 막힘' : '') +
+  (step.operatorAnswers?.length
+    ? ' / 선배 답: ' + step.operatorAnswers.map((a) => a.answer ?? '모른다고 함').join(', ')
+    : '');
+
+/** Every fact the operator told the persona so far (kept beyond the last 3 steps). */
+export function toldFacts(history = []) {
+  return history.flatMap((step) => step.operatorAnswers ?? []);
+}
 
 export function stepPrompt(goal, history = []) {
   const recent = history.slice(-3);
+  const told = toldFacts(history);
   return [
     `목표: ${goal}`,
     '',
+    ...(told.length
+      ? [
+          '선배에게 물어서 들은 것:\n' +
+            told
+              .map((a) => `- ${a.question ?? a.field}: ${a.answer ?? '선배도 모른다고 했습니다'}`)
+              .join('\n'),
+          '',
+        ]
+      : []),
     recent.length
       ? '지난 단계(내가 적은 요약):\n' + recent.map(summary).join('\n')
       : '지난 단계: 없음(첫 화면)',
@@ -245,6 +280,51 @@ export async function personaStep({
     }
   }
   throw new Error('persona answer invalid twice: ' + lastError.message);
+}
+
+// --- operator answers (T-286) --------------------------------------------------------------------
+/** How many times one run answers ask_operator; later asks get no answer (the intern must go on). */
+export const MAX_OPERATOR_ANSWERS = 5;
+/**
+ * The operator's answer to an `ask_operator` action: the scenario's `operator` block merged with
+ * `--answers`. Only facts a senior would tell (an address, a project name) are in there; anything
+ * else, how to use the screen included, gets `answer: null`. Pure.
+ * @returns {{ field: string, question?: string, answer: string | null, reason?: string }}
+ */
+export function operatorAnswer(operator, action, asked = 0) {
+  const field = action?.field;
+  const base = { field, ...(action?.question ? { question: action.question } : {}) };
+  if (asked >= MAX_OPERATOR_ANSWERS) return { ...base, answer: null, reason: 'limit' };
+  const value = operator && Object.hasOwn(operator, field) ? operator[field] : undefined;
+  if (typeof value !== 'string' || !value.trim())
+    return { ...base, answer: null, reason: 'unknown' };
+  return { ...base, answer: value };
+}
+
+// --- host check before a run (T-286) -------------------------------------------------------------
+/**
+ * Whether the project's links fit the scenario's hosts (GET /projects/:id/links rows). A host link
+ * is open when the row has a `connection` (a host window holds that document). Refuses when a host
+ * outside `hosts` is open (round 2: an open ZWCAD link drew every request to zwcad) or when a
+ * listed host has no open link. File links (`kind: 'file'`) are not host windows. Pure.
+ * @returns {{ ok: boolean, reason?: string, open: { host: string, id: string, name?: string }[] }}
+ */
+export function hostsCheck(rows, hosts) {
+  const open = (Array.isArray(rows) ? rows : [])
+    .filter((row) => row && row.kind !== 'file' && row.connection)
+    .map((row) => ({ host: row.host ?? 'rhino', id: row.id, name: row.name }));
+  const wanted = new Set(hosts ?? []);
+  const foreign = open.filter((link) => !wanted.has(link.host));
+  if (foreign.length)
+    return {
+      ok: false,
+      reason: `hosts: ${foreign.map((l) => `${l.host} link ${l.id}${l.name ? ` '${l.name}'` : ''}`).join(', ')} is open but the scenario uses only ${[...wanted].join('+') || 'no host'}`,
+      open,
+    };
+  const missing = [...wanted].filter((host) => !open.some((l) => l.host === host));
+  if (missing.length)
+    return { ok: false, reason: `hosts: no open ${missing.join(', ')} link in the project`, open };
+  return { ok: true, open };
 }
 
 export const CANARY_QUESTION = 'VIDE·jig·Sync·Link가 무엇인지 아세요? 모르면 모른다고만 답하세요.';

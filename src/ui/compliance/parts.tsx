@@ -20,6 +20,7 @@ import {
   groundLabel,
   headline,
   orderedItems,
+  readFailureText,
   reportHtml,
   resultCsv,
   revisionOf,
@@ -79,7 +80,7 @@ function useCheck(view: ComplianceView, jig: InstanceState) {
     try {
       await view.readDocument(true);
     } catch (error) {
-      setProblem(messageOf(error));
+      setProblem(readFailureText(error) ?? messageOf(error));
       return;
     } finally {
       setReading(false);
@@ -113,6 +114,40 @@ function CheckButton({
     >
       {check.reading ? '모델을 읽는 중…' : jig.busy || jig.computing ? '계산하는 중…' : '법규 체크'}
     </button>
+  );
+}
+
+/**
+ * Which Rhino document the read uses when several are open (SPEC-15.1 2 '읽을 연결 고르기', T-282):
+ * a small select at the top; the pick reads the document at once and the workbook keeps it. It
+ * stays after a read that used a remembered link, naming the document read.
+ */
+function LinkPicker({ view }: { view: ComplianceView }) {
+  const choice = view.linkChoice;
+  if (view.remote || !choice) return null;
+  const read = !!choice.chosen && view.documentRead?.linkId === choice.chosen;
+  return (
+    <label className="cmp-link-pick" data-link-pick={read ? 'read' : ''}>
+      <span>{read ? '읽은 Rhino 문서' : '읽을 Rhino 문서'}</span>
+      <select
+        value={choice.chosen ?? ''}
+        disabled={view.documentReading}
+        onChange={(event) => {
+          if (event.target.value) void view.chooseLink(event.target.value);
+        }}
+      >
+        {choice.chosen ? null : (
+          <option value="" disabled>
+            고르세요
+          </option>
+        )}
+        {choice.links.map((link) => (
+          <option key={link.id} value={link.id}>
+            {link.documentName}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -177,6 +212,7 @@ export function ComplianceSummary({ view, jig }: { view: ComplianceView; jig: In
         </p>
         {view.stale ? null : <CheckButton view={view} jig={jig} check={check} where="top" />}
       </div>
+      <LinkPicker view={view} />
       {!result && view.limitsMissing ? (
         <p className="cmp-warn" data-limits-missing="">
           {LIMITS_MISSING}

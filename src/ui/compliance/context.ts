@@ -11,7 +11,9 @@ import { remoteSession } from '../remote-panel.ts';
 import { resolve, type PanelData } from '../jig-panel/bindings.ts';
 import { messageOf, type InstanceState, type StepReport } from '../jig-panel/instance.ts';
 import {
+  READ_REFUSALS,
   limitsMissing,
+  readFailureText,
   readResult,
   staleReasons,
   type ResultRead,
@@ -99,6 +101,19 @@ const readSchema = z
   .passthrough();
 /** What the last role-check read of the document found (SPEC-15.3·15.4). */
 export type CheckRead = z.infer<typeof readSchema>;
+const linksSchema = z
+  .object({
+    links: z.array(
+      z.object({ id: z.string(), documentName: z.string(), open: z.boolean() }).passthrough(),
+    ),
+    chosen: z.string().nullable(),
+  })
+  .passthrough();
+/** The Rhino links the read can use when several are open (SPEC-15.1 2, T-282). */
+export interface LinkChoice {
+  links: { id: string; documentName: string }[];
+  chosen: string | null;
+}
 
 interface Shared {
   limits?: SourceNow | null;
@@ -110,6 +125,8 @@ interface Shared {
   read?: CheckRead;
   readError?: string;
   reading?: boolean;
+  /** Several open Rhino links: the picker at the top (SPEC-15.1 2 '읽을 연결 고르기'). */
+  linkChoice?: LinkChoice;
 }
 
 const LIMITS_JIG = 'vide/buildable-mass';
@@ -160,6 +177,44 @@ class Store {
     }
   }
   private readOnce?: Promise<CheckRead | undefined>;
+  /** The link the person picked on this screen (the engine keeps it in the workbook once read). */
+  private chosen?: string;
+  /**
+   * The open Rhino links and the engine's pick, for the picker (T-282). `read`: the link a read
+   * just used — with several open the picker stays and shows it (SPEC-15.1 2).
+   */
+  private async links(read?: string) {
+    const base = `/projects/${encodeURIComponent(this.projectId)}`;
+    try {
+      const answer = linksSchema.parse(
+        await api(
+          `${base}/compliance/links?instanceId=${encodeURIComponent(this.instanceId)}`,
+          'GET',
+          undefined,
+          { quiet: ['NOT_FOUND', 'FORBIDDEN'] },
+        ),
+      );
+      const open = answer.links.filter((link) => link.open);
+      this.set({
+        linkChoice:
+          open.length > 1
+            ? {
+                links: open.map(({ id, documentName }) => ({ id, documentName })),
+                chosen: read ?? this.chosen ?? answer.chosen,
+              }
+            : undefined,
+      });
+    } catch {
+      // No picker: the failure text still says what to do.
+    }
+  }
+  /** The person picked the Rhino document to read: read it now (roles), not the check. */
+  chooseLink(linkId: string) {
+    this.chosen = linkId;
+    if (this.state.linkChoice)
+      this.set({ linkChoice: { ...this.state.linkChoice, chosen: linkId } });
+    return this.readDocument(true).catch(() => undefined);
+  }
   /**
    * The role-check read (SPEC-15.3 1): reads the linked document whole and classifies it. `force`
    * reads again ([법규 체크], a role change) and throws on failure; otherwise once per store.
@@ -174,14 +229,33 @@ class Store {
           await api(
             `${base}/compliance/read`,
             'POST',
-            { instanceId: this.instanceId },
-            { quiet: ['HOST_NOT_CONNECTED', 'NOT_FOUND', 'STALE_REFERENCE', 'STALE_CONNECTION'] },
+            { instanceId: this.instanceId, ...(this.chosen ? { linkId: this.chosen } : {}) },
+            {
+              quiet: ['HOST_NOT_CONNECTED', 'NOT_FOUND', 'STALE_REFERENCE', ...READ_REFUSALS],
+            },
           ),
         );
-        this.set({ read: answer, readError: undefined, reading: false });
+        this.set({
+          read: answer,
+          readError: undefined,
+          reading: false,
+          ...(this.state.linkChoice
+            ? { linkChoice: { ...this.state.linkChoice, chosen: answer.linkId } }
+            : {}),
+        });
+        // A remembered link was read while others are open too: the picker shows which (T-282).
+        void this.links(answer.linkId);
         return answer;
       } catch (error) {
-        this.set({ readError: messageOf(error), reading: false });
+        // A classified refusal (T-282) says what to do; several open links bring the picker.
+        this.set({ readError: readFailureText(error) ?? messageOf(error), reading: false });
+        const code = (error as { code?: unknown } | null)?.code;
+        if (code === 'LINK_CHOICE_REQUIRED') await this.links();
+        else if (code === 'HOST_UNAVAILABLE' && this.chosen) {
+          // The picked document closed: forget the pick so the engine's rule applies again.
+          this.chosen = undefined;
+          await this.links();
+        }
         if (force) throw error;
         return undefined;
       }
@@ -279,6 +353,10 @@ export interface ComplianceView {
   documentRead?: CheckRead;
   documentReadError?: string;
   documentReading: boolean;
+  /** Several open Rhino links: which one the read uses (SPEC-15.1 2). */
+  linkChoice?: LinkChoice;
+  /** Pick the Rhino document to read; reads it at once for the roles. */
+  chooseLink: (linkId: string) => Promise<unknown>;
   /** Read the document again for the roles (and before [법규 체크]); throws on failure when forced. */
   readDocument: (force?: boolean) => Promise<CheckRead | undefined>;
   /** The last [법규 체크] did not finish: why (the kept result, if any, is the one before). */
@@ -380,6 +458,8 @@ export function useCompliance({
     documentRead: shared.read,
     documentReadError: shared.readError,
     documentReading: !!shared.reading,
+    linkChoice: shared.linkChoice,
+    chooseLink: (linkId: string) => store.chooseLink(linkId),
     readDocument: (force?: boolean) => store.readDocument(force),
     failure,
     stale: reasons.length > 0,

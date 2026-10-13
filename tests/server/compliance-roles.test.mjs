@@ -214,7 +214,11 @@ const LIMITS = (linkId) => ({
   plan: { mainUse: null, floorHeightGround: 4, floorHeightTypical: 3, chosenOption: '대안 A' },
 });
 
-async function fixture(t, { propose } = {}) {
+/**
+ * `windows`: the Rhino windows open now (`editors.list`), as `[instance, documentId]` pairs — given
+ * only by the T-282 tests; without it the fake has no `editors` and every link counts as open.
+ */
+async function fixture(t, { propose, windows } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'vide-compliance-'));
   const dataDir = join(root, 'data');
   mkdirSync(dataDir, { recursive: true });
@@ -225,12 +229,36 @@ async function fixture(t, { propose } = {}) {
   const project = store.createProject('법규 체크 시험');
   const document = fakeDocument();
   const reads = [];
+  const targets = [];
+  const isWindow = (target) =>
+    windows.some(([instance, id]) => instance === target.instance && id === target.documentId);
   const sdk = {
     readLayers: async (target, scope) => {
-      assert.equal(target.instance, INSTANCE);
+      if (windows) {
+        targets.push(target);
+        // A closed window: the plugin connection refuses before sending (transport.ts).
+        if (!isWindow(target) || windows.dropped)
+          throw Object.assign(new Error('HOST_UNAVAILABLE'), { code: 'HOST_UNAVAILABLE' });
+      } else assert.equal(target.instance, INSTANCE);
       reads.push(scope);
       return document.model(scope);
     },
+    ...(windows
+      ? {
+          editors: {
+            list: async () => ({
+              documents: windows.map(([instance, id]) => ({
+                host: 'rhino',
+                instance,
+                id,
+                name: `${instance}.3dm`,
+                connection: 'attached-editor',
+              })),
+            }),
+            has: async () => false,
+          },
+        }
+      : {}),
     importFile: async () => assert.fail('a host link never imports'),
     // The connection's change token without a read (`…/compliance/revision`).
     fingerprint: async (target) => {
@@ -317,8 +345,146 @@ async function fixture(t, { propose } = {}) {
     iid: created.data.id,
     roles,
     workspace,
+    links,
+    targets,
   };
 }
+
+// PLAN-51 T-282 (R1-C, round 2): a project with the round-1 Rhino link (its document closed) and a
+// new link (open). The read uses the open one; with none open, or several, it answers a classified
+// 409 with the links and the next action, never a 500 (SPEC-15.1 2 '읽을 연결 고르기').
+const OTHER = '300:400:' + randomUUID();
+const THIRD = '500:600:' + randomUUID();
+const addLink = (f, instance, name) =>
+  f.links.link(f.project.id, { host: 'rhino', name, instance, documentId: 5 });
+
+test('T-282: with a closed and an open Rhino link the read uses the open one', async (t) => {
+  const windows = [[OTHER, 5]];
+  const f = await fixture(t, { windows });
+  const fresh = addLink(f, OTHER, 'r2.3dm');
+  f.document.add('건물', boxMesh([100, 200, 0], [110, 210, 12]));
+  // The massing work copy read the round-1 link (`f.link`), whose window is gone.
+  const read = await f.call('POST', `${f.base}/compliance/read`, { instanceId: f.iid });
+  assert.equal(read.status, 200, JSON.stringify(read));
+  assert.equal(read.data.linkId, fresh.id);
+  assert.ok(f.targets.length > 0 && f.targets.every((target) => target.instance === OTHER));
+  const picked = await f.call('GET', `${f.base}/compliance/links?instanceId=${f.iid}`);
+  assert.equal(picked.data.chosen, fresh.id);
+  assert.deepEqual(
+    new Map(picked.data.links.map((l) => [l.id, l.open])),
+    new Map([
+      [f.link.id, false],
+      [fresh.id, true],
+    ]),
+  );
+});
+
+test('T-282: no open Rhino link (or Rhino stops answering) is HOST_UNAVAILABLE with the links', async (t) => {
+  const windows = [];
+  const f = await fixture(t, { windows });
+  const fresh = addLink(f, OTHER, 'r2.3dm');
+  const none = await f.call('POST', `${f.base}/compliance/read`, { instanceId: f.iid });
+  assert.equal(none.status, 409, JSON.stringify(none));
+  assert.equal(none.data.code, 'HOST_UNAVAILABLE');
+  assert.match(none.data.reason, /연결된 Rhino 문서가 열려 있지 않습니다/);
+  assert.deepEqual(
+    new Map(none.data.links.map((l) => [l.id, l])),
+    new Map([
+      [f.link.id, { id: f.link.id, documentName: 'synthetic.3dm', open: false }],
+      [fresh.id, { id: fresh.id, documentName: 'r2.3dm', open: false }],
+    ]),
+  );
+  assert.equal(f.targets.length, 0, 'no host read is tried');
+  // The window is listed but the plugin connection fails while reading: the same classified answer.
+  windows.push([OTHER, 5]);
+  windows.dropped = true;
+  const dropped = await f.call('POST', `${f.base}/compliance/read`, { instanceId: f.iid });
+  assert.equal(dropped.status, 409, JSON.stringify(dropped));
+  assert.equal(dropped.data.code, 'HOST_UNAVAILABLE');
+});
+
+test('T-282: several open Rhino links ask the person to pick; the pick is remembered', async (t) => {
+  const windows = [
+    [OTHER, 5],
+    [THIRD, 5],
+  ];
+  const f = await fixture(t, { windows });
+  const b = addLink(f, OTHER, 'r2.3dm');
+  const c = addLink(f, THIRD, 'r3.3dm');
+  f.document.add('건물', boxMesh([100, 200, 0], [110, 210, 12]));
+  const ask = await f.call('POST', `${f.base}/compliance/read`, { instanceId: f.iid });
+  assert.equal(ask.status, 409, JSON.stringify(ask));
+  assert.equal(ask.data.code, 'LINK_CHOICE_REQUIRED');
+  assert.deepEqual(ask.data.links.map((l) => l.id).sort(), [b.id, c.id].sort());
+  assert.ok(ask.data.links.every((l) => l.open));
+  // A closed link named explicitly is refused, not swapped for another.
+  const closed = await f.call('POST', `${f.base}/compliance/read`, {
+    instanceId: f.iid,
+    linkId: f.link.id,
+  });
+  assert.equal(closed.data.code, 'HOST_UNAVAILABLE');
+  const chosen = await f.call('POST', `${f.base}/compliance/read`, {
+    instanceId: f.iid,
+    linkId: c.id,
+  });
+  assert.equal(chosen.status, 200, JSON.stringify(chosen));
+  assert.equal(chosen.data.linkId, c.id);
+  // The workbook keeps the pick: the next read (as the chat-opened panel does) uses it.
+  const again = await f.call('POST', `${f.base}/compliance/read`, { instanceId: f.iid });
+  assert.equal(again.data.linkId, c.id);
+  assert.equal(f.targets.at(-1).instance, THIRD);
+  const picked = await f.call('GET', `${f.base}/compliance/links?instanceId=${f.iid}`);
+  assert.equal(picked.data.chosen, c.id);
+});
+
+test('T-282: a remembered open link is read while another is open; the links list offers both', async (t) => {
+  const windows = [
+    [INSTANCE, DOCUMENT],
+    [OTHER, 5],
+  ];
+  const f = await fixture(t, { windows });
+  const other = addLink(f, OTHER, 'r2.3dm');
+  f.document.add('건물', boxMesh([100, 200, 0], [110, 210, 12]));
+  // The massing work copy read `f.link`, open now: it is read without asking.
+  const read = await f.call('POST', `${f.base}/compliance/read`, { instanceId: f.iid });
+  assert.equal(read.status, 200, JSON.stringify(read));
+  assert.equal(read.data.linkId, f.link.id);
+  // The screen's picker still offers the other open document (SPEC-15.1 2).
+  const picked = await f.call('GET', `${f.base}/compliance/links?instanceId=${f.iid}`);
+  assert.equal(picked.data.chosen, f.link.id);
+  assert.deepEqual(
+    new Map(picked.data.links.map((l) => [l.id, l.open])),
+    new Map([
+      [f.link.id, true],
+      [other.id, true],
+    ]),
+  );
+  const switched = await f.call('POST', `${f.base}/compliance/read`, {
+    instanceId: f.iid,
+    linkId: other.id,
+  });
+  assert.equal(switched.status, 200, JSON.stringify(switched));
+  assert.equal(f.targets.at(-1).instance, OTHER);
+});
+
+test('T-282: a Rhino file opened in VIDE counts as an open link beside a Rhino window', async (t) => {
+  const windows = [[OTHER, 5]];
+  const f = await fixture(t, { windows });
+  const fresh = addLink(f, OTHER, 'r2.3dm');
+  const file = f.links.fileLink(f.project.id, 'rhino', 'plan.3dm');
+  f.document.add('건물', boxMesh([100, 200, 0], [110, 210, 12]));
+  const ask = await f.call('POST', `${f.base}/compliance/read`, { instanceId: f.iid });
+  assert.equal(ask.status, 409, JSON.stringify(ask));
+  assert.equal(ask.data.code, 'LINK_CHOICE_REQUIRED');
+  assert.deepEqual(ask.data.links.map((l) => l.id).sort(), [fresh.id, file.id].sort());
+  assert.equal(f.targets.length, 0, 'no host read before the pick');
+  const chosen = await f.call('POST', `${f.base}/compliance/read`, {
+    instanceId: f.iid,
+    linkId: fresh.id,
+  });
+  assert.equal(chosen.status, 200, JSON.stringify(chosen));
+  assert.equal(chosen.data.linkId, fresh.id);
+});
 
 test('the check read classifies the whole document, keeps it as the step input, and versions records', async (t) => {
   const f = await fixture(t);

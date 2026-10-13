@@ -2,8 +2,8 @@
 id: PLAN-16
 title: 프로젝트 연결 파일(Link)과 여러 파일의 한 공간
 status: review
-version: 1.0
-updated: 2026-10-02
+version: 1.1
+updated: 2026-10-14
 owner: agent:claude
 related: [PLAN, SPEC-01, DESIGN, ARCH-01, ADR-030, FR-01, FR-02, FR-03, FR-16]
 ---
@@ -146,3 +146,13 @@ related: [PLAN, SPEC-01, DESIGN, ARCH-01, ADR-030, FR-01, FR-02, FR-03, FR-16]
   - 엔진: `hostDocumentsSchema`·Rhino `editor-channel.ts`·`editor-sessions.ts`·ZWCAD `attached-documents.ts`가 `linkIds`를 전하고 `setLinkId`를 부른다. `matchOpenDocuments`는 같은 창 → 저장된 ID → 경로 순이다. [새 항목으로 분리]는 그 창 문서에 새 ID를 쓴다(못 쓰면 화면이 알림).
 - **검증:** `link-choice.test.mjs` — 이동·이름 바꾸기·재시작 뒤 저장된 ID가 같은 경로의 다른 닫힌 행보다 먼저 이어짐, 저장된 ID가 있으면 Link가 묻지 않음, 같은 ID의 사본이 두 창에 열리면 두 번째 창의 Link가 묻고(기본 새 항목) 두 행이 각자 연결됨, 대조 순서(같은 ID가 두 창이면 행의 경로에 있는 창, 없으면 먼저 나온 창만, 사본이 먼저 나와도 원본이 행을 지님), Rhino 편집기 채널로 `linkIds`가 오고 [분리]가 `setLinkId`를 부름. Rhino(`VIDE.Worker.csproj`)·ZWCAD(`VIDE.Zwcad.Connection.csproj`) 플러그인은 빌드만 확인했다.
 - **남은 것:** 실제 Rhino 8·ZWCAD에서 ID 쓰기가 문서를 '수정됨'으로 만들고 저장·다른 이름 저장·다시 열기 뒤 유지되는지, `attachedStatus`의 `linkIds` 보고와 [분리] 뒤 다시 쓴 ID, 사본 두 창의 질문을 설치본 반영 뒤 합성 문서로 확인한다(에이전트는 사용자 문서와 호스트를 열지 않음). 함께 확인할 것(통합 검토, 2026-10-02): ID 쓰기(Link, [분리])가 문서 변경으로 세어져 바로 앞 AI 실행의 VIDE [되돌리기]가 '최근 실행이 아님'(`not-latest`)으로 거절된다. ZWCAD의 `_.U`·Rhino의 Undo가 그 쓰기를 별도 단계로 되돌리는지 실호스트에서 확인하기 전에는 이 거절을 유지한다(쓰기를 무시하면 [되돌리기]가 AI 변경 대신 ID 쓰기를 되돌릴 수 있다). 사용자는 호스트의 Ctrl+Z로 되돌릴 수 있다.
+
+<a id="t-284"></a>
+
+### T-284 다른 프로젝트의 연결 ID가 남은 문서의 Link (2026-10-14)
+
+라운드 2 F11([VERIFY](../tdd/VERIFY-2026-10-09-loop-round-2.md), [PLAN-51](PLAN-51-verify-loop.md) §4)에서 다른 프로젝트의 연결 ID를 지닌 사본을 Link하자 그 프로젝트 행의 경로가 바뀌고 같은 창에서 동시 Sync가 돌았다. 규칙은 [SPEC-01.11](../specs/SPEC-01-project-input-sync.md)의 1 '다른 프로젝트의 연결 ID'(열린 창 하나는 한 프로젝트에서만 연결 상태).
+
+- **변경:** `src/core/document-links.ts` — `matchOpenDocuments(rows, open, claimed)`: 다른 프로젝트 행이 제 창으로 지닌 창은 이 프로젝트의 저장된 ID·경로로 잡지 않음, `windowsElsewhere`·`foreignIds`·`releaseElsewhere`(Link한 창을 지녔던 다른 프로젝트 행을 닫힘으로, 이번 실행에서 따라갔으면 이전 이름·경로로), 알림 `foreign`. `src/server/live-links.ts`(`followOpenDocuments`가 `claimed`를 넘김), `src/server/sync-scheduler.ts`(엔진 자동 Sync도 같은 `claimed`), `src/server/server.ts` `POST …/links`(Link 뒤 `releaseElsewhere`, 새 행이고 문서에 다른 프로젝트 ID가 있었으면 `foreign` 알림, 진단 `link-released-elsewhere`), `src/ui/links.tsx`(한 줄 알림 "다른 프로젝트의 연결 ID가 있던 문서 — 새 연결 파일로 추가함"과 [확인]). 플러그인은 바꾸지 않았다: Rhino·ZWCAD 모두 Link에 고른 프로젝트의 ID만 `storedId`로 보내고, 문서의 모든 ID는 열린 문서 목록의 `linkIds`로 온다. 그래서 막는 곳은 엔진의 대조다.
+- **검증:** `tests/server/link-choice.test.mjs` T-284 세 건(다른 프로젝트 ID를 지닌 사본 → 이 프로젝트 새 행과 `foreign` 알림, 다른 프로젝트 행의 경로·연결 그대로 / Link 전에 다른 프로젝트 행이 ID로 따라간 경우 Link가 이전 경로·닫힘으로 되돌림 / 같은 프로젝트의 저장된 ID는 그 행으로 이어지고 알림 없음), `tests/server/sync-scheduler.test.mjs`(다른 프로젝트 행은 그 창의 변경으로 Sync되지 않음). 같은 프로젝트 사본의 질문은 기존 'a copy open in a second window…'가 그대로 통과.
+- **남은 것:** 설치본 반영 뒤 연결 ID가 있는 사본으로 두 전용 프로젝트 Link 재현(L1). `실사용 검증 20261007`의 Link `ab63a9e0` 경로를 되돌릴지는 사용자 결정(엔진 재시작으로 따라감 알림이 사라졌으므로 이번 변경이 자동으로 되돌리지 않는다).

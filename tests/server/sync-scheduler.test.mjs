@@ -253,3 +253,136 @@ test('a reconnected non-live file gets a full Sync instead of its old session di
   await s.tick();
   assert.deepEqual(s.calls, ['full']);
 });
+
+test("a window linked to one project never Syncs another project's row by its stored id (T-284)", async (t) => {
+  const store = new Store(':memory:');
+  t.after(() => store.close());
+  const workspace = new Workspace(store);
+  const links = new DocumentLinks(store);
+  const mine = store.createProject('mine');
+  const other = store.createProject('other');
+  links.link(mine.id, { host: 'rhino', name: 'copy.3dm', instance, documentId: 7 });
+  // The other project's row of the original file, closed; the copy carries its id (ADR-030).
+  const theirs = links.link(other.id, {
+    host: 'rhino',
+    name: 'orig.3dm',
+    path: 'D:\\o\\orig.3dm',
+    instance: '1:2:closed-window',
+    documentId: 1,
+  });
+  const document = {
+    host: 'rhino',
+    instance,
+    id: 7,
+    name: 'copy.3dm',
+    path: 'D:\\loop\\copy.3dm',
+    connection: 'attached-editor',
+    generation: 0,
+    live: true,
+    hostBusy: false,
+    linkIds: [theirs.id],
+  };
+  const synced = [];
+  const scheduler = new SyncScheduler({
+    workspace,
+    links,
+    projects: () => store.listProjects(),
+    open: async () => [document],
+    fullSync: async (projectId, target) => {
+      synced.push(projectId);
+      workspace.submit(projectId, captureInput(target));
+      return {
+        result: workspace.update(projectId, target.id, 'succeeded', {
+          hostExecuted: true,
+          displayOnly: true,
+          host: 'rhino',
+          executionMode: 'sdk',
+          objects: [],
+          scene: [],
+          sourceDocument: { instance, documentId: 7, connection: 'attached-editor', revision: 1 },
+        }),
+      };
+    },
+    liveSync: async (_projectId, input) => ({ requestId: input.basisId }),
+    now: () => 1_000_000,
+  });
+  t.after(() => scheduler.stop?.());
+  await scheduler.tick();
+  await scheduler.settled();
+  assert.deepEqual(synced, [mine.id]);
+  assert.equal(scheduler.status(other.id, document), undefined);
+  assert.equal(links.get(other.id, theirs.id).path, 'D:\\o\\orig.3dm');
+});
+
+test("a document carrying two projects' link ids, reopened without a Link, Syncs only the most recently linked project (T-284)", async (t) => {
+  const store = new Store(':memory:');
+  t.after(() => store.close());
+  const workspace = new Workspace(store);
+  const links = new DocumentLinks(store);
+  const a = store.createProject('A');
+  const b = store.createProject('B');
+  // Both rows closed (the host restarted); B was linked after A.
+  const rowA = links.link(a.id, {
+    host: 'rhino',
+    name: 'orig.3dm',
+    path: 'D:\\o\\orig.3dm',
+    instance: '1:2:closed-a',
+    documentId: 1,
+  });
+  const rowB = links.link(b.id, {
+    host: 'rhino',
+    name: 'copy.3dm',
+    path: 'D:\\c\\copy.3dm',
+    instance: '1:2:closed-b',
+    documentId: 2,
+  });
+  const stamp = (project, id, at) =>
+    store
+      .db(project)
+      .prepare('UPDATE document_links SET linkedAt=?, updatedAt=? WHERE id=?')
+      .run(at, at, id);
+  stamp(a.id, rowA.id, '2026-10-01T00:00:00.000Z');
+  stamp(b.id, rowB.id, '2026-10-02T00:00:00.000Z');
+  const document = {
+    host: 'rhino',
+    instance,
+    id: 7,
+    name: 'copy.3dm',
+    path: 'D:\\loop\\copy.3dm',
+    connection: 'attached-editor',
+    generation: 0,
+    live: true,
+    hostBusy: false,
+    linkIds: [rowA.id, rowB.id],
+  };
+  const synced = [];
+  const scheduler = new SyncScheduler({
+    workspace,
+    links,
+    projects: () => store.listProjects(),
+    open: async () => [document],
+    fullSync: async (projectId, target) => {
+      synced.push(projectId);
+      workspace.submit(projectId, captureInput(target));
+      return {
+        result: workspace.update(projectId, target.id, 'succeeded', {
+          hostExecuted: true,
+          displayOnly: true,
+          host: 'rhino',
+          executionMode: 'sdk',
+          objects: [],
+          scene: [],
+          sourceDocument: { instance, documentId: 7, connection: 'attached-editor', revision: 1 },
+        }),
+      };
+    },
+    liveSync: async (_projectId, input) => ({ requestId: input.basisId }),
+    now: () => 1_000_000,
+  });
+  t.after(() => scheduler.stop?.());
+  await scheduler.tick();
+  await scheduler.settled();
+  assert.deepEqual(synced, [b.id]);
+  assert.equal(scheduler.status(a.id, document), undefined);
+  assert.equal(links.get(a.id, rowA.id).path, 'D:\\o\\orig.3dm');
+});

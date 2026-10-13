@@ -210,6 +210,24 @@ export function limitsMissing(limits: SourceNow | null | undefined): boolean {
   return limits === null || (limits !== undefined && !limits.instanceId && limits.ready === false);
 }
 
+/** No open Rhino document to read, the picked one closed, or Rhino not answering (SPEC-15.1 2). */
+export const LINK_CLOSED =
+  '연결된 Rhino 문서가 열려 있지 않습니다 — Rhino에서 문서를 열고 연결(Link)한 뒤 다시 누르세요';
+/** Several Rhino links open: the picker at the top of the screen chooses (SPEC-15.1 2). */
+export const LINK_CHOICE = '열린 Rhino 연결이 여럿입니다 — 맨 위에서 읽을 문서를 고르세요';
+/** The read failures the engine classifies (T-282); they never read as an internal error. */
+export const READ_REFUSALS = ['HOST_UNAVAILABLE', 'STALE_CONNECTION', 'LINK_CHOICE_REQUIRED'];
+/**
+ * Why the model read failed, for a classified failure (`HOST_UNAVAILABLE`, `LINK_CHOICE_REQUIRED`,
+ * T-282); undefined for any other error, which keeps its own text.
+ */
+export function readFailureText(error: unknown): string | undefined {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (code === 'LINK_CHOICE_REQUIRED') return LINK_CHOICE;
+  if (code === 'HOST_UNAVAILABLE' || code === 'STALE_CONNECTION') return LINK_CLOSED;
+  return undefined;
+}
+
 export interface CurrentInputs {
   /** The project's classification store version now (undefined = not known). */
   rolesVersion?: number;

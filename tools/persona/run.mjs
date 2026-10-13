@@ -8,7 +8,14 @@
 //   node tools/persona/run.mjs --scenario R1-HIDE --project <id>
 //     [--launch-file .vide/dev-data/launch.json | --launch <url#token>]
 //     [--persona intern] [--max-steps 12] [--out .vide/persona/<stamp>] [--claude claude] [--headless]
-//     [--no-fresh-conversation] [--idle-timeout 600]
+//     [--no-fresh-conversation] [--idle-timeout 600] [--answers <json | file.json>] [--no-host-check]
+//
+// Hosts (T-286): the scenario's `hosts` (e.g. ["rhino"]) must match the project's open links before
+// the run starts (GET …/links); an open link of another host or a missing one ends the run
+// 'untested' with the reason — round 2 ran Rhino scenarios with ZWCAD linked and every request went
+// to zwcad. Operator answers (T-286): when the persona asks (`ask_operator`, a fact such as the site
+// address), the driver answers from the scenario's `operator` block merged with --answers, logs it
+// in steps.jsonl and run.json (`operatorAnswers`), and the persona goes on with the answer.
 //
 // Isolation (T-280): by default each run starts in a new conversation (POST …/conversations, shown
 // by presetting the UI's remembered tab) after the project's queued/running requests have ended.
@@ -25,7 +32,14 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { chromium } from 'playwright';
 import { identifyEngine, personEngines } from '../ab/stages.mjs';
-import { VIEWPORT, apiAllowed, canaryStep, personaStep } from './persona-step.mjs';
+import {
+  VIEWPORT,
+  apiAllowed,
+  canaryStep,
+  hostsCheck,
+  operatorAnswer,
+  personaStep,
+} from './persona-step.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..', '..');
@@ -42,6 +56,8 @@ const { values: args } = parseArgs({
     headless: { type: 'boolean', default: false },
     'fresh-conversation': { type: 'boolean', default: true },
     'idle-timeout': { type: 'string', default: '600' },
+    answers: { type: 'string' },
+    'host-check': { type: 'boolean', default: true },
   },
   allowNegative: true,
 });
@@ -54,6 +70,18 @@ if (!scenario) throw new Error('No persona scenario ' + args.scenario);
 const goal = plan.goalFrame.replace('{body}', scenario.body);
 const personaFile = join(here, 'personas', `${args.persona}.md`);
 const maxSteps = Number(args['max-steps']);
+// Facts the operator (a senior) tells when the persona asks: the scenario's block, then --answers
+// (inline JSON or a .json file) over it.
+const answersArg = args.answers?.trim();
+const operator = {
+  ...(scenario.operator ?? {}),
+  ...(answersArg
+    ? JSON.parse(
+        answersArg.startsWith('{') ? answersArg : await readFile(resolve(answersArg), 'utf8'),
+      )
+    : {}),
+};
+const hosts = Array.isArray(scenario.hosts) ? scenario.hosts : null;
 
 // BANNED words on screen (PLAN-51 §2 ①): internal terms a non-developer must never see.
 const BANNED = /SPEC-|PLAN-|JIG|hostUse|LINK_NOT_LIVE|세션|토큰|bake|overlay|handoff|stale/g;
@@ -120,6 +148,9 @@ const run = {
   engineKind: identity.kind ?? 'loop',
   blockedApi: [], // API calls the guard refused: { at, method, path, reason }
   conversation: null, // the fresh conversation of this run (--fresh-conversation)
+  hosts, // the scenario's hosts (T-286); null when the scenario does not say
+  hostCheck: null, // { ok, reason?, open[] } from GET …/links before the run
+  operatorAnswers: [], // { step, field, question?, answer|null, reason? } (ask_operator)
 };
 const save = () => writeFile(join(out, 'run.json'), JSON.stringify(run, null, 2));
 let aborted = false;
@@ -161,6 +192,16 @@ async function waitIdle(timeoutMs) {
 
 let browser;
 try {
+  // Hosts (T-286): the project's open links must be exactly the scenario's hosts.
+  if (hosts && args['host-check']) {
+    run.hostCheck = hostsCheck(await api(`/projects/${project.id}/links`), hosts);
+    if (!run.hostCheck.ok) {
+      run.status = 'untested';
+      run.reason = run.hostCheck.reason;
+      throw Object.assign(new Error(run.reason), { handled: true });
+    }
+  }
+
   // Canary: the persona must not already know the product words (else the run is 미시험).
   const canary = await canaryStep({ personaFile, claude: args.claude });
   run.canary = { asked: true, answeredUnknown: canary.answeredUnknown, answer: canary.answer };
@@ -293,7 +334,13 @@ try {
       if (action.submit) await page.keyboard.press('Enter');
       run.typedInputs++;
     }
-    await page.waitForTimeout(action.type === 'wait' ? 5000 : 1500);
+    // ask_operator: no screen action; the operator's answer goes into the persona's next prompt.
+    let told;
+    if (action.type === 'ask_operator') {
+      told = operatorAnswer(operator, action, run.operatorAnswers.length);
+      run.operatorAnswers.push({ step, ...told });
+    }
+    await page.waitForTimeout(action.type === 'wait' ? 5000 : told ? 300 : 1500);
     const fresh = (await requestIdsOnPage()).filter((id) => id && !seen.has(id));
     for (const id of fresh) seen.add(id);
     run.requestIds.push(...fresh);
@@ -305,7 +352,10 @@ try {
     // No progress (PLAN-51 §2): two consecutive steps that both brought no new request id, saw the
     // same visible text (innerText hash, so a blinking cursor does not hide it) and chose the same
     // action type.
+    // An answered ask is progress (the persona learnt a fact), not a no-progress step.
+    const answered = !!told?.answer;
     if (
+      !answered &&
       previous &&
       !previous.fresh &&
       !fresh.length &&
@@ -325,6 +375,7 @@ try {
       visibleTextLength: text.length,
       textHash: textHash.slice(0, 16),
       requestIds: fresh,
+      ...(told ? { operatorAnswers: [told] } : {}),
       ms: meta?.ms,
     };
     history.push(entry);
@@ -334,7 +385,9 @@ try {
     run.bannedWords = [...banned];
     await save();
     console.log(
-      `${step}. ${action.type}${action.x != null ? ` (${action.x},${action.y})` : ''}${action.text ? ` "${action.text}"` : ''} — ${persona.sees.slice(0, 80)}`,
+      `${step}. ${action.type}${action.x != null ? ` (${action.x},${action.y})` : ''}${action.text ? ` "${action.text}"` : ''}` +
+        (told ? ` ${told.field} → ${told.answer ?? `(no answer: ${told.reason})`}` : '') +
+        ` — ${persona.sees.slice(0, 80)}`,
     );
     if (action.type === 'done' || persona.done) {
       run.personaDone = true;

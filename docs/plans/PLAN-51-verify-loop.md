@@ -2,8 +2,8 @@
 id: PLAN-51
 title: 검증–수정 반복 루프 — 사용자 문장 시나리오·페르소나·스코어카드 (T-264~T-268)
 status: review
-version: 0.4
-updated: 2026-10-09
+version: 0.5
+updated: 2026-10-14
 owner: agent:claude
 related: [PRD, SPEC-00, SPEC-01, SPEC-02, SPEC-05, SPEC-06, SPEC-07, SPEC-12, SPEC-13, SPEC-15, PLAN-12, PLAN-14, PLAN-19, PLAN-45, PLAN-46, PLAN-47, PLAN-48, AC-22, AC-48, FR-25, T-012]
 ---
@@ -78,11 +78,11 @@ related: [PRD, SPEC-00, SPEC-01, SPEC-02, SPEC-05, SPEC-06, SPEC-07, SPEC-12, SP
 | T-279 도구: 시나리오 기준 정렬 | `scenarios-round1.json`에서 R1-NOTE 기대를 §3('호스트·jig 아님')과 맞추고 R1-RECONNECT 행(실패 코드로 끝나고 '응답 완료' 아님)을 추가 | `checks.test.mjs`·`scorecard.test.mjs` | R1-NOTE·R1-RECONNECT가 §3 기준으로 판정됨 |
 | T-280 도구: 페르소나 런 격리 | 런마다 사본을 새로 복사·Link하고 새 대화에서 시작하며, 앞 런의 요청이 끝난 뒤 다음 런을 시작 | 라운드 2 L1 | 런 사이 문서·대화 상태 공유 0 |
 | T-281 P1 후보 Sync 성능 시험의 undo 뒤 delta 불일치 | 동작 변경 없음(원인 조사). `rhino-sync-perf.mjs` small의 undo 단계에서 'delta differs from full Sync'가 두 번 모두 재현됐다. 원인이 제품(변경분 Sync)인지 시험인지 SPEC-01.11(Link·Sync) 기준으로 가린다 | R1-SYNC-PERF small 재실행, `.vide/sync-perf/b5c5f89c-…`·`69757bc6-…` | 원인 확인, 제품 결함이면 해당 SPEC·PLAN에 수정 티켓 |
-| T-282 P0 법규 체크 모델 읽기 실패와 그 표시 | SPEC-15.1에 읽기 실패(호스트 없음·닫힌 연결·Rhino 연결이 여럿)의 표시와 대상 연결 선택을 먼저 정하고 PLAN-48로 구현. `compliance/read`의 `HOST_UNAVAILABLE`이 `server-error`·'VIDE 내부 오류'로 보이는 것을 분류된 실패로 바꾸고, 닫힌 Link가 골라졌는지(`src/server/compliance-routes.ts:276`, 원인 미확인) 확인 | 닫힌 Rhino Link와 새 Link가 함께 있는 프로젝트에서 [법규 체크], L1 R1-C(Rhino만 연결) | 결과 표가 판정 가능/판단 필요/사람 입력 필요를 구분하거나, 읽지 못하면 이유와 다음 행동이 보임('내부 오류' 0) |
-| T-283 P0 후보 Sync jig 비교의 Rhino 0개 | 원인 조사 먼저. Rhino Sync는 3,045개인데 [정렬·비교 실행]이 Rhino 0개 · CAD 3,381개 · 대응 0쌍이고 Rhino 레이어 목록이 빈 까닭을 SPEC-05.8(Sync jig 입력) 기준으로 가린다. 제품 결함이면 SPEC-05.8·PLAN-14에 수정 항목 | `r2-R1-A` 재현(small 사본 + cad 사본), L1 R1-A | 원인 확인. 비교할 요소가 없으면 그 이유를 화면에 보이고, 결함이면 대응 쌍이 나옴 |
-| T-284 P0 후보 다른 프로젝트 연결 ID가 남은 문서의 Link | 동작 판단 먼저. 연결 ID(ADR-030)를 지닌 CAD 사본을 전용 프로젝트에 Link하자 원래 프로젝트 Link `ab63a9e0`의 경로도 바뀌고 그쪽 동시 Sync가 129 s 뒤 `HOST_RESULT_UNKNOWN`. SPEC-01.11에 한 창이 두 프로젝트 연결에 함께 이어질 때의 규칙이 있는지 확인하고 없으면 보완 | 연결 ID가 있는 사본으로 두 전용 프로젝트 Link 재현 | 규칙 확정, 동시 Sync 실패 0. `실사용 검증 20261007` Link 경로를 되돌릴지는 사용자 결정 |
-| T-285 P1 ZWCAD 첫 Sync 151 s | 동작 변경 없음(측정). `cad.dwg`(3,719개) 첫 Sync 151,244 ms(호스트 149,182 ms). 다른 Link의 동시 Sync를 뺀 단독 값을 재고 호스트 단계를 나눈다 | 연결 ID 없는 cad 사본, 전용 프로젝트 하나 | 단독 Sync 수치와 느린 단계 기록, 경보선 ≤20 s 대비 |
-| T-286 도구: 페르소나 런의 호스트 구성·운영자 정보 | 시나리오에 연결할 호스트를 적고(R1-HIDE·D·C·B는 Rhino만, R1-A는 Rhino+CAD), 사본은 문서 안의 연결 ID가 없는 원본에서 만들며, 드라이버에 운영자 정보(대지 주소 등)를 줄 경로를 둔다. `_VIDEConnect`의 '닫힌 연결 파일이 있습니다' 두 번째 창도 무인 처리 대상에 넣는다 | 라운드 3 L1 | 시나리오별 요청의 `host`가 계획과 일치, 다른 프로젝트 Link 변경 0, R1-B가 주소를 받아 만들기 전 단계까지 감 |
+| T-282 P0 법규 체크 모델 읽기 실패와 그 표시 | SPEC-15.1에 읽기 실패(호스트 없음·닫힌 연결·Rhino 연결이 여럿)의 표시와 대상 연결 선택을 먼저 정하고 PLAN-48로 구현. `compliance/read`의 `HOST_UNAVAILABLE`이 `server-error`·'VIDE 내부 오류'로 보이는 것을 분류된 실패로 바꾸고, 닫힌 Link가 골라졌는지(`src/server/compliance-routes.ts:276`, 원인 미확인) 확인 | 닫힌 Rhino Link와 새 Link가 함께 있는 프로젝트에서 [법규 체크], L1 R1-C(Rhino만 연결) | 결과 표가 판정 가능/판단 필요/사람 입력 필요를 구분하거나, 읽지 못하면 이유와 다음 행동이 보임('내부 오류' 0) · **R3 전: 코드 수정·오프라인 시험 통과, 설치본 L1 미측정** |
+| T-283 P0 후보 Sync jig 비교의 Rhino 0개 | 원인 조사 먼저. Rhino Sync는 3,045개인데 [정렬·비교 실행]이 Rhino 0개 · CAD 3,381개 · 대응 0쌍이고 Rhino 레이어 목록이 빈 까닭을 SPEC-05.8(Sync jig 입력) 기준으로 가린다. 제품 결함이면 SPEC-05.8·PLAN-14에 수정 항목 | `r2-R1-A` 재현(small 사본 + cad 사본), L1 R1-A | 원인 확인. 비교할 요소가 없으면 그 이유를 화면에 보이고, 결함이면 대응 쌍이 나옴 · **R3 전: 코드 수정·오프라인 시험 통과, 설치본 L1 미측정** |
+| T-284 P0 후보 다른 프로젝트 연결 ID가 남은 문서의 Link | 동작 판단 먼저. 연결 ID(ADR-030)를 지닌 CAD 사본을 전용 프로젝트에 Link하자 원래 프로젝트 Link `ab63a9e0`의 경로도 바뀌고 그쪽 동시 Sync가 129 s 뒤 `HOST_RESULT_UNKNOWN`. SPEC-01.11에 한 창이 두 프로젝트 연결에 함께 이어질 때의 규칙이 있는지 확인하고 없으면 보완 | 연결 ID가 있는 사본으로 두 전용 프로젝트 Link 재현 | 규칙 확정, 동시 Sync 실패 0. `실사용 검증 20261007` Link 경로를 되돌릴지는 사용자 결정 · **R3 전: 코드 수정·오프라인 시험 통과, 설치본 L1 미측정** |
+| T-285 P1 ZWCAD 첫 Sync 151 s | 동작 변경 없음(측정). `cad.dwg`(3,719개) 첫 Sync 151,244 ms(호스트 149,182 ms). 다른 Link의 동시 Sync를 뺀 단독 값을 재고 호스트 단계를 나눈다 | 연결 ID 없는 cad 사본, 전용 프로젝트 하나 | 단독 Sync 수치와 느린 단계 기록, 경보선 ≤20 s 대비 · **R3 전: 미착수**(수정 웨이브 2에서 맡은 그룹 없음) |
+| T-286 도구: 페르소나 런의 호스트 구성·운영자 정보 | 시나리오에 연결할 호스트를 적고(R1-HIDE·D·C·B는 Rhino만, R1-A는 Rhino+CAD), 사본은 문서 안의 연결 ID가 없는 원본에서 만들며, 드라이버에 운영자 정보(대지 주소 등)를 줄 경로를 둔다. `_VIDEConnect`의 '닫힌 연결 파일이 있습니다' 두 번째 창도 무인 처리 대상에 넣는다 | 라운드 3 L1 | 시나리오별 요청의 `host`가 계획과 일치, 다른 프로젝트 Link 변경 0, R1-B가 주소를 받아 만들기 전 단계까지 감 · **R3 전: 코드 수정·오프라인 시험 통과, 설치본 L1 미측정** |
 
 수정 티켓은 측정 뒤 T-269부터 등록하며 동작 변경은 해당 SPEC을 먼저 보완한다. 예상 후보: A의 Sync jig 채팅 진입(jig 열기와 질문의 구분, PLAN-14·PLAN-19), B의 프로젝트 주소 fallback(SPEC-12), D의 구조 검토 단일 진입점(SPEC-06·07), '응답 완료' 라벨과 실패 코드 분리, planned jig 영역 요청의 '준비 중' 카드(SPEC-02.17·07).
 
@@ -156,6 +156,16 @@ related: [PRD, SPEC-00, SPEC-01, SPEC-02, SPEC-05, SPEC-06, SPEC-07, SPEC-12, SP
 | R1-B | P0 | P0(주소를 몰라 막힘, 제품 쪽은 P2 후보) | T-273 부분 · T-286 |
 | R1-NOTE | 판정 보류 | PASS(route-only) | T-279 완료 |
 | R1-COLOR · L0-R1..R5 · R1-SYNC-PERF · R1-RECONNECT | PASS · PASS · 미시험 · 판정 보류 | 미시험(L1' 생략) | T-277·T-281 남음 |
+
+#### 수정 웨이브 2 (2026-10-14)
+
+라운드 2 티켓을 개발 작업 트리에서 고쳤다(커밋 전). '완료'는 구현과 오프라인 시험(개발 엔진·가짜 호스트·브라우저 시험)까지이고, 설치본 L1·실호스트 확인은 0.2.33 릴리스 뒤 라운드 3에서 한다.
+
+- **T-282 법규 체크 읽기 실패와 대상 연결** — 완료(라운드 3 확인 전). SPEC-15.1 2 '읽을 연결 고르기'(0.5): 열린 Rhino 연결만 읽고, 기억한 연결이 없이 여럿이면 고르기, 기억한 연결로 읽었어도 여럿이면 고르기 칸과 읽은 문서 이름을 함께 보이며, VIDE에서 연 Rhino 파일도 열린 연결로 센다. 읽기 실패는 409 `HOST_UNAVAILABLE`·`LINK_CHOICE_REQUIRED`(이유·다음 행동, '내부 오류' 아님). 검토 반영으로 다른 jig 읽기(`readForJig`)도 호스트의 `HOST_UNAVAILABLE`·`STALE_CONNECTION`·`HOST_BUSY`를 분류된 실패로 넘긴다(`HOST_UNAVAILABLE` 409). 검증: `tests/server/compliance-roles.test.mjs`(T-282 5건), `tests/server/bake-route.test.mjs`('a jig read of a closed Link …'), `tests/core/compliance-screen.test.mjs`, `browser-compliance`(닫힘·여럿·기억한 연결과 다른 열린 연결), `browser-compliance-chat`. 남음: 실제 `editors.list(true)` 응답으로 확인(L1 R1-C), 설치본 R1-C.
+- **T-283 Sync jig 비교 Rhino 0개** — 부분. 원인: 사본 문서가 솔리드뿐이라 직선 요소가 없었다(저장소 읽기 결함 아님, PLAN-14). 화면이 0개인 쪽의 이유(읽지 못함 / 직선 요소 없음과 종류별 개수 / 고른 레이어에 없음)를 보인다(SPEC-05.8 0.17). 검증: `tests/server/sync-jig-route.test.mjs`, `tests/core/sync-jig.test.mjs`, `browser-jigs`. 남음: 솔리드 문서를 무엇으로 비교할지 제품 결정, L1 R1-A.
+- **T-284 다른 프로젝트 연결 ID가 남은 문서** — 완료(라운드 3 확인 전). SPEC-01.11 1(0.48): 연결 ID는 고른 프로젝트 안에서만 잇고, 열린 창 하나는 한 프로젝트에서만 연결 상태이며, Link하면 다른 프로젝트의 행은 닫힘(따라갔으면 이전 파일로)으로 돌아간다. 검토 반영(P0): 여러 프로젝트의 ID를 지닌 문서를 Link 없이 다시 열면 가장 최근에 이어진 연결의 프로젝트 하나만 연결 상태·Sync가 된다(`matchProjects`, 스케줄러와 연결 목록 공통). 검증: `tests/server/link-choice.test.mjs`(T-284 4건), `tests/server/sync-scheduler.test.mjs`(T-284 2건), `browser-links`. 남음: 설치본에서 두 프로젝트 Link 재현, `실사용 검증 20261007` Link 경로를 되돌릴지 사용자 결정.
+- **T-285 ZWCAD 첫 Sync 151 s** — 미착수(측정 티켓, 이번 웨이브에서 맡지 않음).
+- **T-286 페르소나 런 호스트 구성·운영자 정보** — 완료(라운드 3 확인 전). `scenarios.json`의 `hosts`(R1-HIDE·D·C·B Rhino, R1-A Rhino+ZWCAD)와 R1-B `operator.address`, 드라이버의 운영자 답, 연결 ID를 뺀 사본(`tools/persona/host-link.ps1`·`strip-link-id.md`). 검증: `tools/persona/persona-step.test.mjs`, `tools/persona/host-link.test.mjs`. 남음: 실제 Rhino·ZWCAD에서 `host-link.ps1` 실행, '닫힌 연결 파일이 있습니다' 두 번째 창 무인 처리 확인.
 
 ## 6. 하지 않는 것(1회차)
 

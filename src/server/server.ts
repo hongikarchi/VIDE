@@ -1758,9 +1758,26 @@ export async function startServer({
           });
           return;
         }
+        const before = new Set(links.list(linkList[1]).map((row) => row.id));
         const linked = links.link(linkList[1], input);
         // The plugin stores this id in the document now (ADR-030); the list says so once.
         if (target.ask && target.storedId !== linked.id) links.note(linked.id, { kind: 'stored' });
+        // The window is this project's now (SPEC-01.11 1, T-284): another project's row that held
+        // it reads as closed (back to its own file if it had followed this window), and a new row
+        // for a document that carried another project's id says so once.
+        const released = links.releaseElsewhere(
+          linkList[1],
+          target.host,
+          target.instance,
+          target.documentId,
+        );
+        if (released.length)
+          diagnostics.write('link-released-elsewhere', { link: linked.id, released });
+        if (
+          !before.has(linked.id) &&
+          (released.length || links.foreignIds(linkList[1], doc.linkIds).length)
+        )
+          links.note(linked.id, { kind: 'foreign' });
         send(201, linked);
         return;
       }

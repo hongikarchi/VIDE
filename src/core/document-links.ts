@@ -82,7 +82,9 @@ export type LinkNotice =
       to: string;
       previous: { name: string; path: string | null; instance: string; documentId: number };
     }
-  | { kind: 'stored' };
+  | { kind: 'stored' }
+  /** A new row for a document that carried another project's link id (T-284). */
+  | { kind: 'foreign' };
 /** A Link that needs the user's answer (SPEC-01.11 1): which row this document continues. */
 export interface LinkChoice {
   /** `copy`: the stored id's row is open in another window; `closed`: closed rows could match. */
@@ -97,15 +99,24 @@ export interface LinkChoice {
     match: 'stored' | 'path' | 'name' | 'recent';
   }[];
 }
+/** One host window's document, as the key of the windows other projects' rows hold (T-284). */
+export const windowKey = (host: string, instance: string | undefined, documentId: number) =>
+  `${host}|${instance ?? ''}|${documentId}`;
 /** A closed row counts as recently closed for the link choice within this time. */
 const RECENT_MS = 12 * 60 * 60 * 1000;
 /**
  * Which open document each link row shows (SPEC-01.11 1, T-095, T-108): the window's own row first
  * (same instance and documentId), then the row whose id the document stores (ADR-030), then a row
  * of the same saved file; the last two only when the row's own window is gone. One row per open
- * document; the others read as closed.
+ * document; the others read as closed. A window that a row of another project holds as its own
+ * (`claimed`, SPEC-01.11 1, T-284) is matched only by this project's own row of that window:
+ * another project's stored id or path never takes it.
  */
-export function matchOpenDocuments<D extends OpenDocument>(rows: DocumentLink[], open: D[]) {
+export function matchOpenDocuments<D extends OpenDocument>(
+  rows: DocumentLink[],
+  open: D[],
+  claimed: ReadonlySet<string> = new Set(),
+) {
   const matched = new Map<string, { document: D; session: boolean; how: MatchHow }>();
   const host = (document: D) => document.host ?? 'rhino';
   const hostRows = rows.filter((row) => !isFileLink(row));
@@ -126,8 +137,9 @@ export function matchOpenDocuments<D extends OpenDocument>(rows: DocumentLink[],
     );
     if (own) matched.set(own.id, { document, session: true, how: 'session' });
   }
-  const claimed = () => new Set([...matched.values()].map((entry) => entry.document));
-  const taken = claimed();
+  const taken = new Set([...matched.values()].map((entry) => entry.document));
+  for (const document of open)
+    if (claimed.has(windowKey(host(document), document.instance, document.id))) taken.add(document);
   // A row's stored id in several open documents (the file and a copy of it): the one at the row's
   // path keeps the row, else the window listed first.
   for (const row of hostRows) {
@@ -341,6 +353,60 @@ export class DocumentLinks {
         this.of(projectId)
           .prepare('UPDATE document_links SET instance=? WHERE projectId=? AND id=?')
           .run(closedInstance(), projectId, row.id);
+  }
+  /** Host rows of the other projects (one DB in tests, else each project's own DB, T-284). */
+  rowsElsewhere(projectId: string): DocumentLink[] {
+    if (this.source instanceof DatabaseSync)
+      return (
+        this.source
+          .prepare('SELECT * FROM document_links WHERE projectId<>?')
+          .all(projectId) as unknown as Row[]
+      )
+        .map(toLink)
+        .filter((row) => !isFileLink(row));
+    return this.source
+      .listProjects()
+      .filter((project) => project.id !== projectId)
+      .flatMap((project) => this.list(project.id))
+      .filter((row) => !isFileLink(row));
+  }
+  /** Which of a document's stored ids name a row of another project (T-284). */
+  foreignIds(projectId: string, ids: readonly string[] = []) {
+    if (!ids.length) return [];
+    const others = new Set(this.rowsElsewhere(projectId).map((row) => row.id));
+    return ids.filter((id) => others.has(id));
+  }
+  /**
+   * A Link in `projectId` takes the window (SPEC-01.11 1, T-284): rows of other projects that held
+   * it read as closed, and a row that followed this window to another file in this run goes back
+   * to the file it had before (its Sync records stay). Returns the rows released.
+   */
+  releaseElsewhere(projectId: string, host: string, instance: string, documentId: number) {
+    const released: { projectId: string; id: string; restored: boolean }[] = [];
+    for (const row of this.rowsElsewhere(projectId)) {
+      if (row.host !== host || row.instance !== instance || row.documentId !== documentId) continue;
+      const notice = this.notices.get(row.id);
+      const previous = notice?.kind === 'followed' ? notice.previous : undefined;
+      const back =
+        previous && !(previous.instance === instance && previous.documentId === documentId)
+          ? previous.instance
+          : closedInstance();
+      this.of(row.projectId)
+        .prepare(
+          'UPDATE document_links SET name=?, path=?, instance=?, documentId=? WHERE projectId=? AND id=?',
+        )
+        .run(
+          previous?.name ?? row.name,
+          previous ? previous.path : row.path,
+          back,
+          previous?.documentId ?? row.documentId,
+          row.projectId,
+          row.id,
+        );
+      this.notices.delete(row.id);
+      released.push({ projectId: row.projectId, id: row.id, restored: !!previous });
+    }
+    return released;
   }
   /** One-time notes of the links list (in memory: a restart clears them). */
   private readonly notices = new Map<string, LinkNotice>();
