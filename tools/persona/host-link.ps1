@@ -109,7 +109,9 @@ function Api([string]$Path, $Body) {
     }
     $text = [Text.Encoding]::UTF8.GetString($reply.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult())
     if (-not $reply.IsSuccessStatusCode) { throw "$Path`: $([int]$reply.StatusCode) $text" }
-    if ($text) { return $text | ConvertFrom-Json } else { return $null }
+    # Windows PowerShell 5.1 ConvertFrom-Json emits a JSON array as ONE pipeline object; returning
+    # it through a variable unrolls it so @(Api …) holds the rows, not a single array (round 3).
+    if ($text) { $parsed = $text | ConvertFrom-Json; return $parsed } else { return $null }
 }
 function ProjectLinks([string]$Id) { @(Api "/projects/$([Uri]::EscapeDataString($Id))/links" $null) }
 
@@ -121,6 +123,11 @@ Add-Type -Namespace HostLink -Name Native -MemberDefinition @'
 [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
 [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
 [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+[DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
+[DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SendMessageW")] public static extern IntPtr SendMessageText(IntPtr h, uint msg, IntPtr w, System.Text.StringBuilder l);
+[DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
+[DllImport("user32.dll")] public static extern int GetDlgCtrlID(IntPtr h);
+[DllImport("user32.dll")] public static extern IntPtr GetParent(IntPtr h);
 '@
 $UIA = [System.Windows.Automation.AutomationElement]
 $Tree = [System.Windows.Automation.TreeScope]
@@ -145,9 +152,28 @@ function Find-All($Element, $Type) {
     $condition = New-Object System.Windows.Automation.PropertyCondition($UIA::ControlTypeProperty, $Type)
     return @($Element.FindAll($Tree::Descendants, $condition))
 }
-function Get-Texts($Element) { @(Find-All $Element $CT::Text | ForEach-Object { $_.Current.Name }) -join ' ' }
+# Text elements, plus WinForms labels that reach UI Automation only as STATIC Panes (ZWCAD, round 3).
+function Get-Texts($Element) {
+    $labels = @(Find-All $Element $CT::Pane | Where-Object { $_.Current.ClassName -like '*STATIC*' })
+    @(@(Find-All $Element $CT::Text) + $labels | ForEach-Object { $_.Current.Name } | Where-Object { $_ }) -join ' '
+}
 # Press/select an element: Invoke, then SelectionItem, then Toggle, else a mouse click.
 function Use-Element($Element) {
+    # A WinForms ListBox row found through Win32 (ZWCAD dialogs, see Find-ProjectItem): select it and
+    # send LBN_SELCHANGE to the parent, which WinForms reflects as SelectedIndexChanged.
+    if ($Element -is [pscustomobject] -and $Element.Kind -eq 'listbox-row') {
+        [void][HostLink.Native]::SendMessage($Element.Handle, 0x0186, [IntPtr]$Element.Index, [IntPtr]::Zero)   # LB_SETCURSEL
+        $wparam = [IntPtr](([int][HostLink.Native]::GetDlgCtrlID($Element.Handle)) -bor (1 -shl 16))           # LBN_SELCHANGE
+        [void][HostLink.Native]::SendMessage([HostLink.Native]::GetParent($Element.Handle), 0x0111, $wparam, $Element.Handle)
+        return
+    }
+    # A WinForms button/radio button that UI Automation shows only as a Pane: BM_CLICK, posted so a
+    # modal handler behind it does not block this script.
+    $handle = [IntPtr]$Element.Current.NativeWindowHandle
+    if ($Element.Current.ControlType -eq $CT::Pane -and $handle -ne [IntPtr]::Zero -and $Element.Current.ClassName -like '*BUTTON*') {
+        [void][HostLink.Native]::PostMessage($handle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
+        return
+    }
     $pattern = $null
     if ($Element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) { $pattern.Invoke(); return }
     if ($Element.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$pattern)) { $pattern.Select(); return }
@@ -157,12 +183,31 @@ function Use-Element($Element) {
     [HostLink.Native]::mouse_event(0x2, 0, 0, 0, [UIntPtr]::Zero)
     [HostLink.Native]::mouse_event(0x4, 0, 0, 0, [UIntPtr]::Zero)
 }
-function Find-Button($Window, [string]$Like) { Find-All $Window $CT::Button | Where-Object { $_.Current.Name -like $Like } | Select-Object -First 1 }
+# ZWCAD's WinForms dialogs reach UI Automation only as Panes (round 3): a Pane of a Win32 BUTTON
+# class (buttons and radio buttons) with the same name counts too.
+function Find-Button($Window, [string]$Like) {
+    $hit = Find-All $Window $CT::Button | Where-Object { $_.Current.Name -like $Like } | Select-Object -First 1
+    if ($hit) { return $hit }
+    Find-All $Window $CT::Pane | Where-Object { $_.Current.ClassName -like '*BUTTON*' -and $_.Current.Name -like $Like } | Select-Object -First 1
+}
 # A list item whose own name or inner text is the project name (Eto on WPF may name items by type).
 function Find-ProjectItem($Window, [string]$Name) {
     foreach ($item in (Find-All $Window $CT::ListItem)) {
         if ($item.Current.Name -eq $Name) { return $item }
         if ((Get-Texts $item) -eq $Name) { return $item }
+    }
+    # WinForms ListBox shown as a Pane (ZWCAD): read its rows over Win32 (LB_GETCOUNT/LB_GETTEXT).
+    foreach ($box in (Find-All $Window $CT::Pane | Where-Object { $_.Current.ClassName -like '*LISTBOX*' })) {
+        $handle = [IntPtr]$box.Current.NativeWindowHandle
+        if ($handle -eq [IntPtr]::Zero) { continue }
+        $count = [int][HostLink.Native]::SendMessage($handle, 0x018B, [IntPtr]::Zero, [IntPtr]::Zero)
+        for ($i = 0; $i -lt $count; $i++) {
+            $length = [int][HostLink.Native]::SendMessage($handle, 0x018A, [IntPtr]$i, [IntPtr]::Zero)
+            if ($length -lt 0) { continue }
+            $text = New-Object System.Text.StringBuilder ($length + 1)
+            [void][HostLink.Native]::SendMessageText($handle, 0x0189, [IntPtr]$i, $text)
+            if ($text.ToString() -eq $Name) { return [pscustomobject]@{ Kind = 'listbox-row'; Handle = $handle; Index = $i } }
+        }
     }
     return $null
 }
@@ -315,6 +360,7 @@ while ($true) {
                 if ($chose) { break }
                 $text = Get-Texts $w
                 $new = Find-All $w $CT::RadioButton | Where-Object { $_.Current.Name -eq '새 연결 파일로 추가' } | Select-Object -First 1
+                if (-not $new) { $new = Find-Button $w '새 연결 파일로 추가' }   # WinForms radio as a Pane (ZWCAD)
                 $ok = Find-Button $w '연결'
                 if ($new -and $ok) {
                     Use-Element $new
