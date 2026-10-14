@@ -208,7 +208,9 @@ test('a work copy VIDE opened gets its first Sync once; later changes wait for â
   const workspace = new Workspace(store);
   const links = new DocumentLinks(store);
   const project = store.createProject('copy');
-  links.link(project.id, { host: 'rhino', name: 'copy.3dm', instance, documentId: 7 });
+  // A work copy's window is its Rhino process (`pid:startTicks`); this one runs (this process).
+  const copy = `${process.pid}:2`;
+  links.link(project.id, { host: 'rhino', name: 'copy.3dm', instance: copy, documentId: 7 });
   const calls = [];
   const scheduler = new SyncScheduler({
     workspace,
@@ -226,7 +228,35 @@ test('a work copy VIDE opened gets its first Sync once; later changes wait for â
     await scheduler.tick();
     await scheduler.settled();
   }
-  assert.deepEqual(calls, [instance]);
+  assert.deepEqual(calls, [copy]);
+});
+
+test('a row whose host is gone is never Synced, though its connection record remains (T-287)', async (t) => {
+  const store = new Store(':memory:');
+  t.after(() => store.close());
+  const workspace = new Workspace(store);
+  const links = new DocumentLinks(store);
+  const project = store.createProject('stale');
+  // A user's window from before the engine restarted (its discovery file is still there), and a
+  // work copy whose Rhino process has exited: the sessions still answer `has` for both.
+  links.link(project.id, { host: 'rhino', name: 'old.3dm', instance, documentId: 7 });
+  links.link(project.id, { host: 'rhino', name: 'copy.3dm', instance: '999999:1', documentId: 7 });
+  const calls = [];
+  const scheduler = new SyncScheduler({
+    workspace,
+    links,
+    projects: () => store.listProjects(),
+    open: async () => [],
+    isOwnedOpen: async () => true,
+    fullSync: async (projectId, target) => {
+      calls.push(target.instance);
+      workspace.submit(projectId, captureInput(target));
+      return { result: workspace.update(projectId, target.id, 'failed', { code: 'X' }) };
+    },
+  });
+  await scheduler.tick();
+  await scheduler.settled();
+  assert.deepEqual(calls, []);
 });
 
 test('a reconnected non-live file gets a full Sync instead of its old session display', async (t) => {

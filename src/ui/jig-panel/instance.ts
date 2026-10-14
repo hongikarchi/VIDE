@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { api } from '../gateway.ts';
+import { untilAfterConfirmed } from '../skill-start.ts';
 import type { PanelSetting } from './bindings.ts';
 
 // One instance (이 프로젝트의 jig) seen from the declarative panel: its view, the latest step
@@ -214,6 +215,8 @@ export function useInstance(
   const [notice, setNotice] = useState<string>();
   const [lastRun, setLastRun] = useState<Date>();
   const viewRef = useRef<InstanceView | undefined>(undefined);
+  /** Each step's latest status (the view's, then each run's): which human steps are confirmed. */
+  const statusRef = useRef(new Map<string, string>());
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -224,6 +227,7 @@ export function useInstance(
   const setView = (next: unknown) => {
     const parsed = viewSchema.parse(next) as InstanceView;
     viewRef.current = parsed;
+    for (const step of parsed.steps) statusRef.current.set(step.id, step.status);
     if (mounted.current) setViewState(parsed);
     return parsed;
   };
@@ -236,7 +240,15 @@ export function useInstance(
         const preferred =
           !options.mode && !options.until ? runPreferences.get(instanceId) : undefined;
         const mode = options.mode ?? preferred?.mode ?? screenMode ?? 'geometry';
-        const until = options.until ?? preferred?.until;
+        // A started skill stops at its human step until a person confirms it, then runs on to the
+        // next one (SPEC-07.18 3.6, T-288).
+        const until =
+          options.until ??
+          (preferred?.until
+            ? untilAfterConfirmed(viewRef.current?.steps ?? [], preferred.until, (id) =>
+                statusRef.current.get(id),
+              )
+            : undefined);
         const ran = (detail: Record<string, unknown>) =>
           window.dispatchEvent(
             new CustomEvent(JIG_RAN, { detail: { instanceId, mode, ...detail } }),
@@ -251,6 +263,9 @@ export function useInstance(
           throw error;
         }
         ran({ report });
+        if (!report.superseded)
+          for (const step of report.steps)
+            if (evaluated(step.status)) statusRef.current.set(step.id, step.status);
         if (report.superseded || !mounted.current) return report;
         setOutputs((current) => ({ ...current, ...report.outputs }));
         setReports((current) => ({
@@ -422,6 +437,48 @@ export function useInstance(
       setView(await api(base));
       await run();
     });
+  /**
+   * A layer a person picked for a role ([레이어 고르기], T-289, SPEC-07.14): read only that layer
+   * from the Syncs (SPEC-07.5) and confirm the role with the first read that holds objects on it;
+   * then the steps run again.
+   */
+  const pickLayer = (roleKey: string, syncIds: readonly string[], layer: string) =>
+    act(async () => {
+      const read = z
+        .object({
+          readId: z.string(),
+          objectCount: z.number(),
+          layers: z.array(z.object({ fullPath: z.string(), objectCount: z.number() })).optional(),
+        })
+        .passthrough();
+      let found: string | undefined;
+      for (const syncId of syncIds) {
+        let got: z.infer<typeof read>;
+        try {
+          got = read.parse(
+            await api(`${base}/reads`, 'POST', { syncId, layers: [layer], purpose: 'assembly' }),
+          );
+        } catch {
+          continue; // this Sync cannot be read; the next one may hold the layer
+        }
+        const held = got.layers?.find((l) => l.fullPath === layer)?.objectCount ?? got.objectCount;
+        if (held > 0) {
+          found = got.readId;
+          break;
+        }
+      }
+      if (!found) {
+        setNotice(`고른 레이어에서 읽은 객체가 없습니다: ${layer}`);
+        return;
+      }
+      await api(`${base}/assembly/${encodeURIComponent(roleKey)}`, 'PUT', {
+        sources: [{ readId: found, layers: [layer] }],
+        confirm: true,
+      });
+      setProposals(({ [roleKey]: _done, ...rest }) => rest);
+      setView(await api(base));
+      await run();
+    });
   const runStep = (stepId: string) => act(() => run({ until: stepId, mode: 'confirmed' }));
   /** Every step again (after edits made in Rhino were taken as 수정 사항). */
   const recompute = () => act(() => run());
@@ -441,6 +498,7 @@ export function useInstance(
     confirmStep,
     findRole,
     confirmRole,
+    pickLayer,
     runStep,
     recompute,
   };

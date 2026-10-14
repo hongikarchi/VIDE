@@ -14,7 +14,7 @@ import { isFileLink, type DocumentLink, type DocumentLinks } from '../core/docum
 import type { Workspace } from '../core/workspace.ts';
 import type { StoredWork } from '../contracts/stored-work.ts';
 import { linkRequests } from './link-removal.ts';
-import { matchProjects, type OpenDocument } from './live-links.ts';
+import { matchProjects, ownedWindowOpen, type OpenDocument } from './live-links.ts';
 import { LIVE_RETRY } from './live-sync.ts';
 
 export type SyncState = 'idle' | 'syncing' | 'held' | 'waiting' | 'failed';
@@ -318,7 +318,7 @@ export class SyncScheduler {
     };
     if (this.states.has(this.key(projectId, document))) return;
     if (linkRequests(link, requests).some((entry) => entry.state === 'succeeded')) return;
-    if (!(await this.options.isOwnedOpen(link).catch(() => false))) return;
+    if (!(await ownedWindowOpen(link, this.options.isOwnedOpen))) return;
     this.consider(projectId, link, { ...document, generation: 0, live: false }, requests);
   }
   /** Work on this file holds its automatic Sync (SPEC-01.11 6, ARCH-01 §7 보류). */

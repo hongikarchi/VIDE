@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
-import { KEYS, P1, fakeSiteData } from '../fixtures/site-data.mjs';
+import { KEYS, P1, P2, fakeSiteData } from '../fixtures/site-data.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'vide-site-model-'));
 const fake = fakeSiteData();
@@ -162,6 +162,52 @@ try {
   assert.ok(await picker.getByRole('button', { name: '다시 가져오기' }).isDisabled());
   await picker.getByRole('button', { name: '다시 켜기' }).click();
   await picker.getByLabel(/이 프로젝트에서 공공 자료 끄기/).waitFor();
+
+  // T-288 (SPEC-07.18 3.6·SPEC-12.3의 3): a jig started from a request computes up to 대상 필지
+  // 확정; once the person confirms it, the panel runs on up to Rhino에 만들기 (R3 R1-B: 4~7단계가
+  // '계산 전'에 머묾). The open instance is started again from a request; a changed parcel list asks
+  // again.
+  const runs = [];
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && /\/jig-instances\/[^/]+\/run$/.test(request.url()))
+      runs.push(request.postDataJSON());
+  });
+  await page.route(/\/route$/, (route) =>
+    route.fulfill({
+      json: { target: 'jig', by: 'rules', jig: 'vide/site-model', jigName: '사이트 모델링' },
+    }),
+  );
+  await page.locator('#body').fill('지금 우리 프로젝트 주변 사이트 모델링 해줘');
+  await page.locator('#request').click();
+  const tab = page.locator('[data-jig-panel="vide/site-model"]').first();
+  const tabPicker = tab.locator('.site-picker');
+  const tabRail = (id, state) =>
+    tab.locator(`.kit-rail li[data-step="${id}"][data-state="${state}"]`);
+  await tabRail('confirmTarget', 'confirmed').waitFor();
+  await page.unroute(/\/route$/);
+  await tabPicker.getByLabel('필지 더하기 (PNU)').fill(P2);
+  await tabPicker.getByRole('button', { name: '더하기' }).click();
+  await tabRail('confirmTarget', 'reconfirm').waitFor();
+  // While the parcels wait for the person again, the started run stops there.
+  const waited = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' && /\/jig-instances\/[^/]+\/run$/.test(response.url()),
+  );
+  await tabPicker.getByRole('button', { name: '다시 가져오기' }).click();
+  await waited;
+  assert.equal(runs.at(-1)?.until, 'confirmTarget', 'stops at the person step while it waits');
+  const ranAfter = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' && /\/jig-instances\/[^/]+\/run$/.test(response.url()),
+  );
+  await tabPicker.getByRole('button', { name: '대상 필지 확정' }).click();
+  await ranAfter;
+  await tabPicker.getByText('대상 필지를 확정했습니다.').waitFor();
+  assert.equal(runs.at(-1).until, undefined, 'runs on past the confirmed step');
+  for (const id of ['collect', 'frame', 'roads', 'terrain', 'buildings'])
+    await tabRail(id, 'done').waitFor();
+  await tabRail('summary', 'done').waitFor();
+  await tabRail('make', 'waiting').waitFor();
   // The AI turn after the T-273 start is refused by the stub above (409); nothing else may fail.
   assert.deepEqual(
     errors.filter((e) => !/status of 409/.test(e)),
@@ -175,6 +221,7 @@ try {
       unconfirmedThenConfirmed: true,
       collected: true,
       offSwitch: true,
+      continuesAfterConfirm: true,
       calls: fake.calls.length,
     }),
   );

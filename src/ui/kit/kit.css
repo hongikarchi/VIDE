@@ -358,6 +358,14 @@
   justify-content: space-between;
   gap: var(--s1);
 }
+.kit-role-pick {
+  display: grid;
+  gap: var(--s1);
+  margin-top: var(--s1);
+}
+.kit-role-pick select {
+  max-width: 100%;
+}
 
 /* --- KPI strip ------------------------------------------------------------------------------- */
 .kit-kpis {

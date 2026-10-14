@@ -217,8 +217,9 @@ const LIMITS = (linkId) => ({
 /**
  * `windows`: the Rhino windows open now (`editors.list`), as `[instance, documentId]` pairs — given
  * only by the T-282 tests; without it the fake has no `editors` and every link counts as open.
+ * `stale`: instances `editors.has` still reports though no host lists them (T-287).
  */
-async function fixture(t, { propose, windows } = {}) {
+async function fixture(t, { propose, windows, stale = [] } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'vide-compliance-'));
   const dataDir = join(root, 'data');
   mkdirSync(dataDir, { recursive: true });
@@ -255,7 +256,9 @@ async function fixture(t, { propose, windows } = {}) {
                 connection: 'attached-editor',
               })),
             }),
-            has: async () => false,
+            // `stale`: windows whose plugin connection record is still there though the host is
+            // gone (T-287): the sessions report them, the hosts' list does not.
+            has: async (instance) => stale.includes(instance),
           },
         }
       : {}),
@@ -377,6 +380,33 @@ test('T-282: with a closed and an open Rhino link the read uses the open one', a
       [fresh.id, true],
     ]),
   );
+});
+
+// PLAN-51 T-287 (R1-C, round 3): the round-1 link's Rhino is gone but its connection record is
+// still there (a discovery file the plugin did not remove, a session from before the engine
+// restarted). That row is closed: the picker never chooses it and the read uses the open window.
+test('T-287: a link whose host is gone but whose connection record remains reads as closed', async (t) => {
+  const windows = [[OTHER, 5]];
+  const gone = '999999:1';
+  const f = await fixture(t, { windows, stale: [INSTANCE, gone] });
+  const fresh = addLink(f, OTHER, 'r3-small.3dm');
+  // A work copy VIDE opened whose Rhino process has exited.
+  const copy = addLink(f, gone, 'copy.3dm');
+  f.document.add('건물', boxMesh([100, 200, 0], [110, 210, 12]));
+  const picked = await f.call('GET', `${f.base}/compliance/links?instanceId=${f.iid}`);
+  assert.equal(picked.data.chosen, fresh.id);
+  assert.deepEqual(
+    new Map(picked.data.links.map((l) => [l.id, l.open])),
+    new Map([
+      [f.link.id, false],
+      [fresh.id, true],
+      [copy.id, false],
+    ]),
+  );
+  const read = await f.call('POST', `${f.base}/compliance/read`, { instanceId: f.iid });
+  assert.equal(read.status, 200, JSON.stringify(read));
+  assert.equal(read.data.linkId, fresh.id);
+  assert.ok(f.targets.every((target) => target.instance === OTHER));
 });
 
 test('T-282: no open Rhino link (or Rhino stops answering) is HOST_UNAVAILABLE with the links', async (t) => {

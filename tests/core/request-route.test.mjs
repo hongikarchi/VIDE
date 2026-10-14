@@ -360,6 +360,7 @@ test('building words find layers by synonyms per path segment', async () => {
     ['3D', 'S-COLUMN', '구조', '보도', 'A-COLOR'],
   );
   assert.deepEqual(layerChoices('3D만 남겨', objects), [
+    { layer: '모두 (2개 레이어)', ids: ['o0', 'o1'], subject: '레이어 3D::S-Beam 외 1개' },
     { layer: '3D::S-Beam', ids: ['o0'] },
     { layer: '3D::S-Slab', ids: ['o1'] },
   ]);
@@ -387,6 +388,93 @@ test('member words skip 보이게/보는/보도 and layers like 도면정보/옹
   ]);
   const objects = layers.map((layer, i) => ({ id: 'o' + i, type: 'Brep', layer }));
   assert.deepEqual(routeRequest('기둥만 보이게 해줘', objects).view?.ids, ['o0']);
+});
+
+// ── T-270 R3: Korean structural layer codes (SB6·SG7·SB10) are beams; all of them are isolated. ──
+test('structural layer codes name members; every matching layer is used', async () => {
+  const { memberLayers, layerChoices, jevRoute, routeSubjects } =
+    await import('../../src/ui/request-route.ts');
+  const layers = ['SB6', 'SG7', 'SB10', 'SC1', 'Casing', 'SBase', '3D::S-Beam'];
+  assert.deepEqual(memberLayers('보만 남기고 다 숨겨줘', layers), [
+    'SB6',
+    'SG7',
+    'SB10',
+    '3D::S-Beam',
+  ]);
+  assert.deepEqual(memberLayers('기둥만 남겨', layers), ['SC1']);
+  // Paths, suffixes and case; ordinary words and other members are not codes.
+  const more = [
+    '철골::철골_3D::SB10',
+    'sg7a',
+    'B-2',
+    'RC1',
+    'SL1',
+    'Slab',
+    'W3',
+    'FT1',
+    'Gate',
+    'Basement',
+    'SB10(1F)',
+  ];
+  // "B-2" alone is a basement floor; a one-letter beam code needs a structure parent.
+  assert.deepEqual(memberLayers('보만 숨겨', more), ['철골::철골_3D::SB10', 'sg7a']);
+  assert.deepEqual(memberLayers('보만 숨겨', [...more, '구조::B-2']), [
+    '철골::철골_3D::SB10',
+    'sg7a',
+    '구조::B-2',
+  ]);
+  assert.deepEqual(memberLayers('기둥만 숨겨', more), ['RC1']);
+  assert.deepEqual(memberLayers('슬래브만 숨겨', more), ['SL1', 'Slab']);
+  assert.deepEqual(memberLayers('벽만 숨겨', more), ['W3']);
+  assert.deepEqual(memberLayers('기초만 숨겨', more), ['FT1']);
+  const objects = layers.map((layer, i) => ({ id: 'o' + i, type: 'Brep', layer }));
+  const rules = routeRequest('보만 남기고 다 숨겨줘', objects);
+  assert.deepEqual(rules.view, {
+    action: 'isolate',
+    ids: ['o0', 'o1', 'o2', 'o6'],
+    subject: '레이어 3D::S-Beam 외 3개',
+  });
+  // Jev naming one beam layer keeps all the beam layers the words name.
+  const subjects = routeSubjects(objects);
+  const one = jevRoute(
+    { target: 'view', action: 'isolate', subject: 'layer:SB10' },
+    subjects,
+    rules,
+  );
+  assert.deepEqual(one?.view?.ids, ['o0', 'o1', 'o2', 'o6']);
+  // A pick card with several matching layers offers them all at once first.
+  const choices = layerChoices('SB 숨겨', objects);
+  assert.equal(choices[0].layer, '모두 (3개 레이어)');
+  assert.deepEqual(choices[0].ids, ['o0', 'o2', 'o5']);
+});
+
+// ── T-270 R3 review: one-letter codes are not floors, grids, openings or sections. ──
+test('one-letter codes skip basements, grids, openings, sections and RC alone', async () => {
+  const { memberLayers } = await import('../../src/ui/request-route.ts');
+  const layers = [
+    'SB6',
+    'SG7',
+    'B1',
+    'B2',
+    '지하::B1',
+    'B-1F',
+    'Grid::G1',
+    '창호::W1',
+    '단면::S1',
+    'RC',
+    'SC1',
+    'C3',
+    '구조::B3',
+    'W2',
+  ];
+  assert.deepEqual(memberLayers('보만 남기고 다 숨겨줘', layers), ['SB6', 'SG7', '구조::B3']);
+  assert.deepEqual(memberLayers('벽만 남겨', layers), ['W2']);
+  assert.deepEqual(memberLayers('슬래브만 보여줘', layers), []);
+  assert.deepEqual(memberLayers('기둥만 남겨', layers), ['SC1', 'C3']);
+  // Without any two-letter code in the file, one-letter codes need a structure parent.
+  assert.deepEqual(memberLayers('기둥만 남겨', ['C3', 'W2', 'STR::C4']), ['STR::C4']);
+  const objects = layers.map((layer, i) => ({ id: 'o' + i, type: 'Brep', layer }));
+  assert.deepEqual(routeRequest('보만 남기고 다 숨겨줘', objects).view?.ids, ['o0', 'o1', 'o12']);
 });
 
 // ── T-269 review: reconcile words with an edit verb or a zoom word are not the Sync jig. ──

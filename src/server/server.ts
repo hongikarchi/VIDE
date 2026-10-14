@@ -2402,6 +2402,8 @@ export async function startServer({
             search: z.number().positive().max(10).optional(),
             rhinoLayers: z.array(z.string()).max(500).optional(),
             cadLayers: z.array(z.string()).max(500).optional(),
+            // Height (m) at which Rhino solids are cut (SPEC-05.8; default by levels or range).
+            sectionHeight: z.number().finite().min(-10000).max(10000).optional(),
             anchor: z.object({ rhino: z.string(), cad: z.string() }).optional(),
             candidate: z
               .object({ rotation: point, translation: z.tuple([point, point]), dz: point })

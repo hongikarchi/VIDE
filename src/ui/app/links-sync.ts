@@ -271,7 +271,12 @@ export function showRequest(id: string, restored = false) {
 /** The composer's target follows the active layer (SPEC-01.11 요청 대상). */
 export function applyActiveLayer() {
   if (!linksState.currentLayers.some((layer) => layer.key === linksState.activeLayer)) {
-    const newest = [...linksState.currentLayers].sort((a, b) =>
+    // An open file (connected now) first, then the newest Sync (T-287): a closed row's last Sync
+    // never heads the layer panel while another file is open.
+    const open = linksState.currentLayers.filter((layer) =>
+      linksState.links.some((link) => link.id === layer.key && link.connection),
+    );
+    const newest = [...(open.length ? open : linksState.currentLayers)].sort((a, b) =>
       String(
         draftState.state.messages.find((entry) => entry.id === a.requestId)?.request.createdAt ??
           '',

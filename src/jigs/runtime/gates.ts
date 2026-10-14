@@ -280,7 +280,7 @@ export function missingInputsMessage(manifest: JigManifest, keys: readonly strin
     return title ?? key;
   });
   return `필요한 입력이 없습니다: ${named.join(', ')}${
-    roles ? ' — 역할 카드에서 레이어를 고르거나 [입력 조립]을 여세요' : ''
+    roles ? ' — 역할 카드의 [레이어 고르기]로 넣으세요' : ''
   }`;
 }
 

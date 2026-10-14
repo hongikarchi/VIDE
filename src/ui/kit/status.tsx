@@ -28,6 +28,8 @@ export interface RailStep {
   reason?: string;
   /** A person may confirm the step now. */
   confirm?: boolean;
+  /** Missing input roles a person can pick here ([입력 고르기], T-289); the first one opens. */
+  inputs?: readonly string[];
 }
 const RAIL: Record<RailState, [string, string]> = {
   pending: ['○', '계산 전'],
@@ -45,10 +47,13 @@ export function StepRail({
   steps,
   busy,
   onConfirm,
+  onPickInput,
 }: {
   steps: readonly RailStep[];
   busy?: boolean;
   onConfirm?: (id: string) => void;
+  /** Open the role card of a missing input with its layer list (SPEC-07.14). */
+  onPickInput?: (key: string) => void;
 }) {
   return (
     <ol className="kit-rail" aria-label="단계">
@@ -75,6 +80,17 @@ export function StepRail({
               {text} · {step.by}
             </span>
             {step.reason ? <span className="kit-rail-why">{step.reason}</span> : null}
+            {step.inputs?.length && onPickInput ? (
+              <button
+                type="button"
+                className="kit-button"
+                data-primary
+                data-pick-input={step.inputs[0]}
+                onClick={() => onPickInput(step.inputs![0])}
+              >
+                입력 고르기
+              </button>
+            ) : null}
             {step.confirm && onConfirm ? (
               <button
                 type="button"

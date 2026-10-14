@@ -752,3 +752,81 @@ test("a document carrying two projects' ids, reopened without a Link, is live in
   assert.equal(mine.connection?.instance, W1);
   assert.equal((await api(otherBase)).find((row) => row.id === 'theirs').path, 'D:\\real\\cad.dwg');
 });
+
+// PLAN-51 T-287 (round 3): a row whose Rhino is gone kept a connection record (the plugin's
+// discovery file outlived the host and the engine restart) and read as '연결됨'. It is closed: only
+// a window the hosts list now (or a work copy whose process runs) is open (SPEC-01.11 7).
+test('Rhino: a connection record left by a host that is gone never makes its row open (T-287)', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'vide-link-stale-'));
+  const connections = join(root, 'rhino-connections');
+  await mkdir(connections, { recursive: true });
+  const executable = join(root, 'Rhino.exe');
+  await writeFile(executable, '');
+  const live = { port: 45124, pid: 4322, startTicks: '99', sessionId: randomUUID() };
+  // Windows PIDs are multiples of 4: 999999 names no process.
+  const gone = { port: 45125, pid: 999999, startTicks: '98', sessionId: randomUUID() };
+  for (const identity of [live, gone])
+    await writeFile(
+      join(connections, identity.sessionId + '.json'),
+      JSON.stringify({
+        identity: { ...identity, documentId: 7, revision: 0 },
+        token: 'c'.repeat(64),
+        executable,
+      }),
+    );
+  const callFor = (identity) => async (method) => {
+    if (identity.pid === gone.pid)
+      throw Object.assign(new Error('connect ECONNREFUSED'), { code: 'HOST_UNAVAILABLE' });
+    return method === 'attachedStatus'
+      ? {
+          ok: true,
+          documentId: 7,
+          name: 'r3-small.3dm',
+          path: 'C:\p\r3-small.3dm',
+          units: 'Meters',
+          objectCount: 3,
+          modified: false,
+          generation: 1,
+          live: true,
+          busy: false,
+        }
+      : { ok: false, code: 'UNSUPPORTED_METHOD' };
+  };
+  const app = await startServer({
+    filename: join(root, 'vide.db'),
+    host: { status: async () => ({ available: true }) },
+    sdkOptions: {
+      directory: join(root, 'sdk-models'),
+      executable,
+      plugin: executable,
+      bootstrap: executable,
+      connectionDirectory: connections,
+      resume: (connection) => ({
+        ...editorMethods(callFor(connection.identity)),
+        identity: connection.identity,
+        editorConnection: connection,
+      }),
+    },
+  });
+  t.after(async () => {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  });
+  const api = await session(app);
+  const project = await api('/projects', 'POST', { name: 'p' });
+  const at = new Date(Date.now() - 86_400_000).toISOString();
+  const insert = (id, name, instance) =>
+    soleDb(app.store)
+      .prepare('INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)')
+      .run(id, project.id, 'rhino', name, `C:\p\${name}`, instance, 7, at, at);
+  insert('stale', 'persona-small.3dm', `${gone.pid}:${gone.startTicks}:${gone.sessionId}`);
+  insert('open', 'r3-small.3dm', `${live.pid}:${live.startTicks}:${live.sessionId}`);
+  // A work copy VIDE opened (`pid:startTicks`) whose Rhino process has exited.
+  insert('copy', 'copy.3dm', `${gone.pid}:1`);
+  const list = await api(`/projects/${project.id}/links`);
+  assert.deepEqual(list.map((row) => [row.id, !!row.connection]).sort(), [
+    ['copy', false],
+    ['open', true],
+    ['stale', false],
+  ]);
+});

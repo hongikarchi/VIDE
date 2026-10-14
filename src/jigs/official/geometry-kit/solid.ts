@@ -755,6 +755,19 @@ export function closedVolumeCheck(
 export const solidVolume = (s: Solid) => (s.length ? checkSolid(weldSolid(s)).volume : 0);
 
 /**
+ * Where the edge a→b crosses the horizontal plane at height z, or undefined. A vertex on the plane
+ * counts as above it, so every polygon of a closed mesh crossing the plane gives exactly two points
+ * (shared by `sectionArea` and `sectionOutline`).
+ */
+export function planeCrossing(a: Vec3, b: Vec3, z: number): Vec3 | undefined {
+  const da = a[2] - z,
+    db = b[2] - z;
+  if (!((da < 0 && db >= 0) || (da >= 0 && db < 0))) return undefined;
+  const t = da / (da - db);
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, z];
+}
+
+/**
  * Area of the horizontal section at height z (m²). Each polygon crossing the plane gives one
  * segment oriented so the outward normal is on its right; the shoelace sum of those segments is
  * the section area (positive for a closed outward solid).
@@ -764,14 +777,8 @@ export function sectionArea(m: SolidMesh, z: number) {
   for (const loop of m.f) {
     const pts: Vec3[] = [];
     for (let e = 0; e < loop.length; e++) {
-      const a = m.v[loop[e]],
-        b = m.v[loop[(e + 1) % loop.length]];
-      const da = a[2] - z,
-        db = b[2] - z;
-      if ((da < 0 && db >= 0) || (da >= 0 && db < 0)) {
-        const t = da / (da - db);
-        pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, z]);
-      }
+      const hit = planeCrossing(m.v[loop[e]], m.v[loop[(e + 1) % loop.length]], z);
+      if (hit) pts.push(hit);
     }
     if (pts.length !== 2) continue;
     const n = newellOf(loop.map((i) => m.v[i]));

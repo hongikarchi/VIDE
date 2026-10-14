@@ -2,7 +2,7 @@
 id: PLAN-16
 title: 프로젝트 연결 파일(Link)과 여러 파일의 한 공간
 status: review
-version: 1.1
+version: 1.2
 updated: 2026-10-14
 owner: agent:claude
 related: [PLAN, SPEC-01, DESIGN, ARCH-01, ADR-030, FR-01, FR-02, FR-03, FR-16]
@@ -156,3 +156,14 @@ related: [PLAN, SPEC-01, DESIGN, ARCH-01, ADR-030, FR-01, FR-02, FR-03, FR-16]
 - **변경:** `src/core/document-links.ts` — `matchOpenDocuments(rows, open, claimed)`: 다른 프로젝트 행이 제 창으로 지닌 창은 이 프로젝트의 저장된 ID·경로로 잡지 않음, `windowsElsewhere`·`foreignIds`·`releaseElsewhere`(Link한 창을 지녔던 다른 프로젝트 행을 닫힘으로, 이번 실행에서 따라갔으면 이전 이름·경로로), 알림 `foreign`. `src/server/live-links.ts`(`followOpenDocuments`가 `claimed`를 넘김), `src/server/sync-scheduler.ts`(엔진 자동 Sync도 같은 `claimed`), `src/server/server.ts` `POST …/links`(Link 뒤 `releaseElsewhere`, 새 행이고 문서에 다른 프로젝트 ID가 있었으면 `foreign` 알림, 진단 `link-released-elsewhere`), `src/ui/links.tsx`(한 줄 알림 "다른 프로젝트의 연결 ID가 있던 문서 — 새 연결 파일로 추가함"과 [확인]). 플러그인은 바꾸지 않았다: Rhino·ZWCAD 모두 Link에 고른 프로젝트의 ID만 `storedId`로 보내고, 문서의 모든 ID는 열린 문서 목록의 `linkIds`로 온다. 그래서 막는 곳은 엔진의 대조다.
 - **검증:** `tests/server/link-choice.test.mjs` T-284 세 건(다른 프로젝트 ID를 지닌 사본 → 이 프로젝트 새 행과 `foreign` 알림, 다른 프로젝트 행의 경로·연결 그대로 / Link 전에 다른 프로젝트 행이 ID로 따라간 경우 Link가 이전 경로·닫힘으로 되돌림 / 같은 프로젝트의 저장된 ID는 그 행으로 이어지고 알림 없음), `tests/server/sync-scheduler.test.mjs`(다른 프로젝트 행은 그 창의 변경으로 Sync되지 않음). 같은 프로젝트 사본의 질문은 기존 'a copy open in a second window…'가 그대로 통과.
 - **남은 것:** 설치본 반영 뒤 연결 ID가 있는 사본으로 두 전용 프로젝트 Link 재현(L1). `실사용 검증 20261007`의 Link `ab63a9e0` 경로를 되돌릴지는 사용자 결정(엔진 재시작으로 따라감 알림이 사라졌으므로 이번 변경이 자동으로 되돌리지 않는다).
+
+<a id="t-287"></a>
+
+### T-287 호스트가 사라진 연결 행이 '연결됨'으로 남음 (2026-10-14)
+
+라운드 3 F13([VERIFY](../tdd/VERIFY-2026-10-14-loop-round-3.md), [PLAN-51](PLAN-51-verify-loop.md) §4)에서 라운드 1 행 `950d3fb8`(Rhino pid 13404, 그 Rhino 없음)이 `connection`(`live:false`, generation 0, objectCount 0)을 지녀 목록 '연결됨', `compliance/links` `open:true`·`chosen`, 레이어 패널 머리가 되었다. 규칙은 [SPEC-01.11](../specs/SPEC-01-project-input-sync.md)의 7(연결은 엔진 재시작·호스트 사라짐을 넘어 남지 않음).
+
+- **원인:** 그 `connection`은 links 응답의 작업 사본(`ownedOpen`) 갈래였다. 열린 문서 목록에 없는 행도 `editors.has(instance)`가 참이면 VIDE가 연 작업 사본으로 열림 처리했는데, `has`는 플러그인 발견 파일(`rhino-connections/*.json`)이나 엔진의 `.editors.json`에 남은 기록만 보고 그 프로세스가 살아 있는지 보지 않는다. 호스트가 비정상 종료해 발견 파일이 남으면 엔진을 다시 시작해도 그 행은 '연결됨'이었다. 0.2.33의 T-282가 같은 판정(`followOpenDocuments`의 `ownedOpen`)을 법규 체크 대상 선택에 쓰면서 거짓 거절로 드러났다.
+- **변경:** `src/server/live-links.ts` `ownedWindowOpen`·`processAlive` — 작업 사본 판정은 `pid:startTicks` 창이고 그 프로세스가 살아 있을 때만 참이며, 플러그인으로 붙은 창(`pid:startTicks:session`)은 호스트 목록에 있을 때만 열림이다. `followOpenDocuments`(links 목록·법규 체크 `rhinoLinks`·AI 턴 `liveLinks` 공통)와 `src/server/sync-scheduler.ts`의 작업 사본 첫 Sync가 이 판정을 쓴다. `src/ui/app/links-sync.ts` `applyActiveLayer` — 보던 레이어가 없을 때 연결된 파일의 레이어를 먼저 고른다(닫힌 행의 마지막 Sync가 레이어 패널 머리가 되지 않음).
+- **검증:** `tests/server/link-choice.test.mjs`(남은 발견 파일의 죽은 창 행·끝난 작업 사본 행과 열린 창 하나 → GET links에서 열린 행 하나만 `connection`), `tests/server/compliance-roles.test.mjs` T-287(죽은 행이 기억된 대상이어도 `compliance/links`가 열린 행을 고르고 읽기가 그 창을 읽음), `tests/server/sync-scheduler.test.mjs`(죽은 행은 자동 Sync하지 않음, 작업 사본 시험은 실제 `pid:startTicks` 형식으로). 앞의 두 서버 시험은 수정 전 코드에서 실패.
+- **남은 것:** 설치본 반영 뒤 라운드 4에서 죽은 행과 열린 행이 함께 있는 프로젝트의 links·`compliance/links`·레이어 패널 머리 확인(L1 R1-C·R1-HIDE). 남은 발견 파일·`.editors.json` 기록 자체는 지우지 않는다(판정만 바꿈). PID 재사용으로 다른 프로세스가 같은 PID를 가지면 작업 사본이 열림으로 보일 수 있다(시작 시각 대조는 하지 않음).

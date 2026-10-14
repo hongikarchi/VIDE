@@ -169,9 +169,35 @@ try {
     [200, 200],
   );
 
-  // Every role: candidates from the Sync layers that fit its hints, the first one confirmed by a person.
+  // T-289 (SPEC-07.14): while required roles are missing the role cards sit above the step rail;
+  // the blocked step's [입력 고르기] opens the first missing role's layer list, a person picks the
+  // slab layer, the role is confirmed and the step runs again without it.
+  const slabCard = panel.locator('.kit-role[data-role="site.slab"]');
+  assert.ok(
+    (await slabCard.boundingBox()).y < (await panel.locator('.kit-rail').boundingBox()).y,
+    'the role cards are above the step rail while inputs are missing',
+  );
+  const pickButton = rail('assemble', 'failed').getByRole('button', { name: '입력 고르기' });
+  assert.equal(await pickButton.getAttribute('data-pick-input'), 'site.slab');
+  await pickButton.click();
+  const slabLayer = slabCard.getByRole('combobox', { name: '슬래브 경계 레이어' });
+  await slabLayer.waitFor();
+  assert.ok(await slabLayer.evaluate((el) => el === document.activeElement), 'the list has focus');
+  assert.ok(await slabLayer.isVisible());
+  assert.ok((await slabLayer.locator('option').allTextContents()).includes(LAYERS.slab));
+  await slabLayer.selectOption(LAYERS.slab);
+  await slabCard.getByRole('button', { name: '이 레이어로 확인' }).click();
+  await panel.locator('.kit-role[data-role="site.slab"][data-state="confirmed"]').waitFor();
+  assert.match(await slabCard.textContent(), new RegExp(LAYERS.slab));
+  await page.waitForFunction(() => {
+    const text = document.querySelector('.kit-rail li[data-step="assemble"]')?.textContent ?? '';
+    return /필요한 입력이 없습니다/.test(text) && !/슬래브 경계/.test(text);
+  });
+  assert.match(await rail('assemble').textContent(), /기존 기초/);
+
+  // Every other role: candidates from the Sync layers that fit its hints, the first one confirmed
+  // by a person.
   const roles = [
-    ['site.slab', '슬래브 경계'],
     ['site.existingFootings', '기존 기초'],
     ['site.basinGirders', '유수지 보'],
     ['site.existingGrid', '기존 그리드'],

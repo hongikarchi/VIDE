@@ -70,7 +70,14 @@ const syncApplySchema = z
 const syncReadSchema = z.object({
   objects: z.number(),
   comparable: z.number(),
+  /** Elements per rule (SPEC-05.8): curves, solid section edges and the solids that gave them. */
+  rules: z.object({ curves: z.number(), sections: z.number(), solids: z.number() }).optional(),
   skipped: z.array(z.object({ type: z.string(), count: z.number() })),
+});
+const sectionSchema = z.object({
+  heights: z.array(z.number()),
+  source: z.enum(['person', 'levels', 'range', 'none']),
+  levels: z.array(z.number()),
 });
 const syncSchema = z.object({
   alignment: z.object({
@@ -101,6 +108,8 @@ const syncSchema = z.object({
           layer: z.string(),
           name: z.string().optional(),
           type: z.string(),
+          rule: z.literal('section').optional(),
+          height: z.number().optional(),
         })
         .optional(),
       cad: z
@@ -124,6 +133,7 @@ const syncSchema = z.object({
   cadLayers: z.array(z.object({ name: z.string(), count: z.number() })),
   counts: z.object({ rhino: z.number(), cad: z.number() }),
   read: z.object({ rhino: syncReadSchema, cad: syncReadSchema }).optional(),
+  section: sectionSchema.optional(),
   cadUnits: z.string(),
 });
 type Sync = z.infer<typeof syncSchema>;
@@ -146,7 +156,36 @@ function syncEmptyReason(
     .map((t) => `${t.type} ${n(t.count)}`)
     .join(' · ');
   const rest = read.skipped.length > 4 ? ' 등' : '';
-  return `${side} Sync에 비교할 직선 요소가 없습니다 — 객체 ${n(read.objects)}개(${types}${rest})에 선·폴리선이 없습니다. 면·솔리드·블록은 비교하지 않습니다.`;
+  if (side === 'CAD')
+    return `CAD Sync에 비교할 직선 요소가 없습니다 — 개체 ${n(read.objects)}개(${types}${rest})에 선분이 없습니다.`;
+  return `Rhino Sync에 비교할 요소가 없습니다 — 객체 ${n(read.objects)}개(${types}${rest})에 선·폴리선이 없고, 단면 높이에 걸친 솔리드도 없습니다. 단면 높이를 바꿔 보세요. 면·블록·점은 비교하지 않습니다.`;
+}
+const metres = (v: number) => `${Math.round(v * 1000) / 1000} m`;
+/** Which rule made each side's elements (SPEC-05.8, T-283). Empty when nothing was compared. */
+function syncRuleNote(side: 'Rhino' | 'CAD', result: Sync): string {
+  const n = (v: number) => v.toLocaleString('ko-KR');
+  const read = side === 'Rhino' ? result.read?.rhino : result.read?.cad;
+  const count = side === 'Rhino' ? result.counts.rhino : result.counts.cad;
+  if (!count || !read) return '';
+  if (side === 'CAD') return `CAD 비교 요소 ${n(count)}개 — 선분으로 된 개체`;
+  const rules = read.rules;
+  const section = result.section;
+  const parts: string[] = [];
+  if (!rules || rules.curves) parts.push(`선·폴리선 ${n(rules?.curves ?? count)}`);
+  if (rules?.sections && section) {
+    const heights = section.heights.slice(0, 4).map(metres).join(' · ');
+    const more = section.heights.length > 4 ? ` 외 ${section.heights.length - 4}` : '';
+    const from =
+      section.source === 'person'
+        ? '사람이 정한 높이'
+        : section.source === 'levels'
+          ? `층 레벨 ${section.levels.length}개 + 1.2 m`
+          : '솔리드 높이 범위 가운데';
+    parts.push(
+      `솔리드 단면 변 ${n(rules.sections)}(솔리드 ${n(rules.solids)}개, 높이 ${heights}${more} — ${from})`,
+    );
+  }
+  return `Rhino 비교 요소 ${n(count)}개 — ${parts.join(' · ')}`;
 }
 /** A stored Sync's rows of one document object (`GET …/requests/:r/objects?native=`). */
 const syncRowsSchema = z.object({
@@ -1237,6 +1276,8 @@ function SyncJig({ context }: { context: JigContext }) {
   const [cad, setCad] = useState(cadSources.at(-1)?.id ?? '');
   const [tolerance, setTolerance] = useState(1);
   const [search, setSearch] = useState(100);
+  /** Section height (m) for Rhino solids; empty = by storey levels or the height range. */
+  const [sectionHeight, setSectionHeight] = useState('');
   const [rhinoLayers, setRhinoLayers] = useState<string[]>([]);
   const [cadLayers, setCadLayers] = useState<string[]>([]);
   const [result, setResult] = useState<Sync>();
@@ -1257,6 +1298,9 @@ function SyncJig({ context }: { context: JigContext }) {
           cad,
           tolerance: tolerance / 1000,
           search: search / 1000,
+          ...(sectionHeight.trim() && Number.isFinite(Number(sectionHeight))
+            ? { sectionHeight: Number(sectionHeight) }
+            : {}),
           ...(rhinoLayers.length ? { rhinoLayers } : {}),
           ...(cadLayers.length ? { cadLayers } : {}),
           ...extra,
@@ -1282,7 +1326,10 @@ function SyncJig({ context }: { context: JigContext }) {
     [result, filter],
   );
   const a = result?.alignment;
-  const chosen = (result?.rows ?? []).filter((row) => picked.has(row.id));
+  // A solid's section edge is compared only: it never goes into an apply list (SPEC-05.8).
+  const picks = (result?.rows ?? []).filter((row) => picked.has(row.id));
+  const chosen = picks.filter((row) => row.rhino?.rule !== 'section');
+  const sectionPicked = picks.length - chosen.length;
   // The drawing follows the model through the engine's backflow apply (T-233, SPEC-14.11 1): the
   // open drawing's entities take the Rhino objects' shapes in place (type, layer, handle kept),
   // Rhino-only objects are added on the matched drawing layer, CAD-only entities are deleted.
@@ -1409,7 +1456,10 @@ function SyncJig({ context }: { context: JigContext }) {
           row: row.id,
           state: row.state,
           rhino:
-            row.rhino && `${row.rhino.name ?? ''} ${row.rhino.layer} ${row.rhino.nativeId}`.trim(),
+            row.rhino &&
+            `${row.rhino.name ?? ''} ${row.rhino.layer} ${row.rhino.nativeId}${
+              row.rhino.rule === 'section' ? ` 단면 ${row.rhino.height ?? ''}m` : ''
+            }`.trim(),
           cad: row.cad && `${row.cad.layer} ${row.cad.nativeId} ${row.cad.type}`,
           deviationMm:
             row.deviation === undefined ? undefined : Math.round(row.deviation * 1e4) / 10,
@@ -1418,6 +1468,13 @@ function SyncJig({ context }: { context: JigContext }) {
     });
   const send = async (kind: 'review' | 'cad' | 'rhino') => {
     if (!result) return;
+    const skippedNote = sectionPicked
+      ? ` 솔리드 단면 ${sectionPicked}행은 반영하지 않고 뺐습니다.`
+      : '';
+    if (kind !== 'review' && !chosen.length) {
+      setNotice(`고른 행이 모두 솔리드 단면이라 반영하지 않습니다.${skippedNote}`);
+      return;
+    }
     setBusy(true);
     try {
       if (kind === 'review')
@@ -1428,7 +1485,7 @@ function SyncJig({ context }: { context: JigContext }) {
           jig: { kind: 'sync-review', rows: result.rows.map((row) => row.id) },
         });
       else if (kind === 'cad') {
-        setNotice(await applyCad());
+        setNotice((await applyCad()) + skippedNote);
         return;
       }
       // Rhino follows the drawing in the open document (자동, ADR-022): one undo record per
@@ -1445,7 +1502,7 @@ function SyncJig({ context }: { context: JigContext }) {
       setNotice(
         kind === 'review'
           ? 'AI 검토를 대화에 보냈습니다.'
-          : '반영 요청을 대화에 보냈습니다. 결과는 오른쪽 대화에서 확인하세요.',
+          : '반영 요청을 대화에 보냈습니다. 결과는 오른쪽 대화에서 확인하세요.' + skippedNote,
       );
     } catch (error) {
       console.error(error);
@@ -1527,6 +1584,18 @@ function SyncJig({ context }: { context: JigContext }) {
             onChange={(e) => setSearch(Number(e.target.value) || 100)}
           />
         </label>
+        <label>
+          단면 높이 (m)
+          <input
+            type="number"
+            step="0.1"
+            placeholder="자동"
+            aria-label="단면 높이 (m)"
+            title="Rhino 솔리드를 자르는 높이. 비우면 층 레벨 + 1.2 m, 레벨이 없으면 솔리드 높이 범위 가운데"
+            value={sectionHeight}
+            onChange={(e) => setSectionHeight(e.target.value)}
+          />
+        </label>
         <button
           type="button"
           className="primary-button"
@@ -1561,9 +1630,16 @@ function SyncJig({ context }: { context: JigContext }) {
               side === 'Rhino' ? result.counts.rhino : result.counts.cad,
               side === 'Rhino' ? result.read?.rhino : result.read?.cad,
             );
-            return reason ? (
-              <p key={side} role="status" className="sync-missing" data-sync-empty={side}>
-                {reason}
+            if (reason)
+              return (
+                <p key={side} role="status" className="sync-missing" data-sync-empty={side}>
+                  {reason}
+                </p>
+              );
+            const note = syncRuleNote(side, result);
+            return note ? (
+              <p key={side} className="sync-rules" data-sync-rules={side}>
+                {note}
               </p>
             ) : null;
           })
@@ -1674,6 +1750,9 @@ function SyncJig({ context }: { context: JigContext }) {
                             ? row.rhino.name + ' · '
                             : ''}
                           {row.rhino.layer || row.rhino.type}
+                          {row.rhino.rule === 'section'
+                            ? ` · 단면 ${metres(row.rhino.height ?? 0)}`
+                            : ''}
                         </button>
                       ) : (
                         '—'
@@ -1705,16 +1784,12 @@ function SyncJig({ context }: { context: JigContext }) {
             <button type="button" disabled={busy} onClick={() => void send('review')}>
               AI 검토 (차이의 의미 판정)
             </button>
-            <button
-              type="button"
-              disabled={busy || !chosen.length}
-              onClick={() => void send('cad')}
-            >
+            <button type="button" disabled={busy || !picks.length} onClick={() => void send('cad')}>
               선택 {chosen.length}개 · CAD를 Rhino에 맞춤
             </button>
             <button
               type="button"
-              disabled={busy || !chosen.length}
+              disabled={busy || !picks.length}
               onClick={() => void send('rhino')}
             >
               선택 {chosen.length}개 · Rhino를 CAD에 맞춤

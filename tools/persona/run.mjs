@@ -8,7 +8,8 @@
 //   node tools/persona/run.mjs --scenario R1-HIDE --project <id>
 //     [--launch-file .vide/dev-data/launch.json | --launch <url#token>]
 //     [--persona intern] [--max-steps 12] [--out .vide/persona/<stamp>] [--claude claude] [--headless]
-//     [--no-fresh-conversation] [--idle-timeout 600] [--answers <json | file.json>] [--no-host-check]
+//     [--no-fresh-conversation] [--no-fresh-jigs] [--idle-timeout 600] [--answers <json | file.json>]
+//     [--no-host-check] [--logs <engine logs dir>]
 //
 // Hosts (T-286): the scenario's `hosts` (e.g. ["rhino"]) must match the project's open links before
 // the run starts (GET …/links); an open link of another host or a missing one ends the run
@@ -19,6 +20,10 @@
 //
 // Isolation (T-280): by default each run starts in a new conversation (POST …/conversations, shown
 // by presetting the UI's remembered tab) after the project's queued/running requests have ended.
+// Jigs (T-280, --fresh-jigs, default on): for the scenario's `jigs`, the conversations bound to
+// that jig's workbooks are closed and a new workbook is made, so the run's jig start opens it and a
+// new conversation instead of resuming an earlier run's (isolation.mjs; `isolation` in run.json).
+// After the run each request's CLI start (`resume`) is read from the engine log (`cliSessions`).
 // The document is not isolated here: the operator links a fresh .vide/ copy per run.
 //
 // On the person's engines — the installed one or their `npm run dev` one, recognised by port, by the
@@ -31,7 +36,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { chromium } from 'playwright';
-import { identifyEngine, personEngines } from '../ab/stages.mjs';
+import { identifyEngine, personEngines, readStages } from '../ab/stages.mjs';
+import { cliSessions, isolateJigs, scenarioJigs } from './isolation.mjs';
 import {
   VIEWPORT,
   apiAllowed,
@@ -55,6 +61,8 @@ const { values: args } = parseArgs({
     claude: { type: 'string', default: 'claude' },
     headless: { type: 'boolean', default: false },
     'fresh-conversation': { type: 'boolean', default: true },
+    'fresh-jigs': { type: 'boolean', default: true },
+    logs: { type: 'string' },
     'idle-timeout': { type: 'string', default: '600' },
     answers: { type: 'string' },
     'host-check': { type: 'boolean', default: true },
@@ -82,6 +90,7 @@ const operator = {
     : {}),
 };
 const hosts = Array.isArray(scenario.hosts) ? scenario.hosts : null;
+const jigs = scenarioJigs(scenario); // the jigs the run is expected to open (T-280)
 
 // BANNED words on screen (PLAN-51 §2 ①): internal terms a non-developer must never see.
 const BANNED = /SPEC-|PLAN-|JIG|hostUse|LINK_NOT_LIVE|세션|토큰|bake|overlay|handoff|stale/g;
@@ -90,12 +99,22 @@ const BANNED = /SPEC-|PLAN-|JIG|hostUse|LINK_NOT_LIVE|세션|토큰|bake|overlay
 const launchFile = args.launch ? null : resolve(args['launch-file']);
 const launch = new URL(args.launch ?? JSON.parse(await readFile(launchFile, 'utf8')).url);
 const origin = launch.origin;
+const engines = personEngines({ root });
 const identity = identifyEngine({
   origin,
   launchFile,
   logsDir: launchFile && join(dirname(launchFile), 'logs'),
-  engines: personEngines({ root }),
+  engines,
 });
+// The engine log, read only (CLI starts per request): --logs, the launch file's, or the engine's.
+const engineDir = engines.find((engine) => engine.kind === identity.kind)?.dir;
+const logsDir = args.logs
+  ? resolve(args.logs)
+  : launchFile
+    ? join(dirname(launchFile), 'logs')
+    : engineDir
+      ? join(engineDir, 'logs')
+      : null;
 const session = await fetch(origin + '/api/v1/session', {
   method: 'POST',
   headers: { Origin: origin, 'Content-Type': 'application/json' },
@@ -151,6 +170,10 @@ const run = {
   hosts, // the scenario's hosts (T-286); null when the scenario does not say
   hostCheck: null, // { ok, reason?, open[] } from GET …/links before the run
   operatorAnswers: [], // { step, field, question?, answer|null, reason? } (ask_operator)
+  jigs, // the scenario's expected jigs (T-280); null when the scenario does not say
+  isolation: null, // { status: full|partial|none|off, jigs[], limits[] } (isolation.mjs)
+  logsDir,
+  cliSessions: [], // { requestId, cliStarts, resume|null, provider, model } from the engine log
 };
 const save = () => writeFile(join(out, 'run.json'), JSON.stringify(run, null, 2));
 let aborted = false;
@@ -212,7 +235,7 @@ try {
     throw Object.assign(new Error(run.reason), { handled: true });
   }
 
-  if (args['fresh-conversation']) {
+  if (args['fresh-conversation'] || (args['fresh-jigs'] && jigs?.length)) {
     try {
       await waitIdle(Number(args['idle-timeout']) * 1000);
     } catch (error) {
@@ -220,6 +243,19 @@ try {
       run.reason = 'isolation: ' + String(error?.message ?? error);
       throw Object.assign(new Error(run.reason), { handled: true });
     }
+  }
+  // Jigs (T-280): close the conversations on the jig's workbooks and make a new latest workbook.
+  if (!args['fresh-jigs']) run.isolation = { status: 'off', jigs: [], limits: [] };
+  else if (jigs?.length) {
+    run.isolation = await isolateJigs({ api, projectId: project.id, jigs });
+    for (const row of run.isolation.jigs)
+      console.log(
+        `isolation ${row.jig}: ${row.kind ?? 'unknown'}, closed ${row.closedConversations.length}` +
+          `, unbound ${row.unboundConversations.length}, new workbook ${row.freshWorkbook ?? '-'}` +
+          (row.errors.length ? ` — ${row.errors.join('; ')}` : ''),
+      );
+  } else run.isolation = { status: 'none', jigs: [], limits: [] };
+  if (args['fresh-conversation']) {
     // Same call as the [+] tab button (src/ui/conversations.tsx): an empty general conversation.
     run.conversation = (await api(`/projects/${project.id}/conversations`, { kind: 'general' })).id;
   }
@@ -407,6 +443,16 @@ try {
 } finally {
   if (aborted && run.status === 'completed') run.status = 'aborted';
   run.endedAt = new Date().toISOString();
+  // Each request's CLI start from the engine log: resume true = it went on an earlier session.
+  try {
+    run.cliSessions = cliSessions(
+      run.requestIds,
+      (requestId) =>
+        readStages({ logsDir, requestId, startedAt: run.startedAt, endedAt: run.endedAt }).lines,
+    );
+  } catch {
+    /* the log is optional evidence */
+  }
   await save();
   await browser?.close().catch(() => {});
 }

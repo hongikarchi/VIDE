@@ -36,6 +36,8 @@ import {
   fieldOf,
   formatNumber,
   layerItems,
+  leftOrder,
+  pickableInputs,
   resolve,
   rowsOf,
   stepOf,
@@ -145,6 +147,7 @@ function railStep(
   step: InstanceView['steps'][number],
   report: StepReport | undefined,
   stale: boolean,
+  roleKeys: ReadonlySet<string> = new Set(),
 ): RailStep {
   const fromReport: Record<string, RailState> = {
     done: 'done',
@@ -188,6 +191,7 @@ function railStep(
     problems: gates.filter((g) => !g.ok).length || undefined,
     reason,
     confirm: step.kind === 'human' && (state === 'waiting' || state === 'reconfirm') && !!report,
+    inputs: state === 'failed' ? pickableInputs(gates, roleKeys) : undefined,
   };
 }
 
@@ -251,6 +255,8 @@ export function JigPanel({
   const [asking, setAsking] = useState<PanelAction>();
   /** Why an object asked for from the bake card was not shown. */
   const [focusNote, setFocusNote] = useState('');
+  /** The role whose [레이어 고르기] list is open (T-289). */
+  const [picking, setPicking] = useState<string>();
   const data: PanelData = useMemo(
     () => ({ outputs: jig.outputs, params: view?.params ?? [] }),
     [jig.outputs, view?.params],
@@ -405,6 +411,22 @@ export function JigPanel({
       />
     );
   };
+  /** The assembly roles a role-card part of this panel shows. */
+  const rolesOf = (part: PartOf<'role-card'>) => {
+    const input = view.inputs.find((i) => `inputs.${i.key}` === part.input);
+    return input?.kind === 'assembly'
+      ? (input.roles ?? [])
+          .filter((r) => !part.roles || part.roles.includes(r.role) || part.roles.includes(r.title))
+          .map((r) => ({ key: `${input.key}.${r.role}`, required: r.required }))
+      : [];
+  };
+  const roleParts = spec.left.filter(
+    (part): part is PartOf<'role-card'> => part.part === 'role-card',
+  );
+  const roleKeys = new Set(roleParts.flatMap((part) => rolesOf(part).map((r) => r.key)));
+  const lacking = (part: PartUse) =>
+    part.part === 'role-card' &&
+    rolesOf(part).some((r) => r.required && !view.body.assembly[r.key]?.confirmed);
   const roleCards = (part: PartOf<'role-card'>) => {
     const input = view.inputs.find((i) => `inputs.${i.key}` === part.input);
     if (!input) return null;
@@ -465,6 +487,17 @@ export function JigPanel({
             candidate === undefined ? undefined : jig.proposals[key]?.[Number(candidate)],
           )
         }
+        layers={viewOnly ? undefined : (host.layers ?? [])}
+        picking={picking}
+        onPicking={setPicking}
+        onPick={(key, layer) => {
+          setPicking(undefined);
+          void jig.pickLayer(
+            key,
+            (host.sources ?? []).map((s) => s.id),
+            layer,
+          );
+        }}
       />
     );
   };
@@ -477,10 +510,11 @@ export function JigPanel({
             <h4>{part.title ?? '단계'}</h4>
             <StepRail
               steps={view.steps.map((step) =>
-                railStep(step, jig.reports[step.id], jig.stale.has(step.id)),
+                railStep(step, jig.reports[step.id], jig.stale.has(step.id), roleKeys),
               )}
               busy={busy}
               onConfirm={(id) => void jig.confirmStep(id)}
+              onPickInput={viewOnly ? undefined : setPicking}
             />
           </section>
         );
@@ -801,7 +835,11 @@ export function JigPanel({
         </p>
       ) : null}
       <div className="kit-columns">
-        <div className="kit-side">{spec.left.map((part, i) => render(part, `left.${i}`))}</div>
+        <div className="kit-side">
+          {leftOrder(spec.left, lacking).map((part) =>
+            render(part, `left.${spec.left.indexOf(part)}`),
+          )}
+        </div>
         {slots.top && slots.board ? null : (
           <div className="kit-main">
             {slots.top ? null : center}

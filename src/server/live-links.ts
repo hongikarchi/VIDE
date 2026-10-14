@@ -109,11 +109,40 @@ export function matchProjects<D extends OpenDocument>(
   }
   return result;
 }
+/** Whether a process still runs (signal 0; `EPERM` means it runs under another account). */
+export function processAlive(pid: number) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return !!error && typeof error === 'object' && 'code' in error && error.code === 'EPERM';
+  }
+}
+/** A host window id: `pid:startTicks` (a work copy VIDE opened) or `pid:startTicks:session`. */
+const processWindow = /^(\d+):(\d+)(?::(.+))?$/;
+/**
+ * Whether a row's window is a work copy VIDE opened that is still open (SPEC-01.11 7, T-287): a
+ * user's window attached through the plugin (`…:session`) is open only while the hosts list it, so
+ * it never counts here; a work copy counts only while its process runs. A connection left in the
+ * engine's registry or a plugin's discovery file by a host that is gone (closed, crashed, or from
+ * before the engine restarted) is not an open window.
+ */
+export async function ownedWindowOpen(
+  link: DocumentLink,
+  isOwnedOpen: (link: DocumentLink) => Promise<boolean | undefined>,
+  alive: (pid: number) => boolean = processAlive,
+) {
+  if (isFileLink(link)) return false;
+  const window = processWindow.exec(link.instance);
+  if (window?.[3] !== undefined) return false;
+  if (window && !alive(Number(window[1]))) return false;
+  return !!(await isOwnedOpen(link).catch(() => false));
+}
 /**
  * Matches the open documents to the project's link rows and lets each matched row follow its
  * window (DocumentLinks.follow: Save As, first save, a row reconnected by path takes the window's
  * session). A work copy VIDE opened itself (`ownedOpen`: its window is not in `open` but still
- * open) keeps its own window. Returns the rows as they are after the follow step.
+ * open, `ownedWindowOpen`) keeps its own window. Returns the rows as they are after the follow step.
  */
 export async function followOpenDocuments<D extends OpenDocument>(
   links: DocumentLinks,
@@ -127,7 +156,7 @@ export async function followOpenDocuments<D extends OpenDocument>(
     if (
       !isFileLink(link) &&
       !open.some((item) => item.instance === link.instance) &&
-      (await isOwnedOpen(link).catch(() => false))
+      (await ownedWindowOpen(link, isOwnedOpen))
     )
       ownedOpen.add(link.id);
   // A window another project holds, or one another project reaches by a more recent link, is not

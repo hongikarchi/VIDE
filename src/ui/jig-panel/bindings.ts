@@ -322,3 +322,34 @@ export function toCsv(rows: readonly Record<string, unknown>[], columns: readonl
   const body = rows.map((row) => columns.map((c) => cell(fieldOf(row, c.field), c)).join(','));
   return '﻿' + [head.join(','), ...body].join('\r\n') + '\r\n';
 }
+
+/**
+ * The missing inputs a failed step's `inputs-present` gate names that a person can pick on a role
+ * card of this panel (T-289, SPEC-07.14), in the gate's order and once each.
+ */
+export function pickableInputs(
+  gates: readonly { name: string; ok: boolean; failed: readonly string[] }[],
+  roleKeys: ReadonlySet<string>,
+): string[] {
+  return [
+    ...new Set(
+      gates
+        .filter((g) => !g.ok && g.name === 'inputs-present')
+        .flatMap((g) => g.failed)
+        .filter((key) => roleKeys.has(key)),
+    ),
+  ];
+}
+
+/**
+ * The left column's parts in the order shown: while a role card still lacks a required role it
+ * goes above everything else (the step rail included), so where to put a missing input is in view
+ * when the panel opens (T-289, Design SCR-14); otherwise the declared order.
+ */
+export function leftOrder<T extends { part: string }>(
+  parts: readonly T[],
+  lacking: (part: T) => boolean,
+): T[] {
+  const first = parts.filter((part) => part.part === 'role-card' && lacking(part));
+  return [...first, ...parts.filter((part) => !first.includes(part))];
+}

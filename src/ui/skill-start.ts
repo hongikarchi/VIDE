@@ -262,6 +262,27 @@ export function skillValues(
   );
 }
 
+/**
+ * The step a started jig's run stops at now (SPEC-07.18 3.6, T-288): the start's `until` while
+ * that human step waits; once a person confirmed it, the next human step after it, and so on;
+ * undefined when none waits further (every step runs; Rhino에 만들기 stays the person's press).
+ */
+export function untilAfterConfirmed(
+  steps: readonly { id: string; kind: string }[],
+  until: string | undefined,
+  status: (stepId: string) => string | undefined,
+): string | undefined {
+  let current = until;
+  const seen = new Set<string>();
+  while (current && !seen.has(current) && status(current) === 'confirmed') {
+    seen.add(current);
+    const at = steps.findIndex((step) => step.id === current);
+    if (at < 0) return current;
+    current = steps.slice(at + 1).find((step) => step.kind === 'human')?.id;
+  }
+  return current;
+}
+
 function summarize(report: SkillRunReport | undefined, titles: Map<string, string>) {
   if (!report) return undefined;
   const name = (id: string) => titles.get(id) ?? id;

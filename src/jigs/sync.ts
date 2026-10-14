@@ -2,6 +2,10 @@
 // match. Alignment and matching are computed (reproducible, thousands of objects); judging what a
 // difference means is left to the AI review, which may cite only these rows and numbers.
 // All coordinates are metres (both Sync results are stored in metres).
+// Rhino solids take part through their plan section outline at a reference height (T-283,
+// SPEC-05.8): each straight edge of the outline is one element (`rule: 'section'`).
+
+import { sectionOutline } from './official/geometry-kit/section.ts';
 
 export type Point = [number, number, number];
 export interface Element {
@@ -16,6 +20,12 @@ export interface Element {
   /** Ordered points when the element is one polyline (Rhino curves). */
   points?: Point[];
   length: number;
+  /** Which rule made the element: a curve/segment entity, or one edge of a solid's section. */
+  rule: 'curve' | 'section';
+  /** The scene row (Rhino object) an element belongs to, when `id` names one of its pieces. */
+  object?: string;
+  /** Section height (m) of a `section` element. */
+  height?: number;
 }
 export interface Transform {
   /** Rhino → CAD in the XY plane: rotate by `rotation` (radians) about the origin, then translate. */
@@ -35,7 +45,16 @@ export type RowState = 'match' | 'offset' | 'rhino-only' | 'cad-only';
 export interface Row {
   id: string;
   state: RowState;
-  rhino?: { id: string; nativeId: string; layer: string; name?: string; type: string };
+  rhino?: {
+    id: string;
+    nativeId: string;
+    layer: string;
+    name?: string;
+    type: string;
+    /** Set for an edge of a solid's section, with the section height (m). */
+    rule?: 'section';
+    height?: number;
+  };
   cad?: { id: string; nativeId: string; layer: string; type: string };
   /** Largest distance between the matched shapes after alignment (metres). */
   deviation?: number;
@@ -56,6 +75,8 @@ export interface SyncOptions {
   anchor?: { rhino: string; cad: string };
   /** Use one of a previous run's candidates (when the alignment was ambiguous). */
   candidate?: Transform;
+  /** Cut Rhino solids at this height only (metres, the person's choice; default per SPEC-05.8). */
+  sectionHeight?: number;
 }
 
 const b64 = (value: unknown) => {
@@ -67,6 +88,19 @@ const b64 = (value: unknown) => {
   }
 };
 const distance = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+/** Coordinates of a stored array: plain numbers, or received binary with its `origin`. */
+function numbers(value: unknown): ArrayLike<number> {
+  if (Array.isArray(value)) return value as number[];
+  if (value instanceof Float32Array) {
+    const origin = (value as { origin?: unknown }).origin;
+    if (!Array.isArray(origin) || origin.length !== 3) return value;
+    const out = new Float64Array(value.length);
+    for (let i = 0; i < value.length; i++) out[i] = value[i] + Number(origin[i % 3]);
+    return out;
+  }
+  if (ArrayBuffer.isView(value)) return value as unknown as ArrayLike<number>;
+  return [];
+}
 
 const listOf = (value: unknown): Iterable<Record<string, unknown>> =>
   value && typeof value === 'object' && Symbol.iterator in value
@@ -81,12 +115,108 @@ const listOf = (value: unknown): Iterable<Record<string, unknown>> =>
 export interface ReadStats {
   objects: number;
   skipped: Map<string, number>;
+  /** Elements per rule, and the solids that gave at least one section edge. */
+  curves: number;
+  sections: number;
+  solids: number;
+}
+
+/** Rhino types cut as solids (render meshes in the Sync). */
+const SOLID_TYPES = new Set(['Brep', 'Extrusion', 'Mesh']);
+/** A point whose layer path or name says it marks a storey level (SPEC-05.8). */
+const LEVEL_NAME = /level|레벨/i;
+/** Section height above each storey level (m). */
+export const SECTION_ABOVE_LEVEL = 1.2;
+/** Where the section heights came from. */
+export interface SectionPlan {
+  heights: number[];
+  source: 'person' | 'levels' | 'range' | 'none';
+  levels: number[];
+}
+const zRange = (row: Record<string, unknown>): [number, number] | undefined => {
+  const origin = row.origin,
+    size = row.boundsSize;
+  if (Array.isArray(origin) && origin.length === 3 && Number.isFinite(origin[2])) {
+    const height = Array.isArray(size) && Number.isFinite(size[2]) ? Number(size[2]) : 0;
+    return [Number(origin[2]), Number(origin[2]) + height];
+  }
+  const v = numbers(row.vertices);
+  if (v.length < 3) return undefined;
+  let lo = Infinity,
+    hi = -Infinity;
+  for (let i = 2; i < v.length; i += 3) {
+    lo = Math.min(lo, v[i]);
+    hi = Math.max(hi, v[i]);
+  }
+  return [lo, hi];
+};
+const isSolidRow = (row: Record<string, unknown>) =>
+  SOLID_TYPES.has(String(row.nativeType ?? '')) && !row.block;
+/**
+ * The section heights of a Rhino Sync (one pass over meta only, no coordinates decoded): the
+ * person's height; else each storey level (points named or layered LEVEL/레벨) + 1.2 m; else the
+ * middle of the solids' height range.
+ */
+export function sectionPlan(result: Record<string, unknown>, height?: number): SectionPlan {
+  const names = new Map<string, string>();
+  for (const object of listOf(result.objects))
+    if (typeof object.name === 'string') names.set(String(object.id), object.name);
+  const levels: number[] = [];
+  let lo = Infinity,
+    hi = -Infinity;
+  for (const row of listOf(result.scene)) {
+    const type = String(row.nativeType ?? '');
+    if (type === 'Point') {
+      const label = `${b64(row.layer64)} ${names.get(String(row.id)) ?? b64(row.name64)}`;
+      const at = zRange(row);
+      if (at && LEVEL_NAME.test(label)) levels.push(at[0]);
+    } else if (isSolidRow(row)) {
+      const range = zRange(row);
+      if (range) {
+        lo = Math.min(lo, range[0]);
+        hi = Math.max(hi, range[1]);
+      }
+    }
+  }
+  const distinct = levels
+    .sort((a, b) => a - b)
+    .filter((z, i, all) => i === 0 || z - all[i - 1] > 0.001);
+  if (height !== undefined && Number.isFinite(height))
+    return { heights: [height], source: 'person', levels: distinct };
+  if (distinct.length)
+    return {
+      heights: distinct.map((z) => Math.round((z + SECTION_ABOVE_LEVEL) * 1e6) / 1e6),
+      source: 'levels',
+      levels: distinct,
+    };
+  if (lo <= hi) return { heights: [(lo + hi) / 2], source: 'range', levels: [] };
+  return { heights: [], source: 'none', levels: [] };
+}
+
+/** Section edges per object geometry and height (the same Sync read again cuts nothing again). */
+const sectionCache = new Map<string, [Point, Point][]>();
+const SECTION_CACHE_LIMIT = 200_000;
+function sectionEdges(row: Record<string, unknown>, height: number): [Point, Point][] {
+  const hash = typeof row.geometryHash === 'string' ? row.geometryHash : '';
+  const key = hash && `${hash}@${height.toFixed(6)}`;
+  const known = key ? sectionCache.get(key) : undefined;
+  if (known) return known;
+  const edges = sectionOutline(numbers(row.vertices), numbers(row.indices), height).edges as [
+    Point,
+    Point,
+  ][];
+  if (key) {
+    if (sectionCache.size >= SECTION_CACHE_LIMIT) sectionCache.clear();
+    sectionCache.set(key, edges);
+  }
+  return edges;
 }
 export function elements(
   result: Record<string, unknown>,
   host: 'rhino' | 'zwcad',
   layers?: readonly string[],
   stats?: ReadStats,
+  section?: SectionPlan,
 ): Element[] {
   const wanted = layers && new Set(layers);
   const names = new Map<string, string | undefined>();
@@ -114,6 +244,37 @@ export function elements(
           [pairs[i + 3], pairs[i + 4], pairs[i + 5]],
         ]);
     const useful = segments.filter(([a, b]) => distance(a, b) > 1e-6);
+    // A Rhino solid: one element per straight edge of its section at each height it spans.
+    if (!useful.length && host === 'rhino' && section?.heights.length && isSolidRow(row)) {
+      const range = zRange(row);
+      let made = 0;
+      for (const height of section.heights) {
+        if (!range || height <= range[0] || height >= range[1]) continue;
+        sectionEdges(row, height).forEach(([a, b], k) => {
+          out.push({
+            id: `${String(row.id)}@${height.toFixed(3)}#${k + 1}`,
+            nativeId: String(row.nativeId ?? row.id),
+            host,
+            layer: b64(row.layer64),
+            type: String(row.nativeType ?? 'Object'),
+            name: names.get(String(row.id)),
+            segments: [[a, b]],
+            length: distance(a, b),
+            rule: 'section',
+            object: String(row.id),
+            height,
+          });
+          made++;
+        });
+      }
+      if (made) {
+        if (stats) {
+          stats.sections += made;
+          stats.solids++;
+        }
+        continue;
+      }
+    }
     if (!useful.length) {
       if (stats) {
         const type = String(row.nativeType ?? 'Object');
@@ -131,7 +292,9 @@ export function elements(
       segments: useful,
       points,
       length: useful.reduce((sum, [a, b]) => sum + distance(a, b), 0),
+      rule: 'curve',
     });
+    if (stats) stats.curves++;
   }
   return out;
 }
@@ -448,6 +611,16 @@ function spread(a: Point[], b: [Point, Point][]) {
   return worst;
 }
 
+/** A row's Rhino side: the object (not the section piece), and the section height if any. */
+const rhinoRef = (e: Element): NonNullable<Row['rhino']> => ({
+  id: e.object ?? e.id,
+  nativeId: e.nativeId,
+  layer: e.layer,
+  name: e.name,
+  type: e.type,
+  ...(e.rule === 'section' ? { rule: 'section' as const, height: e.height } : {}),
+});
+
 /** Pair every Rhino element with its drawing counterpart after alignment and classify the pair. */
 export function compare(rhino: Element[], cad: Element[], t: Transform, options: SyncOptions = {}) {
   const tolerance = options.tolerance ?? 0.001;
@@ -496,13 +669,7 @@ export function compare(rhino: Element[], cad: Element[], t: Transform, options:
     rows.push({
       id: '',
       state: c.d <= tolerance ? 'match' : 'offset',
-      rhino: {
-        id: c.a.id,
-        nativeId: c.a.nativeId,
-        layer: c.a.layer,
-        name: c.a.name,
-        type: c.a.type,
-      },
+      rhino: rhinoRef(c.a),
       cad: { id: c.b.id, nativeId: c.b.nativeId, layer: c.b.layer, type: c.b.type },
       deviation: c.d,
       length: c.a.length,
@@ -519,7 +686,7 @@ export function compare(rhino: Element[], cad: Element[], t: Transform, options:
       rows.push({
         id: '',
         state: 'rhino-only',
-        rhino: { id: a.id, nativeId: a.nativeId, layer: a.layer, name: a.name, type: a.type },
+        rhino: rhinoRef(a),
         length: a.length,
         ...(straight(a)
           ? {
@@ -580,7 +747,8 @@ export function runSync(
   options: SyncOptions & { rhinoLayers?: string[]; cadLayers?: string[] } = {},
 ) {
   const read = { rhino: emptyStats(), cad: emptyStats() };
-  const allRhino = elements(rhinoResult, 'rhino', undefined, read.rhino),
+  const section = sectionPlan(rhinoResult, options.sectionHeight);
+  const allRhino = elements(rhinoResult, 'rhino', undefined, read.rhino, section),
     allCad = elements(cadResult, 'zwcad', undefined, read.cad);
   const pick = (list: Element[], layers?: string[]) =>
     layers?.length ? list.filter((e) => layers.includes(e.layer)) : list;
@@ -598,6 +766,8 @@ export function runSync(
     rhinoLayers: layerList(allRhino),
     cadLayers: layerList(allCad),
     counts: { rhino: rhino.length, cad: cad.length },
+    // Which rule made the Rhino elements (SPEC-05.8): curves, and solid sections at these heights.
+    section,
     // Why a side may have nothing to compare (T-283): stored objects read, comparable elements
     // of all layers, and the types of the objects without straight edges (most first).
     read: {
@@ -606,10 +776,17 @@ export function runSync(
     },
   };
 }
-const emptyStats = (): ReadStats => ({ objects: 0, skipped: new Map() });
+const emptyStats = (): ReadStats => ({
+  objects: 0,
+  skipped: new Map(),
+  curves: 0,
+  sections: 0,
+  solids: 0,
+});
 const readSummary = (read: ReadStats, comparable: number) => ({
   objects: read.objects,
   comparable,
+  rules: { curves: read.curves, sections: read.sections, solids: read.solids },
   skipped: [...read.skipped]
     .map(([type, count]) => ({ type, count }))
     .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type)),

@@ -718,6 +718,7 @@ const MEMBER_WORDS: [string, string[]][] = [
   ['기둥', ['column', 'col', '기둥']],
   ['슬래브', ['slab', '바닥판', '슬래브']],
   ['벽', ['wall', '벽']],
+  ['기초', ['footing', 'foundation', '기초']],
   ['지붕', ['roof', '지붕']],
   ['창', ['window', '창']],
   ['문', ['door', '문']],
@@ -758,33 +759,118 @@ function segmentNames(segment: string, word: string) {
       word.length >= 4 ? part.includes(word) : new RegExp(`^${word}(s|\\d.*)?$`).test(part),
     );
 }
-/** The layers a request's building words name ("보" → S-Beam, 구조::큰보). */
+/**
+ * Korean structural layer codes per building word (T-270 R3: small.3dm names its beams SB6·SG7·SB10).
+ * S·R = steel·RC, B = beam, G = girder (a girder is a 보), C = column, SL = slab, W = wall, F = footing.
+ */
+const MEMBER_CODES: Record<string, string[]> = {
+  보: ['b', 'sb', 'rb', 'g', 'sg', 'rg'],
+  기둥: ['c', 'sc', 'rc', 'col'],
+  슬래브: ['s', 'sl', 'slab'],
+  벽: ['w', 'sw', 'rw', 'wall'],
+  기초: ['f', 'ft', 'footing'],
+};
+/** Codes that are also everyday names alone ("RC" is a material layer), so they need a number. */
+const NUMBERED_ONLY = new Set(['rc']);
+/** Path parts that are structure parents ("구조::B1", "STR::C3"): one-letter codes count under them. */
+const STRUCTURE_PARENTS = /^(구조|골조|철골|structure|structural|struct|str|frame|steel)$/;
+/**
+ * Path parts whose children are not members (T-270 R3 review: "Grid::G1", "창호::W1", "단면::S1",
+ * "지하::B1"): grids, openings, sections and floors/levels ("B1", "1F", "B-1F").
+ */
+const NON_MEMBER_PARENTS =
+  /^(grid|grids|axis|축선|그리드|통로심|창호|창|문|window|windows|door|doors|opening|단면|section|sections|sect|지하|지상|층|level|levels|레벨|floor|floors|basement|b-?\d+f?|\d+f)$/;
+const parts = (segment: string) => segment.split(/[^가-힣a-z0-9-]+/).filter(Boolean);
+/**
+ * A layer segment is a structural code (T-270, SPEC-02.17 1). Codes of two letters or more: the
+ * code alone or + a number with an optional short letter tail ("SB10", "SG7a", "SB-3"; "RC" needs
+ * a number), also read in parts joined by "_" or spaces ("철골_SB10"). One-letter codes (B·G·C·S·W·F)
+ * only with a number and no tail ("C3", not "B-1F"), and only under a structure parent or in a file
+ * that also has two-letter codes; "B" + number only under a structure parent ("B1" is a basement).
+ * "SBase", "Casing", "S-Beam" are not codes.
+ */
+function segmentCode(
+  segment: string,
+  codes: readonly string[],
+  structured: boolean,
+  coded: boolean,
+) {
+  const oneLetter = (entry: string) => structured || (coded && entry !== 'b');
+  const code = (part: string) =>
+    codes.find((entry) =>
+      entry.length === 1
+        ? oneLetter(entry) && new RegExp(`^${entry}[-_]?\\d+$`).test(part.trim())
+        : new RegExp(
+            NUMBERED_ONLY.has(entry)
+              ? `^${entry}[-_]?\\d+[a-z]{0,2}$`
+              : `^${entry}(?:[-_]?\\d+[a-z]{0,2})?$`,
+          ).test(part.trim()),
+    );
+  if (code(segment)) return true;
+  return segment.split(/[_\s]+/).some((part) => (code(part)?.length ?? 0) >= 2);
+}
+/** A segment holds a two-letter-or-longer code with a number ("SB10", "SL1", "FT1"). */
+const LONG_CODES = [...new Set(Object.values(MEMBER_CODES).flat())].filter((c) => c.length >= 2);
+const longCoded = (segment: string) =>
+  segment
+    .split(/[_\s]+/)
+    .some((part) =>
+      LONG_CODES.some((c) => new RegExp(`^${c}[-_]?\\d+[a-z]{0,2}$`).test(part.trim())),
+    );
+/** The layers a request's building words name ("보" → S-Beam, 구조::큰보, SB10, SG7). */
 export function memberLayers(body: string, layers: readonly string[]) {
-  const words = MEMBER_WORDS.filter(([word]) => new RegExp(memberWord(word)).test(body)).flatMap(
-    ([, names]) => names,
-  );
+  const said = MEMBER_WORDS.filter(([word]) => new RegExp(memberWord(word)).test(body));
+  const words = said.flatMap(([, names]) => names);
+  const codes = said.flatMap(([word]) => MEMBER_CODES[word] ?? []);
   if (!words.length) return [];
-  return layers.filter((layer) =>
-    segments(layer).some((segment) => words.some((word) => segmentNames(segment, word))),
-  );
+  const coded = layers.some((layer) => segments(layer).some(longCoded));
+  return layers.filter((layer) => {
+    const path = segments(layer);
+    return path.some((segment, i) => {
+      if (words.some((word) => segmentNames(segment, word))) return true;
+      const parents = path.slice(0, i).flatMap(parts);
+      if (parents.some((part) => NON_MEMBER_PARENTS.test(part))) return false;
+      const structured = parents.some((part) => STRUCTURE_PARENTS.test(part));
+      return segmentCode(segment, codes, structured, coded);
+    });
+  });
 }
 /**
  * Layers to pick from when a screen request found no objects (T-270, SPEC-02.17 2): up to 8 layers
- * holding a word of the request, else the top-level layers; each with its objects.
+ * holding a word of the request (several: an 'all' choice first), else the top-level layers; each
+ * with its objects.
  */
-export function layerChoices(body: string, objects: readonly RouteObject[]) {
+export function layerChoices(
+  body: string,
+  objects: readonly RouteObject[],
+): { layer: string; ids: string[]; subject?: string }[] {
   const all = [...new Set(objects.map((o) => text(o.layer)).filter(Boolean))];
   const tokens = body
     .toLowerCase()
     .split(/\s+/)
     .map((token) => token.replace(/[만을를들은는이가도]$/, ''))
     .filter((token) => token.length >= 2 && !viewActions.some(([, p]) => p.test(token)));
-  const named = all.filter((layer) => tokens.some((token) => layer.toLowerCase().includes(token)));
+  const members = memberLayers(body, all);
+  const named = all.filter(
+    (layer) =>
+      members.includes(layer) || tokens.some((token) => layer.toLowerCase().includes(token)),
+  );
+  const each = named.map((layer) => ({
+    layer,
+    ids: objects.filter((o) => text(o.layer) === layer).map((o) => o.id),
+  }));
+  // Several layers hold the words: one choice for all of them first (T-270 R3).
+  if (each.length > 1)
+    return [
+      {
+        layer: `모두 (${each.length}개 레이어)`,
+        ids: each.flatMap((choice) => choice.ids),
+        subject: `레이어 ${each[0].layer} 외 ${each.length - 1}개`,
+      },
+      ...each.slice(0, 8),
+    ];
   const picked = named.length
-    ? named.map((layer) => ({
-        layer,
-        ids: objects.filter((o) => text(o.layer) === layer).map((o) => o.id),
-      }))
+    ? each
     : [...new Set(all.map((layer) => layer.split('::')[0]))].map((top) => ({
         layer: top,
         ids: objects
@@ -1041,8 +1127,16 @@ export function jevRoute(
       view: { action: 'unhide', ids: [], subject: '숨긴 객체' },
       reason: who + '화면 표시만',
     };
-  const chosen = subjects.find((subject) => subject.id === answer.subject);
   const found = rules?.view?.ids.length ? rules.view : undefined;
+  // Jev naming one of several layers the words name ("보" → SB10 of SB6·SG7·SB10) keeps them all.
+  const named = subjects.find((subject) => subject.id === answer.subject);
+  const chosen =
+    named &&
+    found &&
+    named.ids.length < found.ids.length &&
+    named.ids.every((id) => found.ids.includes(id))
+      ? undefined
+      : named;
   return {
     target: 'view',
     by,

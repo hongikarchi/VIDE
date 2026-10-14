@@ -545,6 +545,52 @@ try {
     })),
     sourceDocument: { name: 'solids.3dm', capturedAt: 'test', instance: '3', documentId: 2 },
   });
+  // A column 400×400×3000 (a Brep render mesh, one quad per face) and a LEVEL point at 0 (T-283,
+  // SPEC-05.8): compared by its section at level + 1.2 m.
+  const quads = [
+    [0, 1, 2, 3],
+    [4, 5, 6, 7],
+    [0, 1, 5, 4],
+    [1, 2, 6, 5],
+    [2, 3, 7, 6],
+    [3, 0, 4, 7],
+  ];
+  const corner = (i) => [i === 1 || i === 2 ? 0.2 : -0.2, i >= 2 ? 0.2 : -0.2];
+  const columnMesh = { vertices: [], indices: [] };
+  for (const face of quads) {
+    const o = columnMesh.vertices.length / 3;
+    for (const k of face) columnMesh.vertices.push(...corner(k % 4), k < 4 ? 0 : 3);
+    columnMesh.indices.push(o, o + 1, o + 2, o, o + 2, o + 3);
+  }
+  const boxes = [
+    {
+      id: 'col',
+      nativeId: '20000001',
+      nativeType: 'Brep',
+      ...columnMesh,
+      origin: [-0.2, -0.2, 0],
+      boundsSize: [0.4, 0.4, 3],
+      layer64: b64('구조::기둥'),
+    },
+    {
+      id: 'lv',
+      nativeId: '20000002',
+      nativeType: 'Point',
+      origin: [0, 0, 0],
+      boundsSize: [0, 0, 0],
+      layer64: b64('LEVEL'),
+    },
+  ];
+  insert('rhino-boxes', 'rhino', {
+    scene: boxes,
+    objects: boxes.map((row) => ({
+      id: row.id,
+      name: row.id === 'col' ? 'C1' : 'L1',
+      kind: 'native',
+      nativeId: row.nativeId,
+    })),
+    sourceDocument: { name: 'boxes.3dm', capturedAt: 'test', instance: '4', documentId: 3 },
+  });
   await page.reload();
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
   await page.getByRole('button', { name: 'JIG', exact: true }).click();
@@ -562,9 +608,44 @@ try {
   await empty.waitFor();
   assert.equal(
     await empty.textContent(),
-    'Rhino Sync에 비교할 직선 요소가 없습니다 — 객체 3개(Brep 2 · Extrusion 1)에 선·폴리선이 없습니다. 면·솔리드·블록은 비교하지 않습니다.',
+    'Rhino Sync에 비교할 요소가 없습니다 — 객체 3개(Brep 2 · Extrusion 1)에 선·폴리선이 없고, 단면 높이에 걸친 솔리드도 없습니다. 단면 높이를 바꿔 보세요. 면·블록·점은 비교하지 않습니다.',
   );
   assert.equal(await dialog.locator('[data-sync-empty="CAD"]').count(), 0);
+  // Solids are compared by their plan section; the jig says which rule made each side's elements.
+  const boxesValue = await rhinoPicker
+    .locator('option', { hasText: 'boxes.3dm' })
+    .getAttribute('value');
+  await rhinoPicker.selectOption(boxesValue);
+  await dialog.getByRole('button', { name: '정렬·비교 실행' }).click();
+  const rhinoRule = dialog.locator('[data-sync-rules="Rhino"]');
+  await rhinoRule.waitFor();
+  assert.equal(
+    await rhinoRule.textContent(),
+    'Rhino 비교 요소 4개 — 솔리드 단면 변 4(솔리드 1개, 높이 1.2 m — 층 레벨 1개 + 1.2 m)',
+  );
+  assert.equal(
+    await dialog.locator('[data-sync-rules="CAD"]').textContent(),
+    'CAD 비교 요소 4개 — 선분으로 된 개체',
+  );
+  assert.equal(await dialog.locator('[data-sync-empty]').count(), 0);
+  const sectionRow = dialog.locator('.jig-table tbody tr', { hasText: 'C1' }).first();
+  assert.match(await sectionRow.textContent(), /Rhino에만C1 · 구조::기둥 · 단면 1\.2 m/);
+  // A section row is compared only: picking it sends nothing to either document.
+  const before = posted.length;
+  await sectionRow.locator('input[type=checkbox]').check();
+  await dialog.getByRole('button', { name: /Rhino를 CAD에 맞춤/ }).click();
+  await dialog
+    .locator('.jig-sync [role=status]', { hasText: '고른 행이 모두 솔리드 단면이라' })
+    .waitFor();
+  assert.equal(posted.length, before);
+  // The person's height: above the column nothing is cut, and the jig says so.
+  await dialog.getByLabel('단면 높이 (m)').fill('5');
+  await dialog.getByRole('button', { name: '정렬·비교 실행' }).click();
+  await dialog.locator('[data-sync-empty="Rhino"]').waitFor();
+  assert.match(
+    await dialog.locator('[data-sync-empty="Rhino"]').textContent(),
+    /객체 2개\(Brep 1 · Point 1\)에 선·폴리선이 없고, 단면 높이에 걸친 솔리드도 없습니다/,
+  );
   assert.deepEqual(errors, []);
   console.log('JIG tab checks passed');
 } finally {

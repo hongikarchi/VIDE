@@ -6,7 +6,7 @@
 // only 'no-key', public data off → the SHP put in. Synthetic services only; nothing leaves the PC.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../../src/core/store.ts';
@@ -20,6 +20,8 @@ import { SiteDataSettings } from '../../src/server/site-data-routes.ts';
 import { PublicDataKeyStore } from '../../src/server/public-data-keys.ts';
 import { addressFromRequest } from '../../src/contracts/site-data.ts';
 import { JIGS } from '../../src/jigs/catalog.ts';
+import { autorunUntil } from '../../src/ui/skill-catalog.ts';
+import { untilAfterConfirmed } from '../../src/ui/skill-start.ts';
 import { KEYS, P1, P2, ROAD, fakeSiteData } from '../fixtures/site-data.mjs';
 import { SHP_TARGET, siteShapefiles } from '../fixtures/site-shp.mjs';
 
@@ -208,6 +210,58 @@ test('flow: notice first, proposal, 대상 필지 미확정, confirmation, re-fe
   const same = await f.call('POST', `${i.base}/collect`);
   assert.equal(same.unchanged, true);
   assert.equal(same.state.previous.length, 2);
+});
+
+test('T-288: a started run stops at 대상 필지 확정; once confirmed it runs on up to Rhino에 만들기 (SPEC-07.18 3.6)', async (t) => {
+  const f = setup(t);
+  const i = await instance(f);
+  const { SITE_DATA_NOTICE } = await import('../../src/contracts/site-data.ts');
+  await f.settings.update(f.project.id, () => ({
+    confirmed: { version: SITE_DATA_NOTICE.version, at: 'x' },
+  }));
+  const steps = (await f.runtime.view(f.project.id, i.iid)).steps;
+  // The skill start's preference: up to the first human step that blocks others.
+  const start = autorunUntil(
+    'first-hard',
+    JSON.parse(readFileSync(join(DIR, 'jig.json'), 'utf8')).steps,
+  );
+  assert.equal(start, 'confirmTarget');
+  const statuses = new Map();
+  const runAsPanel = async () => {
+    const until = untilAfterConfirmed(steps, start, (id) => statuses.get(id));
+    const report = await f.runtime.run(f.project.id, i.iid, {
+      mode: 'confirmed',
+      ...(until ? { until } : {}),
+    });
+    for (const step of report.steps) statuses.set(step.id, step.status);
+    return { report, until };
+  };
+  await f.call('POST', `${i.base}/lookup`, { query: '합성시 가나구 가나동 1' });
+  await f.call('POST', `${i.base}/collect`);
+  let { report, until } = await runAsPanel();
+  assert.equal(until, 'confirmTarget');
+  assert.equal(i.status(report, 'confirmTarget'), 'waiting');
+  assert.equal(i.status(report, 'frame'), undefined, 'not reached before the person confirms');
+
+  // R3 R1-B: after 대상 필지 확정 the steps 4~7 stayed '계산 전'. Now the next run goes on.
+  const hash = report.steps.find((s) => s.id === 'confirmTarget').inputHash;
+  const view = await f.runtime.confirmStep(f.project.id, i.iid, 'confirmTarget', hash);
+  for (const step of view.steps) statuses.set(step.id, step.status);
+  ({ report, until } = await runAsPanel());
+  assert.equal(until, undefined, 'no human step after it: every step but Rhino에 만들기 runs');
+  assert.equal(i.status(report, 'confirmTarget'), 'confirmed');
+  for (const id of ['collect', 'frame', 'roads', 'terrain', 'buildings', 'summary'])
+    assert.equal(i.status(report, id), 'done', id);
+  assert.equal(i.status(report, 'make'), 'waiting', 'Rhino에 만들기 is pressed by a person');
+
+  // [다시 계산] keeps going past the confirmed step; a changed parcel list stops there again.
+  ({ report } = await runAsPanel());
+  assert.equal(i.status(report, 'summary'), 'done');
+  await f.call('PUT', `${i.base}/targets`, { pnus: [P1, P2] });
+  ({ report } = await runAsPanel());
+  assert.equal(i.status(report, 'confirmTarget'), 'reconfirm');
+  ({ until } = await runAsPanel());
+  assert.equal(until, 'confirmTarget', 'reconfirm waits for the person again');
 });
 
 test('several candidates: a question card with [PNU 직접 입력]; no choice is made for the person', async (t) => {

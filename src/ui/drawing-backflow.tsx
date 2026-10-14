@@ -123,7 +123,7 @@ interface SyncAnswer {
   alignment: SyncRelation;
   rows: {
     state: string;
-    rhino?: { id: string; nativeId: string };
+    rhino?: { id: string; nativeId: string; rule?: string };
     cad?: { id: string; nativeId: string };
   }[];
 }
@@ -625,7 +625,8 @@ function BackflowPanel({ context, openSync }: { context: JigContext; openSync: (
   const pairs = useMemo(
     () =>
       (sync?.rows ?? [])
-        .filter((r) => r.state === 'match' && r.rhino && r.cad)
+        // A solid's section edge is not the object itself (SPEC-05.8): never a pair (T-283).
+        .filter((r) => r.state === 'match' && r.rhino && r.cad && r.rhino.rule !== 'section')
         .slice(0, 20000)
         .map((r) => ({
           sourceId: r.rhino!.nativeId || r.rhino!.id,

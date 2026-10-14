@@ -622,7 +622,11 @@ export function runViewRequest(route: Route, body: string) {
             runViewRequest(
               {
                 ...route,
-                view: { action: view.action, ids: choice.ids, subject: '레이어 ' + choice.layer },
+                view: {
+                  action: view.action,
+                  ids: choice.ids,
+                  subject: choice.subject ?? '레이어 ' + choice.layer,
+                },
               },
               body,
             ),

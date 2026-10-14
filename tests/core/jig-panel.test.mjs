@@ -15,6 +15,8 @@ import {
   columnsOf,
   fromDisplay,
   layerItems,
+  leftOrder,
+  pickableInputs,
   resolve,
   rowsOf,
   toCsv,
@@ -289,4 +291,45 @@ test('the example panel declares a report action that names a declared report fr
     JSON.stringify(model.gates),
   );
   assert.match(model.headline.text, /기둥 \d+개와 보 \d+개/);
+});
+
+test('T-289: a blocked step names the missing roles a person can pick, and their cards go first', () => {
+  const roleKeys = new Set(['site.slab', 'site.existingFootings', 'site.columns']);
+  const gates = [
+    { name: 'inputs-present', ok: false, failed: ['site.slab', 'site.existingFootings', 'other'] },
+    { name: 'inputs-present', ok: false, failed: ['site.slab'] },
+    { name: 'units-si', ok: false, failed: ['site.columns'] },
+    { name: 'inputs-present', ok: true, failed: [] },
+  ];
+  // Only inputs-present, only roles a role card shows, once each and in the gate's order.
+  assert.deepEqual(pickableInputs(gates, roleKeys), ['site.slab', 'site.existingFootings']);
+  assert.deepEqual(pickableInputs(gates, new Set()), []);
+  assert.deepEqual(pickableInputs([], roleKeys), []);
+
+  // S-06's declared left column: the role card sits under the step rail; while it lacks a
+  // required role it goes first, and back to its place once every required role is confirmed.
+  const s06 = JSON.parse(
+    readFileSync(
+      join(import.meta.dirname, '..', '..', 'extensions', 'jigs', 's06-frame', 'panel.json'),
+      'utf8',
+    ),
+  );
+  const names = (parts) => parts.slice(0, 3).map((p) => p.part);
+  assert.deepEqual(names(s06.left), ['step-rail', 'role-card', 'param-group']);
+  assert.deepEqual(names(leftOrder(s06.left, () => true)), [
+    'role-card',
+    'step-rail',
+    'param-group',
+  ]);
+  assert.deepEqual(names(leftOrder(s06.left, () => false)), [
+    'step-rail',
+    'role-card',
+    'param-group',
+  ]);
+  // Only role cards move; every part stays, once.
+  assert.equal(leftOrder(s06.left, () => true).length, s06.left.length);
+  assert.deepEqual(names(leftOrder([{ part: 'step-rail' }, { part: 'param-group' }], () => true)), [
+    'step-rail',
+    'param-group',
+  ]);
 });

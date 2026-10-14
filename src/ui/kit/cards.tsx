@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import './kit.css';
 
 // Card parts (Design §14 `role-card` · `bake-card` · `conflict-banner`, SCR-13·14): input roles
@@ -19,12 +20,80 @@ const ROLE_STATE: Record<RoleCardData['state'], string> = {
   missing: '자료에 없음',
 };
 
+/**
+ * The opened [레이어 고르기] of one role (T-289, SPEC-07.14): the linked documents' layers to
+ * pick from. It takes the focus and comes into view when it opens, so the rail's [입력 고르기]
+ * lands on it.
+ */
+function LayerPicker({
+  title,
+  layers,
+  busy,
+  onPick,
+  onClose,
+}: {
+  title: string;
+  layers: readonly string[];
+  busy?: boolean;
+  onPick: (layer: string) => void;
+  onClose: () => void;
+}) {
+  const [layer, setLayer] = useState('');
+  const field = useRef<HTMLSelectElement>(null);
+  useEffect(() => {
+    field.current?.scrollIntoView?.({ block: 'center' });
+    field.current?.focus();
+  }, []);
+  return (
+    <div className="kit-role-pick" role="group" aria-label={`${title} 레이어 고르기`}>
+      {layers.length ? (
+        <>
+          <select
+            ref={field}
+            aria-label={`${title} 레이어`}
+            value={layer}
+            onChange={(event) => setLayer(event.target.value)}
+          >
+            <option value="">레이어를 고르세요</option>
+            {layers.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <div className="kit-actions">
+            <button
+              type="button"
+              data-primary
+              disabled={busy || !layer}
+              onClick={() => onPick(layer)}
+            >
+              이 레이어로 확인
+            </button>
+            <button type="button" onClick={onClose}>
+              닫기
+            </button>
+          </div>
+        </>
+      ) : (
+        <span className="kit-muted">
+          연결한 파일에서 가져온 레이어가 없습니다. 파일을 연결하고 가져온 뒤 고르세요.
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function RoleCards({
   title = '입력 조립',
   roles,
   busy,
   onFind,
   onConfirm,
+  layers,
+  picking,
+  onPicking,
+  onPick,
 }: {
   title?: string;
   roles: readonly RoleCardData[];
@@ -32,6 +101,12 @@ export function RoleCards({
   onFind: (key: string) => void;
   /** Confirm the role as it is (no candidate) or with one found candidate. */
   onConfirm: (key: string, candidate?: string) => void;
+  /** Layers a person may pick for a role ([레이어 고르기]); omitted, the control is not shown. */
+  layers?: readonly string[];
+  /** The role whose layer list is open. */
+  picking?: string;
+  onPicking?: (key: string | undefined) => void;
+  onPick?: (key: string, layer: string) => void;
 }) {
   const done = roles.filter((role) => role.state === 'confirmed').length;
   // Roles that need a person come first.
@@ -89,10 +164,30 @@ export function RoleCards({
                   확인
                 </button>
               ) : null}
+              {layers && onPick ? (
+                <button
+                  type="button"
+                  data-primary={role.state === 'missing' && role.required ? '' : undefined}
+                  aria-expanded={picking === role.key}
+                  disabled={busy}
+                  onClick={() => onPicking?.(picking === role.key ? undefined : role.key)}
+                >
+                  레이어 고르기
+                </button>
+              ) : null}
               <button type="button" disabled={busy} onClick={() => onFind(role.key)}>
                 {role.state === 'missing' ? '후보 찾기' : '바꾸기'}
               </button>
             </div>
+            {layers && onPick && picking === role.key ? (
+              <LayerPicker
+                title={role.title}
+                layers={layers}
+                busy={busy}
+                onPick={(layer) => onPick(role.key, layer)}
+                onClose={() => onPicking?.(undefined)}
+              />
+            ) : null}
           </article>
         ))}
       </div>

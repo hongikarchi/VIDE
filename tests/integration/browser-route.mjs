@@ -42,6 +42,14 @@ try {
       segments: [0, 2, 0, 3, 2, 0],
       layer64: b64('A-HATCH'),
     },
+    // T-270 R3: beams named by Korean structural codes (steel beam SB, steel girder SG).
+    ...['SB6', 'SG7', 'SB10'].map((layer, i) => ({
+      id: 'code-' + i,
+      nativeId: 'C' + i,
+      nativeType: 'Line',
+      segments: [i, 8, 0, i + 1, 8, 0],
+      layer64: b64(layer),
+    })),
   ];
   const input = {
     id: 'sync',
@@ -109,7 +117,8 @@ try {
     '텍스트만 남기고 숨겨줘': { target: 'view', action: 'isolate', subject: 'kind:문자' },
     '해치 지워줘': { target: 'document' },
     'A-HATCH 꺼줘': { target: 'view', action: 'hide', subject: 'layer:A-HATCH' },
-    '보만 남기고 다 숨겨줘': { target: 'view', action: 'isolate' },
+    // R3: Jev named one beam layer only; the words name every beam layer (S-BEAM, SB6, SG7, SB10).
+    '보만 남기고 다 숨겨줘': { target: 'view', action: 'isolate', subject: 'layer:SB10' },
   };
   await page.route('**/route', async (route) => {
     const sent = JSON.parse(route.request().postData());
@@ -118,14 +127,14 @@ try {
   });
   await page.goto(app.launchUrl);
   await page.waitForFunction(() =>
-    document.querySelector('.object-summary')?.textContent.startsWith('8개'),
+    document.querySelector('.object-summary')?.textContent.startsWith('11개'),
   );
   // No route chip before sending; Jev decides when the request is sent.
   await page.locator('#body').fill('텍스트만 남기고 숨겨줘');
   await page.waitForTimeout(100);
   assert.equal(await page.locator('#context .route-chip').count(), 0);
   await page.locator('#request').click();
-  await page.waitForFunction(() => window.videViewport.hiddenCount() === 5);
+  await page.waitForFunction(() => window.videViewport.hiddenCount() === 8);
   assert.match(await page.locator('#message').textContent(), /문자 3개 만 표시 · 원본은 그대로/);
   assert.equal(await page.locator('#body').inputValue(), '');
   // Jev is shown the object groups on screen: kinds and layers.
@@ -148,11 +157,11 @@ try {
   await page.waitForFunction(() => window.videViewport.hiddenCount() === 0);
   for (let i = 0; i < 40 && !posted.length; i++) await page.waitForTimeout(50);
   assert.deepEqual(posted, ['A-HATCH 꺼줘']);
-  // T-270: Jev says isolate but names no group; "보" finds the S-BEAM layer, nothing is sent.
+  // T-270: "보" finds S-BEAM and the coded beam layers SB6·SG7·SB10; all stay, nothing is sent.
   await page.locator('#body').fill('보만 남기고 다 숨겨줘');
   await page.locator('#request').click();
   await page.waitForFunction(() => window.videViewport.hiddenCount() === 4);
-  assert.match(await page.locator('#message').textContent(), /레이어 S-BEAM 4개/);
+  assert.match(await page.locator('#message').textContent(), /레이어 S-BEAM 외 3개 7개 만 표시/);
   await page.locator('#body').fill('모두 다시 보여줘');
   await page.locator('#request').click();
   await page.waitForFunction(() => window.videViewport.hiddenCount() === 0);
@@ -165,10 +174,29 @@ try {
     'A-ANNO',
     'S-BEAM',
     'A-HATCH',
+    'SB6',
+    'SG7',
+    'SB10',
     '문서를 바꾸는 AI 작업으로 보내기',
   ]);
   await picks.filter({ hasText: 'S-BEAM' }).click();
-  await page.waitForFunction(() => window.videViewport.hiddenCount() === 4);
+  await page.waitForFunction(() => window.videViewport.hiddenCount() === 7);
+  await page.locator('#body').fill('모두 다시 보여줘');
+  await page.locator('#request').click();
+  await page.waitForFunction(() => window.videViewport.hiddenCount() === 0);
+  // Several layers hold the words: '모두' applies the action to all of them at once.
+  await page.locator('#body').fill('SB 숨겨줘');
+  await page.locator('#request').click();
+  await picks.filter({ hasText: '문서를 바꾸는' }).waitFor();
+  assert.deepEqual(await picks.allTextContents(), [
+    '모두 (2개 레이어)',
+    'SB6',
+    'SB10',
+    '문서를 바꾸는 AI 작업으로 보내기',
+  ]);
+  await picks.filter({ hasText: '모두' }).click();
+  await page.waitForFunction(() => window.videViewport.hiddenCount() === 2);
+  assert.match(await page.locator('#message').textContent(), /레이어 SB6 외 1개 2개 숨김/);
   await page.locator('#body').fill('모두 다시 보여줘');
   await page.locator('#request').click();
   await page.waitForFunction(() => window.videViewport.hiddenCount() === 0);

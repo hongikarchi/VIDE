@@ -7,6 +7,7 @@ import {
   skillChecklist,
   skillTurnStatus,
   startSkill,
+  untilAfterConfirmed,
 } from '../../src/ui/skill-start.ts';
 
 // startSkill (RESEARCH-12 §6.3, ADR-026 4, SPEC-07.18 3): one sequence for the router's fast path,
@@ -528,4 +529,30 @@ test('leftSteps (SPEC-02.17 2): only steps a person presses — manual skips and
     [],
   );
   assert.equal(leftSteps(undefined, titles), undefined);
+});
+
+test('untilAfterConfirmed: a confirmed human step lets the run go on to the next one (T-288)', () => {
+  const steps = [
+    { id: 'a', kind: 'code' },
+    { id: 'check', kind: 'human' },
+    { id: 'b', kind: 'code' },
+    { id: 'pick', kind: 'human' },
+    { id: 'c', kind: 'code' },
+    { id: 'make', kind: 'host' },
+  ];
+  const of = (map) => (id) => map[id];
+  assert.equal(untilAfterConfirmed(steps, 'check', of({ check: 'waiting' })), 'check');
+  assert.equal(untilAfterConfirmed(steps, 'check', of({ check: 'reconfirm' })), 'check');
+  assert.equal(untilAfterConfirmed(steps, 'check', of({ check: 'confirmed' })), 'pick');
+  assert.equal(
+    untilAfterConfirmed(steps, 'check', of({ check: 'confirmed', pick: 'confirmed' })),
+    undefined,
+    'no human step left: every step runs (the host step only waits)',
+  );
+  assert.equal(untilAfterConfirmed(steps, undefined, of({})), undefined);
+  assert.equal(
+    untilAfterConfirmed([], 'check', of({ check: 'confirmed' })),
+    'check',
+    'no view yet',
+  );
 });
