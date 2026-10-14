@@ -198,10 +198,12 @@ export class ModelView {
   private store: ModelStore;
   private projectId: string;
   private objectCount: number | null;
+  private updatedAt: string;
   constructor(store: ModelStore, projectId: string, header: Header) {
     this.store = store;
     this.projectId = projectId;
     this.objectCount = header.objectCount;
+    this.updatedAt = String(header.updatedAt);
     this.requestId = header.requestId;
     this.revision = header.revision;
   }
@@ -289,6 +291,14 @@ export class ModelView {
         out.push(Object.fromEntries(Object.entries(scene).filter(([, v]) => v !== '$bin')));
     }
     return out;
+  }
+  /**
+   * Each `scene[]` item's `layer64` with how many items carry it, in order of first appearance
+   * (T-300): the layer list of a linked file without decoding every object in JS. SQLite reads the
+   * one field, and the answer is kept per manifest revision, so asking again costs nothing.
+   */
+  layerCounts(): readonly { layer64: unknown; count: number }[] {
+    return this.store.layerCounts(this.requestId, `${this.revision}|${this.updatedAt}`);
   }
   /** How many objects the result lists (its `objects` rows; scene items without them). */
   count(): number {
@@ -428,6 +438,27 @@ export class ModelStore {
   private depth = 0;
   constructor(db: DatabaseSync) {
     this.db = db;
+  }
+  /** `ModelView.layerCounts` answers by request and manifest stamp (a few dozen kept, T-300). */
+  private readonly layerCache = new Map<string, readonly { layer64: unknown; count: number }[]>();
+  layerCounts(requestId: string, stamp: string): readonly { layer64: unknown; count: number }[] {
+    const key = `${requestId}|${stamp}`;
+    const hit = this.layerCache.get(key);
+    if (hit) return hit;
+    const counts = this.db
+      .prepare(
+        `SELECT json_extract(v.meta, '$.scene.layer64') AS layer64, count(*) AS n,
+          min(i.position) AS first
+          FROM sync_manifest_items i JOIN object_versions v
+          ON v.projectId=i.projectId AND v.id=i.versionId
+          WHERE i.requestId=? AND i.kind='object' AND json_type(v.meta, '$.scene') IN ('object','array')
+          GROUP BY 1 ORDER BY first`,
+      )
+      .all(requestId)
+      .map((row) => ({ layer64: row.layer64, count: Number(row.n) }));
+    if (this.layerCache.size >= 48) this.layerCache.delete(this.layerCache.keys().next().value!);
+    this.layerCache.set(key, counts);
+    return counts;
   }
   /** Runs `write` in one SAVEPOINT (nests inside a caller's transaction). */
   tx<T>(write: () => T): T {

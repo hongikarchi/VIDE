@@ -5,20 +5,21 @@ import { resolve, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { runDirectory } from './run-directory.mjs';
-
-const directory = runDirectory('worker-readback');
-await mkdir(directory, { recursive: true });
-const worker = await launchRhinoWorker({
-  directory: join(directory, 'worker'),
-  executable: 'C:/Program Files/Rhino 8/System/Rhino.exe',
-  plugin: resolve('.vide/build/rhino-worker/bin/net8.0-windows/VIDE.Worker.rhp'),
-  bootstrap: resolve('hosts/rhino/worker/bootstrap.py'),
-});
-try {
-  const result = await worker.execute(
-    randomUUID(),
-    0,
-    `
+import { withInstalledPluginRestored } from './plugin-guard.mjs';
+await withInstalledPluginRestored(async () => {
+  const directory = runDirectory('worker-readback');
+  await mkdir(directory, { recursive: true });
+  const worker = await launchRhinoWorker({
+    directory: join(directory, 'worker'),
+    executable: 'C:/Program Files/Rhino 8/System/Rhino.exe',
+    plugin: resolve('.vide/build/rhino-worker/bin/net8.0-windows/VIDE.Worker.rhp'),
+    bootstrap: resolve('hosts/rhino/worker/bootstrap.py'),
+  });
+  try {
+    const result = await worker.execute(
+      randomUUID(),
+      0,
+      `
  var verify=AppDomain.CurrentDomain.GetAssemblies().Select(a=>a.GetType("Vide.Worker.WorkerReadback")).First(t=>t!=null).GetMethod("Verify",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Static);
  using(var expected=RhinoDoc.CreateHeadless(null)) using(var actual=RhinoDoc.CreateHeadless(null)) {
    expected.ModelUnitSystem=actual.ModelUnitSystem=UnitSystem.Meters;
@@ -38,19 +39,20 @@ try {
  }
  doc.Objects.AddBox(new Box(new BoundingBox(0,0,0,2,3,4)));
  `,
-  );
-  assert.equal(result.ok, true, JSON.stringify(result));
-  const model = await worker.exportModel();
-  assert.equal(model.scene[0].volume, 24);
-  const evidence = {
-    passed: true,
-    sameBoundsGeometryRejected: true,
-    metadataChangeRejected: true,
-    savedCandidateVerified: true,
-    directory,
-  };
-  await writeFile(join(directory, 'result.json'), JSON.stringify(evidence, null, 2));
-  console.log(JSON.stringify(evidence));
-} finally {
-  await worker.stop();
-}
+    );
+    assert.equal(result.ok, true, JSON.stringify(result));
+    const model = await worker.exportModel();
+    assert.equal(model.scene[0].volume, 24);
+    const evidence = {
+      passed: true,
+      sameBoundsGeometryRejected: true,
+      metadataChangeRejected: true,
+      savedCandidateVerified: true,
+      directory,
+    };
+    await writeFile(join(directory, 'result.json'), JSON.stringify(evidence, null, 2));
+    console.log(JSON.stringify(evidence));
+  } finally {
+    await worker.stop();
+  }
+});

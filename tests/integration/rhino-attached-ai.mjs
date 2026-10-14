@@ -11,6 +11,7 @@ import { linkOpenDocument } from './link-helper.mjs';
 import { runDirectory } from './run-directory.mjs';
 import { connectScriptLines } from '../../tools/ab/rhino-connect.mjs';
 import { soleDb } from '../fixtures/store.mjs';
+import { withInstalledPluginRestored } from './plugin-guard.mjs';
 const directory = runDirectory('rhino-attached-ai');
 await mkdir(directory, { recursive: true });
 const options = sdkOptions(directory);
@@ -38,108 +39,110 @@ except Exception as e:
 `,
 );
 let host, app, browser;
-try {
-  host = await launchOwnedHost({
-    executable: options.executable,
-    environment: { ...process.env, VIDE_CONNECT_DIR: connections },
-    visible: true,
-    spawnProcess: (file, args, opts) =>
-      spawn(file, args, { ...opts, windowsVerbatimArguments: true }),
-    args: [
-      '/nosplash',
-      '/notemplate',
-      '/scheme=VIDE-Worker-Test',
-      `/runscript="_-RunPythonScript (${script})"`,
-    ],
-  });
-  let ready;
-  const deadline = Date.now() + 90000;
-  while (Date.now() < deadline) {
-    try {
-      ready = JSON.parse(await readFile(join(directory, 'ready.json'), 'utf8'));
-      break;
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
+await withInstalledPluginRestored(async () => {
+  try {
+    host = await launchOwnedHost({
+      executable: options.executable,
+      environment: { ...process.env, VIDE_CONNECT_DIR: connections },
+      visible: true,
+      spawnProcess: (file, args, opts) =>
+        spawn(file, args, { ...opts, windowsVerbatimArguments: true }),
+      args: [
+        '/nosplash',
+        '/notemplate',
+        '/scheme=VIDE-Worker-Test',
+        `/runscript="_-RunPythonScript (${script})"`,
+      ],
+    });
+    let ready;
+    const deadline = Date.now() + 90000;
+    while (Date.now() < deadline) {
+      try {
+        ready = JSON.parse(await readFile(join(directory, 'ready.json'), 'utf8'));
+        break;
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  assert.equal(ready?.ok, true, JSON.stringify(ready));
-  app = await startServer({ filename: join(directory, 'vide.sqlite'), sdkOptions: options });
-  browser = await chromium.launch({ channel: 'chrome', headless: true });
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  const errors = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto(app.launchUrl);
-  await page.waitForFunction(() => !document.querySelector('#body').disabled);
-  // Link the attached document to the project as the plugin's Link does; it syncs by itself.
-  const attached = (
-    await (await page.request.get(app.origin + '/api/v1/host/attached-documents')).json()
-  ).documents[0];
-  await linkOpenDocument(page, {
-    host: 'rhino',
-    instance: attached.instance,
-    documentId: attached.id,
-  });
-  const project = app.store.listProjects()[0];
-  const rows = () =>
-    soleDb(app.store)
-      .prepare('SELECT * FROM workspace_requests WHERE projectId=? ORDER BY rowid')
-      .all(project.id)
-      .map((row) => ({ ...row, result: row.result ? JSON.parse(row.result) : null }));
-  const basis = rows().at(-1);
-  assert.equal(basis.result.displayOnly, true);
-  assert.deepEqual(basis.result.scene[0].boundsSize, [2, 3, 4]);
-  await page.locator('#model').selectOption(process.env.VIDE_TEST_AI_MODEL || 'codex-cli');
-  await page.locator('#permission').selectOption('apply');
-  await page
-    .locator('#body')
-    .fill(
-      '현재 문서의 유일한 박스 높이를 4 m에서 5 m로 바꿔줘. 폭 2 m, 깊이 3 m, 원점, 객체 ID, 이름과 Role 속성은 유지해. 다른 객체는 만들지 마.',
+    assert.equal(ready?.ok, true, JSON.stringify(ready));
+    app = await startServer({ filename: join(directory, 'vide.sqlite'), sdkOptions: options });
+    browser = await chromium.launch({ channel: 'chrome', headless: true });
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto(app.launchUrl);
+    await page.waitForFunction(() => !document.querySelector('#body').disabled);
+    // Link the attached document to the project as the plugin's Link does; it syncs by itself.
+    const attached = (
+      await (await page.request.get(app.origin + '/api/v1/host/attached-documents')).json()
+    ).documents[0];
+    await linkOpenDocument(page, {
+      host: 'rhino',
+      instance: attached.instance,
+      documentId: attached.id,
+    });
+    const project = app.store.listProjects()[0];
+    const rows = () =>
+      soleDb(app.store)
+        .prepare('SELECT * FROM workspace_requests WHERE projectId=? ORDER BY rowid')
+        .all(project.id)
+        .map((row) => ({ ...row, result: row.result ? JSON.parse(row.result) : null }));
+    const basis = rows().at(-1);
+    assert.equal(basis.result.displayOnly, true);
+    assert.deepEqual(basis.result.scene[0].boundsSize, [2, 3, 4]);
+    await page.locator('#model').selectOption(process.env.VIDE_TEST_AI_MODEL || 'codex-cli');
+    await page.locator('#permission').selectOption('apply');
+    await page
+      .locator('#body')
+      .fill(
+        '현재 문서의 유일한 박스 높이를 4 m에서 5 m로 바꿔줘. 폭 2 m, 깊이 3 m, 원점, 객체 ID, 이름과 Role 속성은 유지해. 다른 객체는 만들지 마.',
+      );
+    await page.locator('#request').click();
+    console.log('Actual subscription AI request submitted to the product browser.');
+    let edited;
+    const end = Date.now() + 300000;
+    while (Date.now() < end) {
+      const latest = rows().at(-1);
+      if (latest.id !== basis.id && !['queued', 'running'].includes(latest.state)) {
+        edited = latest;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    await page.screenshot({ path: join(directory, 'ai-roundtrip.png') });
+    await writeFile(
+      join(directory, 'outcome.json'),
+      JSON.stringify({ state: edited?.state, result: edited?.result, errors }, null, 2),
     );
-  await page.locator('#request').click();
-  console.log('Actual subscription AI request submitted to the product browser.');
-  let edited;
-  const end = Date.now() + 300000;
-  while (Date.now() < end) {
-    const latest = rows().at(-1);
-    if (latest.id !== basis.id && !['queued', 'running'].includes(latest.state)) {
-      edited = latest;
-      break;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    assert.equal(edited?.state, 'succeeded', JSON.stringify(edited?.result));
+    assert.equal(edited.result.applicationState, 'succeeded');
+    assert.equal(edited.result.syncState, 'succeeded');
+    assert.equal(edited.result.scene[0].nativeId, ready.nativeId);
+    assert.deepEqual(edited.result.scene[0].boundsSize, [2, 3, 5]);
+    assert.ok(Math.abs(edited.result.scene[0].volume - 30) < 1e-7);
+    await page.reload();
+    await page.waitForFunction(() => !document.querySelector('#body').disabled);
+    assert.equal(await page.locator('#viewport-empty').isVisible(), false);
+    await page.screenshot({ path: join(directory, 'ai-roundtrip-reloaded.png') });
+    assert.deepEqual(errors, []);
+    const evidence = {
+      passed: true,
+      directory,
+      nativeIdPreserved: true,
+      sourceUnits: edited.result.sourceDocument.units,
+      heightBefore: 4,
+      heightAfter: 5,
+      volumeAfter: 30,
+      application: edited.result.applicationState,
+      refreshed: edited.result.syncState,
+      reloaded: true,
+    };
+    await writeFile(join(directory, 'result.json'), JSON.stringify(evidence, null, 2));
+    console.log(JSON.stringify(evidence));
+  } finally {
+    await browser?.close();
+    await app?.close();
+    await host?.stop();
   }
-  await page.screenshot({ path: join(directory, 'ai-roundtrip.png') });
-  await writeFile(
-    join(directory, 'outcome.json'),
-    JSON.stringify({ state: edited?.state, result: edited?.result, errors }, null, 2),
-  );
-  assert.equal(edited?.state, 'succeeded', JSON.stringify(edited?.result));
-  assert.equal(edited.result.applicationState, 'succeeded');
-  assert.equal(edited.result.syncState, 'succeeded');
-  assert.equal(edited.result.scene[0].nativeId, ready.nativeId);
-  assert.deepEqual(edited.result.scene[0].boundsSize, [2, 3, 5]);
-  assert.ok(Math.abs(edited.result.scene[0].volume - 30) < 1e-7);
-  await page.reload();
-  await page.waitForFunction(() => !document.querySelector('#body').disabled);
-  assert.equal(await page.locator('#viewport-empty').isVisible(), false);
-  await page.screenshot({ path: join(directory, 'ai-roundtrip-reloaded.png') });
-  assert.deepEqual(errors, []);
-  const evidence = {
-    passed: true,
-    directory,
-    nativeIdPreserved: true,
-    sourceUnits: edited.result.sourceDocument.units,
-    heightBefore: 4,
-    heightAfter: 5,
-    volumeAfter: 30,
-    application: edited.result.applicationState,
-    refreshed: edited.result.syncState,
-    reloaded: true,
-  };
-  await writeFile(join(directory, 'result.json'), JSON.stringify(evidence, null, 2));
-  console.log(JSON.stringify(evidence));
-} finally {
-  await browser?.close();
-  await app?.close();
-  await host?.stop();
-}
+});

@@ -969,3 +969,65 @@ test('the official 법규 체크 jig: read, check only on request, revision, rem
   assert.equal(looked.status, 200);
   assert.equal((await revision()).status, 200);
 });
+
+/** A closed cylinder as a render mesh (each face its own vertices, as Rhino meshes a brep). */
+function cylinderMesh(cx, cy, r, h, seg) {
+  const vertices = [];
+  const indices = [];
+  const at = (a, z) => [cx + r * Math.cos(a), cy + r * Math.sin(a), z];
+  for (let i = 0; i < seg; i++) {
+    const a0 = (i / seg) * 2 * Math.PI,
+      a1 = ((i + 1) / seg) * 2 * Math.PI;
+    let base = vertices.length / 3;
+    vertices.push(...at(a0, 0), ...at(a1, 0), ...at(a1, h), ...at(a0, h));
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    base = vertices.length / 3;
+    vertices.push(cx, cy, 0, ...at(a1, 0), ...at(a0, 0));
+    indices.push(base, base + 1, base + 2);
+    base = vertices.length / 3;
+    vertices.push(cx, cy, h, ...at(a0, h), ...at(a1, h));
+    indices.push(base, base + 1, base + 2);
+  }
+  return { vertices, indices };
+}
+
+// PLAN-51 T-274 (round 5): the field read of 3,045 objects still held the event loop 4.3 s. The
+// whole [법규 체크] read of a 3,000-object document — two host reads (the reply decoded from JSON
+// as the transport does), the raw model kept, the classification and its contract check, the kept
+// model written — must never hold the loop for a second (1.5 s under the parallel test run).
+test('T-274: a 3,000-object read never holds the event loop for a second', async (t) => {
+  const f = await fixture(t);
+  for (let i = 0; i < 3000; i++)
+    f.document.add(i % 3 ? '건물' : '조경', cylinderMesh(i % 60, Math.floor(i / 60), 0.4, 3, 32));
+  const model = f.document.model;
+  // The reply arrives from a socket (a turn of the loop) and is decoded from JSON.
+  f.document.model = async (scope) => {
+    await new Promise((resolve) => setImmediate(resolve));
+    return JSON.parse(JSON.stringify(model(scope)));
+  };
+  // A first read and a read again (the kept model of the first one is there): each measured alone.
+  for (const pass of ['first', 'again']) {
+    // The longest gap between two ticks of a 10 ms timer while the read runs.
+    let last = performance.now();
+    let loopMax = 0;
+    const ticker = setInterval(() => {
+      const now = performance.now();
+      loopMax = Math.max(loopMax, now - last);
+      last = now;
+    }, 10);
+    const began = performance.now();
+    const read = await f.call('POST', `${f.base}/compliance/read`, { instanceId: f.iid });
+    const ms = performance.now() - began;
+    clearInterval(ticker);
+    loopMax = Math.max(loopMax, performance.now() - last);
+    assert.equal(read.status, 200, JSON.stringify(read).slice(0, 300));
+    assert.ok(read.data.objects > 0);
+    const line = f.logs.filter((l) => l.event === 'compliance-read').at(-1);
+    console.log(
+      `T-274 3,000 objects (${pass}): read ${Math.round(ms)} ms, loopMax ${Math.round(loopMax)} ms, ` +
+        JSON.stringify(line),
+    );
+    assert.ok(line.classifyYields > 0);
+    assert.ok(loopMax < 1500, `event loop held ${Math.round(loopMax)} ms`);
+  }
+});

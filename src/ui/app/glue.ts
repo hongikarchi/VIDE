@@ -5,7 +5,7 @@ import { orderLayerPaths, type HostLayer } from '../../core/layer-tree.ts';
 import { attachReviewNote, linkedCandidates, objects, packet, models } from '../model.ts';
 import { attachSharedFeedback } from '../shared-feedback.tsx';
 import { withObjects } from '../object-rows.ts';
-import { attachJigs, type JigContext, legacyJigTab } from '../jigs.tsx';
+import { attachJigs, type JigContext, type JigSent, legacyJigTab } from '../jigs.tsx';
 import { displayIdOf } from '../layers.ts';
 import { requestData, requestMessage } from '../workspace-data.ts';
 import { provideDashboard } from '../dashboard.tsx';
@@ -21,6 +21,7 @@ import {
 import { type SkillEntry } from '../skill-catalog.ts';
 import { type SkillDeps, type SkillRunReport, provideSkillDeps } from '../skill-start.ts';
 import { preferRun, JIG_RAN } from '../jig-panel/instance.ts';
+import { linkClosed } from '../jig-panel/role-sources.ts';
 import { sessionState } from '../store/session.ts';
 import { draftState } from '../store/draft.ts';
 import { selectionState } from '../store/selection.ts';
@@ -30,9 +31,10 @@ import { linksState } from '../store/links.ts';
 import { revealPanel, mobileView, showModelView, sidebar } from './left.ts';
 import { message } from './status.ts';
 import { render, renderMessages } from './render.ts';
-import { renderConversation, poll } from './thread.ts';
+import { renderConversation, poll, currentConversation, focusWork } from './thread.ts';
 import { currentProject } from './context.ts';
 import { selectInResult } from './viewport.ts';
+import { ownerOf } from './links-sync.ts';
 import {
   modeFields,
   modeOf,
@@ -43,6 +45,23 @@ import {
 } from './composer.ts';
 
 export let reviews!: ReturnType<typeof initializeReviews>;
+/** A Sync's linked file as the jig context lists it: which file, its latest Sync, closed now. */
+function syncFileOf(entry: {
+  id: string;
+  request: Parameters<typeof ownerOf>[0] & { createdAt?: string };
+}) {
+  const link = ownerOf(entry.request);
+  return {
+    ...(entry.request.createdAt ? { at: entry.request.createdAt } : {}),
+    ...(link
+      ? {
+          linkId: link.id,
+          latest: link.lastSync?.requestId === entry.id,
+          closed: linkClosed(link),
+        }
+      : {}),
+  };
+}
 /**
  * Layer paths in the stored Syncs, newest Sync first and each in Rhino's panel order (sublayers
  * under their parent): the output layers a jig instance may use.
@@ -200,6 +219,59 @@ export function initGlue1() {
   });
 }
 
+/**
+ * Jig requests still queued or running, by project and jig kind (SPEC-05.8 2, T-299): a second
+ * press shows the running one instead of starting another. Each is watched until it ends.
+ */
+const jigRunning = new Map<string, JigSent>();
+const jigKey = (projectId: string, jig: Record<string, unknown>) =>
+  `${projectId}|${String(jig.kind ?? '')}|${String(jig.side ?? '')}`;
+function watchJigRequest(key: string, id: string, projectId: string): JigSent {
+  let settle!: () => void;
+  const done = new Promise<void>((resolve) => (settle = resolve));
+  const sent: JigSent = { id, done };
+  jigRunning.set(key, sent);
+  const finish = () => {
+    if (jigRunning.get(key) === sent) jigRunning.delete(key);
+    settle();
+  };
+  const check = async (failures = 0): Promise<void> => {
+    try {
+      const request = await requestData(`/projects/${projectId}/requests/${id}?view=summary`);
+      if (!['queued', 'running'].includes(request.state)) return finish();
+      failures = 0;
+    } catch (cause) {
+      // A request that is gone ends the wait; a passing outage is read again.
+      const code = (cause as { code?: unknown } | null)?.code;
+      if (
+        (typeof code === 'string' &&
+          ['NOT_FOUND', 'PROJECT_NOT_FOUND', 'PROJECT_GONE', 'FORBIDDEN'].includes(code)) ||
+        ++failures > 20
+      )
+        return finish();
+    }
+    setTimeout(() => void check(failures), 1500);
+  };
+  setTimeout(() => void check(), 1500);
+  return sent;
+}
+/** Show a request in the conversation: its tab chosen, the work row focused and in view. */
+function focusJigRequest(id: string) {
+  const entry = draftState.state.messages.find((m) => m.id === id);
+  const conversation = (entry?.request.input as { conversationId?: unknown } | undefined)
+    ?.conversationId;
+  if (typeof conversation === 'string' && conversation !== currentConversation())
+    workState.conversationChips?.select(conversation);
+  focusWork(id);
+  setTimeout(
+    () =>
+      document
+        .querySelector(`.work-view[data-request-id="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ block: 'nearest' }),
+    0,
+  );
+}
+
 export function initGlue2() {
   // Workspace tabs (T-047): the JIG tab and jig context tabs use the project, its Syncs, the
   // viewport and the conversation through this context.
@@ -213,6 +285,8 @@ export function initGlue2() {
       sources: linkedCandidates(draftState.state).map((entry) => ({
         id: entry.id,
         host: entry.request.result?.host === 'zwcad' ? 'zwcad' : 'rhino',
+        // Its linked file: role inputs read open files' latest Syncs first (SPEC-07.5 7, T-298).
+        ...syncFileOf(entry),
         label:
           (entry.request.result?.sourceDocument?.name || entry.body.slice(0, 60)) +
           (entry.request.createdAt
@@ -253,25 +327,48 @@ export function initGlue2() {
             ? target.ids.flatMap((id) => displayIdOf(objects, target.requestId, id) ?? [])
             : target,
         ),
-      send: async (extra) => {
+      send: async ({ single, ...extra }) => {
         const projectId = currentProject().id;
+        // One request per jig kind at a time: a press while it runs shows it (T-299).
+        const key = jigKey(projectId, extra.jig);
+        const running = single ? jigRunning.get(key) : undefined;
+        if (running) {
+          focusJigRequest(running.id);
+          return { ...running, existing: true };
+        }
+        // Like a composer turn, the request goes to the chosen conversation and shows there as a
+        // progress row (SPEC-05.8 2); not to a conversation of its own.
+        const chosen = currentConversation();
+        const conversationId = chosen ?? (workState.conversationChips ? 'default' : undefined);
         const input = {
           ...packet({ ...draftState.state, body: extra.body, pins: [], sketches: [], files: [] }),
           // A jig that asks for review only runs in 계획, whatever the toggle says.
           ...modeFields(extra.permission ? modeOf(extra) : draftState.mode),
           id: crypto.randomUUID(),
+          ...(conversationId ? { conversationId } : {}),
           ...extra,
         };
         if (!extra.host) delete (input as Record<string, unknown>).host;
         if (!extra.baseRequestId) delete (input as Record<string, unknown>).baseRequestId;
+        const original = draftState.state;
         const request = await requestData(`/projects/${projectId}/requests`, 'POST', input);
+        const sent = watchJigRequest(key, request.id, projectId);
+        if (sessionState.project?.id !== projectId || draftState.state !== original) return sent;
         if (!draftState.state.messages.some((entry) => entry.id === request.id))
           draftState.state.messages.push(requestMessage(request));
         workState.focusedWork = request.id;
         renderMessages();
-        revealPanel('right');
+        void workState.conversationChips?.refresh();
+        // Another model than the conversation's: the engine opened a new conversation (SPEC-02.19 5).
+        const landed = (request.input as { conversationId?: unknown }).conversationId;
+        if (chosen && typeof landed === 'string' && landed !== chosen)
+          workState.conversationChips?.select(landed);
+        focusJigRequest(request.id);
         void poll(request.id, projectId, draftState.state);
+        return sent;
       },
+      running: (kind) => jigRunning.get(jigKey(currentProject().id, { kind })),
+      focusRequest: (id) => focusJigRequest(id),
     }),
   );
 }

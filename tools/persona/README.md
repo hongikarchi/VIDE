@@ -2,6 +2,8 @@
 
 인턴 페르소나 AI가 엔진의 웹 UI를 **스크린샷만 보고** 한 단계씩 조작한다. 직관(①)·쉬움(②)을 대행 판정하는 도구이며, 결과의 실제 성공(⑤)은 판정하지 않는다(`reachedGoal`은 `null`로 두고 스코어카드·검수자가 화면 증거로 판단한다). 기준: [PLAN-51](../../docs/plans/PLAN-51-verify-loop.md) §1·§2.
 
+**플러그인 등록 규칙(T-297).** 개발 빌드를 불러오는 실호스트 시험·하네스는 `tests/integration/plugin-guard.mjs`의 `withInstalledPluginRestored`로 감싸 설치본 Rhino 등록을 되돌리고, 세션 끝에 `npm run plugin:check`로 등록이 `.vide/build`가 아님을 확인한다.
+
 ## 파일
 
 | 파일 | 역할 |

@@ -622,3 +622,22 @@ test('T-274: a large read gives the event loop back and classifies exactly as be
   assert.ok(yields > 0);
   assert.ok(longestGap < 1000, `event loop held ${longestGap} ms`);
 });
+
+test('T-274: the kept model hash given back in slices is the same digest', async () => {
+  const { hashValue, hashValueAsync } = await import('../../src/jigs/runtime/hash.ts');
+  const value = {
+    schema: 'x',
+    objects: Array.from({ length: 500 }, (_, i) => ({
+      id: `o${i}`,
+      shape: { mesh: { vertices: [i, 0.5, NaN, -0], indices: [0, 1, 2] }, closed: i % 2 === 0 },
+      skip: undefined,
+      text: '한글 "따옴표"',
+      nested: [[{ b: 1, a: [null, undefined, Infinity] }]],
+    })),
+    empty: [],
+    none: null,
+  };
+  assert.equal(await hashValueAsync(value, 0), hashValue(value));
+  assert.equal(await hashValueAsync([1, 'a', { z: 1, a: 2 }]), hashValue([1, 'a', { z: 1, a: 2 }]));
+  assert.equal(await hashValueAsync('s'), hashValue('s'));
+});

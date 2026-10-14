@@ -39,6 +39,7 @@ import {
   routeCard,
   goesToAi,
   worksOnFile,
+  viewCount,
 } from '../request-route.ts';
 import { skillRouteJigs } from '../skill-catalog.ts';
 import { api, errors } from '../gateway.ts';
@@ -112,6 +113,7 @@ import {
   jigConversation,
 } from './glue.ts';
 import { syncLink } from './links-sync.ts';
+import { linkClosed } from '../jig-panel/role-sources.ts';
 
 export const modeKey = (projectId: string) => 'vide:mode:' + projectId;
 export const modeFields = (value: WorkMode) =>
@@ -672,7 +674,14 @@ export function runViewRequest(route: Route, body: string) {
     );
     return;
   }
-  const count = view.ids.length.toLocaleString();
+  // The open files' targets, and per file when several are drawn (SPEC-01.11 4, T-298).
+  const counted = viewCount(
+    view.ids,
+    objects,
+    new Set(linksState.links.filter((link) => !linkClosed(link)).map((link) => link.id)),
+  );
+  const count = counted.count.toLocaleString();
+  const perFile = counted.files ? ` (${counted.files})` : '';
   const before = [...selectionState.selectedIds];
   if (view.action === 'hide') viewerState.viewport?.hide(view.ids);
   else if (view.action === 'isolate') viewerState.viewport?.isolate(view.ids);
@@ -695,7 +704,7 @@ export function runViewRequest(route: Route, body: string) {
   messageWithAction(
     view.action === 'unhide'
       ? '숨긴 객체를 모두 다시 보입니다 · 원본은 그대로입니다.'
-      : `화면에서 ${view.subject} ${count}개 ${verb} · 원본은 그대로입니다. 다시 보이게 하려면 U.`,
+      : `화면에서 ${view.subject} ${count}개 ${verb}${perFile} · 원본은 그대로입니다. 다시 보이게 하려면 U.`,
     'AI 작업으로 보내기',
     toAi(() => {
       if (view.action === 'hide' || view.action === 'isolate') viewerState.viewport?.unhide();

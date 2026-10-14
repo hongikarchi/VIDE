@@ -469,7 +469,11 @@ export function readClassifiedModel(input: ReadInput): ReadOutput {
     const fact = read(row);
     if (fact) facts.push(fact);
   }
-  return classify(input, facts);
+  const steps = classify(input, facts);
+  for (;;) {
+    const step = steps.next();
+    if (step.done) return step.value;
+  }
 }
 
 /** How long the longest run between two yields of `readClassifiedModelSliced` took. */
@@ -481,10 +485,11 @@ export interface SliceStats {
 }
 
 /**
- * The same read as `readClassifiedModel` (identical output) with the row analysis cut into runs
- * of about `sliceMs`, giving the event loop back between them (T-274: one read of a 3,000-object
- * document held the engine for about 5 s). A single row is never cut, so one very large mesh can
- * still make a longer run.
+ * The same read as `readClassifiedModel` (identical output) with the row analysis, the role
+ * decisions and the contract check cut into runs of about `sliceMs`, giving the event loop back
+ * between them (T-274: one read of a 3,000-object document held the engine for about 5 s; round 5
+ * still had one ~266 ms run, the contract check of the whole model). A single row or object is
+ * never cut, so one very large mesh can still make a longer run.
  */
 export async function readClassifiedModelSliced(
   input: ReadInput,
@@ -496,25 +501,35 @@ export async function readClassifiedModelSliced(
   let longestSliceMs = 0;
   let yields = 0;
   let start = performance.now();
+  const pace = async () => {
+    const ran = performance.now() - start;
+    if (ran < sliceMs) return;
+    longestSliceMs = Math.max(longestSliceMs, ran);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    yields++;
+    start = performance.now();
+  };
   for (const row of input.rows) {
     const fact = read(row);
     if (fact) facts.push(fact);
-    const ran = performance.now() - start;
-    if (ran >= sliceMs) {
-      longestSliceMs = Math.max(longestSliceMs, ran);
-      await new Promise<void>((resolve) => setImmediate(resolve));
-      yields++;
-      start = performance.now();
-    }
+    await pace();
   }
-  // The last rows and the classification run as one piece.
-  const out = classify(input, facts);
-  longestSliceMs = Math.max(longestSliceMs, performance.now() - start);
-  return { ...out, longestSliceMs, yields };
+  const steps = classify(input, facts);
+  for (;;) {
+    const step = steps.next();
+    if (step.done) {
+      longestSliceMs = Math.max(longestSliceMs, performance.now() - start);
+      return { ...step.value, longestSliceMs, yields };
+    }
+    await pace();
+  }
 }
 
-/** Facts (any order) + records → the classified model. */
-function classify(input: ReadInput, facts: RowFacts[]): ReadOutput {
+/**
+ * Facts (any order) + records → the classified model. Yields after each object decided and each
+ * object checked against the contract, so a caller can pace it (`readClassifiedModelSliced`).
+ */
+function* classify(input: ReadInput, facts: RowFacts[]): Generator<void, ReadOutput, void> {
   const toMeters = unitsToMeters(input.units);
   facts.sort((a, b) => (a.objectId < b.objectId ? -1 : a.objectId > b.objectId ? 1 : 0));
 
@@ -531,6 +546,7 @@ function classify(input: ReadInput, facts: RowFacts[]): ReadOutput {
   const unclassified: ClassifiedModel['unclassified'] = [];
   const seen = new Set<string>();
   for (const f of facts) {
+    yield;
     seen.add(f.objectId.toLowerCase());
     const decision = roleOf(
       { objectId: f.objectId, layer: f.layer, attributes: f.attributes },
@@ -583,12 +599,33 @@ function classify(input: ReadInput, facts: RowFacts[]): ReadOutput {
   const missingRecords = input.records.filter(
     (r) => r.scope === 'object' && !seen.has(r.key.toLowerCase()),
   );
-  const model = classifiedModelSchema.parse({
+  // The contract check one object at a time (the same check as the whole model's schema): the
+  // meshes make it the longest piece of a large read (T-274 round 5).
+  const objectSchema = classifiedModelSchema.shape.objects.element;
+  const unusedSchema = classifiedModelSchema.shape.unclassified.element;
+  const checkedObjects: ClassifiedObject[] = [];
+  for (const object of objects) {
+    checkedObjects.push(objectSchema.parse(object));
+    yield;
+  }
+  const checkedUnused: ClassifiedModel['unclassified'] = [];
+  for (const row of unclassified) {
+    checkedUnused.push(unusedSchema.parse(row));
+    yield;
+  }
+  const envelope = classifiedModelSchema.parse({
     schema: 'vide.compliance.model@1',
     source: { ...input.source, toMeters },
-    objects,
-    unclassified,
+    objects: [],
+    unclassified: [],
     rolesVersion: input.rolesVersion,
   });
+  if (checkedObjects.length > 200000 || checkedUnused.length > 200000)
+    classifiedModelSchema.parse({ ...envelope, objects, unclassified });
+  const model: ClassifiedModel = {
+    ...envelope,
+    objects: checkedObjects,
+    unclassified: checkedUnused,
+  };
   return { model, facts, missingRecords, notes };
 }

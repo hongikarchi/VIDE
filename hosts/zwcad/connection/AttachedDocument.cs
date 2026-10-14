@@ -44,6 +44,8 @@ namespace Vide.Zwcad.Connection
         private long buildingRevision = -1; private int buildingNext;
         // The last display page's read timing (T-285), set on ZWCAD's thread and logged after its reply.
         private AttachedDisplay.PageTiming pageTiming;
+        // Block definitions read during the current full read (T-285), dropped when it ends or the revision moves.
+        private AttachedDisplay.DefinitionCache definitions; private long definitionsRevision = -1; private int definitionsNext;
         private static Shown ShownOf(AttachedDisplay.EntityRead read) =>
             new Shown { Omitted = read.Item == null ? read.Omitted : null, Warnings = read.Warnings };
 
@@ -148,9 +150,19 @@ namespace Vide.Zwcad.Connection
                 if (building != null && (buildingRevision != revision || offset != buildingNext)) building = null;
                 var record = building;
                 var timing = new AttachedDisplay.PageTiming(); pageTiming = timing;
+                // Pages of one read in order at one revision share the definitions read so far.
+                if (offset == 0 || definitions == null || definitionsRevision != revision || offset != definitionsNext) {
+                    definitions = new AttachedDisplay.DefinitionCache(); definitionsRevision = revision;
+                }
+                var cache = definitions;
                 using (Document.LockDocument(DocumentLockMode.Read, null, null, false)) {
-                    object result = AttachedDisplay.Page(Document.Database, offset, Convert.ToInt32(request["limit"]), revision, out next, out total,
-                        record == null ? null : (Action<AttachedDisplay.EntityRead>)(read => record[read.Handle] = ShownOf(read)), default(ObjectId), timing);
+                    object result;
+                    try {
+                        result = AttachedDisplay.Page(Document.Database, offset, Convert.ToInt32(request["limit"]), revision, out next, out total,
+                            record == null ? null : (Action<AttachedDisplay.EntityRead>)(read => record[read.Handle] = ShownOf(read)), default(ObjectId), timing, cache);
+                    } catch { definitions = null; throw; }
+                    definitionsNext = next;
+                    if (next >= total) definitions = null;
                     if (record != null) {
                         buildingNext = next;
                         if (next >= total) { shown = record; building = null; }
@@ -299,10 +311,23 @@ namespace Vide.Zwcad.Connection
                 ? (object)new { ok = true, documentHash = current.Fingerprint(), revision = current.revision }
                 : new { ok = false, reason = "undo-no-change" });
         }
+        // T-285: each connection is served on its own thread, so a caller that holds its connection open
+        // before sending (the engine checks the process owner first, 0.5–1.8 s) no longer stalls the
+        // display pages queued behind it. Work on the drawing still runs one at a time on ZWCAD's thread.
         private void Listen()
         {
             while (!disposed) {
                 TcpClient client; try { client = listener.AcceptTcpClient(); } catch { return; }
+                // A bounded number at once; one more is closed unread (the engine sees HOST_UNAVAILABLE).
+                if (System.Threading.Interlocked.Increment(ref serving) > 16) { System.Threading.Interlocked.Decrement(ref serving); client.Close(); continue; }
+                try { new System.Threading.Thread(() => Serve(client)) { IsBackground = true, Name = "VIDE connection" }.Start(); }
+                catch { System.Threading.Interlocked.Decrement(ref serving); client.Close(); }
+            }
+        }
+        private int serving;
+        private void Serve(TcpClient client)
+        {
+            try {
                 using (client) {
                     client.ReceiveTimeout = 10000; client.SendTimeout = 30000;
                     var stream = client.GetStream();
@@ -326,11 +351,13 @@ namespace Vide.Zwcad.Connection
                         var completion = new TaskCompletionSource<object>();
                         // T-285 stages of a display page: waiting for ZWCAD's idle turn, the read itself.
                         double queuedMs = clock.Elapsed.TotalMilliseconds, startedMs = -1, dispatchedMs = -1;
+                        AttachedDisplay.PageTiming timing = null;
                         pending.Enqueue(delegate {
                             if (completion.Task.IsCompleted) return;
                             try {
                                 startedMs = clock.Elapsed.TotalMilliseconds; pageTiming = null;
                                 var result = Dispatch(request);
+                                timing = pageTiming;
                                 dispatchedMs = clock.Elapsed.TotalMilliseconds;
                                 // An AI write runs later as a ZWCAD command (one UNDO step).
                                 if (result is Task<object> job)
@@ -346,7 +373,7 @@ namespace Vide.Zwcad.Connection
                         double serializeMs, writeMs;
                         bytesOut = Reply(stream, completion.Task.Result, out serializeMs, out writeMs);
                         PluginLog.Log.Call(method, clock.Elapsed.TotalMilliseconds, bytesIn, bytesOut);
-                        if (method == "displayPage") Stages(method, clock.Elapsed.TotalMilliseconds, queuedMs, startedMs, dispatchedMs, serializeMs, writeMs, bytesOut, pageTiming);
+                        if (method == "displayPage") Stages(method, clock.Elapsed.TotalMilliseconds, queuedMs, startedMs, dispatchedMs, serializeMs, writeMs, bytesOut, timing);
                     } catch (System.Exception error) {
                         var cause = error is AggregateException ? ((AggregateException)error).GetBaseException() : error;
                         string code = cause is InvalidOperationException ? cause.Message : "HOST_READ_FAILED";
@@ -356,7 +383,8 @@ namespace Vide.Zwcad.Connection
                         try { Reply(stream, new { ok = false, code, exceptionType = cause.GetType().FullName }); } catch (IOException) { }
                     }
                 }
-            }
+            } catch (System.Exception) { /* A connection that fails before its request is read. */ }
+            finally { System.Threading.Interlocked.Decrement(ref serving); }
         }
         private static string Value(Dictionary<string, object> request, string key) { object value; return request.TryGetValue(key, out value) ? Convert.ToString(value) : null; }
         private static byte[] Read(Stream stream, int size) { var bytes = new byte[size]; int at = 0; while (at < size) { int n = stream.Read(bytes, at, size - at); if (n == 0) throw new EndOfStreamException(); at += n; } return bytes; }

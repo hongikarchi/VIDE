@@ -229,7 +229,8 @@ export async function complianceRoutes(
     let hashes: Map<string, string | null> | undefined;
     if (input.instanceId) {
       const rt = runtimeOf(ctx);
-      const kept = await keptDocument(ctx, projectId, input.instanceId);
+      // Only which read it was: the kept model itself is not loaded (T-274).
+      const kept = await keptDocumentRef(ctx, projectId, input.instanceId);
       hashes = kept
         ? hashesOf((await rt.readModelAsync(input.instanceId, kept.readId)).model)
         : undefined;
@@ -316,7 +317,17 @@ async function keptDocument(
   key?: string,
 ) {
   const { input } = await documentInput(ctx, projectId, instanceId, key);
-  return runtimeOf(ctx).hostDocument(projectId, instanceId, input.key);
+  return runtimeOf(ctx).hostDocumentAsync(projectId, instanceId, input.key);
+}
+/** The kept document's entry (link, read) without its model. */
+async function keptDocumentRef(
+  ctx: ComplianceRouteContext,
+  projectId: string,
+  instanceId: string,
+  key?: string,
+) {
+  const { input } = await documentInput(ctx, projectId, instanceId, key);
+  return runtimeOf(ctx).hostDocumentRef(projectId, instanceId, input.key);
 }
 
 /**
@@ -344,7 +355,7 @@ export async function readForCheck(
   const params = ((instance.body as { params?: Record<string, { value?: unknown }> }).params ??
     {}) as Record<string, { value?: unknown }>;
   const includeHidden = input.includeHidden ?? params.includeHidden?.value === true;
-  const previous = rt.hostDocument(projectId, input.instanceId, decl.key);
+  const previous = rt.hostDocumentRef(projectId, input.instanceId, decl.key);
   // SPEC-15.1 2 '읽을 연결 고르기' (T-282): only an open Rhino link is read.
   const linkId = await chooseLink(ctx, projectId, input.linkId, [
     previous?.linkId,
@@ -522,7 +533,7 @@ async function remembered(ctx: ComplianceRouteContext, projectId: string, instan
   const limits = limitsDecl
     ? limitsOf(await rt.jigOutputInput(projectId, instanceId, limitsDecl.key).catch(() => null))
     : null;
-  return [rt.hostDocument(projectId, instanceId, decl.key)?.linkId, limits?.frame.linkId];
+  return [rt.hostDocumentRef(projectId, instanceId, decl.key)?.linkId, limits?.frame.linkId];
 }
 
 /**

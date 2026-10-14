@@ -44,6 +44,7 @@ import {
   restoreInstalledPlugin,
   warnIfRhinoRunning,
 } from './installed-connector.mjs';
+import { withInstalledPluginRestored } from './plugin-guard.mjs';
 
 const live = process.argv.includes('--live');
 const probe = sdkOptions('.');
@@ -115,25 +116,26 @@ const timed = async (timings, name, fn) => {
 let worker, host, f, clawde;
 const result = { directory, live, timings: {} };
 const T = result.timings;
-try {
-  await warnIfRhinoRunning();
-  // 1. A synthetic document, saved by a work copy, then open in a VIDE-owned hidden Rhino.
-  await timed(T, 'rhinoStartMs', async () => {
-    worker = await launchRhinoWorker({ ...options, directory: join(directory, 'create') });
-    const receipt = await worker.execute(randomUUID(), 0, build);
-    assert.equal(receipt.ok, true, JSON.stringify(receipt).slice(0, 400));
-    await worker.stop();
-    worker = undefined;
-    result.documentSource = receipt.filename;
-  });
-  const attachedDirectory = join(directory, 'attached');
-  await mkdir(attachedDirectory);
-  const source = join(attachedDirectory, 'synthetic-site-massing.3dm');
-  await copyFile(result.documentSource, source);
-  const script = join(attachedDirectory, 'fixture.py');
-  await writeFile(
-    script,
-    `import Rhino, System, json, os, traceback
+await withInstalledPluginRestored(async () => {
+  try {
+    await warnIfRhinoRunning();
+    // 1. A synthetic document, saved by a work copy, then open in a VIDE-owned hidden Rhino.
+    await timed(T, 'rhinoStartMs', async () => {
+      worker = await launchRhinoWorker({ ...options, directory: join(directory, 'create') });
+      const receipt = await worker.execute(randomUUID(), 0, build);
+      assert.equal(receipt.ok, true, JSON.stringify(receipt).slice(0, 400));
+      await worker.stop();
+      worker = undefined;
+      result.documentSource = receipt.filename;
+    });
+    const attachedDirectory = join(directory, 'attached');
+    await mkdir(attachedDirectory);
+    const source = join(attachedDirectory, 'synthetic-site-massing.3dm');
+    await copyFile(result.documentSource, source);
+    const script = join(attachedDirectory, 'fixture.py');
+    await writeFile(
+      script,
+      `import Rhino, System, json, os, traceback
 folder=${JSON.stringify(attachedDirectory.replaceAll('\\', '/'))}
 plugin=${JSON.stringify(options.plugin.replaceAll('\\', '/'))}
 source=${JSON.stringify(source.replaceAll('\\', '/'))}
@@ -165,317 +167,322 @@ try:
     report('ready',dict(ok=True,objects=int(doc.Objects.Count),units=str(doc.ModelUnitSystem),rhino=str(Rhino.RhinoApp.Version)))
 except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback.format_exc()))
 `,
-  );
-  const ready = await timed(T, 'rhinoOpenMs', async () => {
-    host = await launchOwnedHost({
-      executable: options.executable,
-      environment: { ...process.env, VIDE_CONNECT_DIR: connectionDirectory },
-      visible: false,
-      spawnProcess: (file, args, o) => spawn(file, args, { ...o, windowsVerbatimArguments: true }),
-      args: [
-        '/nosplash',
-        '/notemplate',
-        '/scheme=VIDE-Worker-Test',
-        `/runscript="_-RunPythonScript (${script})"`,
-      ],
-    });
-    return wait(async () =>
-      JSON.parse(await readFile(join(attachedDirectory, 'ready.json'), 'utf8')),
     );
-  });
-  assert.equal(ready.ok, true, JSON.stringify(ready));
-  result.rhino = ready.rhino;
-  let step = 0;
-  const action = async (code) => {
-    step++;
-    await writeFile(join(attachedDirectory, 'action.tmp'), JSON.stringify({ id: step, code }));
-    for (let attempt = 0; ; attempt++) {
-      try {
-        await rename(join(attachedDirectory, 'action.tmp'), join(attachedDirectory, 'action.json'));
-        break;
-      } catch (error) {
-        if (error.code !== 'EPERM' || attempt === 19) throw error;
-        await new Promise((accept) => setTimeout(accept, 50));
-      }
-    }
-    const r = await wait(async () =>
-      JSON.parse(await readFile(join(attachedDirectory, 'action-' + step + '.json'), 'utf8')),
-    );
-    assert.equal(r.ok, true, JSON.stringify(r));
-    return r.value;
-  };
-  const sessions = new EditorSessions({ ...options, connectionDirectory });
-  const sdk = new SdkExecution({ ...options, connectionDirectory, tools: {}, origin: () => '' });
-  const catalog = await sessions.list(true);
-  assert.equal(catalog.documents.length, 1);
-  const target = { instance: catalog.documents[0].instance, documentId: catalog.documents[0].id };
-
-  // 2. The engine: project, link and Sync, the chain's services (fake cLAWde, public data).
-  clawde = await startFakeClawde();
-  let links, execution;
-  f = await chainEngine({
-    root: join(directory, 'engine'),
-    keys,
-    fetch: fetchImpl,
-    clawde,
-    jigContext: {
-      get links() {
-        return links;
-      },
-      sdk,
-      get execution() {
-        return execution;
-      },
-    },
-  });
-  links = new DocumentLinks(f.store);
-  execution = new Execution(f.workspace, { sdk });
-  const link = links.link(f.project.id, {
-    host: 'rhino',
-    name: 'synthetic-site-massing.3dm',
-    path: source,
-    instance: target.instance,
-    documentId: target.documentId,
-  });
-  const syncRecord = async (id) => {
-    const display = await sdk.syncEditor(target, () => {});
-    soleDb(f.store)
-      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
-      .run(
-        id,
-        f.project.id,
-        JSON.stringify({
-          id,
-          body: 'Sync',
-          permission: 'review',
-          provider: 'claude-cli',
-          pins: [],
-          sketches: [],
-          files: [],
-          host: 'rhino',
-          source: 'document',
-          linkId: link.id,
-          sourceDocument: target,
-        }),
-        'succeeded',
-        JSON.stringify({ ...display, hostExecuted: true }),
-        new Date().toISOString(),
+    const ready = await timed(T, 'rhinoOpenMs', async () => {
+      host = await launchOwnedHost({
+        executable: options.executable,
+        environment: { ...process.env, VIDE_CONNECT_DIR: connectionDirectory },
+        visible: false,
+        spawnProcess: (file, args, o) =>
+          spawn(file, args, { ...o, windowsVerbatimArguments: true }),
+        args: [
+          '/nosplash',
+          '/notemplate',
+          '/scheme=VIDE-Worker-Test',
+          `/runscript="_-RunPythonScript (${script})"`,
+        ],
+      });
+      return wait(async () =>
+        JSON.parse(await readFile(join(attachedDirectory, 'ready.json'), 'utf8')),
       );
-    return display;
-  };
-  await syncRecord('sync-1');
-  await f.client.meta();
+    });
+    assert.equal(ready.ok, true, JSON.stringify(ready));
+    result.rhino = ready.rhino;
+    let step = 0;
+    const action = async (code) => {
+      step++;
+      await writeFile(join(attachedDirectory, 'action.tmp'), JSON.stringify({ id: step, code }));
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await rename(
+            join(attachedDirectory, 'action.tmp'),
+            join(attachedDirectory, 'action.json'),
+          );
+          break;
+        } catch (error) {
+          if (error.code !== 'EPERM' || attempt === 19) throw error;
+          await new Promise((accept) => setTimeout(accept, 50));
+        }
+      }
+      const r = await wait(async () =>
+        JSON.parse(await readFile(join(attachedDirectory, 'action-' + step + '.json'), 'utf8')),
+      );
+      assert.equal(r.ok, true, JSON.stringify(r));
+      return r.value;
+    };
+    const sessions = new EditorSessions({ ...options, connectionDirectory });
+    const sdk = new SdkExecution({ ...options, connectionDirectory, tools: {}, origin: () => '' });
+    const catalog = await sessions.list(true);
+    assert.equal(catalog.documents.length, 1);
+    const target = { instance: catalog.documents[0].instance, documentId: catalog.documents[0].id };
 
-  // 3. 사이트 모델링: address → lot → collect → compute → the person confirms.
-  const site = await timed(T, 'siteModelMs', () =>
-    siteModel(f, { query, ...(live ? { radius: 100 } : {}) }),
-  );
-  Object.assign(T, {
-    lookupMs: site.timings.lookupMs,
-    collectMs: site.timings.collectMs,
-    siteComputeMs: site.timings.computeMs,
-  });
-  assert.equal(site.found, undefined, JSON.stringify(site.found));
-  for (const id of ['collect', 'frame', 'roads', 'buildings', 'summary'])
-    assert.equal(statusOf(site.report, id), 'done', id);
-  const so = site.report.outputs;
-  result.site = {
-    pnus: so.summary.pnus.length,
-    officialArea_m2: so.summary.officialArea_m2,
-    computedArea_m2: so.summary.computedArea_m2,
-    areaGap_pct: so.summary.areaGap_pct,
-    parcels: so.frame.parcels.length,
-    roads: so.roads.curves.length,
-    buildings: so.buildings.buildings.length,
-    convergenceDeg: so.frame.convergenceDeg,
-    sources: so.collect.sources.map((s) => `${s.key}=${s.status}:${s.count}`).join(' '),
-  };
-
-  // 4. Rhino에 만들기 of the site model.
-  const siteBake = await timed(T, 'siteBakeMs', () =>
-    f.jig('POST', `${f.base}/${site.id}/bake`, { bake: SITE_BAKES, linkId: link.id }),
-  );
-  assert.equal(siteBake.status, 200, JSON.stringify(siteBake.data).slice(0, 800));
-  assert.deepEqual(
-    siteBake.data.bake.bakes.flatMap((b) => b.failed),
-    [],
-  );
-  result.siteBakeTotals = siteBake.data.bake.totals;
-
-  // 5. 법규: profile from the model, the 일조 answer, its chips resolve to Rhino's objects.
-  const legalStarted = performance.now();
-  const read = await f.legal.syncModel(f.project.id);
-  assert.ok(read.includes('site.pnu') && read.includes('site.area'));
-  const sun = await askConfirmed(f.legal, f.project.id, '일조 사선 제한을 받나요?');
-  await askConfirmed(f.legal, f.project.id, '조경 기준을 받나요?');
-  T.legalMs = Math.round(performance.now() - legalStarted);
-  const answer = await f.legal.get(f.project.id, sun.number);
-  const siteChip = answer.targets.find((c) => c.kind === 'site');
-  assert.equal(siteChip.found, true, JSON.stringify(answer.targets));
-  const chipIds = siteChip.objects.flatMap((o) => o.nativeIds);
-  assert.ok(siteChip.objects.every((o) => o.linkId === link.id));
-  assert.ok(chipIds.length >= 1);
-  const inRhino = await action(
-    `result=[i for i in ${JSON.stringify(chipIds)} if doc.Objects.FindId(System.Guid(i)) is not None]`,
-  );
-  assert.deepEqual(inRhino.sort(), [...chipIds].sort(), 'every chip object is in Rhino');
-  // The viewport selects by the Sync's display ids (sourceId = Rhino object id, ui/layers.ts).
-  const display = await syncRecord('sync-2');
-  const shown = new Set(
-    (display.objects ?? []).map((o) => (typeof o.sourceId === 'string' ? o.sourceId : o.id)),
-  );
-  const highlighted = chipIds.filter((id) => shown.has(id));
-  assert.deepEqual(highlighted.sort(), [...chipIds].sort(), 'the chip objects are in the Sync');
-  result.chip = {
-    label: siteChip.label,
-    objects: chipIds.length,
-    inRhino: inRhino.length,
-    inSync: highlighted.length,
-    adjacent: answer.targets.find((c) => c.kind === 'adjacent')?.found ?? null,
-  };
-
-  // 6. 가능 매스 from the layers read back from Rhino, with the legal constraints.
-  const boundary = so.frame.targets.length > 1 ? '대지 경계' : '대상 필지';
-  const massWith = (params, title) =>
-    buildableMass(f, {
-      boundary,
-      title,
-      // 정북 from the site model's summary (VERIFY-2026-10-08 F-9), not typed by the person.
-      params: { northBasis: 'site', ...params },
-      layerRoot: MASS_ROOT,
-      readFrom: async (instanceId, layers) => {
-        const started = performance.now();
-        const r = await f.jig('POST', `${f.base}/${instanceId}/reads`, {
-          linkId: link.id,
-          layers,
-          purpose: 'assembly',
-        });
-        T.massReadMs = Math.round(performance.now() - started);
-        assert.equal(r.status, 200, JSON.stringify(r.data).slice(0, 400));
-        result.massRead = { objects: r.data.objectCount };
-        return r.data.readId;
+    // 2. The engine: project, link and Sync, the chain's services (fake cLAWde, public data).
+    clawde = await startFakeClawde();
+    let links, execution;
+    f = await chainEngine({
+      root: join(directory, 'engine'),
+      keys,
+      fetch: fetchImpl,
+      clawde,
+      jigContext: {
+        get links() {
+          return links;
+        },
+        sdk,
+        get execution() {
+          return execution;
+        },
       },
     });
-  let mass = await timed(T, 'massMs', () => massWith({}, '매스 검토'));
-  const envelopeStep = mass.report.steps.find((s) => s.id === 'envelope');
-  if (live && envelopeStep.status === 'failed') {
-    // VERIFY-2026-10-08-site-massing 발견: the 3D 돌출 외피 of a real lot with many road segments
-    // fails its closed-solid check. Recorded, then the chain goes on with the road setback off
-    // (a test variant, not a reading) so the rest of the chain still reaches Rhino.
-    result.massFirstAttempt = {
-      envelope: envelopeStep.error?.message,
-      segments: mass.report.outputs.site?.segments.length,
-      buildableArea_m2: mass.report.outputs.buildable?.area,
+    links = new DocumentLinks(f.store);
+    execution = new Execution(f.workspace, { sdk });
+    const link = links.link(f.project.id, {
+      host: 'rhino',
+      name: 'synthetic-site-massing.3dm',
+      path: source,
+      instance: target.instance,
+      documentId: target.documentId,
+    });
+    const syncRecord = async (id) => {
+      const display = await sdk.syncEditor(target, () => {});
+      soleDb(f.store)
+        .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+        .run(
+          id,
+          f.project.id,
+          JSON.stringify({
+            id,
+            body: 'Sync',
+            permission: 'review',
+            provider: 'claude-cli',
+            pins: [],
+            sketches: [],
+            files: [],
+            host: 'rhino',
+            source: 'document',
+            linkId: link.id,
+            sourceDocument: target,
+          }),
+          'succeeded',
+          JSON.stringify({ ...display, hostExecuted: true }),
+          new Date().toISOString(),
+        );
+      return display;
     };
-    mass = await timed(T, 'massRetryMs', () =>
-      massWith({ roadSetbackState: 'none' }, '매스 검토(건축선 후퇴 끔)'),
-    );
-  }
-  T.massComputeMs = mass.computeMs;
-  const mo = mass.report.outputs;
-  for (const id of ['site', 'regulations', 'buildable', 'envelope', 'alternatives', 'handoff'])
-    assert.equal(
-      statusOf(mass.report, id),
-      'done',
-      `${id}: ${JSON.stringify(mass.report.steps.find((s) => s.id === id)?.error)}`,
-    );
-  assert.match(mo.site.northSource, /사이트 모델링/);
-  assert.ok(Math.abs(mo.site.northDeg + (so.frame.convergenceDeg ?? 0)) < 1e-12);
-  const sunItem = mo.regulations.items.find((i) => i.id === 'sunNearDistance');
-  assert.deepEqual([sunItem.value, sunItem.origin], [1.5, '서비스 확정']);
-  result.mass = {
-    siteArea_m2: mo.site.area_m2,
-    segments: mo.site.segments.map((s) => s.kind).join(','),
-    alternatives: mo.alternatives.rows.map((r) => `${r.id} ${r.floorsAbove}F ${r.farArea}`),
-    unresolved: mo.limits.unresolved.length,
-    roadSetback: mo.regulations.items.find((i) => i.id === 'roadSetback')?.applies,
-    buildableArea_m2: mo.buildable.area,
-    envelopes: mo.envelope.variants[0].envelopes.map((e) => `${e.kind} ${e.volume}`),
-    north: `${mo.site.northBasis} ${mo.site.northDeg}° (${mo.site.northSource})`,
-    squareDatum: mo.limits.unresolved.filter((u) => /정북과 거의 수직/.test(u.reason)).length,
-  };
+    await syncRecord('sync-1');
+    await f.client.meta();
 
-  // 7. Rhino에 만들기 of the masses: closed outward solids with the engine's volumes.
-  const massBake = await timed(T, 'massBakeMs', () =>
-    f.jig('POST', `${f.base}/${mass.id}/bake`, {
-      bake: ['limitLines', 'alternativeMasses'],
-      linkId: link.id,
-    }),
-  );
-  assert.equal(massBake.status, 200, JSON.stringify(massBake.data).slice(0, 800));
-  assert.deepEqual(
-    massBake.data.bake.bakes.flatMap((b) => b.failed),
-    [],
-  );
-  const rows = (await sdk.readLayers(target, { includeHidden: true })).scene.filter(
-    (row) => attrsOf(row)['vide-instance'] === mass.id,
-  );
-  const solids = rows.filter((row) => decode(row.layer64).endsWith('::대안 매스'));
-  assert.ok(solids.length > 0);
-  const measured = await action(
-    `out={}
+    // 3. 사이트 모델링: address → lot → collect → compute → the person confirms.
+    const site = await timed(T, 'siteModelMs', () =>
+      siteModel(f, { query, ...(live ? { radius: 100 } : {}) }),
+    );
+    Object.assign(T, {
+      lookupMs: site.timings.lookupMs,
+      collectMs: site.timings.collectMs,
+      siteComputeMs: site.timings.computeMs,
+    });
+    assert.equal(site.found, undefined, JSON.stringify(site.found));
+    for (const id of ['collect', 'frame', 'roads', 'buildings', 'summary'])
+      assert.equal(statusOf(site.report, id), 'done', id);
+    const so = site.report.outputs;
+    result.site = {
+      pnus: so.summary.pnus.length,
+      officialArea_m2: so.summary.officialArea_m2,
+      computedArea_m2: so.summary.computedArea_m2,
+      areaGap_pct: so.summary.areaGap_pct,
+      parcels: so.frame.parcels.length,
+      roads: so.roads.curves.length,
+      buildings: so.buildings.buildings.length,
+      convergenceDeg: so.frame.convergenceDeg,
+      sources: so.collect.sources.map((s) => `${s.key}=${s.status}:${s.count}`).join(' '),
+    };
+
+    // 4. Rhino에 만들기 of the site model.
+    const siteBake = await timed(T, 'siteBakeMs', () =>
+      f.jig('POST', `${f.base}/${site.id}/bake`, { bake: SITE_BAKES, linkId: link.id }),
+    );
+    assert.equal(siteBake.status, 200, JSON.stringify(siteBake.data).slice(0, 800));
+    assert.deepEqual(
+      siteBake.data.bake.bakes.flatMap((b) => b.failed),
+      [],
+    );
+    result.siteBakeTotals = siteBake.data.bake.totals;
+
+    // 5. 법규: profile from the model, the 일조 answer, its chips resolve to Rhino's objects.
+    const legalStarted = performance.now();
+    const read = await f.legal.syncModel(f.project.id);
+    assert.ok(read.includes('site.pnu') && read.includes('site.area'));
+    const sun = await askConfirmed(f.legal, f.project.id, '일조 사선 제한을 받나요?');
+    await askConfirmed(f.legal, f.project.id, '조경 기준을 받나요?');
+    T.legalMs = Math.round(performance.now() - legalStarted);
+    const answer = await f.legal.get(f.project.id, sun.number);
+    const siteChip = answer.targets.find((c) => c.kind === 'site');
+    assert.equal(siteChip.found, true, JSON.stringify(answer.targets));
+    const chipIds = siteChip.objects.flatMap((o) => o.nativeIds);
+    assert.ok(siteChip.objects.every((o) => o.linkId === link.id));
+    assert.ok(chipIds.length >= 1);
+    const inRhino = await action(
+      `result=[i for i in ${JSON.stringify(chipIds)} if doc.Objects.FindId(System.Guid(i)) is not None]`,
+    );
+    assert.deepEqual(inRhino.sort(), [...chipIds].sort(), 'every chip object is in Rhino');
+    // The viewport selects by the Sync's display ids (sourceId = Rhino object id, ui/layers.ts).
+    const display = await syncRecord('sync-2');
+    const shown = new Set(
+      (display.objects ?? []).map((o) => (typeof o.sourceId === 'string' ? o.sourceId : o.id)),
+    );
+    const highlighted = chipIds.filter((id) => shown.has(id));
+    assert.deepEqual(highlighted.sort(), [...chipIds].sort(), 'the chip objects are in the Sync');
+    result.chip = {
+      label: siteChip.label,
+      objects: chipIds.length,
+      inRhino: inRhino.length,
+      inSync: highlighted.length,
+      adjacent: answer.targets.find((c) => c.kind === 'adjacent')?.found ?? null,
+    };
+
+    // 6. 가능 매스 from the layers read back from Rhino, with the legal constraints.
+    const boundary = so.frame.targets.length > 1 ? '대지 경계' : '대상 필지';
+    const massWith = (params, title) =>
+      buildableMass(f, {
+        boundary,
+        title,
+        // 정북 from the site model's summary (VERIFY-2026-10-08 F-9), not typed by the person.
+        params: { northBasis: 'site', ...params },
+        layerRoot: MASS_ROOT,
+        readFrom: async (instanceId, layers) => {
+          const started = performance.now();
+          const r = await f.jig('POST', `${f.base}/${instanceId}/reads`, {
+            linkId: link.id,
+            layers,
+            purpose: 'assembly',
+          });
+          T.massReadMs = Math.round(performance.now() - started);
+          assert.equal(r.status, 200, JSON.stringify(r.data).slice(0, 400));
+          result.massRead = { objects: r.data.objectCount };
+          return r.data.readId;
+        },
+      });
+    let mass = await timed(T, 'massMs', () => massWith({}, '매스 검토'));
+    const envelopeStep = mass.report.steps.find((s) => s.id === 'envelope');
+    if (live && envelopeStep.status === 'failed') {
+      // VERIFY-2026-10-08-site-massing 발견: the 3D 돌출 외피 of a real lot with many road segments
+      // fails its closed-solid check. Recorded, then the chain goes on with the road setback off
+      // (a test variant, not a reading) so the rest of the chain still reaches Rhino.
+      result.massFirstAttempt = {
+        envelope: envelopeStep.error?.message,
+        segments: mass.report.outputs.site?.segments.length,
+        buildableArea_m2: mass.report.outputs.buildable?.area,
+      };
+      mass = await timed(T, 'massRetryMs', () =>
+        massWith({ roadSetbackState: 'none' }, '매스 검토(건축선 후퇴 끔)'),
+      );
+    }
+    T.massComputeMs = mass.computeMs;
+    const mo = mass.report.outputs;
+    for (const id of ['site', 'regulations', 'buildable', 'envelope', 'alternatives', 'handoff'])
+      assert.equal(
+        statusOf(mass.report, id),
+        'done',
+        `${id}: ${JSON.stringify(mass.report.steps.find((s) => s.id === id)?.error)}`,
+      );
+    assert.match(mo.site.northSource, /사이트 모델링/);
+    assert.ok(Math.abs(mo.site.northDeg + (so.frame.convergenceDeg ?? 0)) < 1e-12);
+    const sunItem = mo.regulations.items.find((i) => i.id === 'sunNearDistance');
+    assert.deepEqual([sunItem.value, sunItem.origin], [1.5, '서비스 확정']);
+    result.mass = {
+      siteArea_m2: mo.site.area_m2,
+      segments: mo.site.segments.map((s) => s.kind).join(','),
+      alternatives: mo.alternatives.rows.map((r) => `${r.id} ${r.floorsAbove}F ${r.farArea}`),
+      unresolved: mo.limits.unresolved.length,
+      roadSetback: mo.regulations.items.find((i) => i.id === 'roadSetback')?.applies,
+      buildableArea_m2: mo.buildable.area,
+      envelopes: mo.envelope.variants[0].envelopes.map((e) => `${e.kind} ${e.volume}`),
+      north: `${mo.site.northBasis} ${mo.site.northDeg}° (${mo.site.northSource})`,
+      squareDatum: mo.limits.unresolved.filter((u) => /정북과 거의 수직/.test(u.reason)).length,
+    };
+
+    // 7. Rhino에 만들기 of the masses: closed outward solids with the engine's volumes.
+    const massBake = await timed(T, 'massBakeMs', () =>
+      f.jig('POST', `${f.base}/${mass.id}/bake`, {
+        bake: ['limitLines', 'alternativeMasses'],
+        linkId: link.id,
+      }),
+    );
+    assert.equal(massBake.status, 200, JSON.stringify(massBake.data).slice(0, 800));
+    assert.deepEqual(
+      massBake.data.bake.bakes.flatMap((b) => b.failed),
+      [],
+    );
+    const rows = (await sdk.readLayers(target, { includeHidden: true })).scene.filter(
+      (row) => attrsOf(row)['vide-instance'] === mass.id,
+    );
+    const solids = rows.filter((row) => decode(row.layer64).endsWith('::대안 매스'));
+    assert.ok(solids.length > 0);
+    const measured = await action(
+      `out={}
 for i in ${JSON.stringify(solids.map((row) => row.nativeId))}:
     b=doc.Objects.FindId(System.Guid(i)).Geometry
     if isinstance(b, Rhino.Geometry.Extrusion): b=b.ToBrep()
     m=Rhino.Geometry.VolumeMassProperties.Compute(b,True,False,False,False)
     out[i]=[b.IsSolid,b.IsValid,str(b.SolidOrientation),m.Volume if m else None]
 result=out`,
-  );
-  let bad = 0;
-  for (const row of solids) {
-    const [solid, valid, orientation, volume] = measured[row.nativeId];
-    if (!(solid && valid && orientation === 'Outward' && volume > 0)) bad++;
-  }
-  assert.equal(bad, 0, 'every floor mass is a closed outward solid');
-  result.massBake = { solids: solids.length, totals: massBake.data.bake.totals };
+    );
+    let bad = 0;
+    for (const row of solids) {
+      const [solid, valid, orientation, volume] = measured[row.nativeId];
+      if (!(solid && valid && orientation === 'Outward' && volume > 0)) bad++;
+    }
+    assert.equal(bad, 0, 'every floor mass is a closed outward solid');
+    result.massBake = { solids: solids.length, totals: massBake.data.bake.totals };
 
-  // 8. 건축개요: both earlier results, the page and the two CSVs.
-  const summary = await timed(T, 'summaryMs', () => buildingSummary(f));
-  for (const id of ['sources', 'summary', 'check'])
-    assert.equal(statusOf(summary.report, id), 'done', id);
-  const ss = summary.report.outputs.summary;
-  assert.equal(summary.report.outputs.check.ok, true);
-  assert.equal(summary.report.outputs.sources.site.title, '대지');
-  assert.ok(summary.page.html.length > 0, JSON.stringify(summary.page.model.exportRefused));
-  const panel = JSON.parse(
-    await readFile('src/jigs/official/jigs/building-summary/panel.json', 'utf8'),
-  );
-  const tab = (title) => panel.drawer.tabs.find((t) => t.title === title);
-  const csv = {
-    overview: toCsv(summary.report.outputs.check.overview, tab('건축개요').columns),
-    floors: toCsv(summary.report.outputs.check.floors, tab('층별 면적표').columns),
-  };
-  await writeFile(join(directory, 'summary.html'), summary.page.html);
-  await writeFile(join(directory, 'overview.csv'), csv.overview);
-  await writeFile(join(directory, 'floors.csv'), csv.floors);
-  result.summary = {
-    alternative: ss.alternative,
-    gfaTotal: ss.gfaTotal,
-    unconfirmed: ss.unconfirmedCount,
-    needsInput: ss.needsInputCount,
-    htmlBytes: summary.page.html.length,
-    csvLines: [csv.overview.split('\r\n').length - 1, csv.floors.split('\r\n').length - 1],
-  };
-  for (const value of Object.values(keys))
-    if (value)
-      assert.ok(
-        !JSON.stringify([so, mo.handoff, ss, summary.page.html]).includes(value),
-        'no key in the chain',
-      );
+    // 8. 건축개요: both earlier results, the page and the two CSVs.
+    const summary = await timed(T, 'summaryMs', () => buildingSummary(f));
+    for (const id of ['sources', 'summary', 'check'])
+      assert.equal(statusOf(summary.report, id), 'done', id);
+    const ss = summary.report.outputs.summary;
+    assert.equal(summary.report.outputs.check.ok, true);
+    assert.equal(summary.report.outputs.sources.site.title, '대지');
+    assert.ok(summary.page.html.length > 0, JSON.stringify(summary.page.model.exportRefused));
+    const panel = JSON.parse(
+      await readFile('src/jigs/official/jigs/building-summary/panel.json', 'utf8'),
+    );
+    const tab = (title) => panel.drawer.tabs.find((t) => t.title === title);
+    const csv = {
+      overview: toCsv(summary.report.outputs.check.overview, tab('건축개요').columns),
+      floors: toCsv(summary.report.outputs.check.floors, tab('층별 면적표').columns),
+    };
+    await writeFile(join(directory, 'summary.html'), summary.page.html);
+    await writeFile(join(directory, 'overview.csv'), csv.overview);
+    await writeFile(join(directory, 'floors.csv'), csv.floors);
+    result.summary = {
+      alternative: ss.alternative,
+      gfaTotal: ss.gfaTotal,
+      unconfirmed: ss.unconfirmedCount,
+      needsInput: ss.needsInputCount,
+      htmlBytes: summary.page.html.length,
+      csvLines: [csv.overview.split('\r\n').length - 1, csv.floors.split('\r\n').length - 1],
+    };
+    for (const value of Object.values(keys))
+      if (value)
+        assert.ok(
+          !JSON.stringify([so, mo.handoff, ss, summary.page.html]).includes(value),
+          'no key in the chain',
+        );
 
-  result.passed = true;
-  await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
-  console.log(JSON.stringify(result, null, 2));
-} finally {
-  try {
-    await f?.close();
-  } catch (error) {
-    console.error('engine close: ' + String(error));
+    result.passed = true;
+    await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
+    console.log(JSON.stringify(result, null, 2));
+  } finally {
+    try {
+      await f?.close();
+    } catch (error) {
+      console.error('engine close: ' + String(error));
+    }
+    await clawde?.close();
+    await worker?.stop();
+    await host?.stop();
+    if (process.env.VIDE_TEST_KEEP_REGISTRATION !== '1') {
+      reportRestore(await restoreInstalledPlugin());
+    }
   }
-  await clawde?.close();
-  await worker?.stop();
-  await host?.stop();
-  if (process.env.VIDE_TEST_KEEP_REGISTRATION !== '1') {
-    reportRestore(await restoreInstalledPlugin());
-  }
-}
+});

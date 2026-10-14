@@ -24,6 +24,8 @@ export interface RailStep {
   /** The result was the same as before (nothing it reads changed). */
   unchanged?: boolean;
   problems?: number;
+  /** Words in place of the state's own (e.g. '수집 중…' while a part fetches for the step). */
+  label?: string;
   /** Why the step is blocked or failed, as a sentence. */
   reason?: string;
   /** A person may confirm the step now. */
@@ -58,7 +60,8 @@ export function StepRail({
   return (
     <ol className="kit-rail" aria-label="단계">
       {steps.map((step, i) => {
-        const [mark, text] = RAIL[step.state];
+        const [mark, own] = RAIL[step.state];
+        const text = step.label ?? own;
         return (
           <li
             key={step.id}

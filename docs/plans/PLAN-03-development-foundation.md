@@ -2,10 +2,10 @@
 id: PLAN-03
 title: 개발 기반 구축과 저장소 보호
 status: review
-version: 0.4
-updated: 2026-10-01
+version: 0.5
+updated: 2026-10-15
 owner: agent:codex
-related: [PLAN, ARCH-01, SPEC-05, RESEARCH-02, T-019, T-020, T-021, T-022, T-023, T-024, T-032, T-040]
+related: [PLAN, ARCH-01, SPEC-05, RESEARCH-02, T-019, T-020, T-021, T-022, T-023, T-024, T-032, T-040, T-297]
 ---
 
 # 개발 기반 구축과 저장소 보호
@@ -45,6 +45,7 @@ T-019 → T-020 → T-021 → T-022 → T-023 → T-024 순서로 진행한다. 
 - 커밋: 변경 범위에 맞는 빠른 검사와 기존 MD/HTML 일치 보호를 유지한다. 부분 스테이징 상태에서 작업 트리 검사만 통과하고 다른 코드가 커밋되는 문제를 방지한다. 자동 포맷으로 사용자의 미스테이징 변경을 함께 추가하지 않는다.
 - 통합: 전체 검사와 헤드리스 브라우저 회귀를 CI/명시적 통합 명령으로 실행한다. C# 빌드는 SDK 보유 환경에서, Rhino/ZWCAD 실호스트 검증은 합성 자료를 사용하는 별도 경로로 둔다. CLI 계정이나 CAD 라이선스가 필요한 시험을 일반 공개 CI에 강제하지 않는다.
 - 완료: 의도한 타입 오류·실패 테스트·오래된 HTML을 각각 검출하고 실패 시 커밋/검증이 중단된다. 실제 실행한 검사와 환경 미확보로 빠진 검사를 구분한다. CI에서 비밀값이나 사용자 프로젝트를 사용하지 않는다.
+- 실호스트 시험의 플러그인 등록 보호(PLAN-51 T-297, 2026-10-15): 개발 빌드를 `LoadPlugIn`하는 시험·하네스는 본문을 `tests/integration/plugin-guard.mjs`의 `withInstalledPluginRestored`로 감싸 시험 전 Rhino 등록 `FileName`을 기록하고, 끝날 때 설치 엔진(`POST /api/v1/connectors/rhino8/install`)으로, 안 되면 기록한 값을 레지스트리에 되돌린다. `npm run verify` 마지막의 `plugin:check`(`tools/checks/plugin-registration.mjs`)는 등록이 `.vide/build` 아래면 실패한다. **상태: 구현·단위 시험 완료, 실호스트 확인 전.**
 
 <a id="t-022"></a>
 ### T-022 · 일관된 포맷

@@ -33,6 +33,7 @@ import { closeJigRuntime, jigRoutes, jigRuntimeFor } from '../../src/server/jig-
 import { panelingRoutes } from '../../src/server/paneling-routes.ts';
 import { importPack, packJig } from '../../src/jigs/runtime/pack.ts';
 import { surfaceTestJig, SURFACE_TEST_JIG } from '../fixtures/paneling-jig.mjs';
+import { withInstalledPluginRestored } from './plugin-guard.mjs';
 
 const probe = sdkOptions('.');
 const plugin = process.env.VIDE_TEST_RHINO_PLUGIN
@@ -124,26 +125,27 @@ async function installedConnectors({ install = false } = {}) {
 
 let worker, host, store, workspace;
 const result = { directory, plugin };
-try {
-  // 1. The synthetic document, made and saved by a hidden worker.
-  let t = performance.now();
-  worker = await launchRhinoWorker({ ...options, directory: join(directory, 'create') });
-  const built = await worker.execute(randomUUID(), 0, BUILD);
-  assert.equal(built.ok, true, JSON.stringify(built).slice(0, 1500));
-  const ids = built.value;
-  await worker.stop();
-  worker = undefined;
-  const attachedDirectory = join(directory, 'attached');
-  await mkdir(attachedDirectory);
-  const source = join(attachedDirectory, 'paneling-read.3dm');
-  await copyFile(built.filename, source);
-  log('document', ms(t), 'ms');
+await withInstalledPluginRestored(async () => {
+  try {
+    // 1. The synthetic document, made and saved by a hidden worker.
+    let t = performance.now();
+    worker = await launchRhinoWorker({ ...options, directory: join(directory, 'create') });
+    const built = await worker.execute(randomUUID(), 0, BUILD);
+    assert.equal(built.ok, true, JSON.stringify(built).slice(0, 1500));
+    const ids = built.value;
+    await worker.stop();
+    worker = undefined;
+    const attachedDirectory = join(directory, 'attached');
+    await mkdir(attachedDirectory);
+    const source = join(attachedDirectory, 'paneling-read.3dm');
+    await copyFile(built.filename, source);
+    log('document', ms(t), 'ms');
 
-  // 2. The document in a VIDE-owned hidden Rhino attached to the plugin, with an action loop.
-  const script = join(attachedDirectory, 'fixture.py');
-  await writeFile(
-    script,
-    `import Rhino, System, json, os, traceback
+    // 2. The document in a VIDE-owned hidden Rhino attached to the plugin, with an action loop.
+    const script = join(attachedDirectory, 'fixture.py');
+    await writeFile(
+      script,
+      `import Rhino, System, json, os, traceback
 folder=${JSON.stringify(attachedDirectory.replaceAll('\\', '/'))}
 plugin=${JSON.stringify(plugin.replaceAll('\\', '/'))}
 source=${JSON.stringify(source.replaceAll('\\', '/'))}
@@ -174,224 +176,231 @@ try:
     report('ready',dict(ok=True,objects=int(doc.Objects.Count),rhino=str(Rhino.RhinoApp.Version)))
 except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback.format_exc()))
 `,
-  );
-  t = performance.now();
-  host = await launchOwnedHost({
-    executable: options.executable,
-    environment: { ...process.env, VIDE_CONNECT_DIR: connectionDirectory },
-    visible: false,
-    spawnProcess: (f, a, o) => spawn(f, a, { ...o, windowsVerbatimArguments: true }),
-    args: [
-      '/nosplash',
-      '/notemplate',
-      '/scheme=VIDE-Worker-Test',
-      `/runscript="_-RunPythonScript (${script})"`,
-    ],
-  });
-  const ready = await wait(async () =>
-    JSON.parse(await readFile(join(attachedDirectory, 'ready.json'), 'utf8')),
-  );
-  assert.equal(ready.ok, true, JSON.stringify(ready));
-  result.rhino = ready.rhino;
-  log('attached Rhino', ready.rhino, ms(t), 'ms');
-  let step = 0;
-  const action = async (code) => {
-    step++;
-    await writeFile(join(attachedDirectory, 'action.tmp'), JSON.stringify({ id: step, code }));
-    for (let attempt = 0; ; attempt++) {
-      try {
-        await rename(join(attachedDirectory, 'action.tmp'), join(attachedDirectory, 'action.json'));
-        break;
-      } catch (error) {
-        if (error.code !== 'EPERM' || attempt === 19) throw error;
-        await new Promise((r) => setTimeout(r, 50));
+    );
+    t = performance.now();
+    host = await launchOwnedHost({
+      executable: options.executable,
+      environment: { ...process.env, VIDE_CONNECT_DIR: connectionDirectory },
+      visible: false,
+      spawnProcess: (f, a, o) => spawn(f, a, { ...o, windowsVerbatimArguments: true }),
+      args: [
+        '/nosplash',
+        '/notemplate',
+        '/scheme=VIDE-Worker-Test',
+        `/runscript="_-RunPythonScript (${script})"`,
+      ],
+    });
+    const ready = await wait(async () =>
+      JSON.parse(await readFile(join(attachedDirectory, 'ready.json'), 'utf8')),
+    );
+    assert.equal(ready.ok, true, JSON.stringify(ready));
+    result.rhino = ready.rhino;
+    log('attached Rhino', ready.rhino, ms(t), 'ms');
+    let step = 0;
+    const action = async (code) => {
+      step++;
+      await writeFile(join(attachedDirectory, 'action.tmp'), JSON.stringify({ id: step, code }));
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await rename(
+            join(attachedDirectory, 'action.tmp'),
+            join(attachedDirectory, 'action.json'),
+          );
+          break;
+        } catch (error) {
+          if (error.code !== 'EPERM' || attempt === 19) throw error;
+          await new Promise((r) => setTimeout(r, 50));
+        }
       }
-    }
-    const r = await wait(async () =>
-      JSON.parse(await readFile(join(attachedDirectory, `action-${step}.json`), 'utf8')),
-    );
-    assert.equal(r.ok, true, JSON.stringify(r));
-    return r.value;
-  };
-  const documentState = async () =>
-    action(
-      'result=[len(list(doc.Objects.GetObjectList(Rhino.DocObjects.ObjectEnumeratorSettings()))), int(doc.NextUndoRecordSerialNumber), bool(doc.Modified)]',
-    );
-  const select = (id) =>
-    action(`doc.Objects.UnselectAll()\ndoc.Objects.Select(System.Guid('${id}'))\nresult=True`);
-
-  const sessions = new EditorSessions({ ...options, connectionDirectory });
-  const sdk = new SdkExecution({ ...options, connectionDirectory, tools: {}, origin: () => '' });
-  const catalog = await sessions.list(true);
-  assert.equal(catalog.documents.length, 1);
-  const target = { instance: catalog.documents[0].instance, documentId: catalog.documents[0].id };
-
-  // 3. A project with the link and a work copy of the test jig (engine data under the run folder).
-  const dataDir = join(directory, 'engine');
-  mkdirSync(dataDir, { recursive: true });
-  store = new Store(join(directory, 'workspace.sqlite'));
-  workspace = new Workspace(store);
-  const links = new DocumentLinks(store);
-  const project = store.createProject('패널링 기준 면 시험');
-  const link = links.link(project.id, { host: 'rhino', name: 'paneling-read.3dm', ...target });
-  const call = async (method, path, payload) => {
-    let last;
-    const url = new URL(path, 'http://127.0.0.1');
-    const send = (status, data) => (last = { status, data });
-    const handled =
-      (await panelingRoutes(url, method, {
-        workspace,
-        dataDirectory: dataDir,
-        body: async () => payload ?? {},
-        send,
-        remote: false,
-        links,
-        sdk,
-      })) ||
-      (await jigRoutes(url, Object.assign(Readable.from([]), { method, headers: {} }), {
-        workspace,
-        body: async () => payload ?? {},
-        send,
-        dataDirectory: dataDir,
-        links,
-        remote: false,
-      }));
-    assert.ok(handled);
-    return last;
-  };
-  const packed = await packJig(surfaceTestJig(directory), {
-    dataDir,
-    bundle: false,
-    skipTests: true,
-  });
-  await importPack(packed.bytes, { store: new JigStore(store), dataDir });
-  const base = `/api/v1/projects/${project.id}`;
-  const created = await call('POST', `${base}/jig-instances`, {
-    jig: SURFACE_TEST_JIG,
-    version: '0.1.0',
-    title: '패널링 시험 작업본',
-    layerRoot: 'VIDE::패널링',
-  });
-  assert.equal(created.status, 200, JSON.stringify(created));
-  const iid = created.data.id;
-  const read = async (payload) => {
-    const s = performance.now();
-    const r = await call('POST', `${base}/paneling/surface/read`, { instanceId: iid, ...payload });
-    assert.equal(r.status, 200, JSON.stringify(r));
-    return { ...r.data, ms: ms(s) };
-  };
-  const keptSample = () =>
-    jigRuntimeFor(workspace, dataDir).hostSurface(project.id, iid, 'surface');
-
-  // 4. [고른 면 쓰기] from the Rhino selection: the saddle with a hole.
-  await select(ids.saddle);
-  const before = await documentState();
-  const picked = await read({});
-  assert.equal(picked.ok, true, JSON.stringify(picked));
-  const after = await documentState();
-  assert.deepEqual(after, before, 'a read adds no object, no undo record, no modified flag');
-  const kept = keptSample();
-  const sample = surfaceSampleSchema.parse(kept.sample);
-  assert.equal(sample.source.objectId, ids.saddle.toLowerCase());
-  assert.equal(sample.source.path, 'attached-template');
-  assert.equal(sample.source.toMeters, 1);
-  assert.equal(sample.faces.length, 1);
-  const face = sample.faces[0];
-  assert.equal(face.nu, 128);
-  assert.ok(face.trimLoops.length >= 2, 'outer loop and the hole');
-  assert.ok(face.inside.includes(0) && face.inside.includes(1));
-  assert.match(face.geometryHash, /^[a-f0-9]{64}$/);
-  const flat = face.points.every(Number.isFinite) && face.normals.every(Number.isFinite);
-  assert.ok(flat);
-  result.saddle = { ms: picked.ms, inside: picked.summary.faces[0].inside };
-  log('saddle 128²', picked.ms, 'ms');
-
-  // The step reads the kept sample.
-  const run = await call('POST', `${base}/jig-instances/${iid}/run`, { mode: 'confirmed' });
-  assert.equal(run.status, 200, JSON.stringify(run));
-  assert.deepEqual(run.data.outputs.look, {
-    read: true,
-    objectId: ids.saddle.toLowerCase(),
-    points: 128 * 128,
-  });
-
-  // [다시 읽기]: the same fingerprint; after a 1 mm move another one.
-  const again = await read({ mode: 'reread' });
-  assert.equal(again.ok, true);
-  assert.deepEqual(again.picked.faceHashes, picked.picked.faceHashes);
-  await action(
-    `doc.Objects.Transform(System.Guid('${ids.saddle}'), Rhino.Geometry.Transform.Translation(0,0,0.001), True)\nresult=True`,
-  );
-  const moved = await read({ mode: 'reread' });
-  assert.equal(moved.ok, true);
-  assert.notDeepEqual(moved.picked.faceHashes, picked.picked.faceHashes);
-  // The moved face is a new input copy: the step needs computing again.
-  const view = await call('GET', `${base}/jig-instances/${iid}`);
-  assert.equal(view.data.status, 'stale');
-
-  // 5. A polysurface (box, 6 faces) on a smaller grid; a seam and a pole.
-  const box = await read({ objectId: ids.box });
-  assert.equal(box.ok, true, JSON.stringify(box));
-  assert.deepEqual(box.picked.faces, [0, 1, 2, 3, 4, 5]);
-  assert.equal(box.picked.grid, 104);
-  surfaceSampleSchema.parse(keptSample().sample);
-  const cylinder = await read({ objectId: ids.cylinder });
-  assert.equal(cylinder.ok, true, JSON.stringify(cylinder));
-  assert.equal(cylinder.summary.faces[0].closedU || cylinder.summary.faces[0].closedV, true);
-  const sphere = await read({ objectId: ids.sphere });
-  assert.equal(sphere.ok, true, JSON.stringify(sphere));
-  const poles = Object.values(sphere.summary.faces[0].singular).filter(Boolean).length;
-  assert.equal(poles, 1);
-  surfaceSampleSchema.parse(keptSample().sample);
-  result.reads = { box: box.ms, cylinder: cylinder.ms, sphere: sphere.ms };
-
-  // 6. Failures keep the earlier sample: a mesh, a missing object, too fine a grid.
-  const keptBefore = keptSample().hash;
-  await select(ids.mesh);
-  const mesh = await read({});
-  assert.equal(mesh.ok, false);
-  assert.equal(mesh.code, 'MESH_NOT_ACCEPTED');
-  assert.equal(mesh.message, '메쉬 기준 면은 아직 받지 않습니다 · Rhino에서 서피스로 바꾸세요');
-  const missing = await read({ objectId: randomUUID() });
-  assert.equal(missing.code, 'FACE_NOT_FOUND');
-  const tooFine = await read({ mode: 'reread', grid: 512 });
-  assert.equal(tooFine.code, 'SAMPLE_LIMIT');
-  assert.equal(keptSample().hash, keptBefore);
-
-  // 7. direct-read refuses a body that writes, and puts back what it added.
-  const state0 = await documentState();
-  const writing = await sdk.readDirect(
-    target,
-    'doc.Objects.AddPoint(new Point3d(1, 2, 3)); return 1;',
-  );
-  assert.equal(writing.ok, false);
-  assert.equal(writing.code, 'READ_CHANGED_DOCUMENT');
-  assert.equal(writing.reverted, true);
-  const state1 = await documentState();
-  assert.equal(state1[0], state0[0], 'the added point is gone');
-  assert.equal(state1[1], state0[1], 'no undo record');
-  result.passed = true;
-  log('passed');
-} finally {
-  await worker?.stop().catch(() => {});
-  await host?.stop().catch(() => {});
-  if (workspace) await closeJigRuntime(workspace).catch(() => {});
-  store?.close();
-  // Installed engine connectors: read; re-install only when not current and no Rhino runs.
-  try {
-    let status = await installedConnectors();
-    let running = false;
-    try {
-      running = /Rhino\.exe/i.test(
-        execSync('tasklist /FI "IMAGENAME eq Rhino.exe" /NH', { encoding: 'utf8' }),
+      const r = await wait(async () =>
+        JSON.parse(await readFile(join(attachedDirectory, `action-${step}.json`), 'utf8')),
       );
-    } catch {}
-    if (status.rhino8 && status.rhino8 !== 'current' && !running)
-      status = await installedConnectors({ install: true });
-    result.connectors = { ...status, rhinoRunning: running };
-  } catch (error) {
-    result.connectors = { error: String(error) };
+      assert.equal(r.ok, true, JSON.stringify(r));
+      return r.value;
+    };
+    const documentState = async () =>
+      action(
+        'result=[len(list(doc.Objects.GetObjectList(Rhino.DocObjects.ObjectEnumeratorSettings()))), int(doc.NextUndoRecordSerialNumber), bool(doc.Modified)]',
+      );
+    const select = (id) =>
+      action(`doc.Objects.UnselectAll()\ndoc.Objects.Select(System.Guid('${id}'))\nresult=True`);
+
+    const sessions = new EditorSessions({ ...options, connectionDirectory });
+    const sdk = new SdkExecution({ ...options, connectionDirectory, tools: {}, origin: () => '' });
+    const catalog = await sessions.list(true);
+    assert.equal(catalog.documents.length, 1);
+    const target = { instance: catalog.documents[0].instance, documentId: catalog.documents[0].id };
+
+    // 3. A project with the link and a work copy of the test jig (engine data under the run folder).
+    const dataDir = join(directory, 'engine');
+    mkdirSync(dataDir, { recursive: true });
+    store = new Store(join(directory, 'workspace.sqlite'));
+    workspace = new Workspace(store);
+    const links = new DocumentLinks(store);
+    const project = store.createProject('패널링 기준 면 시험');
+    const link = links.link(project.id, { host: 'rhino', name: 'paneling-read.3dm', ...target });
+    const call = async (method, path, payload) => {
+      let last;
+      const url = new URL(path, 'http://127.0.0.1');
+      const send = (status, data) => (last = { status, data });
+      const handled =
+        (await panelingRoutes(url, method, {
+          workspace,
+          dataDirectory: dataDir,
+          body: async () => payload ?? {},
+          send,
+          remote: false,
+          links,
+          sdk,
+        })) ||
+        (await jigRoutes(url, Object.assign(Readable.from([]), { method, headers: {} }), {
+          workspace,
+          body: async () => payload ?? {},
+          send,
+          dataDirectory: dataDir,
+          links,
+          remote: false,
+        }));
+      assert.ok(handled);
+      return last;
+    };
+    const packed = await packJig(surfaceTestJig(directory), {
+      dataDir,
+      bundle: false,
+      skipTests: true,
+    });
+    await importPack(packed.bytes, { store: new JigStore(store), dataDir });
+    const base = `/api/v1/projects/${project.id}`;
+    const created = await call('POST', `${base}/jig-instances`, {
+      jig: SURFACE_TEST_JIG,
+      version: '0.1.0',
+      title: '패널링 시험 작업본',
+      layerRoot: 'VIDE::패널링',
+    });
+    assert.equal(created.status, 200, JSON.stringify(created));
+    const iid = created.data.id;
+    const read = async (payload) => {
+      const s = performance.now();
+      const r = await call('POST', `${base}/paneling/surface/read`, {
+        instanceId: iid,
+        ...payload,
+      });
+      assert.equal(r.status, 200, JSON.stringify(r));
+      return { ...r.data, ms: ms(s) };
+    };
+    const keptSample = () =>
+      jigRuntimeFor(workspace, dataDir).hostSurface(project.id, iid, 'surface');
+
+    // 4. [고른 면 쓰기] from the Rhino selection: the saddle with a hole.
+    await select(ids.saddle);
+    const before = await documentState();
+    const picked = await read({});
+    assert.equal(picked.ok, true, JSON.stringify(picked));
+    const after = await documentState();
+    assert.deepEqual(after, before, 'a read adds no object, no undo record, no modified flag');
+    const kept = keptSample();
+    const sample = surfaceSampleSchema.parse(kept.sample);
+    assert.equal(sample.source.objectId, ids.saddle.toLowerCase());
+    assert.equal(sample.source.path, 'attached-template');
+    assert.equal(sample.source.toMeters, 1);
+    assert.equal(sample.faces.length, 1);
+    const face = sample.faces[0];
+    assert.equal(face.nu, 128);
+    assert.ok(face.trimLoops.length >= 2, 'outer loop and the hole');
+    assert.ok(face.inside.includes(0) && face.inside.includes(1));
+    assert.match(face.geometryHash, /^[a-f0-9]{64}$/);
+    const flat = face.points.every(Number.isFinite) && face.normals.every(Number.isFinite);
+    assert.ok(flat);
+    result.saddle = { ms: picked.ms, inside: picked.summary.faces[0].inside };
+    log('saddle 128²', picked.ms, 'ms');
+
+    // The step reads the kept sample.
+    const run = await call('POST', `${base}/jig-instances/${iid}/run`, { mode: 'confirmed' });
+    assert.equal(run.status, 200, JSON.stringify(run));
+    assert.deepEqual(run.data.outputs.look, {
+      read: true,
+      objectId: ids.saddle.toLowerCase(),
+      points: 128 * 128,
+    });
+
+    // [다시 읽기]: the same fingerprint; after a 1 mm move another one.
+    const again = await read({ mode: 'reread' });
+    assert.equal(again.ok, true);
+    assert.deepEqual(again.picked.faceHashes, picked.picked.faceHashes);
+    await action(
+      `doc.Objects.Transform(System.Guid('${ids.saddle}'), Rhino.Geometry.Transform.Translation(0,0,0.001), True)\nresult=True`,
+    );
+    const moved = await read({ mode: 'reread' });
+    assert.equal(moved.ok, true);
+    assert.notDeepEqual(moved.picked.faceHashes, picked.picked.faceHashes);
+    // The moved face is a new input copy: the step needs computing again.
+    const view = await call('GET', `${base}/jig-instances/${iid}`);
+    assert.equal(view.data.status, 'stale');
+
+    // 5. A polysurface (box, 6 faces) on a smaller grid; a seam and a pole.
+    const box = await read({ objectId: ids.box });
+    assert.equal(box.ok, true, JSON.stringify(box));
+    assert.deepEqual(box.picked.faces, [0, 1, 2, 3, 4, 5]);
+    assert.equal(box.picked.grid, 104);
+    surfaceSampleSchema.parse(keptSample().sample);
+    const cylinder = await read({ objectId: ids.cylinder });
+    assert.equal(cylinder.ok, true, JSON.stringify(cylinder));
+    assert.equal(cylinder.summary.faces[0].closedU || cylinder.summary.faces[0].closedV, true);
+    const sphere = await read({ objectId: ids.sphere });
+    assert.equal(sphere.ok, true, JSON.stringify(sphere));
+    const poles = Object.values(sphere.summary.faces[0].singular).filter(Boolean).length;
+    assert.equal(poles, 1);
+    surfaceSampleSchema.parse(keptSample().sample);
+    result.reads = { box: box.ms, cylinder: cylinder.ms, sphere: sphere.ms };
+
+    // 6. Failures keep the earlier sample: a mesh, a missing object, too fine a grid.
+    const keptBefore = keptSample().hash;
+    await select(ids.mesh);
+    const mesh = await read({});
+    assert.equal(mesh.ok, false);
+    assert.equal(mesh.code, 'MESH_NOT_ACCEPTED');
+    assert.equal(mesh.message, '메쉬 기준 면은 아직 받지 않습니다 · Rhino에서 서피스로 바꾸세요');
+    const missing = await read({ objectId: randomUUID() });
+    assert.equal(missing.code, 'FACE_NOT_FOUND');
+    const tooFine = await read({ mode: 'reread', grid: 512 });
+    assert.equal(tooFine.code, 'SAMPLE_LIMIT');
+    assert.equal(keptSample().hash, keptBefore);
+
+    // 7. direct-read refuses a body that writes, and puts back what it added.
+    const state0 = await documentState();
+    const writing = await sdk.readDirect(
+      target,
+      'doc.Objects.AddPoint(new Point3d(1, 2, 3)); return 1;',
+    );
+    assert.equal(writing.ok, false);
+    assert.equal(writing.code, 'READ_CHANGED_DOCUMENT');
+    assert.equal(writing.reverted, true);
+    const state1 = await documentState();
+    assert.equal(state1[0], state0[0], 'the added point is gone');
+    assert.equal(state1[1], state0[1], 'no undo record');
+    result.passed = true;
+    log('passed');
+  } finally {
+    await worker?.stop().catch(() => {});
+    await host?.stop().catch(() => {});
+    if (workspace) await closeJigRuntime(workspace).catch(() => {});
+    store?.close();
+    // Installed engine connectors: read; re-install only when not current and no Rhino runs.
+    try {
+      let status = await installedConnectors();
+      let running = false;
+      try {
+        running = /Rhino\.exe/i.test(
+          execSync('tasklist /FI "IMAGENAME eq Rhino.exe" /NH', { encoding: 'utf8' }),
+        );
+      } catch {}
+      if (status.rhino8 && status.rhino8 !== 'current' && !running)
+        status = await installedConnectors({ install: true });
+      result.connectors = { ...status, rhinoRunning: running };
+    } catch (error) {
+      result.connectors = { error: String(error) };
+    }
+    console.log('installed connectors: ' + JSON.stringify(result.connectors));
+    await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
   }
-  console.log('installed connectors: ' + JSON.stringify(result.connectors));
-  await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
-}
+});

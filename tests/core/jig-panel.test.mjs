@@ -23,6 +23,7 @@ import {
   toDisplay,
 } from '../../src/ui/jig-panel/bindings.ts';
 import { PART_NAMES } from '../../src/ui/kit/registry.ts';
+import { railStep } from '../../src/ui/jig-panel/rail.ts';
 import { grid } from '../../extensions/jigs/example-grid/steps/grid.ts';
 import { beams } from '../../extensions/jigs/example-grid/steps/beams.ts';
 import { summary } from '../../extensions/jigs/example-grid/steps/summary.ts';
@@ -332,4 +333,29 @@ test('T-289: a blocked step names the missing roles a person can pick, and their
     'step-rail',
     'param-group',
   ]);
+});
+
+// SPEC-12.3의 3 (T-295): while the panel fetches for a step (the first [가져오기] after the target
+// is confirmed) the rail shows it running as '수집 중…', not the run before's '막힘' with its reason.
+test('a step a part is fetching for shows as running, not blocked', () => {
+  const step = { id: 'collect', title: '수집', kind: 'code', speed: 'release', status: 'failed' };
+  const report = {
+    status: 'gate-failed',
+    gates: [
+      {
+        ok: false,
+        level: 'block',
+        message: '대상 필지 경계가 없어 뒤 단계를 멈췄습니다. 대상 필지를 고르고 가져오세요',
+      },
+    ],
+  };
+  const idle = railStep(step, report, false);
+  assert.equal(idle.state, 'failed');
+  assert.match(idle.reason ?? '', /가져오세요/);
+  const fetching = railStep(step, report, false, new Set(), true);
+  assert.equal(fetching.state, 'running');
+  assert.equal(fetching.label, '수집 중…');
+  assert.equal(fetching.reason, undefined);
+  assert.equal(fetching.confirm, undefined);
+  assert.equal(fetching.problems, undefined);
 });

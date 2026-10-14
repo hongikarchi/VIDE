@@ -9,6 +9,7 @@ import {
   turnRules,
 } from '../../src/ai/agent-connection.ts';
 import { DomainError } from '../../src/core/store.ts';
+import { setDiagnosticSink, withTrace } from '../../src/core/breadcrumbs.ts';
 
 const b64 = (text) => Buffer.from(text, 'utf8').toString('base64');
 const summary = (mode) => ({
@@ -504,4 +505,125 @@ test('jig_open and ui_go record screen actions; user-only jigs are refused; plan
   assert.ok(
     !plan.connection.tools.includes('jig_set') && !plan.connection.tools.includes('jig_run'),
   );
+});
+
+// T-293 follow-up (R5): a tool's own refusal ({ok:false,error}) changed nothing, so its log line
+// is a failure with that code — R5's engine log said ok:true for two NOT_NAMED answers.
+test('a tool answer ok:false is logged as a failed call with its code (SPEC-07.18 9.6)', async (t) => {
+  const events = [];
+  const sink = (event, fields) => events.push({ event, ...fields });
+  setDiagnosticSink(sink);
+  t.after(() => setDiagnosticSink(undefined, sink));
+  const tools = new AgentTools();
+  const scope = withTrace({ requestId: 'req-r5' }, () =>
+    tools.issue({
+      targetRef: 'conversation:c-1',
+      handlers: {
+        jig_set_input: async () => ({ ok: false, error: 'NOT_NAMED', message: 'x', layers: ['a'] }),
+        jig_list: async () => ({ instances: [], note: '{"ok":false,"error":"NOT_NAMED"}' }),
+      },
+      isCurrent: () => true,
+    }),
+  );
+  t.after(() => scope.revoke());
+  const answer = await tools.call(scope.token, 'jig_set_input', { input: 'slab', layers: ['a'] });
+  assert.equal(JSON.parse(answer.content[0].text).error, 'NOT_NAMED', 'the answer is unchanged');
+  await tools.call(scope.token, 'jig_list', {});
+  const [refused, listed] = events.filter((e) => e.event === 'tool-call');
+  assert.deepEqual(
+    [refused.tool, refused.ok, refused.code, refused.requestId],
+    ['jig_set_input', false, 'NOT_NAMED', 'req-r5'],
+  );
+  // Only a top-level ok:false counts, not the same words inside another answer.
+  assert.deepEqual([listed.ok, listed.code], [true, undefined]);
+});
+
+// PLAN-51 T-300 (round 5): links_layers and jig_ask_input took 4.1–4.4 s and held the engine,
+// because every call decoded every object row of every link's last Sync twice. The layer list now
+// comes from the stored manifest (counted in SQLite, kept per revision): the same rows in the same
+// order, a 3,000-object document under 300 ms on the first call.
+test('T-300: links_layers lists a 3,000-object stored Sync from its manifest, fast and unchanged', async (t) => {
+  const { Store } = await import('../../src/core/store.ts');
+  const { Workspace } = await import('../../src/core/workspace.ts');
+  const { captureInput } = await import('../../src/server/import-model.ts');
+  const { layersOf } = await import('../../src/jigs/runtime/runtime.ts');
+  const store = new Store(':memory:');
+  t.after(() => store.close());
+  const workspace = new Workspace(store);
+  const projectId = store.createProject('T-300').id;
+  const links = [];
+  for (let n = 0; n < 3; n++) {
+    const target = { instance: `1:2:t300-${n}`, documentId: n + 1 };
+    const objects = [];
+    const scene = [];
+    for (let i = 0; i < 3000; i++) {
+      const key = `k${n}-${i}`;
+      objects.push({ id: key, nativeId: key, kind: 'native', name: key });
+      scene.push({
+        id: key,
+        nativeId: key,
+        nativeType: i % 7 ? 'Brep' : 'Curve',
+        geometryHash: `h-${key}`,
+        // Layers in a mixed order; one row without a layer.
+        ...(i === 5 ? {} : { layer64: b64(`건물::${(i * 7) % 40}층`) }),
+        attributes64: [[b64('용도'), b64('업무')]],
+        vertices: Array.from({ length: 300 }, (_, j) => i + j * 0.5),
+        indices: Array.from({ length: 300 }, (_, j) => j % 100),
+        line: [],
+        valid: true,
+      });
+    }
+    const id = `t300-sync-${n}`;
+    const linkId = `t300-link-${n}`;
+    workspace.submit(projectId, captureInput({ id, ...target, linkId }));
+    workspace.update(projectId, id, 'succeeded', {
+      hostExecuted: true,
+      displayOnly: true,
+      executionMode: 'sdk',
+      host: 'rhino',
+      objects,
+      scene,
+      sourceDocument: { ...target, connection: 'attached-editor', documentHash: 'd', revision: 1 },
+    });
+    links.push({ id: linkId, host: 'rhino', name: `t300-${n}.3dm`, ...target });
+  }
+  const handlers = conversationHandlers({
+    projectId,
+    conversationId: 'c',
+    openInstanceId: null,
+    workspace,
+    links: { list: () => links, get: (_p, id) => links.find((l) => l.id === id) },
+  });
+  let began = performance.now();
+  const one = await handlers.links_layers({ linkId: links[0].id });
+  const firstMs = performance.now() - began;
+  began = performance.now();
+  const all = await handlers.links_layers({});
+  const allMs = performance.now() - began;
+  console.log(
+    `T-300 links_layers: one link 3,000 objects ${Math.round(firstMs)} ms; three links ${Math.round(allMs)} ms`,
+  );
+  // The same layers, counts and order as counting the decoded rows.
+  const view = workspace.model(projectId, 't300-sync-0');
+  const expected = layersOf({ scene: view.sceneMeta() }).slice(0, 300);
+  const [listed] = one.links;
+  assert.deepEqual(listed.layers, expected);
+  assert.equal(
+    expected.reduce((sum, l) => sum + l.objectCount, 0),
+    3000,
+  );
+  assert.ok(firstMs < 300, `links_layers took ${Math.round(firstMs)} ms`);
+  assert.ok(allMs < 300, `links_layers (3 links) took ${Math.round(allMs)} ms`);
+  assert.equal(all.links.length, 3);
+  // jig_ask_input and jig_set_input list the documents the same way.
+  const { jigInputDocuments } = await import('../../src/server/agent-tools.ts');
+  began = performance.now();
+  const documents = jigInputDocuments({
+    projectId,
+    workspace,
+    links: { list: () => links, get: () => undefined },
+  });
+  const documentsMs = performance.now() - began;
+  assert.deepEqual(documents[0].layers, expected);
+  assert.ok(documentsMs < 300, `jigInputDocuments took ${Math.round(documentsMs)} ms`);
 });

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { api } from '../gateway.ts';
 import { untilAfterConfirmed } from '../skill-start.ts';
 import type { PanelSetting } from './bindings.ts';
+import { findOrder, pickOrder, type RoleSyncs } from './role-sources.ts';
 
 // One instance (이 프로젝트의 jig) seen from the declarative panel: its view, the latest step
 // outputs and reports, and the actions of the jig instance routes (ARCH-03 §7). A setting moved
@@ -212,6 +213,18 @@ export function useInstance(
   const [proposals, setProposals] = useState<Record<string, Candidate[]>>({});
   const [busy, setBusy] = useState(false);
   const [computing, setComputing] = useState(false);
+  /** Steps a part of the panel is doing work for right now (a site fetch, SPEC-12.3의 3): the rail shows them running. */
+  const [working, setWorking] = useState<ReadonlySet<string>>(new Set());
+  const markWorking = useCallback((stepId: string, on: boolean) => {
+    if (!mounted.current) return;
+    setWorking((prev) => {
+      if (prev.has(stepId) === on) return prev;
+      const next = new Set(prev);
+      if (on) next.add(stepId);
+      else next.delete(stepId);
+      return next;
+    });
+  }, []);
   const [notice, setNotice] = useState<string>();
   const [lastRun, setLastRun] = useState<Date>();
   const viewRef = useRef<InstanceView | undefined>(undefined);
@@ -399,10 +412,12 @@ export function useInstance(
     });
   /**
    * Candidates for a role. Layers that fit the role and are not read yet are read first from the
-   * given Syncs (a jig input read: only those layers, nothing else changes, SPEC-07.5).
+   * given Syncs (a jig input read: only those layers, nothing else changes, SPEC-07.5): the open
+   * files' latest Syncs, closed ones only when no file is open (SPEC-07.5 7, T-298).
    */
-  const findRole = (roleKey: string, syncIds: readonly string[], layers: readonly string[]) =>
+  const findRole = (roleKey: string, sources: RoleSyncs, layers: readonly string[]) =>
     act(async () => {
+      const syncIds = findOrder(sources);
       const known = z
         .object({ reads: z.array(z.object({ layers: z.array(z.string()) }).passthrough()) })
         .passthrough()
@@ -440,10 +455,12 @@ export function useInstance(
   /**
    * A layer a person picked for a role ([레이어 고르기], T-289, SPEC-07.14): read only that layer
    * from the Syncs (SPEC-07.5) and confirm the role with the first read that holds objects on it;
-   * then the steps run again.
+   * then the steps run again. The open files' latest Syncs are tried first; a closed link's last
+   * Sync only when no open file holds the layer (SPEC-07.5 7, T-298).
    */
-  const pickLayer = (roleKey: string, syncIds: readonly string[], layer: string) =>
+  const pickLayer = (roleKey: string, sources: RoleSyncs, layer: string) =>
     act(async () => {
+      const syncIds = pickOrder(sources);
       const read = z
         .object({
           readId: z.string(),
@@ -492,6 +509,8 @@ export function useInstance(
     proposals,
     busy,
     computing,
+    working,
+    markWorking,
     notice,
     lastRun,
     change,

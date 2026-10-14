@@ -6,6 +6,7 @@ import { chromium } from 'playwright';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { startServer } from '../../src/server/server.ts';
 import { soleDb } from '../fixtures/store.mjs';
+import { withInstalledPluginRestored } from './plugin-guard.mjs';
 // The work history opens a work; the linked files list forces a Sync of the work copy.
 const openWork = async (page, id) => {
   await page.locator('button[data-section="task-list"]').click();
@@ -30,205 +31,166 @@ const launch = async (options) => {
   workers.push(worker);
   return worker;
 };
-try {
-  const worker = await launch({ ...options, directory: join(directory, 'source') });
-  const receipt = await worker.execute(
-    randomUUID(),
-    0,
-    'doc.Objects.AddBox(new Box(new BoundingBox(0,0,0,2,3,4)));',
-  );
-  assert.equal(receipt.ok, true, JSON.stringify(receipt));
-  const model = await worker.exportModel();
-  await worker.stop();
-  app = await startServer({
-    filename: join(directory, 'test.sqlite'),
-    sdkOptions: { ...options, directory, launch },
-  });
-  const project = app.store.createProject('Own editor'),
-    id = randomUUID();
-  const input = {
-    id,
-    body: 'Synthetic editor test',
-    provider: 'codex-cli',
-    permission: 'candidate',
-    host: 'rhino',
-    pins: [],
-    sketches: [],
-    files: [],
-  };
-  soleDb(app.store)
-    .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
-    .run(
-      id,
-      project.id,
-      JSON.stringify(input),
-      'succeeded',
-      JSON.stringify({
-        ...model,
-        hostExecuted: true,
-        executionMode: 'sdk',
-        host: 'rhino',
-        verified: true,
-        filename: receipt.filename,
-        fileHash: receipt.fileHash,
-      }),
-      new Date().toISOString(),
-    );
-  browser = await chromium.launch({ channel: 'chrome', headless: true });
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  page.setDefaultTimeout(90000);
-  if (!ai) {
-    await page.route('**/api/v1/providers', (route) => route.fulfill({ json: [] }));
-    await page.route('**/api/v1/models', (route) => route.fulfill({ json: [] }));
-  }
-  await page.goto(app.launchUrl);
-  await page.locator('#project-picker').selectOption(project.id);
-  const opened = page.waitForResponse(
-    (response) =>
-      response.url().endsWith(`/requests/${id}/open`) && response.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: 'Rhino에서 열기', exact: true }).click();
-  const response = await opened;
-  assert.equal(response.status(), 200);
-  const target = await response.json();
-  // The opened work copy is a linked file of the project; its first Sync starts by itself.
-  const capturing = page.waitForResponse(
-    (response) =>
-      response.url().endsWith(`/projects/${project.id}/capture`) &&
-      response.request().method() === 'POST',
-  );
-  const result = await (await capturing).json();
-  assert.equal(result.state, 'succeeded', JSON.stringify(result));
-  assert.equal(result.result.executionMode, 'sdk');
-  assert.equal(result.result.sourceDocument.instance, target.instance);
-  assert.equal(result.result.scene[0].volume, 24);
-  await openWork(page, result.id);
-  await page
-    .locator('.work-view')
-    .getByRole('button', { name: '이 후보 보기', exact: true })
-    .click();
-  await page.screenshot({ path: join(directory, 'recaptured.png') });
-  let nextId, usage;
-  if (ai) {
-    await page
-      .locator('#model')
-      .selectOption(provider === 'claude-cli' ? 'claude-opus-4-6' : provider);
-    if (provider === 'claude-cli') {
-      await page.locator('#effort').focus();
-      await page.keyboard.press('Home');
-      await page.keyboard.press('ArrowRight');
-    }
-    assert.equal(
-      await page.locator('#effort-label').textContent(),
-      provider === 'claude-cli' ? 'low' : '기본값',
-    );
-    await page.locator('#permission').selectOption('candidate');
-    await page
-      .locator('#body')
-      .fill(
-        '현재 작업 사본의 박스 한 개 높이만 4 m에서 8 m로 수정해줘. 원점과 폭 2 m, 깊이 3 m, 객체 ID와 기존 속성을 유지하고 Level 사용자 문자열은 L02로 넣어줘. 결과 체적도 확인해줘.',
-      );
-    await page.locator('#request').click();
-    let saved;
-    const deadline = Date.now() + 240000;
-    while (Date.now() < deadline) {
-      const rows = await page.evaluate(
-        async (id) => await (await fetch(`/api/v1/projects/${id}/requests`)).json(),
-        project.id,
-      );
-      if (rows.length === 3 && !['queued', 'running'].includes(rows.at(-1).state)) {
-        saved = rows.at(-1);
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-    assert.ok(saved, 'AI did not finish');
-    assert.equal(saved.state, 'succeeded', JSON.stringify(saved.result));
-    assert.equal(saved.result.hostExecuted, true);
-    assert.equal(saved.result.baseRequestId, result.id);
-    nextId = saved.id;
-    usage = saved.result.usage;
-  } else {
-    const changing = await launch({
-      ...options,
-      directory: join(directory, 'edited'),
-      source: { filename: result.result.filename, fileHash: result.result.fileHash },
-    });
-    const nextReceipt = await changing.execute(
+await withInstalledPluginRestored(async () => {
+  try {
+    const worker = await launch({ ...options, directory: join(directory, 'source') });
+    const receipt = await worker.execute(
       randomUUID(),
       0,
-      'var item=doc.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).Single();using(var geometry=new Box(new BoundingBox(0,0,0,2,3,8)).ToBrep())doc.Objects.Replace(item.Id,geometry);',
+      'doc.Objects.AddBox(new Box(new BoundingBox(0,0,0,2,3,4)));',
     );
-    assert.equal(nextReceipt.ok, true, JSON.stringify(nextReceipt));
-    const nextModel = await changing.exportModel();
-    await changing.stop();
-    nextId = randomUUID();
+    assert.equal(receipt.ok, true, JSON.stringify(receipt));
+    const model = await worker.exportModel();
+    await worker.stop();
+    app = await startServer({
+      filename: join(directory, 'test.sqlite'),
+      sdkOptions: { ...options, directory, launch },
+    });
+    const project = app.store.createProject('Own editor'),
+      id = randomUUID();
+    const input = {
+      id,
+      body: 'Synthetic editor test',
+      provider: 'codex-cli',
+      permission: 'candidate',
+      host: 'rhino',
+      pins: [],
+      sketches: [],
+      files: [],
+    };
     soleDb(app.store)
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
       .run(
-        nextId,
+        id,
         project.id,
-        JSON.stringify({
-          ...input,
-          id: nextId,
-          body: 'Synthetic height edit',
-          baseRequestId: result.id,
-        }),
+        JSON.stringify(input),
         'succeeded',
         JSON.stringify({
-          ...nextModel,
+          ...model,
           hostExecuted: true,
           executionMode: 'sdk',
           host: 'rhino',
           verified: true,
-          filename: nextReceipt.filename,
-          fileHash: nextReceipt.fileHash,
-          baseRequestId: result.id,
-          sourceDocument: result.result.sourceDocument,
+          filename: receipt.filename,
+          fileHash: receipt.fileHash,
         }),
         new Date().toISOString(),
       );
-  }
-  await app.close();
-  app = await startServer({
-    filename: join(directory, 'test.sqlite'),
-    sdkOptions: { ...options, directory, launch },
-  });
-  await page.goto(app.launchUrl);
-  await page.locator('#project-picker').selectOption(project.id);
-  await page.getByRole('button', { name: '문서에 적용', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Rhino·ZWCAD 원본 적용' });
-  await dialog.getByRole('button', { name: '영향 검토', exact: true }).click();
-  await dialog.getByRole('status').filter({ hasText: '수정 1' }).waitFor();
-  await dialog.getByRole('button', { name: '검토한 변경 적용', exact: true }).click();
-  await dialog.getByRole('status').filter({ hasText: '문서 반영 완료' }).waitFor();
-  await dialog.getByRole('button', { name: '닫기', exact: true }).click();
-  const finalCapture = page.waitForResponse(
-    (response) =>
-      response.url().endsWith(`/projects/${project.id}/capture`) &&
-      response.request().method() === 'POST',
-  );
-  await syncWorkCopy(page);
-  const final = await (await finalCapture).json();
-  assert.equal(final.state, 'succeeded', JSON.stringify(final));
-  assert.ok(Math.abs(final.result.scene[0].volume - 48) < 1e-8);
-  assert.deepEqual(final.result.measurementStats, { measuredObjects: 1, reusedObjects: 0 });
-  assert.equal(final.result.objects[0].nativeId, result.result.objects[0].nativeId);
-  if (ai)
-    assert.ok(
-      final.result.scene[0].attributes64.some(
-        ([key, value]) =>
-          Buffer.from(key, 'base64').toString() === 'Level' &&
-          Buffer.from(value, 'base64').toString() === 'L02',
-      ),
+    browser = await chromium.launch({ channel: 'chrome', headless: true });
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    page.setDefaultTimeout(90000);
+    if (!ai) {
+      await page.route('**/api/v1/providers', (route) => route.fulfill({ json: [] }));
+      await page.route('**/api/v1/models', (route) => route.fulfill({ json: [] }));
+    }
+    await page.goto(app.launchUrl);
+    await page.locator('#project-picker').selectOption(project.id);
+    const opened = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/requests/${id}/open`) && response.request().method() === 'POST',
     );
-  await openWork(page, final.id);
-  await page
-    .locator('.work-view')
-    .getByRole('button', { name: '이 후보 보기', exact: true })
-    .click();
-  await page.screenshot({ path: join(directory, 'applied.png') });
-  if (!ai) {
+    await page.getByRole('button', { name: 'Rhino에서 열기', exact: true }).click();
+    const response = await opened;
+    assert.equal(response.status(), 200);
+    const target = await response.json();
+    // The opened work copy is a linked file of the project; its first Sync starts by itself.
+    const capturing = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/projects/${project.id}/capture`) &&
+        response.request().method() === 'POST',
+    );
+    const result = await (await capturing).json();
+    assert.equal(result.state, 'succeeded', JSON.stringify(result));
+    assert.equal(result.result.executionMode, 'sdk');
+    assert.equal(result.result.sourceDocument.instance, target.instance);
+    assert.equal(result.result.scene[0].volume, 24);
+    await openWork(page, result.id);
+    await page
+      .locator('.work-view')
+      .getByRole('button', { name: '이 후보 보기', exact: true })
+      .click();
+    await page.screenshot({ path: join(directory, 'recaptured.png') });
+    let nextId, usage;
+    if (ai) {
+      await page
+        .locator('#model')
+        .selectOption(provider === 'claude-cli' ? 'claude-opus-4-6' : provider);
+      if (provider === 'claude-cli') {
+        await page.locator('#effort').focus();
+        await page.keyboard.press('Home');
+        await page.keyboard.press('ArrowRight');
+      }
+      assert.equal(
+        await page.locator('#effort-label').textContent(),
+        provider === 'claude-cli' ? 'low' : '기본값',
+      );
+      await page.locator('#permission').selectOption('candidate');
+      await page
+        .locator('#body')
+        .fill(
+          '현재 작업 사본의 박스 한 개 높이만 4 m에서 8 m로 수정해줘. 원점과 폭 2 m, 깊이 3 m, 객체 ID와 기존 속성을 유지하고 Level 사용자 문자열은 L02로 넣어줘. 결과 체적도 확인해줘.',
+        );
+      await page.locator('#request').click();
+      let saved;
+      const deadline = Date.now() + 240000;
+      while (Date.now() < deadline) {
+        const rows = await page.evaluate(
+          async (id) => await (await fetch(`/api/v1/projects/${id}/requests`)).json(),
+          project.id,
+        );
+        if (rows.length === 3 && !['queued', 'running'].includes(rows.at(-1).state)) {
+          saved = rows.at(-1);
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      assert.ok(saved, 'AI did not finish');
+      assert.equal(saved.state, 'succeeded', JSON.stringify(saved.result));
+      assert.equal(saved.result.hostExecuted, true);
+      assert.equal(saved.result.baseRequestId, result.id);
+      nextId = saved.id;
+      usage = saved.result.usage;
+    } else {
+      const changing = await launch({
+        ...options,
+        directory: join(directory, 'edited'),
+        source: { filename: result.result.filename, fileHash: result.result.fileHash },
+      });
+      const nextReceipt = await changing.execute(
+        randomUUID(),
+        0,
+        'var item=doc.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).Single();using(var geometry=new Box(new BoundingBox(0,0,0,2,3,8)).ToBrep())doc.Objects.Replace(item.Id,geometry);',
+      );
+      assert.equal(nextReceipt.ok, true, JSON.stringify(nextReceipt));
+      const nextModel = await changing.exportModel();
+      await changing.stop();
+      nextId = randomUUID();
+      soleDb(app.store)
+        .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+        .run(
+          nextId,
+          project.id,
+          JSON.stringify({
+            ...input,
+            id: nextId,
+            body: 'Synthetic height edit',
+            baseRequestId: result.id,
+          }),
+          'succeeded',
+          JSON.stringify({
+            ...nextModel,
+            hostExecuted: true,
+            executionMode: 'sdk',
+            host: 'rhino',
+            verified: true,
+            filename: nextReceipt.filename,
+            fileHash: nextReceipt.fileHash,
+            baseRequestId: result.id,
+            sourceDocument: result.result.sourceDocument,
+          }),
+          new Date().toISOString(),
+        );
+    }
     await app.close();
     app = await startServer({
       filename: join(directory, 'test.sqlite'),
@@ -236,39 +198,80 @@ try {
     });
     await page.goto(app.launchUrl);
     await page.locator('#project-picker').selectOption(project.id);
-    const recapturing = page.waitForResponse(
+    await page.getByRole('button', { name: '문서에 적용', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Rhino·ZWCAD 원본 적용' });
+    await dialog.getByRole('button', { name: '영향 검토', exact: true }).click();
+    await dialog.getByRole('status').filter({ hasText: '수정 1' }).waitFor();
+    await dialog.getByRole('button', { name: '검토한 변경 적용', exact: true }).click();
+    await dialog.getByRole('status').filter({ hasText: '문서 반영 완료' }).waitFor();
+    await dialog.getByRole('button', { name: '닫기', exact: true }).click();
+    const finalCapture = page.waitForResponse(
       (response) =>
         response.url().endsWith(`/projects/${project.id}/capture`) &&
         response.request().method() === 'POST',
     );
     await syncWorkCopy(page);
-    const unchanged = await (await recapturing).json();
-    assert.equal(unchanged.state, 'succeeded', JSON.stringify(unchanged));
-    assert.deepEqual(unchanged.result.measurementStats, { measuredObjects: 0, reusedObjects: 1 });
-    assert.equal(unchanged.result.scene[0].volume, final.result.scene[0].volume);
+    const final = await (await finalCapture).json();
+    assert.equal(final.state, 'succeeded', JSON.stringify(final));
+    assert.ok(Math.abs(final.result.scene[0].volume - 48) < 1e-8);
+    assert.deepEqual(final.result.measurementStats, { measuredObjects: 1, reusedObjects: 0 });
+    assert.equal(final.result.objects[0].nativeId, result.result.objects[0].nativeId);
+    if (ai)
+      assert.ok(
+        final.result.scene[0].attributes64.some(
+          ([key, value]) =>
+            Buffer.from(key, 'base64').toString() === 'Level' &&
+            Buffer.from(value, 'base64').toString() === 'L02',
+        ),
+      );
+    await openWork(page, final.id);
+    await page
+      .locator('.work-view')
+      .getByRole('button', { name: '이 후보 보기', exact: true })
+      .click();
+    await page.screenshot({ path: join(directory, 'applied.png') });
+    if (!ai) {
+      await app.close();
+      app = await startServer({
+        filename: join(directory, 'test.sqlite'),
+        sdkOptions: { ...options, directory, launch },
+      });
+      await page.goto(app.launchUrl);
+      await page.locator('#project-picker').selectOption(project.id);
+      const recapturing = page.waitForResponse(
+        (response) =>
+          response.url().endsWith(`/projects/${project.id}/capture`) &&
+          response.request().method() === 'POST',
+      );
+      await syncWorkCopy(page);
+      const unchanged = await (await recapturing).json();
+      assert.equal(unchanged.state, 'succeeded', JSON.stringify(unchanged));
+      assert.deepEqual(unchanged.result.measurementStats, { measuredObjects: 0, reusedObjects: 1 });
+      assert.equal(unchanged.result.scene[0].volume, final.result.scene[0].volume);
+    }
+    const evidence = {
+      passed: true,
+      directory,
+      actualAi: ai,
+      provider: ai ? provider : undefined,
+      usage,
+      browserOpened: true,
+      ownDocumentSelected: true,
+      browserRecaptured: true,
+      browserPreviewApplied: true,
+      controllerRestartReconnected: true,
+      changedCaptureRecomputed: true,
+      unchangedCaptureReusedAfterRestart: !ai,
+      nativeIdentityPreserved: true,
+      volumeBefore: 24,
+      volumeAfter: 48,
+    };
+    await writeFile(join(directory, 'result.json'), JSON.stringify(evidence, null, 2));
+    console.log(JSON.stringify(evidence));
+  } finally {
+    if (browser) await browser.close();
+    if (app) await app.close();
+    for (const worker of workers.reverse()) await worker.stop();
+    await rm(directory + '.editors.json', { force: true });
   }
-  const evidence = {
-    passed: true,
-    directory,
-    actualAi: ai,
-    provider: ai ? provider : undefined,
-    usage,
-    browserOpened: true,
-    ownDocumentSelected: true,
-    browserRecaptured: true,
-    browserPreviewApplied: true,
-    controllerRestartReconnected: true,
-    changedCaptureRecomputed: true,
-    unchangedCaptureReusedAfterRestart: !ai,
-    nativeIdentityPreserved: true,
-    volumeBefore: 24,
-    volumeAfter: 48,
-  };
-  await writeFile(join(directory, 'result.json'), JSON.stringify(evidence, null, 2));
-  console.log(JSON.stringify(evidence));
-} finally {
-  if (browser) await browser.close();
-  if (app) await app.close();
-  for (const worker of workers.reverse()) await worker.stop();
-  await rm(directory + '.editors.json', { force: true });
-}
+});

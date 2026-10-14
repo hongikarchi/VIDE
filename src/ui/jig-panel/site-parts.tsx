@@ -74,6 +74,8 @@ const sourceRow = z
   .object({ name: z.string(), status: z.string(), text: z.string() })
   .passthrough();
 
+/** The site-model step that fetches the public data and SHP into one copy (SPEC-12.3 수집). */
+const COLLECT_STEP = 'collect';
 const PNU = /^\d{10}[12]\d{8}$/;
 const lotOf = (pnu: string) =>
   `${pnu[10] === '2' ? '산' : ''}${Number(pnu.slice(11, 15))}${Number(pnu.slice(15, 19)) ? `-${Number(pnu.slice(15, 19))}` : ''}`;
@@ -262,22 +264,43 @@ export function SitePicker({
     }
     void putTargets([picked]);
   };
-  const collect = () =>
-    act(async () => {
-      const result = (await call('collect', 'POST', {})) as {
-        needsConfirm?: unknown;
-        blocked?: boolean;
-        waiting?: boolean;
-        unchanged?: boolean;
-      };
-      if (result.needsConfirm) {
-        await readNotice();
-        return '공공 자료원에 보내기 전에 아래 안내를 확인하세요.';
-      }
-      if (result.waiting) return '새 사본에 바뀐 항목이 있습니다. 받을지 고르세요.';
-      if (result.unchanged) return '다시 가져왔습니다. 바뀐 항목이 없습니다.';
-      if (result.blocked) return '대상 필지 경계를 찾지 못했습니다. 필지를 확인하세요.';
-    });
+  // The step the fetch is for: while it runs the rail shows it as '수집 중…', never '막힘'.
+  const collectStep = jig.view?.steps.some((s) => s.id === COLLECT_STEP) ? COLLECT_STEP : undefined;
+  const { markWorking } = jig;
+  const showFetching = useCallback(
+    (on: boolean) => {
+      if (collectStep) markWorking(collectStep, on);
+    },
+    [collectStep, markWorking],
+  );
+  const fetching = !!collectStep && jig.working.has(collectStep);
+  /** One fetch at a time (SPEC-12.3의 3): a press while one runs is ignored. */
+  const collecting = useRef(false);
+  const collect = async () => {
+    if (collecting.current) return;
+    collecting.current = true;
+    showFetching(true);
+    try {
+      await act(async () => {
+        const result = (await call('collect', 'POST', {})) as {
+          needsConfirm?: unknown;
+          blocked?: boolean;
+          waiting?: boolean;
+          unchanged?: boolean;
+        };
+        if (result.needsConfirm) {
+          await readNotice();
+          return '공공 자료원에 보내기 전에 아래 안내를 확인하세요.';
+        }
+        if (result.waiting) return '새 사본에 바뀐 항목이 있습니다. 받을지 고르세요.';
+        if (result.unchanged) return '다시 가져왔습니다. 바뀐 항목이 없습니다.';
+        if (result.blocked) return '대상 필지 경계를 찾지 못했습니다. 필지를 확인하세요.';
+      });
+    } finally {
+      collecting.current = false;
+      showFetching(false);
+    }
+  };
   // SPEC-12.3의 3 (T-295): confirming the target runs on to Rhino에 만들기, and with the send
   // notice confirmed and no copy fetched yet that includes the first [가져오기] — 수집 never sits as
   // '막힘' waiting for a second press. Only on the person's confirmation here, never on opening.
@@ -285,14 +308,23 @@ export function SitePicker({
   const fetchAfterConfirm = useRef(false);
   useEffect(() => {
     if (confirmStatus === undefined) return;
-    if (wasConfirmed.current === false && confirmed) fetchAfterConfirm.current = true;
+    if (wasConfirmed.current === false && confirmed) {
+      fetchAfterConfirm.current = true;
+      // From the confirmation on the rail says 수집 중… (not the run before's '막힘').
+      if (notice?.confirmed && !notice.off && !state.collection && targets.length)
+        showFetching(true);
+    }
     wasConfirmed.current = confirmed;
+    // Only the change of the confirmation decides; the rest is read as it is then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [confirmStatus, confirmed]);
   useEffect(() => {
     if (!fetchAfterConfirm.current || waiting || !notice) return;
     fetchAfterConfirm.current = false;
-    if (!confirmed || state.collection || !targets.length || !notice.confirmed || notice.off)
+    if (!confirmed || state.collection || !targets.length || !notice.confirmed || notice.off) {
+      if (!collecting.current) showFetching(false);
       return;
+    }
     void collect();
     // collect reads the latest state through `call`; the conditions above are what may change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -519,10 +551,10 @@ export function SitePicker({
             ) : null}
             <button
               type="button"
-              disabled={disabled || !!notice?.off}
+              disabled={disabled || fetching || !!notice?.off}
               onClick={() => void collect()}
             >
-              {state.collection ? '다시 가져오기' : '가져오기'}
+              {fetching ? '가져오는 중…' : state.collection ? '다시 가져오기' : '가져오기'}
             </button>
           </div>
           {state.collection ? (

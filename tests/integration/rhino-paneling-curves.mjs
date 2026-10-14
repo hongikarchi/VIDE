@@ -20,6 +20,7 @@ import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { curvesReadBody, decodeCurveSet } from '../../src/server/paneling-curves.ts';
 import { tileFromCurves } from '../../src/jigs/official/paneling-kit/tile.ts';
+import { withInstalledPluginRestored } from './plugin-guard.mjs';
 
 const options0 = sdkOptions('.');
 if (!existsSync(options0.executable) || !existsSync(options0.plugin)) {
@@ -85,86 +86,89 @@ async function installedConnectors({ install = false } = {}) {
 
 let worker;
 const result = { directory };
-try {
-  worker = await launchRhinoWorker({ ...options, directory: join(directory, 'worker') });
-  const built = await worker.execute(randomUUID(), 0, BUILD);
-  assert.equal(built.ok, true, JSON.stringify(built).slice(0, 1500));
-  const ids = built.value;
-  // The worker counts every execute as a revision; each read goes on from the last one.
-  let revision = built.revision;
-  const read = async (keys) => {
-    const t = performance.now();
-    const answer = await worker.execute(
-      randomUUID(),
-      revision,
-      curvesReadBody(keys.map((k) => ids[k])),
-    );
-    if (typeof answer.revision === 'number') revision = answer.revision;
-    log('read', keys.join(','), Math.round(performance.now() - t), 'ms');
-    return answer;
-  };
-  const source = { linkId: 'worker', documentKey: 'worker', readAt: new Date().toISOString() };
-
-  // 1. The tile: two flat closed squares, metres, no repeated end point.
-  const tileAnswer = await read(['a', 'b']);
-  assert.equal(tileAnswer.ok, true, JSON.stringify(tileAnswer).slice(0, 1500));
-  const tileSet = decodeCurveSet(tileAnswer.value, source);
-  const k = tileSet.source.toMeters;
-  const near = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 1e-9 * Math.max(1, Math.abs(b[i])));
-  assert.deepEqual(
-    tileSet.items.map((i) => [i.kind, i.closed, i.flatXY, i.points.length]),
-    [
-      ['polyline', true, true, 4],
-      ['polyline', true, true, 4],
-    ],
-  );
-  assert.ok(near(tileSet.items[0].points[2], [400 * k, 400 * k, 100 * k]));
-  const tile = tileFromCurves(tileSet);
-  assert.ok(near(tile.size, [900 * k, 400 * k]));
-  result.tile = { pieces: tile.pieces.length, size: tile.size };
-
-  // 2. Attractors: a point, an open line, a circle as a polyline within the tolerance.
-  const att = await read(['point', 'line', 'circle']);
-  assert.equal(att.ok, true, JSON.stringify(att).slice(0, 1500));
-  const attSet = decodeCurveSet(att.value, source);
-  assert.ok(near(attSet.items[0].points[0], [1000 * k, 2000 * k, 3000 * k]));
-  assert.equal(attSet.items[1].closed, false);
-  assert.equal(attSet.items[2].closed, true);
-  const circle = attSet.items[2].points;
-  assert.ok(circle.length >= 16, `circle points ${circle.length}`);
-  for (const p of circle) assert.ok(Math.abs(Math.hypot(p[0], p[1]) - 300 * k) < 1e-6 * 300 * k);
-  result.attractors = attSet.items.map((i) => [i.kind, i.closed, i.points.length]);
-
-  // 3. Not a tile: open, tilted. Not a curve: a surface.
-  assert.throws(() => tileFromCurves(attSet), /닫힌 곡선/);
-  const tiltedAnswer = await read(['tilted']);
-  assert.equal(decodeCurveSet(tiltedAnswer.value, source).items[0].flatXY, false);
-  assert.throws(() => tileFromCurves(decodeCurveSet(tiltedAnswer.value, source)), /평면 XY/);
-  const surface = await read(['surface']);
-  assert.equal(surface.ok, false);
-  // The worker keeps the exception text in its diagnostic file (the attached path returns it).
-  const why =
-    surface.message ??
-    (await readFile(join(directory, 'worker', `${surface.diagnosticId}.diagnostic.txt`), 'utf8'));
-  assert.match(why, /NOT_A_CURVE: /);
-  result.passed = true;
-  log('passed');
-} finally {
-  await worker?.stop().catch(() => {});
+await withInstalledPluginRestored(async () => {
   try {
-    let status = await installedConnectors();
-    let running = false;
-    try {
-      running = /Rhino\.exe/i.test(
-        execSync('tasklist /FI "IMAGENAME eq Rhino.exe" /NH', { encoding: 'utf8' }),
+    worker = await launchRhinoWorker({ ...options, directory: join(directory, 'worker') });
+    const built = await worker.execute(randomUUID(), 0, BUILD);
+    assert.equal(built.ok, true, JSON.stringify(built).slice(0, 1500));
+    const ids = built.value;
+    // The worker counts every execute as a revision; each read goes on from the last one.
+    let revision = built.revision;
+    const read = async (keys) => {
+      const t = performance.now();
+      const answer = await worker.execute(
+        randomUUID(),
+        revision,
+        curvesReadBody(keys.map((k) => ids[k])),
       );
-    } catch {}
-    if (status.rhino8 && status.rhino8 !== 'current' && !running)
-      status = await installedConnectors({ install: true });
-    result.connectors = { ...status, rhinoRunning: running };
-  } catch (error) {
-    result.connectors = { error: String(error) };
+      if (typeof answer.revision === 'number') revision = answer.revision;
+      log('read', keys.join(','), Math.round(performance.now() - t), 'ms');
+      return answer;
+    };
+    const source = { linkId: 'worker', documentKey: 'worker', readAt: new Date().toISOString() };
+
+    // 1. The tile: two flat closed squares, metres, no repeated end point.
+    const tileAnswer = await read(['a', 'b']);
+    assert.equal(tileAnswer.ok, true, JSON.stringify(tileAnswer).slice(0, 1500));
+    const tileSet = decodeCurveSet(tileAnswer.value, source);
+    const k = tileSet.source.toMeters;
+    const near = (a, b) =>
+      a.every((v, i) => Math.abs(v - b[i]) < 1e-9 * Math.max(1, Math.abs(b[i])));
+    assert.deepEqual(
+      tileSet.items.map((i) => [i.kind, i.closed, i.flatXY, i.points.length]),
+      [
+        ['polyline', true, true, 4],
+        ['polyline', true, true, 4],
+      ],
+    );
+    assert.ok(near(tileSet.items[0].points[2], [400 * k, 400 * k, 100 * k]));
+    const tile = tileFromCurves(tileSet);
+    assert.ok(near(tile.size, [900 * k, 400 * k]));
+    result.tile = { pieces: tile.pieces.length, size: tile.size };
+
+    // 2. Attractors: a point, an open line, a circle as a polyline within the tolerance.
+    const att = await read(['point', 'line', 'circle']);
+    assert.equal(att.ok, true, JSON.stringify(att).slice(0, 1500));
+    const attSet = decodeCurveSet(att.value, source);
+    assert.ok(near(attSet.items[0].points[0], [1000 * k, 2000 * k, 3000 * k]));
+    assert.equal(attSet.items[1].closed, false);
+    assert.equal(attSet.items[2].closed, true);
+    const circle = attSet.items[2].points;
+    assert.ok(circle.length >= 16, `circle points ${circle.length}`);
+    for (const p of circle) assert.ok(Math.abs(Math.hypot(p[0], p[1]) - 300 * k) < 1e-6 * 300 * k);
+    result.attractors = attSet.items.map((i) => [i.kind, i.closed, i.points.length]);
+
+    // 3. Not a tile: open, tilted. Not a curve: a surface.
+    assert.throws(() => tileFromCurves(attSet), /닫힌 곡선/);
+    const tiltedAnswer = await read(['tilted']);
+    assert.equal(decodeCurveSet(tiltedAnswer.value, source).items[0].flatXY, false);
+    assert.throws(() => tileFromCurves(decodeCurveSet(tiltedAnswer.value, source)), /평면 XY/);
+    const surface = await read(['surface']);
+    assert.equal(surface.ok, false);
+    // The worker keeps the exception text in its diagnostic file (the attached path returns it).
+    const why =
+      surface.message ??
+      (await readFile(join(directory, 'worker', `${surface.diagnosticId}.diagnostic.txt`), 'utf8'));
+    assert.match(why, /NOT_A_CURVE: /);
+    result.passed = true;
+    log('passed');
+  } finally {
+    await worker?.stop().catch(() => {});
+    try {
+      let status = await installedConnectors();
+      let running = false;
+      try {
+        running = /Rhino\.exe/i.test(
+          execSync('tasklist /FI "IMAGENAME eq Rhino.exe" /NH', { encoding: 'utf8' }),
+        );
+      } catch {}
+      if (status.rhino8 && status.rhino8 !== 'current' && !running)
+        status = await installedConnectors({ install: true });
+      result.connectors = { ...status, rhinoRunning: running };
+    } catch (error) {
+      result.connectors = { error: String(error) };
+    }
+    console.log('installed connectors: ' + JSON.stringify(result.connectors));
+    await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
   }
-  console.log('installed connectors: ' + JSON.stringify(result.connectors));
-  await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
-}
+});

@@ -24,6 +24,7 @@ import {
 } from '../../src/jigs/official/massing-kit/index.ts';
 import { SITES, SLANTED, nearStraightLot, paramsOf, star } from '../fixtures/massing-sites.mjs';
 import { runDirectory } from './run-directory.mjs';
+import { withInstalledPluginRestored } from './plugin-guard.mjs';
 
 const probe = sdkOptions('.');
 if (process.env.VIDE_TEST_RHINO_PLUGIN) probe.plugin = resolve(process.env.VIDE_TEST_RHINO_PLUGIN);
@@ -69,73 +70,81 @@ const execute = async (code) => {
   return receipt;
 };
 const result = { directory, sites: [] };
-try {
-  worker = await launchRhinoWorker({ ...options, directory: join(directory, 'bake') });
-  // near-straight-1: the many-segment lot of T-214 F-6 (돌출 외피 as a prism of the 2D area).
-  const sites = [...SITES, SLANTED, star(16), nearStraightLot(1, 0.5)];
-  for (const site of sites) {
-    const out = envelopeOf(site);
-    const { items, problems } = extractItems(decl, out);
-    assert.deepEqual(problems, [], site.id);
-    // A reversed copy of the maximum envelope must not be made.
-    const max = items.find((i) => i.key.endsWith(':max'));
-    const bad = {
-      ...max,
-      key: `${max.key}:reversed`,
-      faces: max.faces.map((face) => face.map((ring) => [...ring].reverse())),
-    };
-    const header = {
-      template: decl.template,
-      jigId: 'vide/buildable-mass',
-      instanceId: randomUUID(),
-      bakeId: decl.id,
-      runId: randomUUID(),
-      layerPath: `VIDE::매스 시험::${site.id}`,
-      deleteIds: [],
-    };
-    const started = performance.now();
-    const made = { keys: [], ids: [], failed: [] };
-    const chunks = renderChunks(header, [...items, bad]);
-    for (const chunk of chunks) {
-      const receipt = await execute(chunk.code);
-      assert.equal(receipt.ok, true, JSON.stringify(receipt).slice(0, 600));
-      made.keys.push(...receipt.value.keys);
-      made.ids.push(...receipt.value.ids);
-      made.failed.push(...receipt.value.failed);
+await withInstalledPluginRestored(async () => {
+  try {
+    worker = await launchRhinoWorker({ ...options, directory: join(directory, 'bake') });
+    // near-straight-1: the many-segment lot of T-214 F-6 (돌출 외피 as a prism of the 2D area).
+    const sites = [...SITES, SLANTED, star(16), nearStraightLot(1, 0.5)];
+    for (const site of sites) {
+      const out = envelopeOf(site);
+      const { items, problems } = extractItems(decl, out);
+      assert.deepEqual(problems, [], site.id);
+      // A reversed copy of the maximum envelope must not be made.
+      const max = items.find((i) => i.key.endsWith(':max'));
+      const bad = {
+        ...max,
+        key: `${max.key}:reversed`,
+        faces: max.faces.map((face) => face.map((ring) => [...ring].reverse())),
+      };
+      const header = {
+        template: decl.template,
+        jigId: 'vide/buildable-mass',
+        instanceId: randomUUID(),
+        bakeId: decl.id,
+        runId: randomUUID(),
+        layerPath: `VIDE::매스 시험::${site.id}`,
+        deleteIds: [],
+      };
+      const started = performance.now();
+      const made = { keys: [], ids: [], failed: [] };
+      const chunks = renderChunks(header, [...items, bad]);
+      for (const chunk of chunks) {
+        const receipt = await execute(chunk.code);
+        assert.equal(receipt.ok, true, JSON.stringify(receipt).slice(0, 600));
+        made.keys.push(...receipt.value.keys);
+        made.ids.push(...receipt.value.ids);
+        made.failed.push(...receipt.value.failed);
+      }
+      const bakeMs = Math.round(performance.now() - started);
+      assert.deepEqual(made.failed, [bad.key], `${site.id}: only the reversed copy fails`);
+      assert.deepEqual(
+        made.keys,
+        items.map((i) => i.key),
+        site.id,
+      );
+      const measured = await execute(measure(made.ids));
+      assert.equal(measured.ok, true, JSON.stringify(measured).slice(0, 600));
+      let worst = 0;
+      const rows = measured.value.map((row, k) => {
+        const item = items[k];
+        assert.ok(
+          row.solid && row.valid && row.orientation === 'Outward',
+          `${site.id} ${item.key}: ${JSON.stringify(row)}`,
+        );
+        const relative = Math.abs(row.volume - item.volume) / item.volume;
+        worst = Math.max(worst, relative);
+        assert.ok(relative <= 1e-3, `${site.id} ${item.key}: ${row.volume} vs ${item.volume}`);
+        assert.equal(
+          row.faces,
+          item.faces.length,
+          `${site.id} ${item.key}: one Brep face per merged face`,
+        );
+        return {
+          key: item.key,
+          faces: row.faces,
+          engine: item.volume,
+          rhino: row.volume,
+          relative,
+        };
+      });
+      result.sites.push({ id: site.id, bakeMs, chunks: chunks.length, worst, rows });
+      console.log(
+        `${site.id.padEnd(14)} ${rows.length} envelopes made, reversed refused, worst relative volume ${worst.toExponential(2)}, ${bakeMs} ms`,
+      );
     }
-    const bakeMs = Math.round(performance.now() - started);
-    assert.deepEqual(made.failed, [bad.key], `${site.id}: only the reversed copy fails`);
-    assert.deepEqual(
-      made.keys,
-      items.map((i) => i.key),
-      site.id,
-    );
-    const measured = await execute(measure(made.ids));
-    assert.equal(measured.ok, true, JSON.stringify(measured).slice(0, 600));
-    let worst = 0;
-    const rows = measured.value.map((row, k) => {
-      const item = items[k];
-      assert.ok(
-        row.solid && row.valid && row.orientation === 'Outward',
-        `${site.id} ${item.key}: ${JSON.stringify(row)}`,
-      );
-      const relative = Math.abs(row.volume - item.volume) / item.volume;
-      worst = Math.max(worst, relative);
-      assert.ok(relative <= 1e-3, `${site.id} ${item.key}: ${row.volume} vs ${item.volume}`);
-      assert.equal(
-        row.faces,
-        item.faces.length,
-        `${site.id} ${item.key}: one Brep face per merged face`,
-      );
-      return { key: item.key, faces: row.faces, engine: item.volume, rhino: row.volume, relative };
-    });
-    result.sites.push({ id: site.id, bakeMs, chunks: chunks.length, worst, rows });
-    console.log(
-      `${site.id.padEnd(14)} ${rows.length} envelopes made, reversed refused, worst relative volume ${worst.toExponential(2)}, ${bakeMs} ms`,
-    );
+    result.passed = true;
+    await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
+  } finally {
+    await worker?.stop();
   }
-  result.passed = true;
-  await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
-} finally {
-  await worker?.stop();
-}
+});

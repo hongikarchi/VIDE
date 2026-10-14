@@ -6,6 +6,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { runDirectory } from './run-directory.mjs';
+import { withInstalledPluginRestored } from './plugin-guard.mjs';
 const sourceDirectory = resolve(process.argv[2] || ''),
   within = relative(resolve('.vide/browser-owned-editor'), sourceDirectory);
 assert.ok(within && !within.startsWith('..') && !isAbsolute(within));
@@ -28,87 +29,89 @@ const saved = join(directory, 'manually-saved.3dm'),
     bootstrap: resolve('hosts/rhino/worker/bootstrap.py'),
   };
 let editor, verify;
-try {
-  editor = await launchRhinoWorker({
-    ...options,
-    directory: join(directory, 'editor'),
-    mode: 'editor',
-    visible: true,
-    source: { filename: source.filename, fileHash: source.fileHash },
-  });
-  const before = await editor.inspectEditor();
-  const waiting = {
-    directory,
-    pid: editor.identity.pid,
-    saved,
-    instruction:
-      'In this synthetic Rhino window: select the object, Move by +1 m world X, then SaveAs the saved path.',
-  };
-  await writeFile(join(directory, 'waiting.json'), JSON.stringify(waiting, null, 2));
-  console.log(JSON.stringify(waiting));
-  const deadline = Date.now() + 15 * 60 * 1000;
-  let exists = false;
-  while (Date.now() < deadline) {
-    try {
-      await access(saved);
-      exists = true;
-      break;
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+await withInstalledPluginRestored(async () => {
+  try {
+    editor = await launchRhinoWorker({
+      ...options,
+      directory: join(directory, 'editor'),
+      mode: 'editor',
+      visible: true,
+      source: { filename: source.filename, fileHash: source.fileHash },
+    });
+    const before = await editor.inspectEditor();
+    const waiting = {
+      directory,
+      pid: editor.identity.pid,
+      saved,
+      instruction:
+        'In this synthetic Rhino window: select the object, Move by +1 m world X, then SaveAs the saved path.',
+    };
+    await writeFile(join(directory, 'waiting.json'), JSON.stringify(waiting, null, 2));
+    console.log(JSON.stringify(waiting));
+    const deadline = Date.now() + 15 * 60 * 1000;
+    let exists = false;
+    while (Date.now() < deadline) {
+      try {
+        await access(saved);
+        exists = true;
+        break;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
     }
+    assert.ok(exists, 'Native UI save was not completed');
+    // Allow SaveAs to release its file before the separate native reader opens it.
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const after = await editor.inspectEditor();
+    console.log(
+      JSON.stringify({ stage: 'saved', readOnly: after.readOnly, modified: after.modified }),
+    );
+    if (process.argv.includes('--inspect-save'))
+      await new Promise((resolve) => setTimeout(resolve, 15000));
+    assert.equal(after.modified, false);
+    assert.notEqual(after.documentHash, before.documentHash);
+    const captured = await editor.captureEditor(randomUUID());
+    const afterCapture = await editor.inspectEditor();
+    console.log(JSON.stringify({ stage: 'captured', readOnly: afterCapture.readOnly }));
+    if (process.argv.includes('--inspect-save'))
+      await new Promise((resolve) => setTimeout(resolve, 15000));
+    const hash = createHash('sha256')
+      .update(await readFile(saved))
+      .digest('hex');
+    verify = await launchRhinoWorker({
+      ...options,
+      directory: join(directory, 'reopened'),
+      source: { filename: saved, fileHash: hash },
+    });
+    const restored = await verify.exportModel();
+    assert.equal(restored.objects.length, 1);
+    assert.equal(restored.objects[0].nativeId, source.objects[0].nativeId);
+    const actual = restored.scene[0],
+      expected = source.scene[0];
+    assert.ok(Math.abs(actual.origin[0] - expected.origin[0] - 1) < 1e-8);
+    assert.ok(Math.abs(actual.origin[1] - expected.origin[1]) < 1e-8);
+    assert.ok(Math.abs(actual.origin[2] - expected.origin[2]) < 1e-8);
+    assert.deepEqual(actual.attributes64, expected.attributes64);
+    assert.ok(Math.abs(actual.volume - expected.volume) < 1e-8);
+    assert.equal(captured.documentHash, after.documentHash);
+    const evidence = {
+      passed: true,
+      directory,
+      sourceDirectory,
+      nativeMoveX: 1,
+      nativeSaveAs: true,
+      reopened: true,
+      nativeIdentityPreserved: true,
+      attributesPreserved: true,
+      volume: actual.volume,
+      readOnlyAtOpen: before.readOnly,
+      readOnlyAfterSave: after.readOnly,
+      readOnlyAfterCapture: afterCapture.readOnly,
+    };
+    await writeFile(join(directory, 'result.json'), JSON.stringify(evidence, null, 2));
+    console.log(JSON.stringify(evidence));
+  } finally {
+    if (verify) await verify.stop();
+    if (editor) await editor.stop();
   }
-  assert.ok(exists, 'Native UI save was not completed');
-  // Allow SaveAs to release its file before the separate native reader opens it.
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  const after = await editor.inspectEditor();
-  console.log(
-    JSON.stringify({ stage: 'saved', readOnly: after.readOnly, modified: after.modified }),
-  );
-  if (process.argv.includes('--inspect-save'))
-    await new Promise((resolve) => setTimeout(resolve, 15000));
-  assert.equal(after.modified, false);
-  assert.notEqual(after.documentHash, before.documentHash);
-  const captured = await editor.captureEditor(randomUUID());
-  const afterCapture = await editor.inspectEditor();
-  console.log(JSON.stringify({ stage: 'captured', readOnly: afterCapture.readOnly }));
-  if (process.argv.includes('--inspect-save'))
-    await new Promise((resolve) => setTimeout(resolve, 15000));
-  const hash = createHash('sha256')
-    .update(await readFile(saved))
-    .digest('hex');
-  verify = await launchRhinoWorker({
-    ...options,
-    directory: join(directory, 'reopened'),
-    source: { filename: saved, fileHash: hash },
-  });
-  const restored = await verify.exportModel();
-  assert.equal(restored.objects.length, 1);
-  assert.equal(restored.objects[0].nativeId, source.objects[0].nativeId);
-  const actual = restored.scene[0],
-    expected = source.scene[0];
-  assert.ok(Math.abs(actual.origin[0] - expected.origin[0] - 1) < 1e-8);
-  assert.ok(Math.abs(actual.origin[1] - expected.origin[1]) < 1e-8);
-  assert.ok(Math.abs(actual.origin[2] - expected.origin[2]) < 1e-8);
-  assert.deepEqual(actual.attributes64, expected.attributes64);
-  assert.ok(Math.abs(actual.volume - expected.volume) < 1e-8);
-  assert.equal(captured.documentHash, after.documentHash);
-  const evidence = {
-    passed: true,
-    directory,
-    sourceDirectory,
-    nativeMoveX: 1,
-    nativeSaveAs: true,
-    reopened: true,
-    nativeIdentityPreserved: true,
-    attributesPreserved: true,
-    volume: actual.volume,
-    readOnlyAtOpen: before.readOnly,
-    readOnlyAfterSave: after.readOnly,
-    readOnlyAfterCapture: afterCapture.readOnly,
-  };
-  await writeFile(join(directory, 'result.json'), JSON.stringify(evidence, null, 2));
-  console.log(JSON.stringify(evidence));
-} finally {
-  if (verify) await verify.stop();
-  if (editor) await editor.stop();
-}
+});

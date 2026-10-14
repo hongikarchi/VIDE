@@ -124,6 +124,8 @@ B는 제3자 [rhinomcp](https://github.com/jingcheng-chen/rhinomcp)(Rhino 플러
 
 런 전용 자료 폴더(`<dir>/data`, `.vide/dev-data`의 `typesafe.env`·`public-data.env` 복사)로 개발 엔진을 띄우고 전용 프로젝트를 만든 뒤 `launch.json`을 쓴다. `<dir>/stop` 파일이 생기면(또는 SIGINT) 엔진·Rhino를 닫고 설치본 플러그인 등록을 확인·복원한다. 출력: `LAUNCH`·`LOGS`·`PROJECT`(호스트가 있으면 `SYNC`).
 
+**플러그인 등록 규칙(T-297):** 이 하네스와 개발 빌드를 `LoadPlugIn`하는 모든 실호스트 시험은 `tests/integration/plugin-guard.mjs`의 `withInstalledPluginRestored`로 감싸 끝날 때 설치본 등록을 되돌린다. 세션 끝에 `npm run plugin:check`(verify 마지막 단계)로 등록이 `.vide/build`가 아님을 확인한다.
+
 ```text
 node tools/ab/host-session.mjs --document .vide/loop/<run>/<사본>.3dm [--dir .vide/loop/<run>] [--visible]
 node tools/ab/host-session.mjs --no-host [--dir .vide/loop/<run>]     # route-only L0: Rhino·Link·Sync 없음

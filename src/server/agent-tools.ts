@@ -13,12 +13,13 @@ import {
 } from '../ai/agent-connection.ts';
 import { DomainError } from '../core/store.ts';
 import { currentTrace, diagnostic } from '../core/breadcrumbs.ts';
-import { DocumentLinks } from '../core/document-links.ts';
+import { DocumentLinks, isFileLink, type DocumentLink } from '../core/document-links.ts';
 import { ConversationStore } from '../core/conversation-store.ts';
 import type { Workspace } from '../core/workspace.ts';
 import { structureSummarySchema, type StructureSummary } from '../contracts/structure-model.ts';
 import {
   layersOf,
+  layersOfCounts,
   rowsOfLayers,
   type JigRuntime,
   type ReadModel,
@@ -26,7 +27,6 @@ import {
 import { jigRuntimeFor, readForJig } from './jig-routes.ts';
 import {
   assignJigInput,
-  notNamedText,
   unnamedLayers,
   findRole,
   inputRoles,
@@ -413,7 +413,7 @@ const definitions = {
   // 대화로 정한 입력 역할 (SPEC-07.18 9, T-293): the role card's path, only for layers a person named.
   jig_set_input: {
     description:
-      "Set an input role (입력 역할, e.g. input 'slab' / '슬래브 경계' / 'site.slab') of the jig this conversation has open to the layers the person named in this conversation (a question card answer or their text). Only layers the person named: never your own guess (a layer whose name is not in the person's words or answers is refused, NOT_NAMED; recommended-default answers do not count). Layers are full paths or last names from links_layers; give linkId when the same layer is in several files. The layers are read from the linked file's last Sync, the role is recorded as confirmed by the person in chat, and the steps run again up to the next step a person confirms; returns the step statuses. ok:false changes nothing and says why (unknown role → the declared roles; unknown layer → similar names).",
+      "Set an input role (입력 역할, e.g. input 'slab' / '슬래브 경계' / 'site.slab') of the jig this conversation has open to the layers the person named in this conversation (a question card answer or their text). Only layers the person named: never your own guess (a layer whose name is not in the person's words or answers is refused, NOT_NAMED; recommended-default answers do not count). Layers are full paths or last names from links_layers; give linkId when the same layer is in several files. The layers are read from the linked file's last Sync, the role is recorded as confirmed by the person in chat, and the steps run again up to the next step a person confirms; returns the workbook (instance id) and the steps that changed. ok:false changes nothing and says why (unknown role → the declared roles; unknown layer → similar names; UNCHANGED → the role already holds these layers, e.g. the person picked them on the role card: do not ask for it again).",
     schema: z
       .object({
         targetRef: scoped,
@@ -495,7 +495,7 @@ const definitions = {
   },
   links_layers: {
     description:
-      'Layer table of each linked file of this project (from its latest stored Sync): layer path and object count.',
+      'Layer table of each linked file of this project (from its latest stored Sync): layer path and object count. Files open now come first; a file not open now says closed: true (its last Sync is used for an input only when no open file has that layer; say so to the user).',
     schema: z.object({ targetRef: scoped, linkId: id.optional() }).strict(),
   },
   sync_sample: {
@@ -1124,21 +1124,31 @@ export class AgentTools {
     const result = await this.#invoke(run, name, args);
     try {
       let bytes = 0,
-        code: string | undefined;
+        code: string | undefined,
+        refused = false;
       for (const part of result.content ?? []) {
         if (part.type === 'text') {
           bytes += Buffer.byteLength(part.text);
           if (result.isError && code === undefined)
             code = /"code":"([A-Z][A-Z0-9_]{1,63})"/.exec(part.text)?.[1];
+          // A handler's own refusal ({ok:false,error}) changed nothing: logged as one (SPEC-07.18
+          // 9.6, T-293), not as a successful call.
+          const own =
+            !result.isError && /^\{"ok":false,"error":"([A-Z][A-Z0-9_]{1,63})"/.exec(part.text);
+          if (own && code === undefined) {
+            refused = true;
+            code = own[1];
+          }
         } else if (part.type === 'image') bytes += Math.floor((part.data.length * 3) / 4);
       }
+      const failed = !!result.isError || refused;
       diagnostic('tool-call', {
         ...(run.requestId ? { requestId: run.requestId } : {}),
         tool: name,
         ms: Math.round(performance.now() - began),
         bytes,
-        ok: !result.isError,
-        ...(result.isError ? { code: code ?? 'UNKNOWN' } : {}),
+        ok: !failed,
+        ...(failed ? { code: code ?? 'UNKNOWN' } : {}),
         ...(args.linkId ? { linkId: String(args.linkId).slice(0, 80) } : {}),
       });
     } catch {
@@ -1312,6 +1322,12 @@ export interface ConversationToolSources {
   jigs?: Pick<JigRuntime, 'list' | 'view' | 'output' | 'setParams' | 'run'> &
     Partial<Pick<JigRuntime, 'recordRead' | 'setAssembly'>>;
   links?: Pick<DocumentLinks, 'list' | 'get'>;
+  /**
+   * The host links open now (SPEC-07.5 7, T-298): jig inputs and links_layers read the open files'
+   * last Syncs first, a closed file's only for a layer no open file holds. Absent or null (no host
+   * connection to ask, a host-less test): every link counts as open.
+   */
+  openLinks?: () => Promise<ReadonlySet<string> | null>;
   /** Reads a linked file's last Sync for an input role (SPEC-07.18 9); jig_set_input needs it. */
   readInput?: JigInputDeps['read'];
   /**
@@ -1475,6 +1491,26 @@ function latestSync(
     ? { syncId: full.id, model: full.result as unknown as ReadModel }
     : undefined;
 }
+/**
+ * The layer list of a link's latest Sync (links_layers, jig_ask_input, jig_set_input). A model
+ * stored per object is counted from its manifest (`ModelView.layerCounts`, kept per revision);
+ * decoding every object row twice per link held the engine for over 4 s with nine links (T-300).
+ */
+function latestSyncLayers(
+  workspace: ConversationToolSources['workspace'],
+  projectId: string,
+  linkId: string,
+): { syncId: string; layers: { fullPath: string; objectCount: number }[] } | undefined {
+  const entry = workspace
+    .list(projectId)
+    .filter((row) => row.state === 'succeeded' && row.input.linkId === linkId)
+    .at(-1);
+  if (!entry) return undefined;
+  const view = workspace.model?.(projectId, entry.id);
+  if (view) return { syncId: entry.id, layers: layersOfCounts(view.layerCounts()) };
+  const sync = latestSync(workspace, projectId, linkId);
+  return sync ? { syncId: sync.syncId, layers: layersOf(sync.model) } : undefined;
+}
 /** Scalar fields and short numeric arrays of a Sync row; geometry payloads stay out. */
 function sampleRow(row: Record<string, unknown>) {
   const out: Record<string, unknown> = {};
@@ -1605,18 +1641,24 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
         ...pageOf(rows, offset, limit ?? 50),
       });
     },
-    links_layers: ({ linkId }) => {
+    links_layers: async ({ linkId }) => {
       if (!links) throw new DomainError('EXECUTOR_NOT_READY');
-      const chosen = linkId ? [links.get(projectId, linkId)] : links.list(projectId);
+      const open = await openLinksOf(sources);
+      const closedOf = (link: DocumentLink) => !isOpenLink(link, open);
+      // Open files first (SPEC-07.5 7, T-298); a closed file is listed and says so.
+      const chosen = linkId
+        ? [links.get(projectId, linkId)]
+        : [...links.list(projectId)].sort((a, b) => Number(closedOf(a)) - Number(closedOf(b)));
       return bounded({
         links: chosen.slice(0, 8).map((link) => {
-          const sync = latestSync(workspace, projectId, link.id);
+          const sync = latestSyncLayers(workspace, projectId, link.id);
           return {
             linkId: link.id,
             host: link.host,
             name: link.name,
+            ...(closedOf(link) ? { closed: true } : {}),
             syncId: sync?.syncId ?? null,
-            layers: sync ? layersOf(sync.model).slice(0, 300) : [],
+            layers: sync ? sync.layers.slice(0, 300) : [],
           };
         }),
       });
@@ -1666,20 +1708,18 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
     };
     handlers.jig_set_input = async ({ instanceId: given, input, layers, linkId, reason }) => {
       const instanceId = pick(given);
-      // Only layers the person named (SPEC-07.18 9): the AI's own pick stays a proposal.
-      const unnamed = unnamedLayers(sources.personWords?.() ?? [], layers);
-      if (unnamed.length)
-        return bounded({
-          ok: false,
-          error: 'NOT_NAMED',
-          message: notNamedText(unnamed),
-          layers: unnamed,
-        });
       const result = await assignJigInput(
         jigInputDeps(sources, open(instanceId)),
         projectId,
         instanceId,
-        { input, layers, linkId, reason: reason ?? '대화에서 사람이 확인' },
+        {
+          input,
+          layers,
+          linkId,
+          reason: reason ?? '대화에서 사람이 확인',
+          // Only layers the person named (SPEC-07.18 9): the AI's own pick stays a proposal.
+          unnamed: (names) => unnamedLayers(sources.personWords?.() ?? [], names),
+        },
       );
       // The screen re-reads the instance (role card, step rail) when the turn records this.
       if (result.ok)
@@ -1702,7 +1742,7 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
       const role = findRole(inputRoles(await rt.view(projectId, instanceId)), input);
       if (!role) throw new DomainError('NOT_FOUND');
       if (options.filter((o) => o.recommended).length !== 1) throw new DomainError('INVALID_INPUT');
-      const documents = jigInputDocuments(sources);
+      const documents = jigInputDocuments(sources, await openLinksOf(sources));
       const checked = options.map((option, n) => {
         const { picks, problems } = resolveLayers(documents, option.layers, option.linkId);
         return { option, n, picks, problems };
@@ -2005,7 +2045,11 @@ export function conversationSources(
     draftId?: string | null;
     targets?: string[] | null;
   },
-  { requestId, ledger }: Pick<ConversationToolSources, 'requestId' | 'ledger'> = {},
+  {
+    requestId,
+    ledger,
+    openLinks,
+  }: Pick<ConversationToolSources, 'requestId' | 'ledger' | 'openLinks'> = {},
 ): ConversationToolSources {
   const data = workspace.store.dataDirectory();
   return {
@@ -2017,6 +2061,7 @@ export function conversationSources(
     workspace,
     jigs: data ? jigRuntimeFor(workspace, data) : undefined,
     links: new DocumentLinks(workspace.store),
+    ...(openLinks ? { openLinks } : {}),
     readInput: (document, layers) =>
       readForJig({ workspace }, conversation.projectId, {
         linkId: document.linkId,
@@ -2096,22 +2141,47 @@ export function personWordsOf(
 }
 /** A card option's label: what the person reads, at most 80 characters. */
 const clipLabel = (text: string) => (text.length > 80 ? text.slice(0, 79) + '…' : text);
-/** The linked files with a stored Sync and its layer table (SPEC-07.18 9). */
+/** The host links open now; null when that cannot be asked (every link counts as open). */
+const openLinksOf = (sources: Pick<ConversationToolSources, 'openLinks'>) =>
+  sources.openLinks ? sources.openLinks().catch(() => null) : Promise.resolve(null);
+/** A file opened in VIDE is read from its own copy: never a closed connection (SPEC-01.11 4). */
+const isOpenLink = (link: DocumentLink, open: ReadonlySet<string> | null) =>
+  open === null || isFileLink(link) || open.has(link.id);
+/**
+ * The linked files with a stored Sync and its layer table (SPEC-07.18 9): the open files first,
+ * then the closed ones marked `closed` (SPEC-07.5 7, T-298). `open` null: every file is open.
+ */
 export function jigInputDocuments(
   sources: Pick<ConversationToolSources, 'projectId' | 'workspace' | 'links'>,
+  open: ReadonlySet<string> | null = null,
 ): JigInputDocument[] {
   const { projectId, workspace, links } = sources;
   if (!links) return [];
-  return links.list(projectId).flatMap((link) => {
-    const sync = latestSync(workspace, projectId, link.id);
+  const documents = links.list(projectId).flatMap((link) => {
+    const sync = latestSyncLayers(workspace, projectId, link.id);
     return sync
-      ? [{ linkId: link.id, name: link.name, syncId: sync.syncId, layers: layersOf(sync.model) }]
+      ? [
+          {
+            linkId: link.id,
+            name: link.name,
+            syncId: sync.syncId,
+            layers: sync.layers,
+            ...(isOpenLink(link, open) ? {} : { closed: true }),
+          },
+        ]
       : [];
   });
+  return [
+    ...documents.filter((document) => !document.closed),
+    ...documents.filter((document) => document.closed),
+  ];
 }
 /** The role path of a conversation (jig_set_input, the answer of a jig_ask_input card). */
 export function jigInputDeps(
-  sources: Pick<ConversationToolSources, 'projectId' | 'workspace' | 'links' | 'readInput'>,
+  sources: Pick<
+    ConversationToolSources,
+    'projectId' | 'workspace' | 'links' | 'readInput' | 'openLinks'
+  >,
   runtime: NonNullable<ConversationToolSources['jigs']>,
 ): JigInputDeps {
   const { recordRead, setAssembly } = runtime;
@@ -2124,7 +2194,13 @@ export function jigInputDeps(
       recordRead: recordRead.bind(runtime),
       setAssembly: setAssembly.bind(runtime),
     },
-    documents: () => jigInputDocuments(sources),
+    documents: async () => jigInputDocuments(sources, await openLinksOf(sources)),
+    // A role card pick holds `sync:<syncId>`: that Sync's own linked file (SPEC-07.18 9.6, T-293).
+    syncLink: (syncId) => {
+      const linkId = sources.workspace.list(sources.projectId).find((entry) => entry.id === syncId)
+        ?.input.linkId;
+      return typeof linkId === 'string' ? linkId : undefined;
+    },
     read: sources.readInput,
   };
 }

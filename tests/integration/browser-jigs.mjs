@@ -404,9 +404,66 @@ try {
   assert.equal(await rows.count(), 2);
   assert.match(await rows.nth(0).textContent(), /R1오차B3 · 구조::girderS-BEAM · 220\.8 mm/);
   // AI review: host-less, the table attached, only the table's rows citable.
-  await dialog.getByRole('button', { name: /AI 검토/ }).click();
-  await dialog.locator('.jig-sync [role=status]', { hasText: 'AI 검토를' }).waitFor();
+  // Like any request it goes to the chosen conversation with a progress row; while it runs the
+  // button reads '검토 중…' and a press starts nothing but shows it (SPEC-05.8 2, T-299). The jig's
+  // requests go to a mock engine here (no AI, no host): they stay 'running' until settled.
+  const mocked = new Map();
+  await page.route('**/api/v1/projects/*/requests**', async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (request.method() === 'POST' && /\/requests$/.test(path)) {
+      const input = JSON.parse(request.postData());
+      if (!input.jig) return route.fallback();
+      const row = {
+        id: input.id,
+        state: 'running',
+        input,
+        result: null,
+        createdAt: new Date().toISOString(),
+      };
+      mocked.set(input.id, row);
+      return route.fulfill({ status: 201, json: row });
+    }
+    const row = mocked.get(decodeURIComponent(path.split('/').at(-1)));
+    if (request.method() !== 'GET' || !row) return route.fallback();
+    return route.fulfill({ json: row });
+  });
+  const reviewButton = dialog.locator('.jig-sync .jig-actions button').first();
+  const reviewPosts = () => posted.filter((input) => input.jig?.kind === 'sync-review').length;
+  // Two presses before the screen redraws: one request.
+  await reviewButton.evaluate((button) => {
+    button.click();
+    button.click();
+  });
+  await dialog
+    .locator('.jig-sync [role=status]', { hasText: 'AI 검토를 대화에 보냈습니다' })
+    .waitFor();
+  await page.waitForFunction(
+    () => document.querySelector('.jig-sync .jig-actions button')?.textContent === '검토 중…',
+  );
+  assert.equal(reviewPosts(), 1, 'one review request for two presses');
   const review = posted.at(-1);
+  assert.equal(
+    typeof review.conversationId,
+    'string',
+    'the review goes to the chosen conversation',
+  );
+  await page.locator(`.work-view[data-request-id="${review.id}"]`).waitFor({ state: 'attached' });
+  assert.equal(await reviewButton.getAttribute('aria-busy'), 'true');
+  // A press while it runs (aria-disabled, so dispatched) shows the running request; no new one.
+  await reviewButton.dispatchEvent('click');
+  await dialog.locator('.jig-sync [role=status]', { hasText: 'AI 검토가 진행 중입니다' }).waitFor();
+  await page.waitForTimeout(400);
+  assert.equal(reviewPosts(), 1, 'a press while running starts no request');
+  // The request ends: the button comes back.
+  mocked.get(review.id).state = 'cancelled';
+  await page.waitForFunction(
+    () =>
+      document.querySelector('.jig-sync .jig-actions button')?.textContent ===
+      'AI 검토 (차이의 의미 판정)',
+    undefined,
+    { timeout: 15000 },
+  );
   assert.equal(review.permission, 'review');
   assert.equal(review.host, undefined);
   assert.equal(review.jig.kind, 'sync-review');

@@ -1343,3 +1343,52 @@ export function routeQuery(body: string, subjects: readonly Subject[], context: 
 export const routeRevert = (route: Route) => ({ target: route.target, by: route.by ?? 'rules' });
 /** Routes the composer hands to the conversation AI unchanged (SPEC-02.17 2). */
 export const goesToAi = (route: Route) => AI_ROUTES.includes(route.target);
+
+/** A shown object with the linked file it is drawn from (src/ui/layers.ts composeLayers). */
+export interface ViewCountObject {
+  id: string;
+  documentKey?: unknown;
+  documentName?: unknown;
+}
+/**
+ * The count a view action's notice gives (SPEC-01.11 4, T-298): the targets in the open linked
+ * files (all targets when none is in an open file), and when they span several files the count per
+ * file — open files first, a closed file marked '(닫힘)', at most three named.
+ */
+export function viewCount(
+  ids: readonly string[],
+  objects: readonly ViewCountObject[],
+  openKeys: ReadonlySet<string>,
+): { count: number; files: string } {
+  const byId = new Map(objects.map((object) => [object.id, object]));
+  const groups = new Map<string, { name: string; open: boolean; count: number }>();
+  for (const id of ids) {
+    const object = byId.get(id);
+    const key = typeof object?.documentKey === 'string' ? object.documentKey : '';
+    const group = groups.get(key) ?? {
+      name: typeof object?.documentName === 'string' ? object.documentName : '',
+      open: openKeys.has(key),
+      count: 0,
+    };
+    group.count++;
+    groups.set(key, group);
+  }
+  const list = [...groups.values()].sort(
+    (a, b) => Number(b.open) - Number(a.open) || b.count - a.count,
+  );
+  const inOpen = list.filter((group) => group.open).reduce((sum, group) => sum + group.count, 0);
+  const count = inOpen || ids.length;
+  if (list.length < 2) return { count, files: '' };
+  const named = list
+    .slice(0, 3)
+    .map(
+      (group) =>
+        `${group.name || '이름 없는 파일'}${group.open ? '' : '(닫힘)'} ${group.count.toLocaleString()}`,
+    );
+  const rest = list.slice(3);
+  if (rest.length)
+    named.push(
+      `외 ${rest.length}개 파일 ${rest.reduce((sum, group) => sum + group.count, 0).toLocaleString()}`,
+    );
+  return { count, files: `파일별 ${named.join(' · ')}` };
+}

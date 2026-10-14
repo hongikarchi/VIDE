@@ -19,7 +19,7 @@ import { ChildRunner, type ChildRunnerOptions } from './child-runner.ts';
 import { ComputeBoxRunner } from './compute-box.ts';
 import type { GateContext, GateResult } from './gates.ts';
 import { buildGraph, type StepGraph } from './graph.ts';
-import { hashValue } from './hash.ts';
+import { hashValue, hashValueAsync } from './hash.ts';
 import { checkSchema } from './schema.ts';
 import {
   bodyOf,
@@ -231,6 +231,17 @@ export function layersOf(model: ReadModel): { fullPath: string; objectCount: num
     counts.set(layer, (counts.get(layer) ?? 0) + 1);
   }
   return [...counts].map(([fullPath, objectCount]) => ({ fullPath, objectCount }));
+}
+/** `layersOf` from counted `layer64` values (`ModelView.layerCounts`, T-300): same rows, same order. */
+export function layersOfCounts(
+  counts: Iterable<{ layer64: unknown; count: number }>,
+): { fullPath: string; objectCount: number }[] {
+  const out = new Map<string, number>();
+  for (const { layer64, count } of counts) {
+    const layer = decode64(layer64);
+    out.set(layer, (out.get(layer) ?? 0) + count);
+  }
+  return [...out].map(([fullPath, objectCount]) => ({ fullPath, objectCount }));
 }
 const globToRegExp = (glob: string) =>
   new RegExp(
@@ -886,7 +897,8 @@ export class JigRuntime {
       model && typeof model === 'object' && model.source && typeof model.source === 'object'
         ? { ...model, source: { ...model.source, readId: null, readAt: null } }
         : kept.model;
-    const hash = hashValue([kept.revisionKey, kept.rolesVersion, hashValue(content)]);
+    // T-274: the content hash of a model with meshes gives the event loop back (same digest).
+    const hash = hashValue([kept.revisionKey, kept.rolesVersion, await hashValueAsync(content)]);
     const ref = `models/${instanceId}/${key.replace(/[^A-Za-z0-9_.-]/g, '_')}-${hash.slice(0, 16)}.json.gz`;
     await this.writeGzAsync(ref, kept.model);
     const body = bodyOf(instance.body);
@@ -1017,6 +1029,18 @@ export class JigRuntime {
     return sample === undefined ? null : { ...kept, sample };
   }
   /** The kept classified model of a `host-document` input, with its reference; null when unread. */
+  /** The kept host document's entry (link, read, hash) without loading its model (T-274). */
+  hostDocumentRef(projectId: string, instanceId: string, key: string) {
+    const instance = this.store.instance(projectId, instanceId);
+    return bodyOf(instance.body).hostDocuments?.[key] ?? null;
+  }
+  /** `hostDocument` with the file read and decompression off the event loop (T-274). */
+  async hostDocumentAsync(projectId: string, instanceId: string, key: string) {
+    const kept = this.hostDocumentRef(projectId, instanceId, key);
+    if (!kept) return null;
+    const model = await this.readGzAsync(kept.ref);
+    return model === undefined ? null : { ...kept, model };
+  }
   hostDocument(projectId: string, instanceId: string, key: string) {
     const instance = this.store.instance(projectId, instanceId);
     const kept = bodyOf(instance.body).hostDocuments?.[key];

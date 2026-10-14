@@ -184,6 +184,12 @@ function backflowAnswer(result: unknown) {
 
 export class AttachedZwcadDocuments {
   private connections = new Map<string, Connection>();
+  /**
+   * T-285: the status a running Sync of a drawing read at its start (HOST-ZWCAD §1.1). The list
+   * answers from it while that Sync reads pages, instead of a status call (with its process owner
+   * check of 0.5–1.8 s) between the pages.
+   */
+  private capturing = new Map<string, { status: z.infer<typeof statusSchema>; count: number }>();
   private directory: string;
   constructor(directory: string) {
     this.directory = directory;
@@ -270,9 +276,9 @@ export class AttachedZwcadDocuments {
     const result = [];
     for (const instance of this.connections.keys()) {
       try {
-        const status = statusSchema.parse(
-          await this.call({ instance, documentId: 1 }, 'attachedStatus'),
-        );
+        const status =
+          this.capturing.get(instance)?.status ??
+          statusSchema.parse(await this.call({ instance, documentId: 1 }, 'attachedStatus'));
         result.push({
           instance,
           id: 1,
@@ -405,6 +411,18 @@ export class AttachedZwcadDocuments {
     await this.discover();
     const status = statusSchema.parse(await this.call(target, 'attachedStatus'));
     if (status.hostBusy) throw new DomainError('HOST_BUSY');
+    const running = this.capturing.get(target.instance);
+    this.capturing.set(target.instance, { status, count: (running?.count ?? 0) + 1 });
+    try {
+      return await this.capturePages(target, status);
+    } finally {
+      const current = this.capturing.get(target.instance);
+      if (current && current.count > 1)
+        this.capturing.set(target.instance, { ...current, count: current.count - 1 });
+      else this.capturing.delete(target.instance);
+    }
+  }
+  private async capturePages(target: HostTarget, status: z.infer<typeof statusSchema>) {
     const objects: z.infer<typeof pageSchema>['objects'] = [],
       scene: z.infer<typeof pageSchema>['scene'] = [];
     const ids = new Set<string>(),

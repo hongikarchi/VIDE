@@ -3775,6 +3775,11 @@ body[data-workspace='context'] .workspace > .jig-dialog {
   gap: 8px;
   margin: 10px 0 6px;
 }
+/* A jig request still running (T-299): looks disabled; a press shows it in the conversation. */
+.jig-actions button[aria-busy='true'] {
+  opacity: 0.6;
+  cursor: progress;
+}
 /* Structure jig '배치 진단' (PLAN-23 T-044, Design SCR-13): KPI strip, result tabs, verdict chips. */
 .jig-mode {
   margin: 4px 0 8px;

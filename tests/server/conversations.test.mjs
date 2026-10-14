@@ -1328,3 +1328,27 @@ test('the route helper leaves other paths alone', async () => {
     false,
   );
 });
+
+// T-299 (SPEC-05.8 2): a Sync jig's [AI 검토] runs in the chosen conversation (its row carries the
+// conversation id) but sends only its table: no ledger, no earlier exchanges, no session resume.
+test('a sync-review turn in a conversation sends only its table: no ledger, conversation or resume', async (t) => {
+  const { fake, open, send, settled, state } = setup(t, (turn) => [init, answer(`답 ${turn + 1}`)]);
+  const conversation = open();
+  send('c1', { conversationId: conversation.id });
+  await settled();
+  send('review', {
+    conversationId: conversation.id,
+    jig: { kind: 'sync-review', rows: ['R1'] },
+    files: [{ name: 'sync-table.json', text: '{"rows":[{"id":"R1"}]}' }],
+  });
+  await settled();
+  assert.equal(state('review').state, 'succeeded');
+  assert.equal(state('review').input.conversationId, conversation.id);
+  const runs = fake.runs();
+  const last = runs.at(-1);
+  assert.ok(!last.args.includes('--resume'), last.args.join(' '));
+  const ids = fake.packet(last).items.map((item) => item.id);
+  for (const id of ['ledger', 'conversation', 'handoff', 'changes-elsewhere'])
+    assert.ok(!ids.includes(id), `${id} in ${ids.join(', ')}`);
+  assert.ok(ids.includes('file-0'), ids.join(', '));
+});

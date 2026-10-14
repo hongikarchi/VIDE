@@ -25,6 +25,7 @@ import {
   conversationHandlers,
   conversationSources,
   type AgentTools,
+  type ConversationToolSources,
   type ProjectToolHandlers,
 } from './agent-tools.ts';
 import {
@@ -240,13 +241,25 @@ export function hostTurnProjectHandlers(
   workspace: Workspace,
   conversation: Parameters<typeof conversationSources>[1],
   requestId?: string,
+  openLinks?: ConversationToolSources['openLinks'],
 ): ProjectToolHandlers {
-  const all = conversationHandlers(conversationSources(workspace, conversation, { requestId }));
+  const all = conversationHandlers(
+    conversationSources(workspace, conversation, {
+      requestId,
+      ...(openLinks ? { openLinks } : {}),
+    }),
+  );
   return Object.fromEntries(
     HOST_TURN_PROJECT_TOOLS.flatMap((name) => (all[name] ? [[name, all[name]]] : [])),
   ) as ProjectToolHandlers;
 }
 
+/**
+ * A Sync jig's AI review (SPEC-05.8 2, T-299): it runs in the conversation the person chose (its
+ * row and answer show there) but sends only the attached table, never the conversation's context.
+ */
+export const isTableOnlyReview = (input: object) =>
+  (input as { jig?: { kind?: unknown } | null }).jig?.kind === 'sync-review';
 /** The card id of a legal tool's '보낼 정보' question (SPEC-13.3). */
 export const LEGAL_SEND_CARD = 'legal-send';
 /** The card id of the file permission question (SPEC-01.13 3). */
@@ -1251,6 +1264,7 @@ export class Execution {
           targets: conversation?.targets ?? null,
         },
         requestId,
+        () => this.openLinkIds(projectId),
       );
     } catch (error) {
       this.diagnostics?.write('host-project-tools-failed', {
@@ -1322,6 +1336,9 @@ export class Execution {
       .object({ kind: z.enum(['sync-review', 'structure-draft-review', 'input-roles']) })
       .safeParse(input.jig).success;
     const jigReview = reviewJig || hostUse(input) === 'none';
+    // A Sync jig's [AI 검토] (SPEC-05.8 2, T-299) is shown in the chosen conversation but sends only
+    // its table: no conversation ledger, session or earlier exchanges.
+    const tableOnly = isTableOnlyReview(input);
     const target = input.host || 'rhino',
       host = jigReview ? undefined : this.hosts[target];
     this.workspace.update(projectId, id, 'running');
@@ -1387,7 +1404,7 @@ export class Execution {
         if (note) items.push(note);
       }
       // Outside a conversation the run stays synchronous up to the provider call (no await).
-      const pending = this.beginTurn(request);
+      const pending = tableOnly ? undefined : this.beginTurn(request);
       if (pending) turn = await pending;
       // Every host modeling turn reads the project beside its target (SPEC-02.6, T-062).
       const projectTools = jigReview ? undefined : this.projectTools(projectId, id, turn);
@@ -1459,7 +1476,7 @@ export class Execution {
       // no conversation item, only the ledger summary of its turn items. The ledger method sends a
       // selection.
       const earlier = (
-        turn?.session
+        turn?.session || tableOnly
           ? []
           : this.workspace
               .list(projectId)
@@ -1665,6 +1682,7 @@ export class Execution {
         turn && !host && this.tools
           ? conversationSources(this.workspace, turn.conversation, {
               requestId: id,
+              openLinks: () => this.openLinkIds(projectId),
               ledger: (item) =>
                 this.conversations!.addLedger(projectId, turn!.conversation.id, item),
             })
@@ -2066,6 +2084,27 @@ export class Execution {
     prefer?: { host: string; instance: string; documentId: number },
   ): Promise<LiveLink[]> {
     if (this.injectedLinks) return this.injectedLinks(projectId);
+    const { rows, matched, ownedOpen } = await this.followLinks(projectId, prefer);
+    return liveLinksOf(rows, matched, ownedOpen);
+  }
+  /**
+   * The host links open now (a user's window or a work copy VIDE opened), for the conversation
+   * tools' jig inputs (SPEC-07.5 7, T-298); null when no host connection can be asked.
+   */
+  async openLinkIds(projectId: string): Promise<ReadonlySet<string> | null> {
+    if (this.injectedLinks)
+      return new Set(
+        (await this.injectedLinks(projectId)).filter((link) => link.open).map((link) => link.id),
+      );
+    if (!this.sdk && !this.zwcadSdk) return null;
+    const { matched, ownedOpen } = await this.followLinks(projectId);
+    return new Set([...matched.keys(), ...ownedOpen]);
+  }
+  /** The links list's matching and follow step for the hosts the project links (live-links.ts). */
+  private async followLinks(
+    projectId: string,
+    prefer?: { host: string; instance: string; documentId: number },
+  ) {
     const documentLinks = new DocumentLinks(this.workspace.store);
     const links = documentLinks.list(projectId);
     const hosts = new Set(links.filter((link) => !isFileLink(link)).map((link) => link.host));
@@ -2080,7 +2119,7 @@ export class Execution {
     ]);
     // The links list's own matching and follow step (live-links.ts): a Save As since its last
     // poll is seen here too, and one window is one live row.
-    const { rows, matched, ownedOpen } = await followOpenDocuments(
+    return followOpenDocuments(
       documentLinks,
       projectId,
       [...(rhino ?? []), ...(zwcad ?? [])],
@@ -2090,7 +2129,6 @@ export class Execution {
           : await this.zwcadSdk?.editors.has(link.instance),
       prefer,
     );
-    return liveLinksOf(rows, matched, ownedOpen);
   }
   /** Books a run's outcome by mode: Plan keeps its plan card, a tripped guard waits on its card. */
   private settleModes(request: StoredWork, result: Record<string, unknown>, ledger: boolean) {

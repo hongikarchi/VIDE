@@ -9,14 +9,21 @@ import { JigStore } from '../../src/core/jig-store.ts';
 import { JigRegistry } from '../../src/jigs/runtime/loader.ts';
 import { JigRuntime, rowsOfLayers } from '../../src/jigs/runtime/runtime.ts';
 import {
+  AgentTools,
   PLAN_MODE_TOOLS,
   conversationHandlers,
   jigInputDeps,
   personWordsOf,
 } from '../../src/server/agent-tools.ts';
 import { agentToolNames } from '../../src/ai/agent-connection.ts';
-import { assignJigInput, CHAT_CONFIRMED_BY } from '../../src/server/jig-input.ts';
+import {
+  assignJigInput,
+  CHAT_CONFIRMED_BY,
+  inputRoles,
+  resolveLayers,
+} from '../../src/server/jig-input.ts';
 import { ConversationService, conversationRoutes } from '../../src/server/conversations.ts';
+import { setDiagnosticSink } from '../../src/core/breadcrumbs.ts';
 
 // 대화로 정한 입력 역할 (SPEC-07.18 9, T-293/T-294): jig_set_input checks the role and the layers,
 // sets the role the way [레이어 고르기] does (confirmed by the person in chat) and runs the steps up
@@ -394,4 +401,210 @@ test('input card answers that are not the person confirming: another card, 권�
   // The person's answers only: the swapped card's label (not its recorded layers, which the person
   // never saw) and the Plan turn's label with its layers; the 권장값 answer is not there.
   assert.deepEqual(onlyRecommended, ['구조::보이드', '구조::보이드', '구조::보이드']);
+});
+
+// T-293 follow-up (verify loop R5, request ad7be574): the AI called jig_set_input twice; the engine
+// log said ok:true but the workbook never changed. The answers were NOT_NAMED refusals (the person
+// had named a file, not a layer, and had picked 3D::S-Slab on the role card themselves) and the
+// log line counted only transport errors. A refusal is logged as one, a no-op is UNCHANGED, and an
+// applied answer names the workbook and the steps that changed (SPEC-07.18 9.6).
+test('jig_set_input never reports ok without a change: R5 refusals logged as failures, a held role is UNCHANGED, ok names the workbook and changed steps', async (t) => {
+  const f = await fixture(t);
+  const events = [];
+  const sink = (event, fields) => events.push({ event, ...fields });
+  setDiagnosticSink(sink);
+  t.after(() => setDiagnosticSink(undefined, sink));
+  const tools = new AgentTools({ origin: 'http://127.0.0.1:47999' });
+  const scope = tools.issueConversation(f.sources);
+  t.after(() => scope.revoke());
+  const call = async (name, args) => {
+    const result = await tools.call(scope.connection.token, name, args);
+    return JSON.parse(result.content[0].text);
+  };
+  const logged = () => events.filter((e) => e.event === 'tool-call').at(-1);
+
+  // R5's words: the request names member kinds, the card answer names the file — no layer.
+  f.words.push(
+    '이 모델에서 구조 검토를 하고 싶습니다. 보, 기둥, 슬래브, 벽, 코어 같은 구조 부재가 어떤 레이어에 어떻게 들어 있는지 파악해 주세요.',
+    '구조 모델',
+  );
+  // R5's call: the role by its title, a full layer path, the file's linkId, the AI's reason.
+  const r5 = await call('jig_set_input', {
+    input: 'outline',
+    layers: ['구조::슬래브 외곽'],
+    linkId: 'L1',
+    reason: '사용자가 구조 모델을 이번 검토의 기준 파일로 선택',
+  });
+  assert.deepEqual([r5.ok, r5.error, r5.layers], [false, 'NOT_NAMED', ['구조::슬래브 외곽']]);
+  assert.deepEqual(
+    [logged().tool, logged().ok, logged().code],
+    ['jig_set_input', false, 'NOT_NAMED'],
+  );
+  assert.deepEqual((await f.runtime.view(f.project.id, f.created.id)).body.assembly, {});
+  assert.equal(f.reads.length, 0);
+
+  // The person picks the layer on the role card / answers the card (no word check): applied, with
+  // the workbook it changed and the steps whose status moved.
+  const before = await f.runtime.view(f.project.id, f.created.id);
+  const picked = await assignJigInput(
+    jigInputDeps(f.sources, f.runtime),
+    f.project.id,
+    f.created.id,
+    {
+      input: 'outline',
+      layers: ['구조::슬래브 외곽'],
+    },
+  );
+  assert.equal(picked.ok, true, JSON.stringify(picked));
+  assert.deepEqual(picked.workbook, { id: f.created.id, title: '격자 대안 A' });
+  const grid = picked.changedSteps.find((s) => s.id === 'grid');
+  assert.deepEqual(
+    [grid.from, grid.to],
+    [before.steps.find((s) => s.id === 'grid').status, 'done'],
+  );
+  assert.ok(picked.changedSteps.every((s) => typeof s.title === 'string'));
+  assert.equal(f.reads.length, 1);
+
+  // The AI sets the same role to what it already holds, now even named: nothing changes — told
+  // UNCHANGED with what the role holds, nothing read again, logged as a failure.
+  f.words.push('슬래브 외곽으로 해 줘');
+  const again = await call('jig_set_input', { input: '슬래브 외곽선', layers: ['슬래브 외곽'] });
+  assert.deepEqual([again.ok, again.error], [false, 'UNCHANGED']);
+  assert.deepEqual(again.role.layers, ['구조::슬래브 외곽']);
+  assert.match(again.message, /이미/);
+  assert.deepEqual([logged().ok, logged().code], [false, 'UNCHANGED']);
+  assert.equal(f.reads.length, 1);
+  // Unchanged even when the layers were never named: the held state is the useful answer.
+  f.words.length = 0;
+  const unnamedHeld = await call('jig_set_input', {
+    input: 'outline',
+    layers: ['구조::슬래브 외곽'],
+  });
+  assert.equal(unnamedHeld.error, 'UNCHANGED');
+
+  // A real change through the tool: ok names the workbook and the changed steps; the log says ok.
+  f.words.push('보이드는 구조::보이드');
+  const voids = await call('jig_set_input', { input: 'voids', layers: ['구조::보이드'] });
+  assert.equal(voids.ok, true, JSON.stringify(voids));
+  assert.equal(voids.workbook.id, f.created.id);
+  assert.ok(Array.isArray(voids.changedSteps));
+  assert.deepEqual([logged().ok, logged().code], [true, undefined]);
+});
+
+// T-293 follow-up (review of wave 5): R5's real path — the person picked the layer on the role
+// card first. The card's read goes through `POST …/reads {syncId, layers}` without a linkId, so the
+// role holds `sync:<syncId>`; jig_set_input with the file's linkId and the same layer is UNCHANGED
+// (SPEC-07.18 9.6), for the file's latest Sync and for an older Sync of the same file.
+test('a role picked on the role card (held as sync:<id>) is UNCHANGED for the same file and layer', async (t) => {
+  const f = await fixture(t);
+  f.sources.workspace = {
+    list: () => [
+      { id: 'sync-0', state: 'succeeded', input: { linkId: 'L1' } },
+      { id: 'sync-1', state: 'succeeded', input: { linkId: 'L1' } },
+    ],
+    get: (pid, id) => ({ id, result: model() }),
+  };
+  const tools = new AgentTools({ origin: 'http://127.0.0.1:47999' });
+  const scope = tools.issueConversation(f.sources);
+  t.after(() => scope.revoke());
+  const call = async (name, args) =>
+    JSON.parse((await tools.call(scope.connection.token, name, args)).content[0].text);
+  const roleKey = inputRoles(await f.runtime.view(f.project.id, f.created.id)).find((r) =>
+    r.key.endsWith('.outline'),
+  ).key;
+  // The role card's [레이어 고르기] (src/server/jig-routes.ts): the read keeps `sync:<syncId>`.
+  const pick = async (syncId) => {
+    const picked = rowsOfLayers(model(), ['구조::슬래브 외곽']);
+    const read = f.runtime.recordRead(f.project.id, f.created.id, {
+      linkId: `sync:${syncId}`,
+      revisionKey: 'rhino-1|7|3',
+      layers: ['구조::슬래브 외곽'],
+      includeHidden: false,
+      purpose: 'assembly',
+      model: { scene: picked.rows, definitions: picked.definitions },
+    });
+    await f.runtime.setAssembly(f.project.id, f.created.id, roleKey, {
+      sources: [{ readId: read.id, layers: ['구조::슬래브 외곽'] }],
+      confirm: true,
+      by: 'user',
+    });
+  };
+  for (const syncId of ['sync-1', 'sync-0']) {
+    await pick(syncId);
+    // R5's call exactly: the file's linkId, the full path, words that never name the layer.
+    const again = await call('jig_set_input', {
+      input: 'outline',
+      layers: ['구조::슬래브 외곽'],
+      linkId: 'L1',
+      reason: '사용자가 구조 모델을 이번 검토의 기준 파일로 선택',
+    });
+    assert.deepEqual([again.ok, again.error], [false, 'UNCHANGED'], syncId);
+    assert.deepEqual(again.role.layers, ['구조::슬래브 외곽']);
+  }
+  assert.equal(f.reads.length, 0);
+});
+
+// T-298 (SPEC-07.5 7): the AI path reads an open file's last Sync first; a closed file's only for a
+// layer no open file holds, and says so. links_layers lists the open files first.
+test('jig inputs and links_layers: open files first, a closed file only as a marked fallback', async (t) => {
+  const f = await fixture(t);
+  const links = [
+    { id: 'L-closed', host: 'rhino', name: '1차 모델', instance: 'rhino-1' },
+    { id: 'L-open', host: 'rhino', name: '구조 모델', instance: 'rhino-2' },
+    { id: 'L-file', host: 'rhino', name: '배치.3dm', instance: 'file:c:/a/배치.3dm' },
+  ];
+  const onlyClosed = {
+    ...model(),
+    scene: [...model().scene, row('o2', '옛::대지', OUTLINE)],
+    layers: [...model().layers, { fullPath: '옛::대지', objectCount: 1 }],
+  };
+  f.sources.workspace = {
+    list: () => [
+      { id: 's-closed', state: 'succeeded', input: { linkId: 'L-closed' } },
+      { id: 's-open', state: 'succeeded', input: { linkId: 'L-open' } },
+    ],
+    get: (pid, id) => ({ id, result: id === 's-closed' ? onlyClosed : model() }),
+  };
+  f.sources.links = { list: () => links, get: (pid, id) => links.find((l) => l.id === id) };
+  f.sources.openLinks = async () => new Set(['L-open']);
+  const deps = jigInputDeps(f.sources, f.runtime);
+  const documents = await deps.documents();
+  assert.deepEqual(
+    documents.map((d) => [d.linkId, !!d.closed]),
+    [
+      ['L-open', false],
+      ['L-closed', true],
+    ],
+  );
+  // The same layer in the open and the closed file: the open file, no "which file" question.
+  const both = resolveLayers(documents, ['구조::슬래브 외곽']);
+  assert.deepEqual(both.problems, []);
+  assert.deepEqual(
+    both.picks.map((p) => p.document.linkId),
+    ['L-open'],
+  );
+  // Only in the closed file: read from it, and the result says so.
+  const fallback = await assignJigInput(deps, f.project.id, f.created.id, {
+    input: 'outline',
+    layers: ['옛::대지'],
+  });
+  assert.equal(fallback.ok, true, JSON.stringify(fallback));
+  assert.deepEqual(
+    fallback.layers.map((l) => [l.linkId, l.closed, l.note]),
+    [['L-closed', true, '닫힌 연결 기준']],
+  );
+  // links_layers: open first, the closed file marked; a file entry is never closed.
+  const handlers = conversationHandlers(f.sources);
+  const listed = await handlers.links_layers({});
+  assert.deepEqual(
+    listed.links.map((l) => [l.linkId, l.closed ?? false]),
+    [
+      ['L-open', false],
+      ['L-file', false],
+      ['L-closed', true],
+    ],
+  );
+  // No host connection to ask: every link counts as open (unchanged order).
+  const unknown = jigInputDeps({ ...f.sources, openLinks: async () => null }, f.runtime);
+  assert.ok((await unknown.documents()).every((d) => !d.closed));
 });

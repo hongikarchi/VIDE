@@ -37,6 +37,7 @@ import {
   restoreInstalledPlugin,
   warnIfRhinoRunning,
 } from './installed-connector.mjs';
+import { withInstalledPluginRestored } from './plugin-guard.mjs';
 
 const probe = sdkOptions('.');
 if (!existsSync(probe.executable) || !existsSync(probe.plugin)) {
@@ -257,24 +258,25 @@ const ms = (start) => Math.round(performance.now() - start);
 
 let worker, host, engine;
 const result = { directory };
-try {
-  await warnIfRhinoRunning();
-  // 1. The synthetic document, saved by a work copy.
-  worker = await launchRhinoWorker({ ...options, directory: join(directory, 'create') });
-  const receipt = await worker.execute(randomUUID(), 0, build);
-  assert.equal(receipt.ok, true, JSON.stringify(receipt).slice(0, 400));
-  await worker.stop();
-  worker = undefined;
+await withInstalledPluginRestored(async () => {
+  try {
+    await warnIfRhinoRunning();
+    // 1. The synthetic document, saved by a work copy.
+    worker = await launchRhinoWorker({ ...options, directory: join(directory, 'create') });
+    const receipt = await worker.execute(randomUUID(), 0, build);
+    assert.equal(receipt.ok, true, JSON.stringify(receipt).slice(0, 400));
+    await worker.stop();
+    worker = undefined;
 
-  // 2. The document open in a VIDE-owned attached Rhino, with an action loop for "human" edits.
-  const attachedDirectory = join(directory, 'attached');
-  await mkdir(attachedDirectory);
-  const source = join(attachedDirectory, 'synthetic-site.3dm');
-  await copyFile(receipt.filename, source);
-  const script = join(attachedDirectory, 'fixture.py');
-  await writeFile(
-    script,
-    `import Rhino, System, json, os, traceback
+    // 2. The document open in a VIDE-owned attached Rhino, with an action loop for "human" edits.
+    const attachedDirectory = join(directory, 'attached');
+    await mkdir(attachedDirectory);
+    const source = join(attachedDirectory, 'synthetic-site.3dm');
+    await copyFile(receipt.filename, source);
+    const script = join(attachedDirectory, 'fixture.py');
+    await writeFile(
+      script,
+      `import Rhino, System, json, os, traceback
 folder=${JSON.stringify(attachedDirectory.replaceAll('\\', '/'))}
 plugin=${JSON.stringify(options.plugin.replaceAll('\\', '/'))}
 source=${JSON.stringify(source.replaceAll('\\', '/'))}
@@ -306,330 +308,340 @@ try:
     report('ready',dict(ok=True,objects=int(doc.Objects.Count),units=str(doc.ModelUnitSystem),tolerance=doc.ModelAbsoluteTolerance,rhino=str(Rhino.RhinoApp.Version),plugin=assembly.Location))
 except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback.format_exc()))
 `,
-  );
-  host = await launchOwnedHost({
-    executable: options.executable,
-    environment: { ...process.env, VIDE_CONNECT_DIR: connectionDirectory },
-    visible: false,
-    spawnProcess: (f, a, o) => spawn(f, a, { ...o, windowsVerbatimArguments: true }),
-    args: [
-      '/nosplash',
-      '/notemplate',
-      '/scheme=VIDE-Worker-Test',
-      `/runscript="_-RunPythonScript (${script})"`,
-    ],
-  });
-  const ready = await wait(async () =>
-    JSON.parse(await readFile(join(attachedDirectory, 'ready.json'), 'utf8')),
-  );
-  assert.equal(ready.ok, true, JSON.stringify(ready));
-  Object.assign(result, { rhino: ready.rhino, units: ready.units, tolerance: ready.tolerance });
-  let step = 0;
-  /** Run Python in the attached Rhino; `result` in its scope comes back. */
-  const action = async (code) => {
-    step++;
-    await writeFile(join(attachedDirectory, 'action.tmp'), JSON.stringify({ id: step, code }));
-    for (let attempt = 0; ; attempt++) {
-      try {
-        await rename(join(attachedDirectory, 'action.tmp'), join(attachedDirectory, 'action.json'));
-        break;
-      } catch (error) {
-        if (error.code !== 'EPERM' || attempt === 19) throw error;
-        await new Promise((accept) => setTimeout(accept, 50));
-      }
-    }
-    const r = await wait(async () =>
-      JSON.parse(await readFile(join(attachedDirectory, 'action-' + step + '.json'), 'utf8')),
     );
-    assert.equal(r.ok, true, JSON.stringify(r));
-    return r.value;
-  };
-  const sessions = new EditorSessions({ ...options, connectionDirectory });
-  const sdk = new SdkExecution({ ...options, connectionDirectory, tools: {}, origin: () => '' });
-  const catalog = await sessions.list(true);
-  assert.equal(catalog.documents.length, 1);
-  const target = { instance: catalog.documents[0].instance, documentId: catalog.documents[0].id };
-
-  // 3. The engine side: project, link, Sync, the site jig and its instance computed to the end.
-  const store = new Store(join(directory, 'workspace.sqlite')),
-    workspace = new Workspace(store),
-    jigStore = new JigStore(store),
-    links = new DocumentLinks(store),
-    project = store.createProject('대지 만들기 시험'),
-    dataDir = join(directory, 'data');
-  await mkdir(dataDir, { recursive: true });
-  const link = links.link(project.id, {
-    host: 'rhino',
-    name: 'synthetic-site.3dm',
-    path: source,
-    instance: target.instance,
-    documentId: target.documentId,
-  });
-  const display = await sdk.syncEditor(target, () => {});
-  soleDb(workspace.store)
-    .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
-    .run(
-      'sync-1',
-      project.id,
-      JSON.stringify({
-        id: 'sync-1',
-        body: 'Sync',
-        permission: 'review',
-        provider: 'claude-cli',
-        pins: [],
-        sketches: [],
-        files: [],
-        host: 'rhino',
-        source: 'document',
-        linkId: link.id,
-        sourceDocument: target,
-      }),
-      'succeeded',
-      JSON.stringify({ ...display, hostExecuted: true }),
-      new Date().toISOString(),
-    );
-  const jig = siteJig(directory);
-  const packed = await packJig(jig.dir, { dataDir, bundle: false, skipTests: true });
-  await importPack(packed.bytes, { store: jigStore, dataDir });
-  const execution = new Execution(workspace, { sdk });
-  engine = { execution, workspace, store };
-  let last;
-  const call = async (method, path, payload) => {
-    last = undefined;
-    const request = Object.assign(Readable.from([]), { method, headers: {} });
-    const handled = await jigRoutes(new URL(path, 'http://127.0.0.1'), request, {
-      workspace,
-      body: async () => payload ?? {},
-      send: (status, data) => (last = { status, data }),
-      dataDirectory: dataDir,
-      links,
-      sdk,
-      execution,
+    host = await launchOwnedHost({
+      executable: options.executable,
+      environment: { ...process.env, VIDE_CONNECT_DIR: connectionDirectory },
+      visible: false,
+      spawnProcess: (f, a, o) => spawn(f, a, { ...o, windowsVerbatimArguments: true }),
+      args: [
+        '/nosplash',
+        '/notemplate',
+        '/scheme=VIDE-Worker-Test',
+        `/runscript="_-RunPythonScript (${script})"`,
+      ],
     });
-    return handled ? last : { status: 0, data: undefined };
-  };
-  const base = `/api/v1/projects/${project.id}/jig-instances`;
-  const created = await call('POST', base, {
-    jig: 'project/site-bake-test',
-    version: '0.1.0',
-    title: '대지 만들기 시험 작업본',
-    layerRoot: ROOT,
-    params: [],
-  });
-  assert.equal(created.status, 200, JSON.stringify(created.data));
-  const iid = created.data.id;
-  const read = await call('POST', `${base}/${iid}/reads`, {
-    linkId: link.id,
-    layers: ['슬래브 외곽'],
-    purpose: 'assembly',
-  });
-  assert.equal(read.data.objectCount, 1, JSON.stringify(read.data));
-  await call('PUT', `${base}/${iid}/assembly/${encodeURIComponent('site.outline')}`, {
-    sources: [{ readId: read.data.readId, layers: ['슬래브 외곽'] }],
-    confirm: true,
-  });
-  const first = await call('POST', `${base}/${iid}/run`, { mode: 'geometry' });
-  await call('POST', `${base}/${iid}/steps/confirmInputs/confirm`, {
-    inputHash: first.data.steps[1].inputHash,
-  });
-  const computed = await call('POST', `${base}/${iid}/run`, { mode: 'geometry' });
-  assert.ok(
-    computed.data.steps.every((s) => ['done', 'confirmed'].includes(s.status)),
-    JSON.stringify(computed.data.steps.map((s) => [s.id, s.status, s.error])),
-  );
-  const site = computed.data.outputs.site;
-  const counts = {
-    buildings: site.buildings.length,
-    terrain: site.terrain.length,
-    envelopes: site.envelopes.length,
-  };
-  const good = counts.buildings + counts.terrain + counts.envelopes - BAD_ENVELOPES.length;
-  result.counts = counts;
-  assert.equal(counts.buildings, 300);
-
-  // The bodies the route will send, measured with the same functions (worker limit 65,536).
-  result.chunkSizes = Object.fromEntries(
-    jig.manifest.bake.map((decl) => {
-      const { items, problems } = extractItems(decl, site);
-      assert.deepEqual(problems, [], decl.id);
-      const chunks = renderChunks(
-        {
-          template: decl.template,
-          jigId: 'x',
-          instanceId: iid,
-          bakeId: decl.id,
-          runId: randomUUID(),
-          layerPath: `${ROOT}::${decl.layer}`,
-          deleteIds: [],
-        },
-        items,
-      );
-      return [
-        decl.id,
-        chunks.map((c) => ({ items: c.keys.length, chars: c.code.length, bytes: c.bytes })),
-      ];
-    }),
-  );
-
-  const readAll = async () => readObjects(await sdk.readLayers(target, { includeHidden: true }));
-  const tagged = (objects, run) =>
-    [...objects.values()].filter(
-      (o) => o.tags['vide-instance'] === iid && (!run || o.tags['vide-run'] === run),
+    const ready = await wait(async () =>
+      JSON.parse(await readFile(join(attachedDirectory, 'ready.json'), 'utf8')),
     );
-  const records = async () => (await call('GET', `${base}/${iid}/bakes`)).data.bakes;
-  const before = await readAll();
-  const box = [...before.values()].find((o) => o.layer === '기타');
-  const bake = async (label) => {
-    const started = performance.now();
-    const made = await call('POST', `${base}/${iid}/bake`, { bake: BAKES });
-    assert.equal(made.status, 200, JSON.stringify(made.data).slice(0, 800));
-    assert.equal(made.data.status, 'applied');
-    result[`${label}Ms`] = ms(started);
-    return made.data;
-  };
+    assert.equal(ready.ok, true, JSON.stringify(ready));
+    Object.assign(result, { rhino: ready.rhino, units: ready.units, tolerance: ready.tolerance });
+    let step = 0;
+    /** Run Python in the attached Rhino; `result` in its scope comes back. */
+    const action = async (code) => {
+      step++;
+      await writeFile(join(attachedDirectory, 'action.tmp'), JSON.stringify({ id: step, code }));
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await rename(
+            join(attachedDirectory, 'action.tmp'),
+            join(attachedDirectory, 'action.json'),
+          );
+          break;
+        } catch (error) {
+          if (error.code !== 'EPERM' || attempt === 19) throw error;
+          await new Promise((accept) => setTimeout(accept, 50));
+        }
+      }
+      const r = await wait(async () =>
+        JSON.parse(await readFile(join(attachedDirectory, 'action-' + step + '.json'), 'utf8')),
+      );
+      assert.equal(r.ok, true, JSON.stringify(r));
+      return r.value;
+    };
+    const sessions = new EditorSessions({ ...options, connectionDirectory });
+    const sdk = new SdkExecution({ ...options, connectionDirectory, tools: {}, origin: () => '' });
+    const catalog = await sessions.list(true);
+    assert.equal(catalog.documents.length, 1);
+    const target = { instance: catalog.documents[0].instance, documentId: catalog.documents[0].id };
 
-  // 4. First bake: everything good is made, the three bad envelopes come back in failed[].
-  const bake1 = await bake('firstBake');
-  result.chunks = bake1.chunks;
-  const summary1 = bake1.bake;
-  assert.deepEqual(
-    summary1.bakes.flatMap((b) => b.failed).sort(),
-    [...BAD_ENVELOPES].sort(),
-    'only the bad envelopes failed',
-  );
-  assert.equal(summary1.totals.added, good, JSON.stringify(summary1.totals));
-  assert.equal(summary1.totals.failed, BAD_ENVELOPES.length);
-  assert.equal(bake1.baseline, 'recorded');
-  assert.equal(bake1.undoIds.length, bake1.chunks, 'one host undo record per body');
+    // 3. The engine side: project, link, Sync, the site jig and its instance computed to the end.
+    const store = new Store(join(directory, 'workspace.sqlite')),
+      workspace = new Workspace(store),
+      jigStore = new JigStore(store),
+      links = new DocumentLinks(store),
+      project = store.createProject('대지 만들기 시험'),
+      dataDir = join(directory, 'data');
+    await mkdir(dataDir, { recursive: true });
+    const link = links.link(project.id, {
+      host: 'rhino',
+      name: 'synthetic-site.3dm',
+      path: source,
+      instance: target.instance,
+      documentId: target.documentId,
+    });
+    const display = await sdk.syncEditor(target, () => {});
+    soleDb(workspace.store)
+      .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
+      .run(
+        'sync-1',
+        project.id,
+        JSON.stringify({
+          id: 'sync-1',
+          body: 'Sync',
+          permission: 'review',
+          provider: 'claude-cli',
+          pins: [],
+          sketches: [],
+          files: [],
+          host: 'rhino',
+          source: 'document',
+          linkId: link.id,
+          sourceDocument: target,
+        }),
+        'succeeded',
+        JSON.stringify({ ...display, hostExecuted: true }),
+        new Date().toISOString(),
+      );
+    const jig = siteJig(directory);
+    const packed = await packJig(jig.dir, { dataDir, bundle: false, skipTests: true });
+    await importPack(packed.bytes, { store: jigStore, dataDir });
+    const execution = new Execution(workspace, { sdk });
+    engine = { execution, workspace, store };
+    let last;
+    const call = async (method, path, payload) => {
+      last = undefined;
+      const request = Object.assign(Readable.from([]), { method, headers: {} });
+      const handled = await jigRoutes(new URL(path, 'http://127.0.0.1'), request, {
+        workspace,
+        body: async () => payload ?? {},
+        send: (status, data) => (last = { status, data }),
+        dataDirectory: dataDir,
+        links,
+        sdk,
+        execution,
+      });
+      return handled ? last : { status: 0, data: undefined };
+    };
+    const base = `/api/v1/projects/${project.id}/jig-instances`;
+    const created = await call('POST', base, {
+      jig: 'project/site-bake-test',
+      version: '0.1.0',
+      title: '대지 만들기 시험 작업본',
+      layerRoot: ROOT,
+      params: [],
+    });
+    assert.equal(created.status, 200, JSON.stringify(created.data));
+    const iid = created.data.id;
+    const read = await call('POST', `${base}/${iid}/reads`, {
+      linkId: link.id,
+      layers: ['슬래브 외곽'],
+      purpose: 'assembly',
+    });
+    assert.equal(read.data.objectCount, 1, JSON.stringify(read.data));
+    await call('PUT', `${base}/${iid}/assembly/${encodeURIComponent('site.outline')}`, {
+      sources: [{ readId: read.data.readId, layers: ['슬래브 외곽'] }],
+      confirm: true,
+    });
+    const first = await call('POST', `${base}/${iid}/run`, { mode: 'geometry' });
+    await call('POST', `${base}/${iid}/steps/confirmInputs/confirm`, {
+      inputHash: first.data.steps[1].inputHash,
+    });
+    const computed = await call('POST', `${base}/${iid}/run`, { mode: 'geometry' });
+    assert.ok(
+      computed.data.steps.every((s) => ['done', 'confirmed'].includes(s.status)),
+      JSON.stringify(computed.data.steps.map((s) => [s.id, s.status, s.error])),
+    );
+    const site = computed.data.outputs.site;
+    const counts = {
+      buildings: site.buildings.length,
+      terrain: site.terrain.length,
+      envelopes: site.envelopes.length,
+    };
+    const good = counts.buildings + counts.terrain + counts.envelopes - BAD_ENVELOPES.length;
+    result.counts = counts;
+    assert.equal(counts.buildings, 300);
 
-  // 5. The document: Sync's display read carries every object with its attributes.
-  let started = performance.now();
-  const rows = (await sdk.readLayers(target, { includeHidden: true })).scene.filter(
-    (row) => attrsOf(row)['vide-run'] === summary1.runId,
-  );
-  result.readAfterBakeMs = ms(started);
-  assert.equal(rows.length, good);
-  const layerOf = (row) => decode(row.layer64);
-  const byKey = new Map(rows.map((row) => [attrsOf(row)['vide-key'], row]));
-  const sample = attrsOf(byKey.get('bldg:2'));
-  assert.equal(sample['vide-use'], site.buildings[2].use, 'Korean text with spaces survives');
-  assert.equal(sample['vide-height-source'], '대장');
-  assert.equal(sample['vide-floors'], '3');
-  assert.equal(sample['vide-source'], '합성 자료 (시험용, 2026-10-08)');
-  assert.equal(sample['vide-jig'], 'project/site-bake-test');
-  assert.equal(attrsOf(byKey.get('env:sloped'))['vide-envelope'], '최대 외피 (시험)');
-  assert.equal(attrsOf(byKey.get('terrain:1'))['vide-source'], '합성 등고선');
-  for (const key of BAD_ENVELOPES) assert.equal(byKey.has(key), false, `${key} was not made`);
-  assert.deepEqual(
-    Object.fromEntries(
-      Object.entries(LAYERS).map(([id, path]) => [
-        id,
-        rows.filter((row) => layerOf(row) === path).length,
-      ]),
-    ),
-    { buildings: 300, terrain: counts.terrain, envelopes: counts.envelopes - BAD_ENVELOPES.length },
-  );
-  assert.ok(
-    rows.filter((row) => layerOf(row) === LAYERS.terrain).every((row) => row.nativeType === 'Mesh'),
-  );
+    // The bodies the route will send, measured with the same functions (worker limit 65,536).
+    result.chunkSizes = Object.fromEntries(
+      jig.manifest.bake.map((decl) => {
+        const { items, problems } = extractItems(decl, site);
+        assert.deepEqual(problems, [], decl.id);
+        const chunks = renderChunks(
+          {
+            template: decl.template,
+            jigId: 'x',
+            instanceId: iid,
+            bakeId: decl.id,
+            runId: randomUUID(),
+            layerPath: `${ROOT}::${decl.layer}`,
+            deleteIds: [],
+          },
+          items,
+        );
+        return [
+          decl.id,
+          chunks.map((c) => ({ items: c.keys.length, chars: c.code.length, bytes: c.bytes })),
+        ];
+      }),
+    );
 
-  // 6. Solids, orientation and volumes measured in the attached Rhino.
-  const solids = rows.filter((row) => layerOf(row) !== LAYERS.terrain);
-  started = performance.now();
-  const measured = await action(
-    `out={}
+    const readAll = async () => readObjects(await sdk.readLayers(target, { includeHidden: true }));
+    const tagged = (objects, run) =>
+      [...objects.values()].filter(
+        (o) => o.tags['vide-instance'] === iid && (!run || o.tags['vide-run'] === run),
+      );
+    const records = async () => (await call('GET', `${base}/${iid}/bakes`)).data.bakes;
+    const before = await readAll();
+    const box = [...before.values()].find((o) => o.layer === '기타');
+    const bake = async (label) => {
+      const started = performance.now();
+      const made = await call('POST', `${base}/${iid}/bake`, { bake: BAKES });
+      assert.equal(made.status, 200, JSON.stringify(made.data).slice(0, 800));
+      assert.equal(made.data.status, 'applied');
+      result[`${label}Ms`] = ms(started);
+      return made.data;
+    };
+
+    // 4. First bake: everything good is made, the three bad envelopes come back in failed[].
+    const bake1 = await bake('firstBake');
+    result.chunks = bake1.chunks;
+    const summary1 = bake1.bake;
+    assert.deepEqual(
+      summary1.bakes.flatMap((b) => b.failed).sort(),
+      [...BAD_ENVELOPES].sort(),
+      'only the bad envelopes failed',
+    );
+    assert.equal(summary1.totals.added, good, JSON.stringify(summary1.totals));
+    assert.equal(summary1.totals.failed, BAD_ENVELOPES.length);
+    assert.equal(bake1.baseline, 'recorded');
+    assert.equal(bake1.undoIds.length, bake1.chunks, 'one host undo record per body');
+
+    // 5. The document: Sync's display read carries every object with its attributes.
+    let started = performance.now();
+    const rows = (await sdk.readLayers(target, { includeHidden: true })).scene.filter(
+      (row) => attrsOf(row)['vide-run'] === summary1.runId,
+    );
+    result.readAfterBakeMs = ms(started);
+    assert.equal(rows.length, good);
+    const layerOf = (row) => decode(row.layer64);
+    const byKey = new Map(rows.map((row) => [attrsOf(row)['vide-key'], row]));
+    const sample = attrsOf(byKey.get('bldg:2'));
+    assert.equal(sample['vide-use'], site.buildings[2].use, 'Korean text with spaces survives');
+    assert.equal(sample['vide-height-source'], '대장');
+    assert.equal(sample['vide-floors'], '3');
+    assert.equal(sample['vide-source'], '합성 자료 (시험용, 2026-10-08)');
+    assert.equal(sample['vide-jig'], 'project/site-bake-test');
+    assert.equal(attrsOf(byKey.get('env:sloped'))['vide-envelope'], '최대 외피 (시험)');
+    assert.equal(attrsOf(byKey.get('terrain:1'))['vide-source'], '합성 등고선');
+    for (const key of BAD_ENVELOPES) assert.equal(byKey.has(key), false, `${key} was not made`);
+    assert.deepEqual(
+      Object.fromEntries(
+        Object.entries(LAYERS).map(([id, path]) => [
+          id,
+          rows.filter((row) => layerOf(row) === path).length,
+        ]),
+      ),
+      {
+        buildings: 300,
+        terrain: counts.terrain,
+        envelopes: counts.envelopes - BAD_ENVELOPES.length,
+      },
+    );
+    assert.ok(
+      rows
+        .filter((row) => layerOf(row) === LAYERS.terrain)
+        .every((row) => row.nativeType === 'Mesh'),
+    );
+
+    // 6. Solids, orientation and volumes measured in the attached Rhino.
+    const solids = rows.filter((row) => layerOf(row) !== LAYERS.terrain);
+    started = performance.now();
+    const measured = await action(
+      `out={}
 for i in ${JSON.stringify(solids.map((row) => row.nativeId))}:
     b=doc.Objects.FindId(System.Guid(i)).Geometry
     m=Rhino.Geometry.VolumeMassProperties.Compute(b,True,False,False,False)
     out[i]=[b.IsSolid,b.IsValid,str(b.SolidOrientation),m.Volume if m else None,b.Faces.Count]
 result=out`,
-  );
-  result.measureMs = ms(started);
-  const expected = new Map([
-    ...site.buildings.map((b) => {
-      const rings = Array.isArray(b.outline[0][0]) ? b.outline : [b.outline];
-      const area = ringArea(rings[0]) - rings.slice(1).reduce((s, r) => s + ringArea(r), 0);
-      return [b.key, area * Math.fround(b.height)];
-    }),
-    ...site.envelopes.map((e) => [e.key, e.volume]),
-  ]);
-  let worst = 0;
-  for (const row of solids) {
-    const key = attrsOf(row)['vide-key'];
-    const [solid, valid, orientation, volume] = measured[row.nativeId];
-    assert.ok(solid && valid && orientation === 'Outward', `${key}: ${measured[row.nativeId]}`);
-    const relative = Math.abs(volume - expected.get(key)) / expected.get(key);
-    worst = Math.max(worst, relative);
-    assert.ok(relative <= 1e-5, `${key}: volume ${volume} vs ${expected.get(key)}`);
-  }
-  result.worstRelativeVolume = worst;
-  result.envelopeFaces = measured[byKey.get('env:sloped').nativeId][4];
-  assert.equal(
-    result.envelopeFaces,
-    site.envelopes[0].faces.length,
-    'no coplanar merge: one Brep face per engine face',
-  );
+    );
+    result.measureMs = ms(started);
+    const expected = new Map([
+      ...site.buildings.map((b) => {
+        const rings = Array.isArray(b.outline[0][0]) ? b.outline : [b.outline];
+        const area = ringArea(rings[0]) - rings.slice(1).reduce((s, r) => s + ringArea(r), 0);
+        return [b.key, area * Math.fround(b.height)];
+      }),
+      ...site.envelopes.map((e) => [e.key, e.volume]),
+    ]);
+    let worst = 0;
+    for (const row of solids) {
+      const key = attrsOf(row)['vide-key'];
+      const [solid, valid, orientation, volume] = measured[row.nativeId];
+      assert.ok(solid && valid && orientation === 'Outward', `${key}: ${measured[row.nativeId]}`);
+      const relative = Math.abs(volume - expected.get(key)) / expected.get(key);
+      worst = Math.max(worst, relative);
+      assert.ok(relative <= 1e-5, `${key}: volume ${volume} vs ${expected.get(key)}`);
+    }
+    result.worstRelativeVolume = worst;
+    result.envelopeFaces = measured[byKey.get('env:sloped').nativeId][4];
+    assert.equal(
+      result.envelopeFaces,
+      site.envelopes[0].faces.length,
+      'no coplanar merge: one Brep face per engine face',
+    );
 
-  // 7. Records name every made object; [되돌리기] removes the whole bake in one action.
-  const records1 = (await records()).filter((r) => r.runId === summary1.runId);
-  assert.equal(records1.length, BAKES.length);
-  assert.ok(records1.every((r) => r.appliedAt && r.undoable));
-  started = performance.now();
-  const undone = await call('POST', `${base}/${iid}/bakes/${records1[0].id}/undo`);
-  result.undoMs = ms(started);
-  assert.equal(undone.status, 200, JSON.stringify(undone.data));
-  const afterUndo = await readAll();
-  assert.equal(tagged(afterUndo).length, 0, 'every object of the bake is gone');
-  assert.equal(afterUndo.get(box.nativeId).hash, box.hash, 'other objects are untouched');
+    // 7. Records name every made object; [되돌리기] removes the whole bake in one action.
+    const records1 = (await records()).filter((r) => r.runId === summary1.runId);
+    assert.equal(records1.length, BAKES.length);
+    assert.ok(records1.every((r) => r.appliedAt && r.undoable));
+    started = performance.now();
+    const undone = await call('POST', `${base}/${iid}/bakes/${records1[0].id}/undo`);
+    result.undoMs = ms(started);
+    assert.equal(undone.status, 200, JSON.stringify(undone.data));
+    const afterUndo = await readAll();
+    assert.equal(tagged(afterUndo).length, 0, 'every object of the bake is gone');
+    assert.equal(afterUndo.get(box.nativeId).hash, box.hash, 'other objects are untouched');
 
-  // 8. Bake again, a person moves one building, and the next bake keeps it.
-  const bake2 = await bake('secondBake');
-  assert.equal(bake2.bake.totals.added, good);
-  const records2 = (await records()).filter((r) => r.runId === bake2.bake.runId);
-  const buildingsRecord = records2.find((r) => r.bakeId === 'buildings');
-  const movedKey = 'bldg:7',
-    movedId = buildingsRecord.items[movedKey].nativeId;
-  await action(
-    `obj=doc.Objects.FindId(System.Guid(${JSON.stringify(movedId)}))
+    // 8. Bake again, a person moves one building, and the next bake keeps it.
+    const bake2 = await bake('secondBake');
+    assert.equal(bake2.bake.totals.added, good);
+    const records2 = (await records()).filter((r) => r.runId === bake2.bake.runId);
+    const buildingsRecord = records2.find((r) => r.bakeId === 'buildings');
+    const movedKey = 'bldg:7',
+      movedId = buildingsRecord.items[movedKey].nativeId;
+    await action(
+      `obj=doc.Objects.FindId(System.Guid(${JSON.stringify(movedId)}))
 assert doc.Objects.Transform(obj, Rhino.Geometry.Transform.Translation(0,0,1.0), True)`,
-  );
-  const moved = await readAll();
-  const bake3 = await bake('thirdBake');
-  const plans = Object.fromEntries(bake3.plans.map((p) => [p.bakeId, p]));
-  assert.deepEqual(plans.buildings.preserved, [
-    { key: movedKey, nativeId: movedId, reason: 'edited' },
-  ]);
-  assert.equal(plans.buildings.replaced.length, 299);
-  assert.equal(plans.terrain.replaced.length, counts.terrain);
-  const after3 = await readAll();
-  assert.equal(after3.get(movedId).hash, moved.get(movedId).hash, 'the moved building is kept');
-  const perKey = new Map();
-  for (const o of tagged(after3))
-    perKey.set(o.tags['vide-key'], (perKey.get(o.tags['vide-key']) ?? 0) + 1);
-  assert.equal(perKey.size, good, 'every key once');
-  assert.ok(
-    [...perKey.values()].every((n) => n === 1),
-    'no duplicates',
-  );
-  assert.equal(after3.get(box.nativeId).hash, box.hash);
-  result.thirdBake = bake3.bake.totals;
+    );
+    const moved = await readAll();
+    const bake3 = await bake('thirdBake');
+    const plans = Object.fromEntries(bake3.plans.map((p) => [p.bakeId, p]));
+    assert.deepEqual(plans.buildings.preserved, [
+      { key: movedKey, nativeId: movedId, reason: 'edited' },
+    ]);
+    assert.equal(plans.buildings.replaced.length, 299);
+    assert.equal(plans.terrain.replaced.length, counts.terrain);
+    const after3 = await readAll();
+    assert.equal(after3.get(movedId).hash, moved.get(movedId).hash, 'the moved building is kept');
+    const perKey = new Map();
+    for (const o of tagged(after3))
+      perKey.set(o.tags['vide-key'], (perKey.get(o.tags['vide-key']) ?? 0) + 1);
+    assert.equal(perKey.size, good, 'every key once');
+    assert.ok(
+      [...perKey.values()].every((n) => n === 1),
+      'no duplicates',
+    );
+    assert.equal(after3.get(box.nativeId).hash, box.hash);
+    result.thirdBake = bake3.bake.totals;
 
-  result.passed = true;
-  await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
-  console.log(JSON.stringify(result));
-} finally {
-  // The engine first, then the Rhino processes this test launched; other Rhino windows are never
-  // touched.
-  try {
-    await engine?.execution.close();
-    if (engine) await closeJigRuntime(engine.workspace);
-    engine?.store.close();
-  } catch (error) {
-    console.error('engine close: ' + String(error));
+    result.passed = true;
+    await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
+    console.log(JSON.stringify(result));
+  } finally {
+    // The engine first, then the Rhino processes this test launched; other Rhino windows are never
+    // touched.
+    try {
+      await engine?.execution.close();
+      if (engine) await closeJigRuntime(engine.workspace);
+      engine?.store.close();
+    } catch (error) {
+      console.error('engine close: ' + String(error));
+    }
+    await worker?.stop();
+    await host?.stop();
+    if (process.env.VIDE_TEST_KEEP_REGISTRATION !== '1') {
+      reportRestore(await restoreInstalledPlugin());
+    }
   }
-  await worker?.stop();
-  await host?.stop();
-  if (process.env.VIDE_TEST_KEEP_REGISTRATION !== '1') {
-    reportRestore(await restoreInstalledPlugin());
-  }
-}
+});

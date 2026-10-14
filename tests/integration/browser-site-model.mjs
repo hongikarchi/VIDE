@@ -240,9 +240,35 @@ try {
   await freshPicker.locator('.site-target-list li').first().waitFor();
   await freshRail('confirmTarget', 'waiting').waitFor();
   const collectsBefore = fake.calls.length;
+  // T-295 (R5 R1-B): hold the fetch the confirmation starts — while it runs the rail says
+  // '수집 중…' (not '막힘 · … 가져오세요'), [가져오기] is greyed as '가져오는 중…', and a second
+  // press sends no second collect.
+  let release;
+  const held = new Promise((resolve) => (release = resolve));
+  let collectPosts = 0;
+  const collectRoute = /\/site-data\/[^/]+\/collect$/;
+  await page.route(collectRoute, async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    collectPosts += 1;
+    await held;
+    return route.continue();
+  });
   await freshPicker.getByRole('button', { name: '대상 필지 확정' }).click();
   await freshPicker.getByText('대상 필지를 확정했습니다.').waitFor();
+  const fetchingRow = freshRail('collect', 'running');
+  await fetchingRow.waitFor();
+  assert.match(await fetchingRow.locator('.kit-rail-meta').textContent(), /^수집 중…/);
+  assert.equal(await fetchingRow.locator('.kit-rail-why').count(), 0, 'no blocked reason');
+  assert.doesNotMatch(await fresh.locator('.kit-rail').textContent(), /막힘|가져오세요/);
+  const fetchButton = freshPicker.getByRole('button', { name: '가져오는 중…' });
+  assert.ok(await fetchButton.isDisabled(), 'the fetch button is greyed while it runs');
+  await fetchButton.click({ force: true }).catch(() => {});
+  await page.waitForTimeout(300);
+  assert.equal(collectPosts, 1, 'one collect while the first one runs');
+  release();
   await freshRail('collect', 'done').waitFor();
+  await page.unroute(collectRoute);
+  assert.equal(collectPosts, 1, 'no second collect after the first one ends');
   await freshRail('summary', 'done').waitFor();
   await freshRail('make', 'waiting').waitFor();
   assert.ok(fake.calls.length > collectsBefore, 'the first copy was fetched with the confirmation');
@@ -261,6 +287,7 @@ try {
       collected: true,
       offSwitch: true,
       continuesAfterConfirm: true,
+      fetchingNotBlocked: true,
       calls: fake.calls.length,
     }),
   );

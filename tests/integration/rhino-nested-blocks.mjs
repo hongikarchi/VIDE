@@ -29,6 +29,7 @@ import { MAX_EXPANDED_VALUES, MAX_READ_EXPANDED_VALUES } from '../../hosts/rhino
 import { SdkExecution } from '../../src/server/sdk-execution.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { runDirectory } from './run-directory.mjs';
+import { withInstalledPluginRestored } from './plugin-guard.mjs';
 
 const probe = sdkOptions('.');
 if (process.env.VIDE_TEST_RHINO_PLUGIN) probe.plugin = resolve(process.env.VIDE_TEST_RHINO_PLUGIN);
@@ -341,25 +342,26 @@ function checkHuge(model, label) {
 
 let worker, host;
 const result = { directory, heavy: HEAVY };
-try {
-  // 1. The synthetic document, made and read back by a hidden working copy (exportPage, JSON).
-  worker = await launchRhinoWorker({ ...options, directory: join(directory, 'create') });
-  const receipt = await worker.execute(randomUUID(), 0, build);
-  assert.equal(receipt.ok, true, JSON.stringify(receipt).slice(0, 800));
-  const exported = await worker.exportModel();
-  result.workerExport = checkBlocks(exported, 'export');
-  await worker.stop();
-  worker = undefined;
+await withInstalledPluginRestored(async () => {
+  try {
+    // 1. The synthetic document, made and read back by a hidden working copy (exportPage, JSON).
+    worker = await launchRhinoWorker({ ...options, directory: join(directory, 'create') });
+    const receipt = await worker.execute(randomUUID(), 0, build);
+    assert.equal(receipt.ok, true, JSON.stringify(receipt).slice(0, 800));
+    const exported = await worker.exportModel();
+    result.workerExport = checkBlocks(exported, 'export');
+    await worker.stop();
+    worker = undefined;
 
-  // 2. A copy open in a hidden Rhino this test launches, attached like the user's open document.
-  const attached = join(directory, 'attached');
-  await mkdir(attached);
-  const source = join(attached, 'nested.3dm');
-  await copyFile(receipt.filename, source);
-  const script = join(attached, 'fixture.py');
-  await writeFile(
-    script,
-    `import Rhino, System, json, os, traceback
+    // 2. A copy open in a hidden Rhino this test launches, attached like the user's open document.
+    const attached = join(directory, 'attached');
+    await mkdir(attached);
+    const source = join(attached, 'nested.3dm');
+    await copyFile(receipt.filename, source);
+    const script = join(attached, 'fixture.py');
+    await writeFile(
+      script,
+      `import Rhino, System, json, os, traceback
 folder=${JSON.stringify(attached.replaceAll('\\', '/'))}
 plugin=${JSON.stringify(options.plugin.replaceAll('\\', '/'))}
 source=${JSON.stringify(source.replaceAll('\\', '/'))}
@@ -376,145 +378,152 @@ try:
     report('ready',dict(ok=True,pid=System.Diagnostics.Process.GetCurrentProcess().Id,objects=int(doc.Objects.Count)))
 except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback.format_exc()))
 `,
-  );
-  host = await launchOwnedHost({
-    executable: options.executable,
-    environment: { ...process.env, VIDE_CONNECT_DIR: connectionDirectory },
-    visible: false,
-    spawnProcess: (f, a, o) => spawn(f, a, { ...o, windowsVerbatimArguments: true }),
-    args: [
-      '/nosplash',
-      '/notemplate',
-      '/scheme=VIDE-Worker-Test',
-      `/runscript="_-RunPythonScript (${script})"`,
-    ],
-  });
-  const ready = await wait(async () =>
-    JSON.parse(await readFile(join(attached, 'ready.json'), 'utf8')),
-  );
-  assert.equal(ready.ok, true, JSON.stringify(ready));
-  result.rhinoPid = ready.pid;
-  const sessions = new EditorSessions({ ...options, connectionDirectory });
-  const sdk = new SdkExecution({ ...options, connectionDirectory, tools: {}, origin: () => '' });
-  const catalog = await sessions.list(true);
-  const target = { instance: catalog.documents[0].instance, documentId: catalog.documents[0].id };
+    );
+    host = await launchOwnedHost({
+      executable: options.executable,
+      environment: { ...process.env, VIDE_CONNECT_DIR: connectionDirectory },
+      visible: false,
+      spawnProcess: (f, a, o) => spawn(f, a, { ...o, windowsVerbatimArguments: true }),
+      args: [
+        '/nosplash',
+        '/notemplate',
+        '/scheme=VIDE-Worker-Test',
+        `/runscript="_-RunPythonScript (${script})"`,
+      ],
+    });
+    const ready = await wait(async () =>
+      JSON.parse(await readFile(join(attached, 'ready.json'), 'utf8')),
+    );
+    assert.equal(ready.ok, true, JSON.stringify(ready));
+    result.rhinoPid = ready.pid;
+    const sessions = new EditorSessions({ ...options, connectionDirectory });
+    const sdk = new SdkExecution({ ...options, connectionDirectory, tools: {}, origin: () => '' });
+    const catalog = await sessions.list(true);
+    const target = { instance: catalog.documents[0].instance, documentId: catalog.documents[0].id };
 
-  // 3. The display Sync (VGT1, typed arrays, as stored).
-  const first = await sdk.syncEditor(target, () => {});
-  result.firstSync = checkBlocks(first, 'sync');
-  result.coverage = first.displayCoverage;
-  // Only the blocks too large to expand are not shown in full (marked, never boxes).
-  assert.equal(first.displayCoverage.omitted, HUGE_OUTERS, JSON.stringify(first.displayCoverage));
-  assert.deepEqual(first.displayCoverage.omittedTypes, {
-    'InstanceReference (중첩 블록 일부 생략)': HUGE_OUTERS,
-  });
-  result.review = checkReview(first, 'sync');
-  // Only the definitions the rows use are kept (nested ones are inside them).
-  const usedDefinitions = new Set(first.scene.map((row) => row.block?.definition));
-  assert.deepEqual(
-    Object.keys(first.definitions).filter((id) => !usedDefinitions.has(id)),
-    [],
-  );
-  result.definitions = Object.keys(first.definitions).length;
-  result.reviewExport = checkReview(exported, 'export', { huge: false });
-  const rows = rowsByName(first);
-  const heavy = first.definitions[rows.get('case6-heavy-nested').block.definition];
-  const single = first.definitions[rows.get('case6d-heavy-inner').block.definition];
-  // Every one of the 64 nested copies is there; both instances of it share the definition.
-  assert.equal(len(heavy.vertices), len(single.vertices) * HEAVY * HEAVY);
-  assert.equal(len(heavy.indices), len(single.indices) * HEAVY * HEAVY);
-  assert.equal(
-    rows.get('case6c-heavy-nested-again').block.definition,
-    rows.get('case6-heavy-nested').block.definition,
-  );
-  // The working copy's export expands to the same geometry as the display Sync.
-  for (const name of Object.keys(result.firstSync))
-    for (const key of ['vertices', 'triangles', 'segments', 'texts'])
-      assert.equal(result.workerExport[name][key], result.firstSync[name][key], `${name} ${key}`);
+    // 3. The display Sync (VGT1, typed arrays, as stored).
+    const first = await sdk.syncEditor(target, () => {});
+    result.firstSync = checkBlocks(first, 'sync');
+    result.coverage = first.displayCoverage;
+    // Only the blocks too large to expand are not shown in full (marked, never boxes).
+    assert.equal(first.displayCoverage.omitted, HUGE_OUTERS, JSON.stringify(first.displayCoverage));
+    assert.deepEqual(first.displayCoverage.omittedTypes, {
+      'InstanceReference (중첩 블록 일부 생략)': HUGE_OUTERS,
+    });
+    result.review = checkReview(first, 'sync');
+    // Only the definitions the rows use are kept (nested ones are inside them).
+    const usedDefinitions = new Set(first.scene.map((row) => row.block?.definition));
+    assert.deepEqual(
+      Object.keys(first.definitions).filter((id) => !usedDefinitions.has(id)),
+      [],
+    );
+    result.definitions = Object.keys(first.definitions).length;
+    result.reviewExport = checkReview(exported, 'export', { huge: false });
+    const rows = rowsByName(first);
+    const heavy = first.definitions[rows.get('case6-heavy-nested').block.definition];
+    const single = first.definitions[rows.get('case6d-heavy-inner').block.definition];
+    // Every one of the 64 nested copies is there; both instances of it share the definition.
+    assert.equal(len(heavy.vertices), len(single.vertices) * HEAVY * HEAVY);
+    assert.equal(len(heavy.indices), len(single.indices) * HEAVY * HEAVY);
+    assert.equal(
+      rows.get('case6c-heavy-nested-again').block.definition,
+      rows.get('case6-heavy-nested').block.definition,
+    );
+    // The working copy's export expands to the same geometry as the display Sync.
+    for (const name of Object.keys(result.firstSync))
+      for (const key of ['vertices', 'triangles', 'segments', 'texts'])
+        assert.equal(result.workerExport[name][key], result.firstSync[name][key], `${name} ${key}`);
 
-  // 4. Edit the nested definition: the Live change page and a new Sync carry the new geometry.
-  const before = await sessions.inspect(target);
-  const edit = await sessions.directExecute(target, {
-    requestId: randomUUID(),
-    code: editInner,
-    label: 'nested edit',
-  });
-  assert.equal(edit.ok, true, JSON.stringify(edit).slice(0, 400));
-  const changes = await sessions.changes(target, before.revision ?? 0);
-  const changed = rowsByName(changes).get('case5-edit-inner-after-sync');
-  assert.ok(changed, 'the outer instance is reported changed');
-  // Only the blocks that nest the edited definition are sent again (not every block).
-  result.liveChangedRows = changes.scene.map(nameOf).sort();
-  assert.deepEqual(result.liveChangedRows, ['case5-edit-inner-after-sync']);
-  // Rhino keeps reporting part of the instance's earlier bounding box after a definition edit
-  // (seen on Rhino 8: min x stays at the old box), so the edited block is checked against where its
-  // new geometry must be: the sphere (centre 0.5, radius 0.8) and the 3 m line, at x 0 and x 2,
-  // placed at (20, 40, 0).
-  const expected = { min: [19.7, 39.7, -0.3], max: [23.3, 41.3, 3] };
-  const editedBounds = (model, row) =>
-    placedBounds(model.definitions[row.block.definition], row.block.transform);
-  result.liveChanges = checkBlocks({ ...changes, scene: [changed] }, 'live', { bounds: false })[
-    'case5-edit-inner-after-sync'
-  ];
-  const second = await sdk.syncEditor(target, () => {});
-  const secondRow = rowsByName(second).get('case5-edit-inner-after-sync');
-  result.secondSync = checkBlocks({ ...second, scene: [secondRow] }, 'second sync', {
-    bounds: false,
-  })['case5-edit-inner-after-sync'];
-  for (const [label, bounds] of [
-    ['live', editedBounds(changes, changed)],
-    ['second sync', editedBounds(second, secondRow)],
-  ])
-    for (let k = 0; k < 3; k++)
-      assert.ok(
-        Math.abs(bounds.min[k] - expected.min[k]) < 0.02 &&
-          Math.abs(bounds.max[k] - expected.max[k]) < 0.02,
-        `${label} edited block axis ${k}: [${bounds.min[k]}, ${bounds.max[k]}]`,
-      );
-  // The rest of the document is unchanged and still checks against Rhino's boxes.
-  checkBlocks({ ...second, scene: second.scene.filter((row) => row !== secondRow) }, 'second sync');
-  const firstEdit = result.firstSync['case5-edit-inner-after-sync'];
-  assert.notEqual(result.liveChanges.hash, firstEdit.hash);
-  assert.ok(result.liveChanges.vertices > firstEdit.vertices * 10);
-  assert.deepEqual(result.secondSync, result.liveChanges);
+    // 4. Edit the nested definition: the Live change page and a new Sync carry the new geometry.
+    const before = await sessions.inspect(target);
+    const edit = await sessions.directExecute(target, {
+      requestId: randomUUID(),
+      code: editInner,
+      label: 'nested edit',
+    });
+    assert.equal(edit.ok, true, JSON.stringify(edit).slice(0, 400));
+    const changes = await sessions.changes(target, before.revision ?? 0);
+    const changed = rowsByName(changes).get('case5-edit-inner-after-sync');
+    assert.ok(changed, 'the outer instance is reported changed');
+    // Only the blocks that nest the edited definition are sent again (not every block).
+    result.liveChangedRows = changes.scene.map(nameOf).sort();
+    assert.deepEqual(result.liveChangedRows, ['case5-edit-inner-after-sync']);
+    // Rhino keeps reporting part of the instance's earlier bounding box after a definition edit
+    // (seen on Rhino 8: min x stays at the old box), so the edited block is checked against where its
+    // new geometry must be: the sphere (centre 0.5, radius 0.8) and the 3 m line, at x 0 and x 2,
+    // placed at (20, 40, 0).
+    const expected = { min: [19.7, 39.7, -0.3], max: [23.3, 41.3, 3] };
+    const editedBounds = (model, row) =>
+      placedBounds(model.definitions[row.block.definition], row.block.transform);
+    result.liveChanges = checkBlocks({ ...changes, scene: [changed] }, 'live', { bounds: false })[
+      'case5-edit-inner-after-sync'
+    ];
+    const second = await sdk.syncEditor(target, () => {});
+    const secondRow = rowsByName(second).get('case5-edit-inner-after-sync');
+    result.secondSync = checkBlocks({ ...second, scene: [secondRow] }, 'second sync', {
+      bounds: false,
+    })['case5-edit-inner-after-sync'];
+    for (const [label, bounds] of [
+      ['live', editedBounds(changes, changed)],
+      ['second sync', editedBounds(second, secondRow)],
+    ])
+      for (let k = 0; k < 3; k++)
+        assert.ok(
+          Math.abs(bounds.min[k] - expected.min[k]) < 0.02 &&
+            Math.abs(bounds.max[k] - expected.max[k]) < 0.02,
+          `${label} edited block axis ${k}: [${bounds.min[k]}, ${bounds.max[k]}]`,
+        );
+    // The rest of the document is unchanged and still checks against Rhino's boxes.
+    checkBlocks(
+      { ...second, scene: second.scene.filter((row) => row !== secondRow) },
+      'second sync',
+    );
+    const firstEdit = result.firstSync['case5-edit-inner-after-sync'];
+    assert.notEqual(result.liveChanges.hash, firstEdit.hash);
+    assert.ok(result.liveChanges.vertices > firstEdit.vertices * 10);
+    assert.deepEqual(result.secondSync, result.liveChanges);
 
-  // 5. A Live read of the blocks too large to expand: moved, read again, capped and marked.
-  const heapBefore = process.memoryUsage().heapUsed;
-  const moved = await sessions.inspect(target);
-  const move = await sessions.directExecute(target, {
-    requestId: randomUUID(),
-    code: `foreach (var o in new System.Collections.Generic.List<Rhino.DocObjects.RhinoObject>(doc.Objects)) if (o.Name != null && o.Name.StartsWith("x-huge-")) doc.Objects.Transform(o, Transform.Translation(0, 0, 1), true);
+    // 5. A Live read of the blocks too large to expand: moved, read again, capped and marked.
+    const heapBefore = process.memoryUsage().heapUsed;
+    const moved = await sessions.inspect(target);
+    const move = await sessions.directExecute(target, {
+      requestId: randomUUID(),
+      code: `foreach (var o in new System.Collections.Generic.List<Rhino.DocObjects.RhinoObject>(doc.Objects)) if (o.Name != null && o.Name.StartsWith("x-huge-")) doc.Objects.Transform(o, Transform.Translation(0, 0, 1), true);
 output.Append("ok");`,
-    label: 'move huge',
-  });
-  assert.equal(move.ok, true, JSON.stringify(move).slice(0, 400));
-  const hugeChanges = await sessions.changes(target, moved.revision ?? 0);
-  const hugeRows = hugeChanges.scene.filter((row) => nameOf(row).startsWith('x-huge-'));
-  assert.equal(hugeRows.length, HUGE_OUTERS);
-  result.liveHuge = checkHuge(hugeChanges, 'live');
-  // The Live read keeps plain arrays (about 50 bytes a value at its peak): it expands half of what a
-  // typed read may, and the engine's heap grows by about 1 GB at most (it used to run out of 4 GB).
-  result.liveHeapGrowthMB = Math.round((process.memoryUsage().heapUsed - heapBefore) / 2 ** 20);
-  assert.ok(result.liveHeapGrowthMB < 1600, `Live read heap growth ${result.liveHeapGrowthMB} MB`);
+      label: 'move huge',
+    });
+    assert.equal(move.ok, true, JSON.stringify(move).slice(0, 400));
+    const hugeChanges = await sessions.changes(target, moved.revision ?? 0);
+    const hugeRows = hugeChanges.scene.filter((row) => nameOf(row).startsWith('x-huge-'));
+    assert.equal(hugeRows.length, HUGE_OUTERS);
+    result.liveHuge = checkHuge(hugeChanges, 'live');
+    // The Live read keeps plain arrays (about 50 bytes a value at its peak): it expands half of what a
+    // typed read may, and the engine's heap grows by about 1 GB at most (it used to run out of 4 GB).
+    result.liveHeapGrowthMB = Math.round((process.memoryUsage().heapUsed - heapBefore) / 2 ** 20);
+    assert.ok(
+      result.liveHeapGrowthMB < 1600,
+      `Live read heap growth ${result.liveHeapGrowthMB} MB`,
+    );
 
-  // 6. Dimension text inside a block turned 180° reads left to right after a Sync.
-  const dim = await sessions.directExecute(target, {
-    requestId: randomUUID(),
-    code: dimensions,
-    label: 'dimensions',
-  });
-  assert.equal(dim.ok, true, JSON.stringify(dim).slice(0, 400));
-  const third = await sdk.syncEditor(target, () => {});
-  result.thirdSync = checkReview(third, 'third sync');
+    // 6. Dimension text inside a block turned 180° reads left to right after a Sync.
+    const dim = await sessions.directExecute(target, {
+      requestId: randomUUID(),
+      code: dimensions,
+      label: 'dimensions',
+    });
+    assert.equal(dim.ok, true, JSON.stringify(dim).slice(0, 400));
+    const third = await sdk.syncEditor(target, () => {});
+    result.thirdSync = checkReview(third, 'third sync');
 
-  result.passed = true;
-  await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
-  console.log(JSON.stringify(result, null, 2));
-} finally {
-  await worker?.stop();
-  await host?.stop();
-  if (process.env.VIDE_TEST_KEEP_REGISTRATION !== '1') {
-    const restored = await restoreInstalledPlugin();
-    console.log('installed plugin registration: ' + JSON.stringify(restored));
+    result.passed = true;
+    await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
+    console.log(JSON.stringify(result, null, 2));
+  } finally {
+    await worker?.stop();
+    await host?.stop();
+    if (process.env.VIDE_TEST_KEEP_REGISTRATION !== '1') {
+      const restored = await restoreInstalledPlugin();
+      console.log('installed plugin registration: ' + JSON.stringify(restored));
+    }
   }
-}
+});

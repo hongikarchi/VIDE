@@ -2550,7 +2550,9 @@ export async function startServer({
           },
           // An input question card's answer sets the role at once (SPEC-07.18 9.4, T-293).
           applyInput: async (projectId, conversation, asked) => {
-            const sources = conversationSources(workspace, conversation);
+            const sources = conversationSources(workspace, conversation, {
+              openLinks: () => execution.openLinkIds(projectId),
+            });
             if (!sources.jigs) throw new DomainError('EXECUTOR_NOT_READY');
             return assignJigInput(
               jigInputDeps(sources, sources.jigs),

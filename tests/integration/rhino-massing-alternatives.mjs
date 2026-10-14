@@ -18,6 +18,7 @@ import { renderChunks } from '../../src/jigs/bake/templates.ts';
 import { regionsArea } from '../../src/jigs/official/massing-kit/index.ts';
 import { SITES, override, row, runMass } from '../fixtures/massing-sites.mjs';
 import { runDirectory } from './run-directory.mjs';
+import { withInstalledPluginRestored } from './plugin-guard.mjs';
 
 const probe = sdkOptions('.');
 if (process.env.VIDE_TEST_RHINO_PLUGIN) probe.plugin = resolve(process.env.VIDE_TEST_RHINO_PLUGIN);
@@ -153,87 +154,93 @@ const bake = async (decl, items, layerPath) => {
   return made;
 };
 const result = { directory, sites: [] };
-try {
-  worker = await launchRhinoWorker({ ...options, directory: join(directory, 'bake') });
-  for (const c of CASES) {
-    const out = await runMass(c.site, PARAMS, c.overrides, c.drawn);
-    const alts = out.steps.alternatives;
-    // The expected engine volume of each item: its region's area × the floor height.
-    const masses = extractItems(declOf('alternativeMasses'), out.steps.useMix);
-    assert.deepEqual(masses.problems, [], c.site.id);
-    const parking = extractItems(declOf('parkingMasses'), out.steps.parking);
-    assert.deepEqual(parking.problems, [], c.site.id);
-    const curves = extractItems(declOf('groundZones'), out.steps.parking);
-    assert.deepEqual(curves.problems, [], c.site.id);
-    const solids = [...masses.items, ...parking.items];
-    const expected = new Map(
-      solids.map((i) => {
-        const area = regionsArea([
-          {
-            outer: i.rings[0].map((p) => [p[0], p[1]]),
-            holes: i.rings.slice(1).map((h) => h.map((p) => [p[0], p[1]])),
-          },
-        ]);
-        return [
-          i.key,
-          { volume: area * i.height, bottom: i.rings[0][0][2], top: i.rings[0][0][2] + i.height },
-        ];
-      }),
-    );
-    const started = performance.now();
-    const madeMass = await bake(
-      declOf('alternativeMasses'),
-      masses.items,
-      `VIDE::대안 시험::${c.site.id}`,
-    );
-    const madePark = await bake(
-      declOf('parkingMasses'),
-      parking.items,
-      `VIDE::주차 시험::${c.site.id}`,
-    );
-    const madeCurves = await bake(
-      declOf('groundZones'),
-      curves.items,
-      `VIDE::공지 시험::${c.site.id}`,
-    );
-    const bakeMs = Math.round(performance.now() - started);
-    assert.deepEqual([...madeMass.failed, ...madePark.failed, ...madeCurves.failed], [], c.site.id);
-    assert.equal(madeCurves.keys.length, curves.items.length);
-    const ids = [...madeMass.ids, ...madePark.ids];
-    const keys = [...madeMass.keys, ...madePark.keys];
-    const measured = await execute(measure(ids));
-    assert.equal(measured.ok, true, JSON.stringify(measured).slice(0, 600));
-    let worst = 0;
-    measured.value.forEach((r, k) => {
-      const e = expected.get(keys[k]);
-      assert.ok(
-        r.solid && r.valid && r.orientation === 'Outward',
-        `${c.site.id} ${keys[k]}: ${JSON.stringify(r)}`,
+await withInstalledPluginRestored(async () => {
+  try {
+    worker = await launchRhinoWorker({ ...options, directory: join(directory, 'bake') });
+    for (const c of CASES) {
+      const out = await runMass(c.site, PARAMS, c.overrides, c.drawn);
+      const alts = out.steps.alternatives;
+      // The expected engine volume of each item: its region's area × the floor height.
+      const masses = extractItems(declOf('alternativeMasses'), out.steps.useMix);
+      assert.deepEqual(masses.problems, [], c.site.id);
+      const parking = extractItems(declOf('parkingMasses'), out.steps.parking);
+      assert.deepEqual(parking.problems, [], c.site.id);
+      const curves = extractItems(declOf('groundZones'), out.steps.parking);
+      assert.deepEqual(curves.problems, [], c.site.id);
+      const solids = [...masses.items, ...parking.items];
+      const expected = new Map(
+        solids.map((i) => {
+          const area = regionsArea([
+            {
+              outer: i.rings[0].map((p) => [p[0], p[1]]),
+              holes: i.rings.slice(1).map((h) => h.map((p) => [p[0], p[1]])),
+            },
+          ]);
+          return [
+            i.key,
+            { volume: area * i.height, bottom: i.rings[0][0][2], top: i.rings[0][0][2] + i.height },
+          ];
+        }),
       );
-      const rel = Math.abs(r.volume - e.volume) / e.volume;
-      worst = Math.max(worst, rel);
-      assert.ok(rel <= 1e-6, `${c.site.id} ${keys[k]}: ${r.volume} vs ${e.volume}`);
-      assert.ok(
-        Math.abs(r.zmin - e.bottom) <= 1e-5 && Math.abs(r.zmax - e.top) <= 1e-5,
-        `${keys[k]} levels`,
+      const started = performance.now();
+      const madeMass = await bake(
+        declOf('alternativeMasses'),
+        masses.items,
+        `VIDE::대안 시험::${c.site.id}`,
       );
-    });
-    const summary = {
-      id: c.site.id,
-      alternatives: alts.rows.map((r) => `${r.id} ${r.floorsAbove}F ${r.farArea}`),
-      masses: madeMass.keys.length,
-      parking: madePark.keys.length,
-      curves: madeCurves.keys.length,
-      worst,
-      bakeMs,
-    };
-    result.sites.push(summary);
-    console.log(
-      `${c.site.id.padEnd(10)} ${alts.rows.length} alternatives, ${summary.masses} floor masses + ${summary.parking} basement estimates solid/outward, ${summary.curves} curves, worst relative volume ${worst.toExponential(2)}, ${bakeMs} ms`,
-    );
+      const madePark = await bake(
+        declOf('parkingMasses'),
+        parking.items,
+        `VIDE::주차 시험::${c.site.id}`,
+      );
+      const madeCurves = await bake(
+        declOf('groundZones'),
+        curves.items,
+        `VIDE::공지 시험::${c.site.id}`,
+      );
+      const bakeMs = Math.round(performance.now() - started);
+      assert.deepEqual(
+        [...madeMass.failed, ...madePark.failed, ...madeCurves.failed],
+        [],
+        c.site.id,
+      );
+      assert.equal(madeCurves.keys.length, curves.items.length);
+      const ids = [...madeMass.ids, ...madePark.ids];
+      const keys = [...madeMass.keys, ...madePark.keys];
+      const measured = await execute(measure(ids));
+      assert.equal(measured.ok, true, JSON.stringify(measured).slice(0, 600));
+      let worst = 0;
+      measured.value.forEach((r, k) => {
+        const e = expected.get(keys[k]);
+        assert.ok(
+          r.solid && r.valid && r.orientation === 'Outward',
+          `${c.site.id} ${keys[k]}: ${JSON.stringify(r)}`,
+        );
+        const rel = Math.abs(r.volume - e.volume) / e.volume;
+        worst = Math.max(worst, rel);
+        assert.ok(rel <= 1e-6, `${c.site.id} ${keys[k]}: ${r.volume} vs ${e.volume}`);
+        assert.ok(
+          Math.abs(r.zmin - e.bottom) <= 1e-5 && Math.abs(r.zmax - e.top) <= 1e-5,
+          `${keys[k]} levels`,
+        );
+      });
+      const summary = {
+        id: c.site.id,
+        alternatives: alts.rows.map((r) => `${r.id} ${r.floorsAbove}F ${r.farArea}`),
+        masses: madeMass.keys.length,
+        parking: madePark.keys.length,
+        curves: madeCurves.keys.length,
+        worst,
+        bakeMs,
+      };
+      result.sites.push(summary);
+      console.log(
+        `${c.site.id.padEnd(10)} ${alts.rows.length} alternatives, ${summary.masses} floor masses + ${summary.parking} basement estimates solid/outward, ${summary.curves} curves, worst relative volume ${worst.toExponential(2)}, ${bakeMs} ms`,
+      );
+    }
+    result.passed = true;
+    await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
+  } finally {
+    await worker?.stop();
   }
-  result.passed = true;
-  await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
-} finally {
-  await worker?.stop();
-}
+});

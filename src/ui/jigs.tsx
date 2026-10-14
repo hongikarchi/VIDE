@@ -1,4 +1,12 @@
-import { memo, useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from 'react';
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+} from 'react';
 import { createRoot } from 'react-dom/client';
 import { layerOptions } from '../core/layer-tree.ts';
 import { z } from 'zod';
@@ -197,6 +205,12 @@ export interface SyncSource {
   id: string;
   host: 'rhino' | 'zwcad';
   label: string;
+  /** The linked file this Sync belongs to, whether it is that file's latest and the file closed (SPEC-07.5 7). */
+  linkId?: string;
+  latest?: boolean;
+  closed?: boolean;
+  /** When the Sync was made (ISO). */
+  at?: string;
 }
 /** What a jig frames: objects of a Sync, a box in metres, or an overlay layer or item. */
 export type JigFocus =
@@ -228,7 +242,12 @@ export interface JigContext {
   focus: (target: JigFocus) => void;
   /** Overlay items clicked in the viewport (e.g. to move to the table row); returns unsubscribe. */
   onOverlayPick?: (listener: (hit: { key: string; itemId: string }) => void) => () => void;
-  /** Send a request made by a jig (AI review or edits) into the conversation. */
+  /**
+   * Send a request made by a jig (AI review or edits) into the chosen conversation, shown there as
+   * a progress row like any request (SPEC-05.8 2, T-299). With `single`, while a request of the
+   * same jig kind is still queued or running no new one starts: that request is shown instead
+   * (`existing`). `done` settles when the request leaves queued/running.
+   */
   send: (input: {
     body: string;
     files: { name: string; text: string }[];
@@ -236,7 +255,18 @@ export interface JigContext {
     host?: 'rhino' | 'zwcad';
     baseRequestId?: string;
     jig: Record<string, unknown>;
-  }) => Promise<void>;
+    single?: boolean;
+  }) => Promise<JigSent | void>;
+  /** The still running request a jig of this kind sent (e.g. 'sync-review'), e.g. after reopening. */
+  running?: (kind: string) => JigSent | undefined;
+  /** Show a request in the conversation (its tab chosen, its row in view). */
+  focusRequest?: (requestId: string) => void;
+}
+/** A jig's request in the conversation. */
+export interface JigSent {
+  id: string;
+  existing?: boolean;
+  done: Promise<void>;
 }
 
 // A jig instance (작업본) as the engine shows it (ARCH-03 §4·§7), read for the jig screens.
@@ -563,6 +593,8 @@ function tabContext(jig: OpenJig): JigContext {
       return () => dialog.removeEventListener('overlaypick', handle);
     },
     send: (input) => now().send(input),
+    running: (kind) => now().running?.(kind),
+    focusRequest: (id) => now().focusRequest?.(id),
   };
 }
 
@@ -1287,6 +1319,29 @@ function SyncJig({ context }: { context: JigContext }) {
   const [notice, setNotice] = useState('');
   /** The last "CAD를 Rhino에 맞춤" apply on the open drawing, for [되돌리기] (T-233). */
   const [applied, setApplied] = useState<string>();
+  /**
+   * The [AI 검토] request still running (SPEC-05.8 2, T-299): the button reads '검토 중…' and a
+   * press shows that request in the conversation instead of starting another. A reopened jig picks
+   * up the one still running; the ref also catches a second press before the screen redraws.
+   */
+  const [reviewing, setReviewing] = useState<string | undefined>(
+    () => context.running?.('sync-review')?.id,
+  );
+  const reviewRef = useRef<string | true | undefined>(reviewing);
+  const watchReview = (sent: JigSent) => {
+    reviewRef.current = sent.id;
+    setReviewing(sent.id);
+    void sent.done.finally(() => {
+      if (reviewRef.current !== sent.id) return;
+      reviewRef.current = undefined;
+      setReviewing(undefined);
+    });
+  };
+  useEffect(() => {
+    const sent = context.running?.('sync-review');
+    if (sent) watchReview(sent);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const run = async (extra: Record<string, unknown> = {}) => {
     if (!rhino || !cad) return;
     setBusy(true);
@@ -1475,16 +1530,32 @@ function SyncJig({ context }: { context: JigContext }) {
       setNotice(`고른 행이 모두 솔리드 단면이라 반영하지 않습니다.${skippedNote}`);
       return;
     }
+    if (kind === 'review' && reviewRef.current) {
+      // Pressed again while the review runs: show it, start nothing (T-299).
+      if (typeof reviewRef.current === 'string') context.focusRequest?.(reviewRef.current);
+      setNotice('AI 검토가 진행 중입니다. 오른쪽 대화에서 진행을 확인하세요.');
+      return;
+    }
+    if (kind === 'review') reviewRef.current = true;
     setBusy(true);
     try {
-      if (kind === 'review')
-        await context.send({
+      if (kind === 'review') {
+        const sent = await context.send({
           body: '동기화 jig 결과(첨부 sync-jig.json)를 검토해 줘. 위치 관계가 믿을 만한지, 레이어 대응이 맞는지, 오차·한쪽에만 있는 행이 실제 불일치인지 의도된 표현(중심선/외곽선, 층 높이, 도면 표기 관례 등)인지 판정하고, 어느 쪽을 고쳐야 할지 행 번호(R숫자)와 표의 수치만 인용해서 정리해 줘. 표에 없는 수치나 행은 만들지 마.',
           files: [{ name: 'sync-jig.json', text: table() }],
           permission: 'review',
           jig: { kind: 'sync-review', rows: result.rows.map((row) => row.id) },
+          single: true,
         });
-      else if (kind === 'cad') {
+        if (sent) watchReview(sent);
+        else reviewRef.current = undefined;
+        setNotice(
+          sent?.existing
+            ? 'AI 검토가 진행 중입니다. 오른쪽 대화에서 진행을 확인하세요.'
+            : 'AI 검토를 대화에 보냈습니다. 진행과 결과는 오른쪽 대화에서 보입니다.',
+        );
+        return;
+      } else if (kind === 'cad') {
         setNotice((await applyCad()) + skippedNote);
         return;
       }
@@ -1499,12 +1570,9 @@ function SyncJig({ context }: { context: JigContext }) {
           baseRequestId: rhino,
           jig: { kind: 'sync-apply', side: 'rhino' },
         });
-      setNotice(
-        kind === 'review'
-          ? 'AI 검토를 대화에 보냈습니다.'
-          : '반영 요청을 대화에 보냈습니다. 결과는 오른쪽 대화에서 확인하세요.' + skippedNote,
-      );
+      setNotice('반영 요청을 대화에 보냈습니다. 결과는 오른쪽 대화에서 확인하세요.' + skippedNote);
     } catch (error) {
+      if (kind === 'review' && reviewRef.current === true) reviewRef.current = undefined;
       console.error(error);
       setNotice((error instanceof Error && error.message) || '보내지 못했습니다.');
     } finally {
@@ -1789,8 +1857,17 @@ function SyncJig({ context }: { context: JigContext }) {
             ) : null}
           </div>
           <div className="jig-actions">
-            <button type="button" disabled={busy} onClick={() => void send('review')}>
-              AI 검토 (차이의 의미 판정)
+            <button
+              type="button"
+              className={reviewing ? 'is-busy' : undefined}
+              disabled={busy && !reviewing}
+              aria-disabled={reviewing ? true : undefined}
+              aria-busy={reviewing ? true : undefined}
+              data-review-request={reviewing}
+              title={reviewing ? '진행 중인 AI 검토를 대화에서 봅니다' : undefined}
+              onClick={() => void send('review')}
+            >
+              {reviewing ? '검토 중…' : 'AI 검토 (차이의 의미 판정)'}
             </button>
             <button type="button" disabled={busy || !picks.length} onClick={() => void send('cad')}>
               선택 {chosen.length}개 · CAD를 Rhino에 맞춤
@@ -2132,7 +2209,12 @@ export function refreshJigs() {
   if (!mounted.size) return;
   const context = current();
   if (!context) return;
-  const key = context.sources.map((source) => `${source.id}|${source.label}`).join('\n');
+  // A file closing or opening changes where role inputs read from (SPEC-07.5 7).
+  const key = context.sources
+    .map(
+      (source) => `${source.id}|${source.label}|${source.latest ? 1 : 0}${source.closed ? 1 : 0}`,
+    )
+    .join('\n');
   if (key === sourcesKey) return;
   sourcesKey = key;
   generation++;

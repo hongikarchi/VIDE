@@ -50,7 +50,14 @@ import { JigSource } from './source-parts.tsx';
 import { CompliancePart } from '../compliance/panel-part.tsx';
 import { PanelingPart } from '../paneling/panel-part.tsx';
 import { useInstance, type InstanceView, type StepReport } from './instance.ts';
+import { railStep } from './rail.ts';
 import { InstanceReportPart, renderReportPart } from './report-parts.tsx';
+import {
+  CLOSED_SOURCE_NOTE,
+  fromClosedLink,
+  roleSyncs,
+  type RoleSyncSource,
+} from './role-sources.ts';
 import { scopeOf, validatePanel, type PanelAction } from './spec.ts';
 
 // The declarative jig screen (SPEC-07.10, ARCH-03 §5.1, Design SCR-13): a checked `panel.json`
@@ -69,8 +76,11 @@ export interface PanelHost {
   clearTint?: () => void;
   onOverlayPick?: (listener: (hit: { key: string; itemId: string }) => void) => () => void;
   overlayStyle?: (key: string, style: { visible?: boolean; opacity?: number }) => void;
-  /** The project's Syncs; jig input reads come from them. */
-  sources?: readonly { id: string; host: string }[];
+  /**
+   * The project's Syncs; jig input reads come from them (each open file's latest first, a closed
+   * file's only for a layer the open ones lack, SPEC-07.5 7).
+   */
+  sources?: readonly (RoleSyncSource & { host: string })[];
   /** Layer paths in the linked documents' Syncs. */
   layers?: readonly string[];
   /**
@@ -97,18 +107,6 @@ const glob = (pattern: string) =>
     'i',
   );
 
-const BY: Record<string, string> = {
-  code: '계산',
-  library: '라이브러리',
-  ai: 'AI',
-  human: '사람',
-  host: 'CAD 프로그램',
-};
-const ERRORS: Record<string, string> = {
-  BUDGET: '계산 시간 상한을 넘었습니다.',
-  SCHEMA: '결과가 도구 설명의 형식과 다릅니다.',
-  AI_UNAVAILABLE: 'AI 단계는 아직 실행되지 않습니다.',
-};
 const CONTROL: Partial<Record<PartUse['part'], SettingControl>> = {
   slider: 'slider',
   stepper: 'stepper',
@@ -140,59 +138,6 @@ export function kpiNote(note: string | undefined, preview: boolean): string | un
     .filter((part) => part && part !== PREVIEW);
   const parts = preview ? [PREVIEW, ...rest] : rest;
   return parts.length ? parts.join(' · ') : undefined;
-}
-
-/** One rail row from the stored step, the latest run and the pending changes. */
-function railStep(
-  step: InstanceView['steps'][number],
-  report: StepReport | undefined,
-  stale: boolean,
-  roleKeys: ReadonlySet<string> = new Set(),
-): RailStep {
-  const fromReport: Record<string, RailState> = {
-    done: 'done',
-    failed: 'failed',
-    'gate-failed': 'failed',
-    waiting: 'waiting',
-    confirmed: 'confirmed',
-    reconfirm: 'reconfirm',
-    blocked: 'blocked',
-  };
-  const fromStore: Record<string, RailState> = {
-    pending: 'pending',
-    running: 'running',
-    done: 'done',
-    failed: 'failed',
-    stale: 'stale',
-    waiting: 'waiting',
-    confirmed: 'confirmed',
-    reconfirm: 'reconfirm',
-  };
-  const state: RailState = stale
-    ? 'stale'
-    : ((report && fromReport[report.status]) ?? fromStore[step.status] ?? 'pending');
-  const gates = report?.gates ?? step.gates ?? [];
-  const blocking = gates.filter((g) => !g.ok && g.level === 'block').map((g) => g.message);
-  const reason =
-    state !== 'failed'
-      ? state === 'blocked'
-        ? '앞 단계를 먼저 끝내야 합니다.'
-        : undefined
-      : report?.error
-        ? (ERRORS[report.error.code] ?? report.error.message.replace(/^[A-Z][A-Z0-9_]*:\s*/, ''))
-        : blocking.join(' · ') || undefined;
-  return {
-    id: step.id,
-    title: step.title,
-    by: BY[step.kind] ?? step.kind,
-    state,
-    ms: report?.ms ?? step.ms,
-    unchanged: state === 'done' && !!report?.cached,
-    problems: gates.filter((g) => !g.ok).length || undefined,
-    reason,
-    confirm: step.kind === 'human' && (state === 'waiting' || state === 'reconfirm') && !!report,
-    inputs: state === 'failed' ? pickableInputs(gates, roleKeys) : undefined,
-  };
 }
 
 function Drawer({
@@ -448,7 +393,13 @@ export function JigPanel({
           title: r.title,
           required: r.required,
           state: assembled?.confirmed ? 'confirmed' : assembled ? 'proposed' : 'missing',
-          source: assembled?.sources.map((s) => s.layers.join(', ')).join(' · '),
+          source: assembled
+            ? assembled.sources.map((s) => s.layers.join(', ')).join(' · ') +
+              // A role read from a closed linked file says so (SPEC-07.5 7, T-298).
+              (fromClosedLink(assembled.sources, host.sources ?? [])
+                ? ` · ${CLOSED_SOURCE_NOTE}`
+                : '')
+            : undefined,
           candidates: found?.map((c, i) => ({
             id: String(i),
             label: c.layer,
@@ -475,11 +426,7 @@ export function JigPanel({
               words.some((w) => path.toLowerCase().includes(w))
             );
           });
-          void jig.findRole(
-            key,
-            (host.sources ?? []).map((s) => s.id),
-            layers,
-          );
+          void jig.findRole(key, roleSyncs(host.sources ?? []), layers);
         }}
         onConfirm={(key, candidate) =>
           void jig.confirmRole(
@@ -492,11 +439,7 @@ export function JigPanel({
         onPicking={setPicking}
         onPick={(key, layer) => {
           setPicking(undefined);
-          void jig.pickLayer(
-            key,
-            (host.sources ?? []).map((s) => s.id),
-            layer,
-          );
+          void jig.pickLayer(key, roleSyncs(host.sources ?? []), layer);
         }}
       />
     );
@@ -510,7 +453,13 @@ export function JigPanel({
             <h4>{part.title ?? '단계'}</h4>
             <StepRail
               steps={view.steps.map((step) =>
-                railStep(step, jig.reports[step.id], jig.stale.has(step.id), roleKeys),
+                railStep(
+                  step,
+                  jig.reports[step.id],
+                  jig.stale.has(step.id),
+                  roleKeys,
+                  jig.working.has(step.id),
+                ),
               )}
               busy={busy}
               onConfirm={(id) => void jig.confirmStep(id)}

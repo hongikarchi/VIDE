@@ -23,6 +23,7 @@ import { launchOwnedHost } from '../../hosts/common/owned-process.ts';
 import { startServer } from '../../src/server/server.ts';
 import { sdkOptions } from '../../src/server/sdk-options.ts';
 import { connectScriptLines } from './rhino-connect.mjs';
+import { withInstalledPluginRestored } from '../../tests/integration/plugin-guard.mjs';
 
 const exec = promisify(execFile);
 const root = resolve(import.meta.dirname, '..', '..');
@@ -72,9 +73,7 @@ const INSTALLED = noHost ? null : await registered().catch(() => null);
 const installedRoot = join(process.env.LOCALAPPDATA ?? '', 'VIDE', 'plugins', 'rhino');
 if (
   !noHost &&
-  (!INSTALLED ||
-    relative(installedRoot, INSTALLED).startsWith('..') ||
-    !existsSync(INSTALLED))
+  (!INSTALLED || relative(installedRoot, INSTALLED).startsWith('..') || !existsSync(INSTALLED))
 )
   throw new Error(
     `The registered VIDE plugin (${INSTALLED}) is not an installed release under ${installedRoot}; restore it first (POST /api/v1/connectors/rhino8/install on the installed engine).`,
@@ -153,86 +152,88 @@ async function stop(reason) {
 }
 process.on('SIGINT', () => stop('SIGINT').then(() => process.exit(0)));
 
-try {
-  log(
-    noHost
-      ? `dir ${dir}; engine only (--no-host)`
-      : `dir ${dir}; document ${document}; plugin ${plugin}`,
-  );
-  if (!noHost) {
-    host = await launchOwnedHost({
-      executable: options.executable,
-      environment: { ...process.env, VIDE_CONNECT_DIR: connections },
-      visible: args.visible,
-      spawnProcess: (f, a, o) => spawn(f, a, { ...o, windowsVerbatimArguments: true }),
-      args: [
-        '/nosplash',
-        '/notemplate',
-        '/scheme=VIDE-Worker-Test',
-        `/runscript="_-RunPythonScript (${script})"`,
-      ],
-    });
-    let ready;
-    for (const end = Date.now() + 120000; !ready && Date.now() < end; await wait(500))
-      ready = await readFile(join(dir, 'ready.json'), 'utf8').then(JSON.parse, () => null);
-    if (!ready?.ok) throw new Error('Rhino not ready: ' + JSON.stringify(ready));
-    log(`rhino ready: ${ready.objects} objects, ${ready.path}`);
-  }
+await withInstalledPluginRestored(async () => {
+  try {
+    log(
+      noHost
+        ? `dir ${dir}; engine only (--no-host)`
+        : `dir ${dir}; document ${document}; plugin ${plugin}`,
+    );
+    if (!noHost) {
+      host = await launchOwnedHost({
+        executable: options.executable,
+        environment: { ...process.env, VIDE_CONNECT_DIR: connections },
+        visible: args.visible,
+        spawnProcess: (f, a, o) => spawn(f, a, { ...o, windowsVerbatimArguments: true }),
+        args: [
+          '/nosplash',
+          '/notemplate',
+          '/scheme=VIDE-Worker-Test',
+          `/runscript="_-RunPythonScript (${script})"`,
+        ],
+      });
+      let ready;
+      for (const end = Date.now() + 120000; !ready && Date.now() < end; await wait(500))
+        ready = await readFile(join(dir, 'ready.json'), 'utf8').then(JSON.parse, () => null);
+      if (!ready?.ok) throw new Error('Rhino not ready: ' + JSON.stringify(ready));
+      log(`rhino ready: ${ready.objects} objects, ${ready.path}`);
+    }
 
-  app = await startServer({ filename: join(data, 'vide.sqlite'), sdkOptions: options });
-  const origin = app.origin;
-  const token = new URL(app.launchUrl).hash.slice(1);
-  const session = await fetch(origin + '/api/v1/session', {
-    method: 'POST',
-    headers: { Origin: origin, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token }),
-  });
-  const cookie = session.headers.getSetCookie()[0]?.split(';')[0];
-  const call = async (path, body) => {
-    const r = await fetch(origin + '/api/v1' + path, {
-      method: body === undefined ? 'GET' : 'POST',
-      headers: { Origin: origin, 'Content-Type': 'application/json', Cookie: cookie },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    app = await startServer({ filename: join(data, 'vide.sqlite'), sdkOptions: options });
+    const origin = app.origin;
+    const token = new URL(app.launchUrl).hash.slice(1);
+    const session = await fetch(origin + '/api/v1/session', {
+      method: 'POST',
+      headers: { Origin: origin, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
     });
-    const v = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(`${path}: ${r.status} ${JSON.stringify(v)}`);
-    return v;
-  };
-  const project = await call('/projects', { name: args['project-name'] });
-  let sync;
-  if (!noHost) {
-    let attached;
-    for (const end = Date.now() + 60000; !attached && Date.now() < end; await wait(1000))
-      attached = (await call('/host/attached-documents').catch(() => ({}))).documents?.find(
-        (d) => d.host !== 'zwcad',
-      );
-    if (!attached) throw new Error('No attached Rhino document');
-    const began = Date.now();
-    const link = await call(`/projects/${project.id}/links`, {
-      host: 'rhino',
-      instance: attached.instance,
-      documentId: attached.id,
-    });
-    for (const end = Date.now() + 180000; !sync && Date.now() < end; await wait(1000))
-      sync = (await call(`/projects/${project.id}/requests`)).find(
-        (r) => r.state === 'succeeded' && r.result?.sceneOmitted,
-      );
-    if (!sync) throw new Error('First Sync did not succeed in 180 s');
-    log(`linked ${link.id}; first Sync ${sync.id} in ${Date.now() - began} ms`);
+    const cookie = session.headers.getSetCookie()[0]?.split(';')[0];
+    const call = async (path, body) => {
+      const r = await fetch(origin + '/api/v1' + path, {
+        method: body === undefined ? 'GET' : 'POST',
+        headers: { Origin: origin, 'Content-Type': 'application/json', Cookie: cookie },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+      const v = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(`${path}: ${r.status} ${JSON.stringify(v)}`);
+      return v;
+    };
+    const project = await call('/projects', { name: args['project-name'] });
+    let sync;
+    if (!noHost) {
+      let attached;
+      for (const end = Date.now() + 60000; !attached && Date.now() < end; await wait(1000))
+        attached = (await call('/host/attached-documents').catch(() => ({}))).documents?.find(
+          (d) => d.host !== 'zwcad',
+        );
+      if (!attached) throw new Error('No attached Rhino document');
+      const began = Date.now();
+      const link = await call(`/projects/${project.id}/links`, {
+        host: 'rhino',
+        instance: attached.instance,
+        documentId: attached.id,
+      });
+      for (const end = Date.now() + 180000; !sync && Date.now() < end; await wait(1000))
+        sync = (await call(`/projects/${project.id}/requests`)).find(
+          (r) => r.state === 'succeeded' && r.result?.sceneOmitted,
+        );
+      if (!sync) throw new Error('First Sync did not succeed in 180 s');
+      log(`linked ${link.id}; first Sync ${sync.id} in ${Date.now() - began} ms`);
+    }
+    await writeFile(
+      join(dir, 'launch.json'),
+      JSON.stringify({ url: `${origin}/#${token}` }, null, 2),
+    );
+    console.log('LAUNCH ' + join(dir, 'launch.json'));
+    console.log('LOGS ' + join(data, 'logs'));
+    console.log('PROJECT ' + project.id);
+    if (sync) console.log('SYNC ' + sync.id);
+    while (!existsSync(join(dir, 'stop'))) await wait(1000);
+    await stop('stop file');
+  } catch (error) {
+    console.error(error);
+    process.exitCode = 1;
+    await stop('error');
   }
-  await writeFile(
-    join(dir, 'launch.json'),
-    JSON.stringify({ url: `${origin}/#${token}` }, null, 2),
-  );
-  console.log('LAUNCH ' + join(dir, 'launch.json'));
-  console.log('LOGS ' + join(data, 'logs'));
-  console.log('PROJECT ' + project.id);
-  if (sync) console.log('SYNC ' + sync.id);
-  while (!existsSync(join(dir, 'stop'))) await wait(1000);
-  await stop('stop file');
-} catch (error) {
-  console.error(error);
-  process.exitCode = 1;
-  await stop('error');
-}
+});
 process.exit(process.exitCode ?? 0);

@@ -22,6 +22,7 @@ import { EditorSessions } from '../../hosts/rhino/editor-sessions.ts';
 import { launchRhinoWorker } from '../../hosts/rhino/worker-client.ts';
 import { buildLayerTree, flattenTree } from '../../src/core/layer-tree.ts';
 import { runDirectory } from './run-directory.mjs';
+import { withInstalledPluginRestored } from './plugin-guard.mjs';
 
 const probe = sdkOptions('.');
 if (process.env.VIDE_TEST_RHINO_PLUGIN) probe.plugin = resolve(process.env.VIDE_TEST_RHINO_PLUGIN);
@@ -112,23 +113,24 @@ const shape = (nodes) =>
 
 let worker, host;
 const result = { directory, plugin: options.plugin };
-try {
-  // 1. The synthetic document, saved by a work copy.
-  worker = await launchRhinoWorker({ ...options, directory: join(directory, 'create') });
-  const receipt = await worker.execute(randomUUID(), 0, build);
-  assert.equal(receipt.ok, true, JSON.stringify(receipt).slice(0, 400));
-  await worker.stop();
-  worker = undefined;
+await withInstalledPluginRestored(async () => {
+  try {
+    // 1. The synthetic document, saved by a work copy.
+    worker = await launchRhinoWorker({ ...options, directory: join(directory, 'create') });
+    const receipt = await worker.execute(randomUUID(), 0, build);
+    assert.equal(receipt.ok, true, JSON.stringify(receipt).slice(0, 400));
+    await worker.stop();
+    worker = undefined;
 
-  // 2. The document open in a VIDE-owned hidden Rhino with the plugin attached, and an action loop.
-  const attachedDirectory = join(directory, 'attached');
-  await mkdir(attachedDirectory);
-  const source = join(attachedDirectory, 'synthetic-layers.3dm');
-  await copyFile(receipt.filename, source);
-  const script = join(attachedDirectory, 'fixture.py');
-  await writeFile(
-    script,
-    `import Rhino, System, json, os, traceback
+    // 2. The document open in a VIDE-owned hidden Rhino with the plugin attached, and an action loop.
+    const attachedDirectory = join(directory, 'attached');
+    await mkdir(attachedDirectory);
+    const source = join(attachedDirectory, 'synthetic-layers.3dm');
+    await copyFile(receipt.filename, source);
+    const script = join(attachedDirectory, 'fixture.py');
+    await writeFile(
+      script,
+      `import Rhino, System, json, os, traceback
 folder=${JSON.stringify(attachedDirectory.replaceAll('\\', '/'))}
 plugin=${JSON.stringify(options.plugin.replaceAll('\\', '/'))}
 source=${JSON.stringify(source.replaceAll('\\', '/'))}
@@ -159,130 +161,133 @@ try:
     report('ready',dict(ok=True,objects=int(doc.Objects.Count),rhino=str(Rhino.RhinoApp.Version),plugin=assembly.Location))
 except Exception as e: report('ready',dict(ok=False,error=str(e),trace=traceback.format_exc()))
 `,
-  );
-  host = await launchOwnedHost({
-    executable: options.executable,
-    environment: { ...process.env, VIDE_CONNECT_DIR: connectionDirectory },
-    visible: false,
-    spawnProcess: (f, a, o) => spawn(f, a, { ...o, windowsVerbatimArguments: true }),
-    args: [
-      '/nosplash',
-      '/notemplate',
-      '/scheme=VIDE-Worker-Test',
-      `/runscript="_-RunPythonScript (${script})"`,
-    ],
-  });
-  const ready = await wait(async () =>
-    JSON.parse(await readFile(join(attachedDirectory, 'ready.json'), 'utf8')),
-  );
-  assert.equal(ready.ok, true, JSON.stringify(ready));
-  Object.assign(result, { rhino: ready.rhino, loaded: ready.plugin });
-  let step = 0;
-  const action = async (code) => {
-    step++;
-    await writeFile(join(attachedDirectory, 'action.tmp'), JSON.stringify({ id: step, code }));
-    for (let attempt = 0; ; attempt++) {
-      try {
-        await rename(join(attachedDirectory, 'action.tmp'), join(attachedDirectory, 'action.json'));
-        break;
-      } catch (error) {
-        if (error.code !== 'EPERM' || attempt === 19) throw error;
-        await new Promise((accept) => setTimeout(accept, 50));
-      }
-    }
-    const r = await wait(async () =>
-      JSON.parse(await readFile(join(attachedDirectory, 'action-' + step + '.json'), 'utf8')),
     );
-    assert.equal(r.ok, true, JSON.stringify(r));
-    return r.value;
-  };
-  const sessions = new EditorSessions({ ...options, connectionDirectory });
-  const sdk = new SdkExecution({ ...options, connectionDirectory, tools: {}, origin: () => '' });
-  const catalog = await sessions.list(true);
-  assert.equal(catalog.documents.length, 1, 'only the test Rhino is seen');
-  const target = { instance: catalog.documents[0].instance, documentId: catalog.documents[0].id };
-  const sync = async () => {
-    const display = await sdk.syncEditor(target, () => {});
-    const paths = new Map();
-    for (const item of display.scene) paths.set(item.id, decode(item.layer64));
-    return { display, rows: display.objects.map((o) => ({ id: o.id, path: paths.get(o.id) })) };
-  };
-
-  // 3. The first Sync: the whole layer table, nested as Rhino nests it.
-  const first = await sync();
-  const table = first.display.layers;
-  assert.ok(Array.isArray(table), 'the Sync carries the layer table');
-  const byPath = new Map(table.map((layer) => [layer.fullPath, layer]));
-  for (const path of [
-    'Site',
-    'Bldg',
-    'Bldg::L1',
-    'Bldg::L1::Walls',
-    'Bldg::L1::Walls::Ext',
-    'Bldg::L2',
-    'Bldg::L2::Walls',
-    'Empty',
-    'Empty::Child',
-  ])
-    assert.ok(byPath.has(path), 'layer ' + path);
-  assert.equal(byPath.get('Bldg::L1::Walls::Ext').parentId, byPath.get('Bldg::L1::Walls').id);
-  assert.equal(byPath.get('Bldg::L2::Walls').parentId, byPath.get('Bldg::L2').id);
-  assert.equal(byPath.get('Bldg').parentId, null);
-  assert.equal(byPath.get('Bldg::L2::Walls').objectCount, 3, 'own objects only');
-  assert.equal(byPath.get('Bldg').objectCount, 1);
-  result.expandedSent = 'expanded' in byPath.get('Bldg');
-  if (result.expandedSent) assert.equal(byPath.get('Bldg').expanded, true);
-  const tree = buildLayerTree(table, first.rows, (row) => row.path);
-  result.firstTree = shape(tree.roots);
-  // Rhino's order: Site was added first, then Bldg; empty leaves drop, Empty has no listed objects.
-  assert.deepEqual(result.firstTree, [
-    'Site',
-    [
-      'Bldg',
-      [
-        ['L1', [['Walls', ['Ext']]]],
-        ['L2', ['Walls']],
+    host = await launchOwnedHost({
+      executable: options.executable,
+      environment: { ...process.env, VIDE_CONNECT_DIR: connectionDirectory },
+      visible: false,
+      spawnProcess: (f, a, o) => spawn(f, a, { ...o, windowsVerbatimArguments: true }),
+      args: [
+        '/nosplash',
+        '/notemplate',
+        '/scheme=VIDE-Worker-Test',
+        `/runscript="_-RunPythonScript (${script})"`,
       ],
-    ],
-  ]);
-  const bldg = tree.roots[1];
-  assert.equal(bldg.total, 7);
-  assert.equal(bldg.own.length, 1);
-  assert.equal(flattenTree(tree.roots).at(-1).depth, 2);
+    });
+    const ready = await wait(async () =>
+      JSON.parse(await readFile(join(attachedDirectory, 'ready.json'), 'utf8')),
+    );
+    assert.equal(ready.ok, true, JSON.stringify(ready));
+    Object.assign(result, { rhino: ready.rhino, loaded: ready.plugin });
+    let step = 0;
+    const action = async (code) => {
+      step++;
+      await writeFile(join(attachedDirectory, 'action.tmp'), JSON.stringify({ id: step, code }));
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await rename(
+            join(attachedDirectory, 'action.tmp'),
+            join(attachedDirectory, 'action.json'),
+          );
+          break;
+        } catch (error) {
+          if (error.code !== 'EPERM' || attempt === 19) throw error;
+          await new Promise((accept) => setTimeout(accept, 50));
+        }
+      }
+      const r = await wait(async () =>
+        JSON.parse(await readFile(join(attachedDirectory, 'action-' + step + '.json'), 'utf8')),
+      );
+      assert.equal(r.ok, true, JSON.stringify(r));
+      return r.value;
+    };
+    const sessions = new EditorSessions({ ...options, connectionDirectory });
+    const sdk = new SdkExecution({ ...options, connectionDirectory, tools: {}, origin: () => '' });
+    const catalog = await sessions.list(true);
+    assert.equal(catalog.documents.length, 1, 'only the test Rhino is seen');
+    const target = { instance: catalog.documents[0].instance, documentId: catalog.documents[0].id };
+    const sync = async () => {
+      const display = await sdk.syncEditor(target, () => {});
+      const paths = new Map();
+      for (const item of display.scene) paths.set(item.id, decode(item.layer64));
+      return { display, rows: display.objects.map((o) => ({ id: o.id, path: paths.get(o.id) })) };
+    };
 
-  // 4. The parent turned off: Rhino reports its sublayers off and the Sync leaves them out.
-  await action(`
+    // 3. The first Sync: the whole layer table, nested as Rhino nests it.
+    const first = await sync();
+    const table = first.display.layers;
+    assert.ok(Array.isArray(table), 'the Sync carries the layer table');
+    const byPath = new Map(table.map((layer) => [layer.fullPath, layer]));
+    for (const path of [
+      'Site',
+      'Bldg',
+      'Bldg::L1',
+      'Bldg::L1::Walls',
+      'Bldg::L1::Walls::Ext',
+      'Bldg::L2',
+      'Bldg::L2::Walls',
+      'Empty',
+      'Empty::Child',
+    ])
+      assert.ok(byPath.has(path), 'layer ' + path);
+    assert.equal(byPath.get('Bldg::L1::Walls::Ext').parentId, byPath.get('Bldg::L1::Walls').id);
+    assert.equal(byPath.get('Bldg::L2::Walls').parentId, byPath.get('Bldg::L2').id);
+    assert.equal(byPath.get('Bldg').parentId, null);
+    assert.equal(byPath.get('Bldg::L2::Walls').objectCount, 3, 'own objects only');
+    assert.equal(byPath.get('Bldg').objectCount, 1);
+    result.expandedSent = 'expanded' in byPath.get('Bldg');
+    if (result.expandedSent) assert.equal(byPath.get('Bldg').expanded, true);
+    const tree = buildLayerTree(table, first.rows, (row) => row.path);
+    result.firstTree = shape(tree.roots);
+    // Rhino's order: Site was added first, then Bldg; empty leaves drop, Empty has no listed objects.
+    assert.deepEqual(result.firstTree, [
+      'Site',
+      [
+        'Bldg',
+        [
+          ['L1', [['Walls', ['Ext']]]],
+          ['L2', ['Walls']],
+        ],
+      ],
+    ]);
+    const bldg = tree.roots[1];
+    assert.equal(bldg.total, 7);
+    assert.equal(bldg.own.length, 1);
+    assert.equal(flattenTree(tree.roots).at(-1).depth, 2);
+
+    // 4. The parent turned off: Rhino reports its sublayers off and the Sync leaves them out.
+    await action(`
 layer=doc.Layers.FindByFullPath('Bldg',-1)
 doc.Layers[layer].IsVisible=False
 doc.Layers[layer].CommitChanges()
 result=[(l.FullPath,l.IsVisible) for l in doc.Layers if not l.IsDeleted]`);
-  const off = await sync();
-  const offPaths = new Map(off.display.layers.map((layer) => [layer.fullPath, layer]));
-  result.offVisible = Object.fromEntries(
-    [...offPaths].map(([path, layer]) => [path, layer.visible]),
-  );
-  assert.equal(offPaths.get('Bldg').visible, false);
-  assert.equal(off.rows.length, 1, 'only Site stays in the Sync');
-  const offTree = buildLayerTree(off.display.layers, off.rows, (row) => row.path);
-  const hidden = flattenTree(offTree.roots).filter((node) => node.fullPath.startsWith('Bldg'));
-  assert.ok(hidden.length >= 1, 'the off branch is kept for its uncounted objects');
-  assert.ok(
-    hidden.every((node) => node.hidden),
-    'every layer under the off parent is hidden',
-  );
-  assert.equal(hidden[0].hostTotal, 7, 'the host counts what the Sync left out');
-  result.hiddenLayers = off.display.displayCoverage?.hiddenLayers;
+    const off = await sync();
+    const offPaths = new Map(off.display.layers.map((layer) => [layer.fullPath, layer]));
+    result.offVisible = Object.fromEntries(
+      [...offPaths].map(([path, layer]) => [path, layer.visible]),
+    );
+    assert.equal(offPaths.get('Bldg').visible, false);
+    assert.equal(off.rows.length, 1, 'only Site stays in the Sync');
+    const offTree = buildLayerTree(off.display.layers, off.rows, (row) => row.path);
+    const hidden = flattenTree(offTree.roots).filter((node) => node.fullPath.startsWith('Bldg'));
+    assert.ok(hidden.length >= 1, 'the off branch is kept for its uncounted objects');
+    assert.ok(
+      hidden.every((node) => node.hidden),
+      'every layer under the off parent is hidden',
+    );
+    assert.equal(hidden[0].hostTotal, 7, 'the host counts what the Sync left out');
+    result.hiddenLayers = off.display.displayCoverage?.hiddenLayers;
 
-  // 5. Back on, then reordered (Bldg's children swapped): the next read has the new order.
-  const before = off.display.sourceDocument.revision;
-  await action(`
+    // 5. Back on, then reordered (Bldg's children swapped): the next read has the new order.
+    const before = off.display.sourceDocument.revision;
+    await action(`
 layer=doc.Layers.FindByFullPath('Bldg',-1)
 doc.Layers[layer].IsVisible=True
 doc.Layers[layer].CommitChanges()
 result=True`);
-  const on = await sync();
-  const onRevision = on.display.sourceDocument.revision;
-  const sorted = await action(`
+    const on = await sync();
+    const onRevision = on.display.sourceDocument.revision;
+    const sorted = await action(`
 order=[l.Index for l in doc.Layers if not l.IsDeleted]
 l1=doc.Layers.FindByFullPath('Bldg::L1',-1)
 l2=doc.Layers.FindByFullPath('Bldg::L2',-1)
@@ -294,35 +299,36 @@ try:
 except Exception as e:
     ok=str(e)
 result=ok`);
-  result.sortAvailable = sorted === true;
-  if (sorted === true) {
-    const after = await sync();
-    const afterTree = buildLayerTree(after.display.layers, after.rows, (row) => row.path);
-    result.sortedTree = shape(afterTree.roots);
-    assert.deepEqual(
-      afterTree.roots[1].children.map((node) => node.name),
-      ['L2', 'L1'],
-      'the tree follows the new Rhino order',
-    );
-    result.sortedRevision = { before: onRevision, after: after.display.sourceDocument.revision };
-    // A plugin that sends `expanded` also marks the document changed on a reorder, so Live Sync
-    // brings the new order without another edit (an older one keeps the revision).
-    if (result.expandedSent)
-      assert.ok(
-        result.sortedRevision.after > result.sortedRevision.before,
-        'reorder bumps the revision',
+    result.sortAvailable = sorted === true;
+    if (sorted === true) {
+      const after = await sync();
+      const afterTree = buildLayerTree(after.display.layers, after.rows, (row) => row.path);
+      result.sortedTree = shape(afterTree.roots);
+      assert.deepEqual(
+        afterTree.roots[1].children.map((node) => node.name),
+        ['L2', 'L1'],
+        'the tree follows the new Rhino order',
       );
+      result.sortedRevision = { before: onRevision, after: after.display.sourceDocument.revision };
+      // A plugin that sends `expanded` also marks the document changed on a reorder, so Live Sync
+      // brings the new order without another edit (an older one keeps the revision).
+      if (result.expandedSent)
+        assert.ok(
+          result.sortedRevision.after > result.sortedRevision.before,
+          'reorder bumps the revision',
+        );
+    }
+    result.revisions = { off: before, on: onRevision };
+    result.passed = true;
+    await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
+    console.log(JSON.stringify(result));
+  } finally {
+    // Only the Rhino processes this test launched; other Rhino windows are never touched.
+    await worker?.stop();
+    await host?.stop();
+    if (process.env.VIDE_TEST_KEEP_REGISTRATION !== '1') {
+      const restored = await restoreInstalledPlugin();
+      console.log('installed plugin registration: ' + JSON.stringify(restored));
+    }
   }
-  result.revisions = { off: before, on: onRevision };
-  result.passed = true;
-  await writeFile(join(directory, 'result.json'), JSON.stringify(result, null, 2));
-  console.log(JSON.stringify(result));
-} finally {
-  // Only the Rhino processes this test launched; other Rhino windows are never touched.
-  await worker?.stop();
-  await host?.stop();
-  if (process.env.VIDE_TEST_KEEP_REGISTRATION !== '1') {
-    const restored = await restoreInstalledPlugin();
-    console.log('installed plugin registration: ' + JSON.stringify(restored));
-  }
-}
+});
