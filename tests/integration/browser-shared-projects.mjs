@@ -101,7 +101,7 @@ try {
   const main = page.getByRole('main', { name: '원격 프로젝트' });
   await main.waitFor();
   await main
-    .getByText('이 프로젝트는 bob의 PC(Bob PC)에서 돌아갑니다. 모델·Sync·AI 작업은 그 PC에서만', {
+    .getByText('이 프로젝트는 bob의 PC(Bob PC)에서 돌아갑니다. 모델·동기화·AI 작업은 그 PC에서만', {
       exact: false,
     })
     .waitFor();

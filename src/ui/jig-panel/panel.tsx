@@ -102,7 +102,7 @@ const BY: Record<string, string> = {
   library: '라이브러리',
   ai: 'AI',
   human: '사람',
-  host: '호스트',
+  host: 'CAD 프로그램',
 };
 const ERRORS: Record<string, string> = {
   BUDGET: '계산 시간 상한을 넘었습니다.',

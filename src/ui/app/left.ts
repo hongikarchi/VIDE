@@ -127,7 +127,7 @@ export function renderLinkPanel() {
         !confirm(
           link.kind === 'file'
             ? `${link.name}을(를) 목록에서 뺄까요? VIDE에 불러온 사본과 기록이 지워집니다. 원본 파일은 그대로입니다.`
-            : `${link.name}을(를) 목록에서 빼고 연결을 끊을까요? VIDE의 Sync 기록과 사본이 지워집니다. ${link.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} 파일과 객체는 그대로이고, 다시 쓰려면 플러그인에서 Link를 누르세요.`,
+            : `${link.name}을(를) 목록에서 빼고 연결을 끊을까요? VIDE의 동기화 기록과 사본이 지워집니다. ${link.host === 'zwcad' ? 'ZWCAD' : 'Rhino'} 파일과 객체는 그대로이고, 다시 쓰려면 플러그인에서 Link를 누르세요.`,
         )
       )
         return;
@@ -162,7 +162,7 @@ export function renderLinkPanel() {
         .then((reply) => {
           if (!z.object({ stored: z.boolean() }).parse(reply).stored)
             message(
-              '새 항목으로 나눴습니다. 문서에 새 연결 ID를 쓰지 못했으니 다음에 Link할 때 새 항목을 고르세요.',
+              '새 항목으로 나눴습니다. 문서에 새 연결 정보를 쓰지 못했으니 다음에 Link할 때 새 항목을 고르세요.',
             );
           return pollLinks();
         })
@@ -186,7 +186,7 @@ export function renderLinkPanel() {
       const target = linksState.links.find((entry) => entry.id === into);
       if (
         !confirm(
-          `${link.name}의 Sync 기록을 ${target?.name ?? '같은 창의 항목'}(으)로 옮기고 이 항목을 목록에서 뺄까요? 파일과 객체는 그대로입니다.`,
+          `${link.name}의 동기화 기록을 ${target?.name ?? '같은 창의 항목'}(으)로 옮기고 이 항목을 목록에서 뺄까요? 파일과 객체는 그대로입니다.`,
         )
       )
         return;
@@ -214,7 +214,7 @@ export function renderLinkPanel() {
         .filter((object) => object.documentKey === link.id)
         .map((object) => object.id);
       if (ids.length) viewerState.viewport?.fit(ids);
-      else if (!link.lastSync) message('아직 Sync 전입니다. 파일이 열려 있으면 곧 표시됩니다.');
+      else if (!link.lastSync) message('아직 동기화 전입니다. 파일이 열려 있으면 곧 표시됩니다.');
     },
     onBackToSync: (link) => {
       layerOverride.delete(link.id);

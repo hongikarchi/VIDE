@@ -13,7 +13,7 @@ const catalog = [
   { id: 'opus', name: 'Claude Opus', provider: 'claude-cli', efforts: ['default', 'high'] },
   { id: 'sonnet', name: 'Claude Sonnet', provider: 'claude-cli', efforts: ['default'] },
   { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', provider: 'claude-cli', efforts: ['default'] },
-  { id: 'auto', name: '자동 (Jev)', provider: 'claude-cli', efforts: ['default'] },
+  { id: 'auto', name: '자동', provider: 'claude-cli', efforts: ['default'] },
 ];
 const directory = await mkdtemp(join(tmpdir(), 'vide-default-model-'));
 let app, browser;

@@ -13,6 +13,10 @@ import {
   claudeEnv,
   parseStep,
   personaStep,
+  resolveSelect,
+  selectChoices,
+  stepPrompt,
+  undoVerdict,
 } from './persona-step.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -336,4 +340,88 @@ test('hostsCheck refuses a foreign or missing open host link (T-286)', async () 
   for (const s of plan.scenarios)
     assert.deepEqual(s.hosts, s.id === 'R1-A' ? ['rhino', 'zwcad'] : ['rhino'], s.id);
   assert.match(plan.scenarios.find((s) => s.id === 'R1-B').operator.address, /태평로/);
+});
+
+// --- native select (T-292) -----------------------------------------------------------------------
+const layerOptions = [
+  { text: '레이어를 고르세요', value: '' },
+  { text: '3D::S-Slab', value: '3D::S-Slab' },
+  { text: '기초_3D::F1', value: '기초_3D::F1' },
+  { text: '숨은 항목', value: 'x', disabled: true },
+  { text: '기초_3D::F2', value: '기초_3D::F2' },
+];
+
+test('selectChoices numbers the choosable options and drops the placeholder and disabled ones', () => {
+  const choices = selectChoices(layerOptions);
+  assert.deepEqual(
+    choices.map((c) => [c.n, c.optionIndex, c.text]),
+    [
+      [1, 1, '3D::S-Slab'],
+      [2, 2, '기초_3D::F1'],
+      [3, 4, '기초_3D::F2'],
+    ],
+  );
+  assert.deepEqual(selectChoices(undefined), []);
+});
+
+test('resolveSelect takes the list number or the text', () => {
+  const choices = selectChoices(layerOptions);
+  assert.equal(resolveSelect({ type: 'select', index: 3 }, choices).choice.value, '기초_3D::F2');
+  assert.equal(resolveSelect({ type: 'select', text: ' 3D::S-Slab ' }, choices).choice.n, 1);
+  assert.equal(resolveSelect({ type: 'select', text: 'S-Slab' }, choices).choice.n, 1);
+  assert.match(resolveSelect({ type: 'select', text: '기초' }, choices).reason, /2 choices/);
+  assert.match(resolveSelect({ type: 'select', index: 4 }, choices).reason, /not 1–3/);
+  assert.match(resolveSelect({ type: 'select', index: 1 }, []).reason, /no open choice list/);
+});
+
+test('parseStep accepts select only with an open choice list and a valid choice', () => {
+  const choices = selectChoices(layerOptions);
+  const answer = (action) => JSON.stringify({ ...good, action });
+  assert.deepEqual(parseStep(answer({ type: 'select', index: 2 }), { choices }).action, {
+    type: 'select',
+    index: 2,
+  });
+  assert.deepEqual(parseStep(answer({ type: 'select', text: '기초_3D::F2' }), { choices }).action, {
+    type: 'select',
+    text: '기초_3D::F2',
+  });
+  assert.throws(() => parseStep(answer({ type: 'select', index: 2 })), /no open choice list/);
+  assert.throws(
+    () => parseStep(answer({ type: 'select', index: 9 }), { choices }),
+    /action.index\/text/,
+  );
+  assert.throws(() => parseStep(answer({ type: 'select' }), { choices }), /action.index\/text/);
+});
+
+test('the prompt lists the open choices; a select answer round-trips through personaStep', async () => {
+  const choices = selectChoices(layerOptions);
+  assert.match(stepPrompt('g', [], choices), /1\. 3D::S-Slab\n2\. 기초_3D::F1\n3\. 기초_3D::F2/);
+  assert.doesNotMatch(stepPrompt('g', []), /고르는 칸/);
+  const log = setup([JSON.stringify({ ...good, action: { type: 'select', index: 1 } })]);
+  const step = await personaStep({
+    goal: 'g',
+    screenshotPath: screenshot,
+    personaFile,
+    claude: fake,
+    choices,
+  });
+  assert.deepEqual(step.action, { type: 'select', index: 1 });
+  const [call] = await log();
+  assert.match(call.message.message.content[0].text, /방금 누른 칸은 고르는 칸입니다/);
+  assert.match(await readFile(personaFile, 'utf8'), /select/);
+});
+
+// --- after the goal (T-292) ----------------------------------------------------------------------
+test('undoVerdict: restored only when hidden objects all came back', () => {
+  assert.deepEqual(undoVerdict(1812, 0), { undoRestored: true });
+  assert.deepEqual(undoVerdict(1812, 5), { undoRestored: false });
+  assert.equal(undoVerdict(0, 0).undoRestored, null);
+  assert.equal(undoVerdict(null, 0).undoRestored, null);
+});
+
+test('R1-HIDE carries the undo check after the goal', async () => {
+  const plan = JSON.parse(await readFile(join(here, 'scenarios.json'), 'utf8'));
+  const hide = plan.scenarios.find((s) => s.id === 'R1-HIDE');
+  assert.deepEqual(hide.afterGoal, { type: 'undo', key: 'u', toastButton: '되돌리기' });
+  for (const s of plan.scenarios) if (s.id !== 'R1-HIDE') assert.equal(s.afterGoal, undefined);
 });

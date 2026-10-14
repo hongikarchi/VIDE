@@ -278,6 +278,25 @@ export function SitePicker({
       if (result.unchanged) return '다시 가져왔습니다. 바뀐 항목이 없습니다.';
       if (result.blocked) return '대상 필지 경계를 찾지 못했습니다. 필지를 확인하세요.';
     });
+  // SPEC-12.3의 3 (T-295): confirming the target runs on to Rhino에 만들기, and with the send
+  // notice confirmed and no copy fetched yet that includes the first [가져오기] — 수집 never sits as
+  // '막힘' waiting for a second press. Only on the person's confirmation here, never on opening.
+  const wasConfirmed = useRef<boolean | undefined>(undefined);
+  const fetchAfterConfirm = useRef(false);
+  useEffect(() => {
+    if (confirmStatus === undefined) return;
+    if (wasConfirmed.current === false && confirmed) fetchAfterConfirm.current = true;
+    wasConfirmed.current = confirmed;
+  }, [confirmStatus, confirmed]);
+  useEffect(() => {
+    if (!fetchAfterConfirm.current || waiting || !notice) return;
+    fetchAfterConfirm.current = false;
+    if (!confirmed || state.collection || !targets.length || !notice.confirmed || notice.off)
+      return;
+    void collect();
+    // collect reads the latest state through `call`; the conditions above are what may change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting, notice, confirmed, state.collection, targets.length]);
   const pending = (take: boolean) =>
     act(async () => {
       await call('pending', 'POST', { take });

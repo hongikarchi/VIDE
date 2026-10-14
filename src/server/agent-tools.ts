@@ -14,6 +14,7 @@ import {
 import { DomainError } from '../core/store.ts';
 import { currentTrace, diagnostic } from '../core/breadcrumbs.ts';
 import { DocumentLinks } from '../core/document-links.ts';
+import { ConversationStore } from '../core/conversation-store.ts';
 import type { Workspace } from '../core/workspace.ts';
 import { structureSummarySchema, type StructureSummary } from '../contracts/structure-model.ts';
 import {
@@ -22,7 +23,17 @@ import {
   type JigRuntime,
   type ReadModel,
 } from '../jigs/runtime/runtime.ts';
-import { jigRuntimeFor } from './jig-routes.ts';
+import { jigRuntimeFor, readForJig } from './jig-routes.ts';
+import {
+  assignJigInput,
+  notNamedText,
+  unnamedLayers,
+  findRole,
+  inputRoles,
+  resolveLayers,
+  type JigInputDeps,
+  type JigInputDocument,
+} from './jig-input.ts';
 import { skillCatalog } from './skill-catalog.ts';
 import { MakeTurnGuard, draftsFor, makeStopNotice } from './make-routes.ts';
 import type { JigDrafts } from '../jigs/runtime/drafts.ts';
@@ -396,6 +407,47 @@ const definitions = {
         instanceId: scopedInstance,
         until: id.optional(),
         mode: z.enum(['geometry', 'preview']).optional(),
+      })
+      .strict(),
+  },
+  // 대화로 정한 입력 역할 (SPEC-07.18 9, T-293): the role card's path, only for layers a person named.
+  jig_set_input: {
+    description:
+      "Set an input role (입력 역할, e.g. input 'slab' / '슬래브 경계' / 'site.slab') of the jig this conversation has open to the layers the person named in this conversation (a question card answer or their text). Only layers the person named: never your own guess (a layer whose name is not in the person's words or answers is refused, NOT_NAMED; recommended-default answers do not count). Layers are full paths or last names from links_layers; give linkId when the same layer is in several files. The layers are read from the linked file's last Sync, the role is recorded as confirmed by the person in chat, and the steps run again up to the next step a person confirms; returns the step statuses. ok:false changes nothing and says why (unknown role → the declared roles; unknown layer → similar names).",
+    schema: z
+      .object({
+        targetRef: scoped,
+        instanceId: scopedInstance,
+        input: z.string().min(1).max(200),
+        layers: z.array(z.string().min(1).max(1000)).min(1).max(20),
+        linkId: id.optional(),
+        reason: z.string().max(300).optional(),
+      })
+      .strict(),
+  },
+  jig_ask_input: {
+    description:
+      'Make the question card that asks which layers an input role of the open jig uses: 2-5 options, each with its layers (checked against the linked files) and exactly one recommended. Returns the card; end the turn with status "question" and exactly this card in questions. When the person answers, VIDE sets the role and recalculates at once (no jig_set_input needed); the next turn only reports the result. Not set: a [권장값으로 진행] answer (an assumption: ask the person), an answer to a card asked in a Plan turn (set it with jig_set_input after [진행]), and any card whose options you changed.',
+    schema: z
+      .object({
+        targetRef: scoped,
+        instanceId: scopedInstance,
+        input: z.string().min(1).max(200),
+        title: z.string().min(1).max(200).optional(),
+        options: z
+          .array(
+            z
+              .object({
+                layers: z.array(z.string().min(1).max(1000)).min(1).max(20),
+                linkId: id.optional(),
+                label: z.string().min(1).max(80).optional(),
+                recommended: z.boolean(),
+              })
+              .strict(),
+          )
+          .min(2)
+          .max(5),
+        blocks: z.string().max(200).optional(),
       })
       .strict(),
   },
@@ -840,6 +892,7 @@ const controlledTools = new Set<ToolName>([
   'query',
   'jig_set',
   'jig_run',
+  'jig_set_input',
   'capture_view',
 ]);
 /**
@@ -847,7 +900,13 @@ const controlledTools = new Set<ToolName>([
  * (ADR-031 8). capture_view moves the camera and layers of the target for one image, so two
  * captures wait for each other instead of failing.
  */
-const writeTools = new Set<ToolName>(['execute', 'jig_set', 'jig_run', ...GH_WRITE_TOOLS]);
+const writeTools = new Set<ToolName>([
+  'execute',
+  'jig_set',
+  'jig_run',
+  'jig_set_input',
+  ...GH_WRITE_TOOLS,
+]);
 /**
  * A scope's lifetime between two calls (ADR-031 8): each call starts it again, so a turn that keeps
  * working never loses its tools; the turn's end revokes the scope anyway.
@@ -866,6 +925,9 @@ export const PLAN_MODE_TOOLS: ReadonlySet<string> = new Set<ToolName>([
   'jig_list',
   'jig_state',
   'jig_output',
+  // Asking which layers an input role uses changes nothing; an answer to a Plan turn's card stays a
+  // proposed input until [진행] (SPEC-02.20 2, SPEC-07.18 9.4).
+  'jig_ask_input',
   // Screen-only (RESEARCH-12 §6.3): opening a jig and switching the screen compute nothing.
   'jig_open',
   'ui_go',
@@ -1247,8 +1309,16 @@ export interface ConversationToolSources {
   /** The linked files the conversation names as its targets. */
   targetLinkIds?: readonly string[] | null;
   workspace: Pick<Workspace, 'list' | 'get'> & Partial<Pick<Workspace, 'model'>>;
-  jigs?: Pick<JigRuntime, 'list' | 'view' | 'output' | 'setParams' | 'run'>;
+  jigs?: Pick<JigRuntime, 'list' | 'view' | 'output' | 'setParams' | 'run'> &
+    Partial<Pick<JigRuntime, 'recordRead' | 'setAssembly'>>;
   links?: Pick<DocumentLinks, 'list' | 'get'>;
+  /** Reads a linked file's last Sync for an input role (SPEC-07.18 9); jig_set_input needs it. */
+  readInput?: JigInputDeps['read'];
+  /**
+   * What the person said in this conversation (SPEC-07.18 9): this turn's text and their own answers
+   * in the ledger. jig_set_input sets only layers named there; without it nothing is set.
+   */
+  personWords?: () => readonly string[];
   /** Records a ledger item of the conversation (a setting the AI changed, a screen action). */
   ledger?: (item: {
     kind: 'param-change' | 'code' | 'result-ref';
@@ -1594,6 +1664,104 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
       });
       return bounded({ changes, seqs: done.seqs, staleSteps: done.affected });
     };
+    handlers.jig_set_input = async ({ instanceId: given, input, layers, linkId, reason }) => {
+      const instanceId = pick(given);
+      // Only layers the person named (SPEC-07.18 9): the AI's own pick stays a proposal.
+      const unnamed = unnamedLayers(sources.personWords?.() ?? [], layers);
+      if (unnamed.length)
+        return bounded({
+          ok: false,
+          error: 'NOT_NAMED',
+          message: notNamedText(unnamed),
+          layers: unnamed,
+        });
+      const result = await assignJigInput(
+        jigInputDeps(sources, open(instanceId)),
+        projectId,
+        instanceId,
+        { input, layers, linkId, reason: reason ?? '대화에서 사람이 확인' },
+      );
+      // The screen re-reads the instance (role card, step rail) when the turn records this.
+      if (result.ok)
+        ledger?.({
+          kind: 'result-ref',
+          body: {
+            appAction: 'jig_input',
+            by: 'ai',
+            instanceId,
+            role: result.role,
+            layers: result.layers.map((l) => l.layer),
+          },
+          ...(requestId ? { requestId } : {}),
+        });
+      return bounded(result);
+    };
+    handlers.jig_ask_input = async ({ instanceId: given, input, title, options, blocks }) => {
+      const instanceId = pick(given);
+      const rt = open(instanceId);
+      const role = findRole(inputRoles(await rt.view(projectId, instanceId)), input);
+      if (!role) throw new DomainError('NOT_FOUND');
+      if (options.filter((o) => o.recommended).length !== 1) throw new DomainError('INVALID_INPUT');
+      const documents = jigInputDocuments(sources);
+      const checked = options.map((option, n) => {
+        const { picks, problems } = resolveLayers(documents, option.layers, option.linkId);
+        return { option, n, picks, problems };
+      });
+      const bad = checked.find((c) => c.problems.length);
+      if (bad)
+        return bounded({
+          ok: false,
+          error: bad.problems[0].error,
+          option: bad.n + 1,
+          problems: bad.problems,
+        });
+      const tag =
+        role.key
+          .split('.')
+          .at(-1)!
+          .replace(/[^A-Za-z0-9_-]/g, '')
+          .slice(0, 24) || 'role';
+      const questionId = `input-${tag}-${randomBytes(2).toString('hex')}`;
+      const card = {
+        id: questionId,
+        title: title ?? `${role.title}로 어느 레이어를 쓸까요?`,
+        options: checked.map(({ option, n, picks }) => ({
+          id: `layers-${n + 1}`,
+          label: clipLabel(option.label ?? picks.map((p) => p.layer).join(', ')),
+          hint: `${[...new Set(picks.map((p) => p.document.name))].join(', ')} · 객체 ${picks.reduce((sum, p) => sum + p.objectCount, 0)}개`,
+          recommended: option.recommended,
+        })),
+        blocks: blocks ?? role.title,
+        allowFree: true,
+      };
+      // What each option sets: the answer route applies it without another AI turn (T-293).
+      ledger?.({
+        kind: 'result-ref',
+        body: {
+          appAction: 'input-question',
+          by: 'ai',
+          instanceId,
+          questionId,
+          input: role.key,
+          options: Object.fromEntries(
+            checked.map(({ n, picks }) => [
+              `layers-${n + 1}`,
+              {
+                // The words the person reads: the answer applies only on this same card (T-293).
+                label: card.options[n].label,
+                layers: picks.map((p) => p.layer),
+                linkIds: [...new Set(picks.map((p) => p.document.linkId))],
+              },
+            ]),
+          ),
+        },
+        ...(requestId ? { requestId } : {}),
+      });
+      return {
+        question: card,
+        next: 'End this turn with status "question" and exactly this card in questions. VIDE sets the role from the answer and recalculates; do not call jig_set_input for it.',
+      };
+    };
     handlers.jig_run = async ({ instanceId: given, until, mode }) => {
       const instanceId = pick(given);
       const report = await open(instanceId).run(projectId, instanceId, {
@@ -1849,8 +2017,16 @@ export function conversationSources(
     workspace,
     jigs: data ? jigRuntimeFor(workspace, data) : undefined,
     links: new DocumentLinks(workspace.store),
+    readInput: (document, layers) =>
+      readForJig({ workspace }, conversation.projectId, {
+        linkId: document.linkId,
+        syncId: document.syncId,
+        layers,
+        includeHidden: false,
+      }),
     agenda: new Agenda(workspace.store),
     ledger,
+    personWords: () => personWordsOf(workspace, conversation, requestId),
     ...(data ? { skills: () => skillCatalog(workspace, data, conversation.projectId) } : {}),
     ...(data ? { facts: factsOf(workspace, data, conversation.projectId) } : {}),
     ...(data && conversation.kind === 'jig-make' && conversation.draftId
@@ -1860,6 +2036,96 @@ export function conversationSources(
           }),
         }
       : {}),
+  };
+}
+/**
+ * The person's words in a conversation (SPEC-07.18 9): this turn's text, unless VIDE wrote it from
+ * question card answers, and every answer the person gave themself (the chosen option's label and
+ * the layers it carries, or their free text). [권장값으로 진행] answers are assumptions and stay out.
+ */
+export function personWordsOf(
+  workspace: Workspace,
+  conversation: { id: string; projectId: string },
+  requestId: string | undefined,
+): string[] {
+  let ledger: ReturnType<ConversationStore['ledger']>;
+  try {
+    ledger = new ConversationStore(workspace.store).ledger(conversation.id, { current: true });
+  } catch {
+    ledger = [];
+  }
+  const words: string[] = [];
+  const answerTurn = ledger.some((item) => item.kind === 'answer' && item.requestId === requestId);
+  if (requestId && !answerTurn)
+    try {
+      const body = (workspace.brief(conversation.projectId, requestId).input as { body?: unknown })
+        .body;
+      if (typeof body === 'string') words.push(body);
+    } catch {
+      // No such request: only the answers count.
+    }
+  const cards = new Map<string, Record<string, { label?: unknown; layers?: unknown }>>();
+  for (const item of ledger) {
+    const body = (item.body ?? {}) as Record<string, unknown>;
+    if (
+      item.kind === 'result-ref' &&
+      body.appAction === 'input-question' &&
+      typeof body.questionId === 'string' &&
+      body.options &&
+      typeof body.options === 'object'
+    )
+      cards.set(
+        body.questionId,
+        body.options as Record<string, { label?: unknown; layers?: unknown }>,
+      );
+  }
+  for (const item of ledger) {
+    const body = (item.body ?? {}) as Record<string, unknown>;
+    if (item.kind !== 'answer' || body.by !== 'user') continue;
+    if (typeof body.label === 'string') words.push(body.label);
+    if (typeof body.text === 'string') words.push(body.text);
+    const option =
+      typeof body.questionId === 'string' && typeof body.optionId === 'string'
+        ? cards.get(body.questionId)?.[body.optionId]
+        : undefined;
+    // The option's layers only when the person saw that option's words (the card VIDE recorded).
+    if (option && option.label === body.label && Array.isArray(option.layers))
+      words.push(...option.layers.filter((l): l is string => typeof l === 'string'));
+  }
+  return words;
+}
+/** A card option's label: what the person reads, at most 80 characters. */
+const clipLabel = (text: string) => (text.length > 80 ? text.slice(0, 79) + '…' : text);
+/** The linked files with a stored Sync and its layer table (SPEC-07.18 9). */
+export function jigInputDocuments(
+  sources: Pick<ConversationToolSources, 'projectId' | 'workspace' | 'links'>,
+): JigInputDocument[] {
+  const { projectId, workspace, links } = sources;
+  if (!links) return [];
+  return links.list(projectId).flatMap((link) => {
+    const sync = latestSync(workspace, projectId, link.id);
+    return sync
+      ? [{ linkId: link.id, name: link.name, syncId: sync.syncId, layers: layersOf(sync.model) }]
+      : [];
+  });
+}
+/** The role path of a conversation (jig_set_input, the answer of a jig_ask_input card). */
+export function jigInputDeps(
+  sources: Pick<ConversationToolSources, 'projectId' | 'workspace' | 'links' | 'readInput'>,
+  runtime: NonNullable<ConversationToolSources['jigs']>,
+): JigInputDeps {
+  const { recordRead, setAssembly } = runtime;
+  if (!recordRead || !setAssembly || !sources.readInput)
+    throw new DomainError('EXECUTOR_NOT_READY');
+  return {
+    runtime: {
+      view: runtime.view.bind(runtime),
+      run: runtime.run.bind(runtime),
+      recordRead: recordRead.bind(runtime),
+      setAssembly: setAssembly.bind(runtime),
+    },
+    documents: () => jigInputDocuments(sources),
+    read: sources.readInput,
   };
 }
 /** The project's crawler DB and review layer; undefined for an id that names no DB file. */

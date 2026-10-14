@@ -265,16 +265,46 @@ export interface TurnAnswer {
   text?: string;
   recommended: boolean;
 }
-/** The next turn's request text from the answers. */
-export function formatAnswers(answers: TurnAnswer[]) {
+/** An answer VIDE applied to a jig input role itself (SPEC-07.18 9.4, T-293), or could not. */
+export interface AppliedAnswer {
+  questionId: string;
+  ok: boolean;
+  /** What the person reads: '슬래브 경계 ← 3D::S-Slab' or why it was not set. */
+  text: string;
+  /**
+   * Not set on purpose (SPEC-07.18 9.4): the card shown differs from the recorded one, the answer is
+   * a [권장값으로 진행] assumption, or the card was asked in a Plan turn.
+   */
+  held?: 'mismatch' | 'recommended' | 'plan';
+}
+/**
+ * The next turn's request text from the answers. It is the person's message in the conversation:
+ * the question and the chosen words only, never the option keys (SPEC-02.19 6, T-294); the keys
+ * stay in the ledger's answer items.
+ */
+export function formatAnswers(answers: TurnAnswer[], applied: readonly AppliedAnswer[] = []) {
+  const done = applied.filter((a) => a.ok);
+  const held = applied.filter((a) => a.held);
+  const failed = applied.filter((a) => !a.ok && !a.held);
   return [
     '질문 카드 답변:',
     ...answers.map(({ question, option, text }) => {
       const choice = [option ? option.label : undefined, text ? `"${text}"` : undefined]
         .filter(Boolean)
         .join(' · ');
-      return `- ${question.title} → ${choice} [${question.id}${option ? '=' + option.id : ''}]`;
+      return `- ${question.title} → ${choice}`;
     }),
-    '이 답을 결정으로 받아 이어서 진행하세요.',
+    ...(done.length
+      ? [`입력에 바로 넣고 다시 계산했습니다: ${done.map((a) => a.text).join(' · ')}`]
+      : []),
+    ...(failed.length ? [`입력에 넣지 못했습니다: ${failed.map((a) => a.text).join(' · ')}`] : []),
+    ...(held.length
+      ? [
+          `입력에 넣지 않았습니다: ${held.map((a) => a.text).join(' · ')}. 사람이 확인하기 전에는 이 레이어로 역할을 정하지 마세요.`,
+        ]
+      : []),
+    done.length && done.length === answers.length
+      ? '넣은 입력과 다시 계산한 결과를 요약하세요.'
+      : '이 답을 결정으로 받아 이어서 진행하세요.',
   ].join('\n');
 }

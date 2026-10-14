@@ -18,7 +18,14 @@ import { WorkThread } from '../work-view.tsx';
 import { linkedRequestDraft, interventionTargetDraft } from '../linked-draft.ts';
 import { reviewsOf, openReview } from '../reviews.tsx';
 import { jigRouteText } from '../request-route.ts';
-import { skillChecklist, skillTurnStatus, startSkill } from '../skill-start.ts';
+import {
+  followRun,
+  skillChecklist,
+  skillTurnStatus,
+  startSkill,
+  type SkillRunReport,
+} from '../skill-start.ts';
+import { JIG_PARAMS_CHANGED, JIG_RAN } from '../jig-panel/instance.ts';
 import {
   AgendaTurns,
   AGENDA_CHANGED,
@@ -111,6 +118,11 @@ export function renderQuestionCards() {
           answerPath: `/projects/${encodeURIComponent(projectId)}/requests/${encodeURIComponent(last.id)}/questions`,
         }
       : {}),
+    // Input roles set from the answers (T-293): the open jig re-reads its role cards and steps.
+    onApplied: (instanceIds: string[]) => {
+      for (const instanceId of instanceIds)
+        dispatchEvent(new CustomEvent(JIG_PARAMS_CHANGED, { detail: { instanceId } }));
+    },
     onAnswered: ({ id }: { id: string }) =>
       void requestData(`/projects/${projectId}/requests/${id}`).then((request) => {
         if (sessionState.project?.id !== projectId) return;
@@ -393,7 +405,7 @@ export function interventionReason(id: string): string | undefined {
   const original = parent?.input;
   if (!parent || !original || original.parentRequestId) return '상위 작업에서 추가하세요.';
   if (!draftHasInput(draftState.state))
-    return '작성기에 바꿀 조건을 쓰면 추가 지시를 보낼 수 있습니다.';
+    return '요청 입력칸에 바꿀 조건을 쓰면 추가 지시를 보낼 수 있습니다.';
   const draft = interventionTargetDraft(draftState.state, parent);
   if (validate(draft)) return validate(draft);
   if (
@@ -474,6 +486,7 @@ export function hideRouteCard() {
  * [진행] in 계획 and [일반 대화로] — never a card with only [닫기].
  */
 export function renderSkillRow(options: { status?: string; progress?: () => void } = {}) {
+  lastSkillRow = options;
   const shown = workState.shownSkill;
   if (!shown) {
     setRouteCard({ content: null, hidden: true });
@@ -510,6 +523,28 @@ export function renderSkillRow(options: { status?: string; progress?: () => void
     routeRow: true,
   });
 }
+/** What the route row last showed, and how the start's AI turn ended (T-295). */
+let lastSkillRow: { status?: string; progress?: () => void } = {};
+let skillTurn: { id: string; state: string } | undefined;
+/**
+ * The started work copy ran again (a person confirmed, fetched, changed a setting): the row's
+ * 사람 확인 대기 · 멈춘 단계 and the steps left follow that run (SPEC-02.17 2, T-295 — R4 R1-B kept
+ * '사람 확인 대기: 대상 필지 확정 · 멈춘 단계: 수집' after every step had computed).
+ */
+if (typeof window !== 'undefined')
+  window.addEventListener(JIG_RAN, (event) => {
+    const detail = (event as CustomEvent<{ instanceId?: string; report?: unknown }>).detail;
+    const shown = workState.shownSkill;
+    const start = shown?.start;
+    if (!start || detail?.instanceId !== start.instanceId) return;
+    if (!followRun(start, detail.report as SkillRunReport | undefined)) return;
+    if (workState.routeCard.content?.kind !== 'skill') return;
+    const ended =
+      skillTurn && skillTurn.id === shown.aiRequest
+        ? skillTurnStatus(skillTurn.state, start)
+        : undefined;
+    renderSkillRow({ ...lastSkillRow, ...(ended ? { status: ended } : {}) });
+  });
 export function hideSkillRow() {
   workState.shownSkill = undefined;
   hideRouteCard();
@@ -544,6 +579,16 @@ export async function followAppActions(conversationId: string, finished?: string
         if (!item.requestId || !dashboardAgendaRequests.has(item.requestId)) agendaTurns.add(item);
         dispatchEvent(new Event(AGENDA_CHANGED));
       }
+      continue;
+    }
+    // An input role the AI set from the person's words (jig_set_input, T-293): the open jig
+    // re-reads its role cards and steps.
+    if (body.appAction === 'jig_input') {
+      performedActions.add(item.id);
+      if ((item.createdAt ?? '') >= pageOpened && typeof body.instanceId === 'string')
+        dispatchEvent(
+          new CustomEvent(JIG_PARAMS_CHANGED, { detail: { instanceId: body.instanceId } }),
+        );
       continue;
     }
     if (body.appAction !== 'jig_open' && body.appAction !== 'ui_go') continue;
@@ -656,6 +701,7 @@ export async function poll(
     // The jig start's AI turn ended: the route row settles (SPEC-02.17 2, T-272).
     const shown = workState.shownSkill;
     if (shown?.aiRequest === id) {
+      skillTurn = { id, state: request.state };
       const status = skillTurnStatus(request.state, shown.start);
       if (status) renderSkillRow({ status });
     }

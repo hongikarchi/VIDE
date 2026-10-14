@@ -395,7 +395,7 @@ export function StructureJig({ context }: { context: JigContext }) {
         .map((m) => ({ id: m.id, role: m.role, note: m.provenance?.note })),
     };
     await context.send({
-      body: '구조 분석 jig 초안(첨부 structure-draft.json)을 검토해 줘. 입력은 Sync한 도면·모델에서 코드로 만든 해석 모델 초안이야. 역할(기둥·거더·보·가새) 판정, 단면 추정, 가정 표시 항목, 점검 문제를 보고, 레이어·그룹별로 무엇을 어떻게 고치면 되는지(역할, KS H형강 단면 이름 H-높이x폭x웨브x플랜지, 지점 조건) 표로 제안해 줘. 첨부에 없는 부재 ID나 수치는 만들지 말고, 확실하지 않은 것은 확인 질문으로 남겨 줘.',
+      body: '구조 분석 jig 초안(첨부 structure-draft.json)을 검토해 줘. 입력은 동기화한 도면·모델에서 코드로 만든 해석 모델 초안이야. 역할(기둥·거더·보·가새) 판정, 단면 추정, 가정 표시 항목, 점검 문제를 보고, 레이어·그룹별로 무엇을 어떻게 고치면 되는지(역할, KS H형강 단면 이름 H-높이x폭x웨브x플랜지, 지점 조건) 표로 제안해 줘. 첨부에 없는 부재 ID나 수치는 만들지 말고, 확실하지 않은 것은 확인 질문으로 남겨 줘.',
       files: [{ name: 'structure-draft.json', text: JSON.stringify(summary) }],
       permission: 'review',
       jig: { kind: 'structure-draft-review' },
@@ -512,13 +512,13 @@ export function StructureJig({ context }: { context: JigContext }) {
       <div hidden={view !== 'analysis'}>
         <div className="jig-inputs">
           <label>
-            입력 Sync
+            입력 동기화 기록
             <select
-              aria-label="입력 Sync"
+              aria-label="입력 동기화 기록"
               value={syncId}
               onChange={(e) => setSyncId(e.target.value)}
             >
-              {!context.sources.length ? <option value="">Sync가 없습니다</option> : null}
+              {!context.sources.length ? <option value="">동기화 기록이 없습니다</option> : null}
               {[...rhino, ...cad].map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.host === 'zwcad' ? 'CAD · ' : 'Rhino · '}
@@ -674,7 +674,7 @@ export function StructureJig({ context }: { context: JigContext }) {
             <h3>
               해석 모델 초안 · 절점 {draft.model.nodes.length} · 부재 {draft.model.members.length}
               {state?.draftStale ? (
-                <span className="pill"> 입력 Sync가 더 새것으로 바뀜</span>
+                <span className="pill"> 입력 동기화 기록이 더 새것으로 바뀜</span>
               ) : null}
               {inputsChanged ? (
                 <span className="pill" data-state="changed">
@@ -685,8 +685,8 @@ export function StructureJig({ context }: { context: JigContext }) {
             </h3>
             {inputsChanged ? (
               <p className="jig-structure-notice" role="status">
-                Sync·입력 형태·역할 레이어가 이 초안을 만든 때와 다릅니다. [초안 만들기]를 다시 눌러
-                바뀐 입력으로 초안을 만든 뒤 확정하세요.
+                동기화 기록·입력 형태·역할 레이어가 이 초안을 만든 때와 다릅니다. [초안 만들기]를
+                다시 눌러 바뀐 입력으로 초안을 만든 뒤 확정하세요.
               </p>
             ) : null}
             {issues.length ? (

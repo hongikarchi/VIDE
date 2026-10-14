@@ -412,7 +412,10 @@ try {
   };
   await openWork('basis-one');
   const card = page.locator('.work-view[data-request-id="basis-one"]');
-  assert.match(await card.textContent(), /1개는 목록·네이티브 파일에 보존 · 화면 표현 미지원/);
+  assert.match(
+    await card.textContent(),
+    /1개는 목록·네이티브 파일에 보존 · 화면에 그릴 수 없는 객체/,
+  );
   await card.getByRole('button', { name: '이 후보 보기', exact: true }).click();
   await page.getByRole('button', { name: '모델 표시 상태', exact: true }).click();
   assert.match(await settings.textContent(), /전체 1개 · 화면 표시 0개 · 표현 미지원 1개/);

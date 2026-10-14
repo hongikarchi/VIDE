@@ -1214,9 +1214,9 @@ export function routeCard(
       };
     case 'sync_link':
       return {
-        text: `${route.app.link ? route.app.link + '을(를) ' : '연결 파일을 '}다시 Sync 받을까요?`,
+        text: `${route.app.link ? route.app.link + '을(를) ' : '연결 파일을 '}다시 동기화할까요?`,
         tier: 'T1',
-        run: 'Sync 받기',
+        run: '동기화하기',
         toAi: true,
       };
     case 'install_connector':

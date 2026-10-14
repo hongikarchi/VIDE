@@ -479,7 +479,10 @@ try {
     await refusedNote.textContent(),
     /^실행하지 않음 · 읽기 전용으로 열린 문서라 실행하지 않았습니다\. Rhino에서 다른 이름으로 저장/,
   );
-  assert.doesNotMatch(await work().textContent(), /호스트 결과 확인 필요|확인되지 않았습니다/);
+  assert.doesNotMatch(
+    await work().textContent(),
+    /CAD 프로그램 결과 확인 필요|확인되지 않았습니다/,
+  );
   assert.equal(await work().locator('.direct-execution').count(), 0);
 
   // 계획: the AI plans without writing; [진행] continues in 자동 and opens that work.

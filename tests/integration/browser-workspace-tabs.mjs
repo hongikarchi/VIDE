@@ -158,13 +158,13 @@ try {
 
   // A jig opens in a context tab: the panel on the left of the centre, the 3D view beside it.
   await dialog
-    .locator('.jig-card', { hasText: 'Sync · 도면↔모델' })
+    .locator('.jig-card', { hasText: '동기화 · 도면↔모델' })
     .getByRole('button', { name: '열기', exact: true })
     .click();
-  const syncTab = tab(`Sync · ${projectName}`);
+  const syncTab = tab(`동기화 · ${projectName}`);
   assert.equal(await syncTab.getAttribute('aria-selected'), 'true');
   // An open jig shows the row (32 px, over the centre only) and belongs to the rail's JIG.
-  assert.deepEqual(await tabs.getByRole('tab').allTextContents(), [`Sync · ${projectName}`]);
+  assert.deepEqual(await tabs.getByRole('tab').allTextContents(), [`동기화 · ${projectName}`]);
   assert.deepEqual(await pressed(), ['jig']);
   const row = await page.locator('.workspace-tabs').boundingBox();
   const jigCentre = await page.locator('.workspace').boundingBox();
@@ -320,7 +320,9 @@ try {
   assert.equal(await tabs.isVisible(), false);
   const menu = page.getByRole('combobox', { name: '작업공간' });
   assert.equal(await menu.inputValue(), 'jig:legacy:sync');
-  assert.ok(await page.getByRole('button', { name: `Sync · ${projectName} 탭 닫기` }).isVisible());
+  assert.ok(
+    await page.getByRole('button', { name: `동기화 · ${projectName} 탭 닫기` }).isVisible(),
+  );
   await menu.selectOption({ label: '모델' });
   await dialog.waitFor({ state: 'hidden' });
   assert.equal(await menu.inputValue(), 'model');
@@ -447,7 +449,7 @@ try {
   await rail('model').click();
 
   // Closing every open jig hides the row again; the model screen stays.
-  for (const name of [`Sync · ${projectName}`, `격자 골조 배치 예제 · ${projectName}`])
+  for (const name of [`동기화 · ${projectName}`, `격자 골조 배치 예제 · ${projectName}`])
     await page.getByRole('button', { name: `${name} 탭 닫기` }).click();
   assert.equal(await page.locator('.workspace-tabs').isVisible(), false);
   assert.deepEqual(await pressed(), ['model']);

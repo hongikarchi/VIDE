@@ -103,7 +103,7 @@ try {
   );
   await page.reload();
   await page.locator('.link-row').nth(2).waitFor();
-  assert.match(await page.locator('.link-row').first().textContent(), /model\.3dm.*닫힘.*Sync/);
+  assert.match(await page.locator('.link-row').first().textContent(), /model\.3dm.*닫힘.*동기화/);
   // Every visible file is drawn together; the object tree groups by file.
   await page.waitForFunction(() =>
     document.querySelector('.object-summary')?.textContent.startsWith('4개 객체'),
@@ -335,7 +335,7 @@ try {
   await foreignNote.waitFor();
   assert.match(
     await foreignNote.textContent(),
-    /다른 프로젝트의 연결 ID가 있던 문서 — 새 연결 파일로 추가함/,
+    /다른 프로젝트와 이어져 있던 문서 — 새 연결 파일로 추가함/,
   );
   await foreignNote.getByRole('button', { name: '확인' }).click();
   await foreignNote.waitFor({ state: 'detached' });

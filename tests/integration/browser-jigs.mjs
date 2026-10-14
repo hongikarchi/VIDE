@@ -270,7 +270,7 @@ try {
   assert.equal(await installed.locator('.jig-card-head .jig-icon svg').count(), 1);
   const iconOf = (card) =>
     card.locator('.jig-card-head .jig-icon svg').evaluate((svg) => svg.innerHTML);
-  const syncCard = dialog.locator('.jig-card', { hasText: 'Sync · 도면↔모델' });
+  const syncCard = dialog.locator('.jig-card', { hasText: '동기화 · 도면↔모델' });
   const gridCard = dialog.locator('.jig-card', { hasText: '격자 골조 배치 예제' });
   const syncIcon = await iconOf(syncCard);
   assert.notEqual(syncIcon, await iconOf(installed));
@@ -374,11 +374,11 @@ try {
   await installed.waitFor({ state: 'detached' });
   assert.deepEqual(unpinned, [`/api/v1/projects/${projectId}/jigs/project%2Fcheck-sample/pin`]);
   await dialog
-    .locator('.jig-card[data-status="available"]', { hasText: 'Sync · 도면↔모델' })
+    .locator('.jig-card[data-status="available"]', { hasText: '동기화 · 도면↔모델' })
     .getByRole('button', { name: '열기', exact: true })
     .click();
   // The jig opens in its own context tab.
-  const syncTab = tabs.getByRole('tab', { name: `Sync · ${projectName}`, exact: true });
+  const syncTab = tabs.getByRole('tab', { name: `동기화 · ${projectName}`, exact: true });
   assert.equal(await syncTab.getAttribute('aria-selected'), 'true');
   // The tab draws the jig's icon before its name; the name stays the tab's accessible name.
   assert.equal(
@@ -386,11 +386,11 @@ try {
     syncIcon,
   );
   assert.match(
-    await dialog.getByLabel('Rhino Sync').locator('option:checked').textContent(),
+    await dialog.getByLabel('Rhino 동기화 기록').locator('option:checked').textContent(),
     /model\.3dm/,
   );
   assert.match(
-    await dialog.getByLabel('ZWCAD Sync').locator('option:checked').textContent(),
+    await dialog.getByLabel('ZWCAD 동기화 기록').locator('option:checked').textContent(),
     /plan\.dwg/,
   );
   await dialog.getByLabel('일치 허용 (mm)').fill('0.5');
@@ -518,7 +518,7 @@ try {
   assert.equal(await page.locator('#left').isVisible(), true);
   await page.getByRole('button', { name: 'JIG', exact: true }).click();
   await dialog
-    .locator('.jig-card[data-status="available"]', { hasText: 'Sync · 도면↔모델' })
+    .locator('.jig-card[data-status="available"]', { hasText: '동기화 · 도면↔모델' })
     .getByRole('button', { name: '열기', exact: true })
     .click();
   await dialog.locator('.jig-relation').waitFor();
@@ -595,10 +595,10 @@ try {
   await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
   await page.getByRole('button', { name: 'JIG', exact: true }).click();
   await dialog
-    .locator('.jig-card[data-status="available"]', { hasText: 'Sync · 도면↔모델' })
+    .locator('.jig-card[data-status="available"]', { hasText: '동기화 · 도면↔모델' })
     .getByRole('button', { name: '열기', exact: true })
     .click();
-  const rhinoPicker = dialog.getByLabel('Rhino Sync');
+  const rhinoPicker = dialog.getByLabel('Rhino 동기화 기록');
   const solidsValue = await rhinoPicker
     .locator('option', { hasText: 'solids.3dm' })
     .getAttribute('value');
@@ -608,7 +608,7 @@ try {
   await empty.waitFor();
   assert.equal(
     await empty.textContent(),
-    'Rhino Sync에 비교할 요소가 없습니다 — 객체 3개(Brep 2 · Extrusion 1)에 선·폴리선이 없고, 단면 높이에 걸친 솔리드도 없습니다. 단면 높이를 바꿔 보세요. 면·블록·점은 비교하지 않습니다.',
+    'Rhino 동기화 기록에 비교할 요소가 없습니다 — 객체 3개(Brep 2 · Extrusion 1)에 선·폴리선이 없고, 단면 높이에 걸친 솔리드도 없습니다. 단면 높이를 바꿔 보세요. 면·블록·점은 비교하지 않습니다.',
   );
   assert.equal(await dialog.locator('[data-sync-empty="CAD"]').count(), 0);
   // Solids are compared by their plan section; the jig says which rule made each side's elements.

@@ -9,7 +9,7 @@
 | `run.mjs` | Playwright로 UI를 열고 스크린샷 → 페르소나 → 행동 반복, `run.json`·`steps.jsonl`·`steps/NN.png` 기록 |
 | `persona-step.mjs` | `personaStep()`(한 단계), `canaryStep()`(사전 점검), `parseStep()`·`canaryUnknown()` |
 | `personas/intern.md` | 페르소나 시스템 프롬프트(건축사사무소 인턴) |
-| `scenarios.json` | 시나리오 문장(사용자 원문)·연결할 호스트(`hosts`)·열릴 jig(`jigs`)·운영자 정보(`operator`)·전문가 최소 단계·목표 증거 |
+| `scenarios.json` | 시나리오 문장(사용자 원문)·연결할 호스트(`hosts`)·열릴 jig(`jigs`)·운영자 정보(`operator`)·목표 뒤 확인(`afterGoal`)·전문가 최소 단계·목표 증거 |
 | `persona-step.test.mjs` | 가짜 `claude`로 오프라인 왕복 시험: `node --test tools/persona/persona-step.test.mjs` |
 | `isolation.mjs` · `isolation.test.mjs` | jig 작업본·대화 격리(T-280)와 요청별 CLI `resume` 읽기, 가짜 엔진 API 시험: `node --test tools/persona/isolation.test.mjs` |
 | `host-link.ps1` · `host-link.lib.ps1` | 사본을 Rhino 8·ZWCAD 2023에 열고 VIDE 프로젝트에 무인 Link(T-286, 아래 '호스트 구성') |
@@ -26,7 +26,7 @@ node tools/persona/run.mjs --scenario R1-HIDE --project <id> --launch-file .vide
 node tools/persona/run.mjs --scenario R1-HIDE --project <검증 루프 R1의 id> --launch "<url#token>"
 ```
 
-옵션: `--persona intern` · `--max-steps 12` · `--out .vide/persona/<stamp>-<scenario>` · `--claude <경로>`(기본 `claude`: `~/.local/bin/claude(.exe)`가 있으면 그것, 없으면 PATH) · `--headless` · `--no-fresh-conversation`(기본은 새 대화) · `--no-fresh-jigs`(기본은 jig 작업본·대화 격리, 아래) · `--logs <엔진 logs 폴더>`(요청별 CLI 시작 읽기; 기본은 launch 파일 옆 `logs`, `--launch`면 알아본 엔진의 자료 폴더 `logs`) · `--idle-timeout 600`(초) · `--answers '<JSON>'` 또는 `--answers <파일.json>`(운영자 정보, 시나리오의 `operator` 위에 덮음) · `--no-host-check`(호스트 확인 생략, 개발용).
+옵션: `--persona intern` · `--max-steps 12` · `--out .vide/persona/<stamp>-<scenario>` · `--claude <경로>`(기본 `claude`: `~/.local/bin/claude(.exe)`가 있으면 그것, 없으면 PATH) · `--headless` · `--no-fresh-conversation`(기본은 새 대화) · `--no-fresh-jigs`(기본은 jig 작업본·대화 격리, 아래) · `--logs <엔진 logs 폴더>`(요청별 CLI 시작 읽기; 기본은 launch 파일 옆 `logs`, `--launch`면 알아본 엔진의 자료 폴더 `logs`) · `--idle-timeout 600`(초) · `--answers '<JSON>'` 또는 `--answers <파일.json>`(운영자 정보, 시나리오의 `operator` 위에 덮음) · `--no-host-check`(호스트 확인 생략, 개발용) · `--no-after-goal`(시나리오의 `afterGoal` 확인 생략).
 
 ## 호스트 구성과 운영자 정보 (T-286)
 
@@ -48,7 +48,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\persona\host-link.ps1 
 - **Rhino:** `Rhino.exe /nosplash /runscript="_-RunPythonScript (check.py) _VIDELink" <사본>`. `check.py`가 문서의 연결 ID 항목을 `stored-links.json`에 적고(다른 문서에서 돌았으면 거절), `_VIDELink`의 프로젝트 선택 창('VIDE에 연결 · <문서>')에서 이름이 같은 프로젝트를 골라 [Link]를 누른다. 두 번째 창('VIDE 연결 · <문서>', '닫힌 연결 파일이 있습니다' 또는 사본 경우)이 뜨면 '새 연결 파일로 추가' → [연결].
 - **ZWCAD:** `ZWCAD.exe <사본>`. XREF·SHX 누락 창은 '무시하고 계속'. COM(`ZWCAD.Application.2023`)으로 도면이 열린 것과 `VIDE_LINKS`를 확인하고, ZWCAD를 앞으로 가져온 뒤 다른 PowerShell 프로세스에서 `SendCommand('VIDECADLink ')`를 보낸다(모달 창이 떠 있는 동안 `SendCommand`가 막히므로). 대화창 처리는 Rhino와 같다.
 - 그 뒤 `GET …/links`를 2초마다 읽어 이 사본의 행(같은 호스트, 연결 열림, 같은 경로 또는 파일 이름)이 Link 뒤 첫 Sync를 마칠 때까지 기다린다(`-SyncTimeoutSec 600`; ZWCAD `cad.dwg` 첫 Sync는 라운드 2에 151 s). 행에 `lastError`가 생기면 실패다.
-- 출력(표준 출력, JSON 한 줄): `ok, host, document, project{id,name}, pid, storedLinkEntries[], strippedLinkEntries[], choice{reason: closed|copy, picked: new}|null, linkId, firstSync{requestId, at, ms}, timings{openMs, projectDialogMs, choiceDialogMs?, linkedMs, firstSyncMs, totalMs}(실행부터 ms), otherProjectLinksChanged[], state, reason`. 진행 기록은 표준 오류. 런 폴더 `.vide/persona/host-link/<시각>-<host>/`에 `state.json`(pid·시작 시각)·`check.py`·`stored-links.json`.
+- 출력(표준 출력, JSON 한 줄): `ok, host, document, project{id,name}, pid, storedLinkEntries[], strippedLinkEntries[], choice{reason: closed|copy, picked: new}|null, linkId, firstSync{requestId, at, ms, hostMs, objects, state, msSource, linkToSyncWallMs, logsDir}, timings{openMs, projectDialogMs, choiceDialogMs?, linkedMs, firstSyncMs, totalMs}(실행부터 ms), otherProjectLinksChanged[], state, reason`. 진행 기록은 표준 오류. 런 폴더 `.vide/persona/host-link/<시각>-<host>/`에 `state.json`(pid·시작 시각)·`check.py`·`stored-links.json`.
+- **`firstSync.ms`(T-292, 2026-10-14):** 엔진이 잰 그 Sync의 시간이다. 요청 기록(`GET …/requests/<id>?view=summary`)에는 상태만 있고 걸린 시간이 없으므로, 엔진 로그 `engine-<날짜>.jsonl`의 `sync` 줄(`src/server/document-sync.ts`: `ms` 전체, `hostMs` 호스트 읽기, `objects`)을 요청 id로 찾아 읽는다(읽기만, 최대 15 s). 로그 폴더는 `-Logs`, 없으면 `launch.json`의 주소가 `-Launch`와 같은 엔진(설치 `%LOCALAPPDATA%VIDE`, 개발 `.videdev-data`), 그다음 포트(47821·47831)로 고른다. 못 찾으면 `ms: null`, `msSource: not-in-engine-log|no-engine-log`. Link 행을 처음 본 때부터 Sync 끝을 본 때까지의 벽시계는 `linkToSyncWallMs`다(라운드 4의 20 ms는 이 값이었다: 행을 처음 봤을 때 Sync가 이미 끝나 있었다. 엔진 로그는 1,408 ms).
 - **거절(exit 2):** 사본이 `<저장소>\.vide\` 밖(AI.md §8), 같은 호스트가 이미 실행 중(사용자가 작업 중일 수 있음), 프로젝트 이름이 `검증 루프`로 시작하지 않음(개발 엔진에서는 `-AnyProject`), 같은 이름의 프로젝트가 둘 이상, **문서에 다른 프로젝트의 연결 ID가 있음**(이때는 아무것도 연결하지 않고 호스트를 저장 없이 닫는다; `-StripLinkId`는 열린 문서에서만 그 항목을 지우고 진행). **exit 3:** 연결은 됐으나 그 사이 다른 프로젝트의 Link 행이 바뀜(`otherProjectLinksChanged`, `-SkipOtherProjects`로 생략). 되돌리기는 사용자 결정이다. **exit 1:** 시간 초과·VIDE 오류 창·첫 Sync 실패 등. 호스트는 살펴볼 수 있게 열어 두므로 `-Close`로 닫는다.
 - 첫 Sync가 끝나면 `-Visible`이 없을 때 호스트 창을 최소화한다. 대화창 조작에는 창이 보여야 하므로 숨긴 채 띄우지는 않는다. 진행 중에는 호스트를 앞으로 가져오며(ALT 한 번 + `SetForegroundWindow`), 그동안 키보드·마우스를 쓰지 않는다.
 - `-Close`는 이 스크립트가 띄운 프로세스(pid와 시작 시각이 `state.json`과 같을 때만)를 `Stop-Process`로 닫는다. 사본이므로 저장하지 않는다. 닫은 뒤 `Get-Process Rhino,ZWCAD`로 확인한다.
@@ -63,18 +64,23 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\persona\host-link.ps1 
 
 1. 엔진 세션: `POST /api/v1/session {token}`(Origin 헤더) → 쿠키를 **새 브라우저 컨텍스트**(저장소 없음, 1440x900)에 넣고 `/?project=<id>`로 연다.
 2. canary: 페르소나에게 `VIDE·jig·Sync·Link가 무엇인지 아세요? 모르면 모른다고만 답하세요.`를 묻는다. 모른다고 답하지 않거나 뜻을 설명하면 런은 `untested`(미시험)로 끝난다.
-3. 단계마다 스크린샷 → `personaStep()` → 행동 적용(click: 좌표 클릭 / type: 좌표가 있으면 먼저 클릭하고 입력, `submit:true`일 때만 Enter / wait: 5초) → 새로 나타난 `data-request-id` 수집 → `steps.jsonl` 한 줄. 화면 텍스트(`document.body.innerText`)에서 내부 용어를 센다.
+3. 단계마다 스크린샷 → `personaStep()` → 행동 적용(click: 좌표 클릭 / type: 좌표가 있으면 먼저 클릭하고 입력, `submit:true`일 때만 Enter / select: 아래 '네이티브 선택칸' / wait: 5초) → 새로 나타난 `data-request-id` 수집 → `steps.jsonl` 한 줄. 화면 텍스트(`document.body.innerText`)에서 내부 용어를 센다.
 4. `done`·`declare_stuck`·`--max-steps`에서 멈춘다. 다른 출처로 가는 페이지 이동은 막고 새 창은 닫는다.
+5. 시나리오에 `afterGoal`이 있으면 반복이 정상으로 끝난 뒤(`completed`) 한 번 실행한다(아래 '목표 뒤 확인').
+
+**네이티브 선택칸(T-292, 2026-10-14).** Chrome은 `<select>`의 펼친 목록을 페이지 밖에 그려 스크린샷에 나오지 않는다(라운드 4 R1-D `r4-R1-D/steps/11`–`12.png`). 그래서 click 좌표의 요소(`document.elementFromPoint`, 또는 그 `<label>`이 가리키는 칸)가 켜진 `<select>`이면 드라이버는 누르지 않고 칸에 초점만 준 뒤 선택지(`text`, `value`; 빈 값 자리표시 '레이어를 고르세요'와 꺼진 항목 제외)를 1부터 번호를 붙여 다음 단계 프롬프트에 글로 싣는다. 페르소나는 `{"type":"select","index":<번호>}` 또는 `{"type":"select","text":"<항목 글>"}`로 답하고(`personas/intern.md` 규칙 12), 드라이버는 Playwright `selectOption({index})`로 고른다(`input`·`change` 이벤트 발생). 요소가 다시 그려졌으면 같은 좌표에서 다시 찾는다. 열린 목록이 없는데 `select`를 고르거나 없는 번호·글이면 형식 오류로 한 번 다시 묻는다. 다른 행동을 고르면 목록은 닫힌 것으로 본다. 기록: 그 단계 `steps.jsonl`의 `selectOpened{label, choices[{n,text,value}]}`, 고른 단계의 `selected{n,text,value,ok,reason?}`, `run.json`의 `selects`(적용 수).
+
+**목표 뒤 확인(`afterGoal`, T-292).** R1-HIDE는 `{"type":"undo","key":"u","toastButton":"되돌리기"}`다. 알림(`#message`)에 '되돌리기' 버튼이 보이면 누르고, 없으면 입력칸 초점을 풀고 U를 누른다(`src/ui/app/viewport.ts` viewKeys). 앞뒤로 화면이 쓰는 뷰포트 API `window.videViewport.hiddenCount()`를 읽어 `run.json` `afterGoal{type, how(toast:되돌리기|key:u), personaDone, hiddenBefore, hiddenAfter, undoRestored, reason?, screenshot: steps/after-goal.png}`에 남긴다. `undoRestored`는 숨긴 객체가 있었고 0으로 돌아오면 `true`, 남으면 `false`, 처음부터 숨긴 것이 없거나 3D 화면이 없어 읽지 못하면 `null`이다. 페르소나의 판단이 아니라 드라이버의 확인이며 스크린샷에는 들어가지 않는다. 런이 `completed`가 아니면 `afterGoal{skipped, undoRestored: null}`.
 
 ## 출력 (PLAN-51 계약 5)
 
-- `run.json`: `scenario, status(completed|driver-failed|aborted|untested), canary{asked, answeredUnknown}, steps, stuck, wrongClicks, unknownWords[], bannedWords[], requestIds[], typedInputs, reachedGoal(null), startedAt, endedAt, model` + 참고 필드(`stuckDeclared, stuckFlagged, noProgressPairs, goalReached(null), conversation, personaDone, reason, goal, expertSteps, goalEvidence, engine, project, engineKind(installed|dev|loop), blockedApi[], jigs, isolation, logsDir, cliSessions[]`).
+- `run.json`: `scenario, status(completed|driver-failed|aborted|untested), canary{asked, answeredUnknown}, steps, stuck, wrongClicks, unknownWords[], bannedWords[], requestIds[], typedInputs, reachedGoal(null), startedAt, endedAt, model` + 참고 필드(`stuckDeclared, stuckFlagged, noProgressPairs, goalReached(null), conversation, personaDone, reason, goal, expertSteps, goalEvidence, engine, project, engineKind(installed|dev|loop), blockedApi[], jigs, isolation, logsDir, cliSessions[], selects, afterGoal`).
   - `stuck` = `stuckDeclared`(`declare_stuck` 수) + `noProgressPairs`(PLAN-51 §2 '2단계 연속 무진전': 이웃한 두 단계가 모두 새 `data-request-id`를 만들지 않았고, 화면 텍스트(`innerText`의 sha256)가 같고, 행동 종류가 같은 쌍의 수).
   - `stuckFlagged` = 페르소나가 `stuck:true`로 적은 단계 수. `stuck`에 더하지 않고 따로 둔다. 스코어카드는 `stuck > 0` 또는 `stuckFlagged ≥ 2`를 P0로 본다. 이 필드가 없는 예전 런은 스코어카드가 `steps.jsonl`에서 센다.
   - `goalReached` = 운영자가 스크린샷을 읽고 손으로 적는 목표 도달 판정(`true`/`false`, 기본 `null`). 드라이버는 쓰지 않는다. 러너 기록 없이 페르소나만 돈 시나리오는 완료된 모든 런이 `goalReached: true`이고 막힘·내부 용어가 없을 때만 PASS가 되고, `null`이면 미시험, `false`면 P0다(`tools/ab/scorecard.mjs`).
   - `wrongClicks` = 페르소나가 `wrongTurn:true`로 적은 단계 수. `unknownWords`는 합집합.
   - `bannedWords` = `/SPEC-|PLAN-|JIG|hostUse|LINK_NOT_LIVE|세션|토큰|bake|overlay|handoff|stale/`의 서로 다른 일치(모든 단계 합집합).
-- `steps.jsonl`: `{ step, at, screenshot, persona{sees, reads[], unknownWords[], action{type,x,y,text,submit?}, confidence, stuck, wrongTurn, done, evidence?}, visibleTextLength, textHash(앞 16자), requestIds[], ms }`.
+- `steps.jsonl`: `{ step, at, screenshot, persona{sees, reads[], unknownWords[], action{type,x,y,text,submit?}, confidence, stuck, wrongTurn, done, evidence?}, visibleTextLength, textHash(앞 16자), requestIds[], operatorAnswers[]?, selectOpened?, selected?, ms }`.
 - `steps/NN.png`: 단계별 스크린샷(행동 전 화면).
 
 ## Claude CLI에 이미지를 주는 방법 (조사 결과, Claude Code 2.1.292)
@@ -91,6 +97,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\persona\host-link.ps1 
 - 페르소나의 생각 시간(단계당 수 초)은 제품 속도에서 제외한다. 속도(④)는 `tools/ab`의 `request-stages`로 잰다.
 - 브라우저의 웹 UI만 조작한다. 데스크톱 셸(WebView2 창)·Rhino 창은 조작하지 않는다. 호스트 연결은 런 전에 운영자가 `host-link.ps1`로 한다.
 - 운영자 답은 시나리오에 적은 사실만 준다. 페르소나가 다른 키로 물으면 답이 없고(`unknown`), 키 이름을 잘못 고르면(예: `site_address`) 같은 사실이라도 답하지 못한다. 그런 런은 `operatorAnswers`를 보고 `--answers`로 키를 더해 다시 돌린다.
-- 스케치 드래그·키보드 단축키·스크롤은 행동에 없다(1회차 범위, PLAN-51 §6).
+- 스케치 드래그·키보드 단축키·스크롤은 페르소나 행동에 없다(1회차 범위, PLAN-51 §6). U는 `afterGoal`에서 드라이버만 누른다.
+- 네이티브 `<select>`만 글 목록으로 바꾼다. 화면에서 직접 그린 펼침 목록(div 메뉴)은 스크린샷에 보이므로 그대로 click한다. 실제 엔진 화면(R1-D 역할 카드)에서의 select 동작은 라운드 5에서 확인한다(2026-10-14은 합성 페이지에서 `elementFromPoint`·`selectOption`·`change`만 확인).
 - 무진전 감지는 화면 텍스트만 비교한다. 글자는 같고 그림(뷰포트·색)만 바뀐 단계도 무진전으로 셀 수 있고, 시계처럼 저절로 바뀌는 글자가 있으면 세지 못한다.
 - `wrongTurn`·`unknownWords`는 페르소나의 자기 보고이며 '대행 판정'이다. canary가 통과해도 모델이 용어를 짐작할 수 있다.

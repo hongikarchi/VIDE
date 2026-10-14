@@ -418,7 +418,7 @@ export function S06Diagnose({ context }: { context: JigContext }) {
     setResult(undefined);
     setSelected(undefined);
     setNotice(
-      '읽을 Sync나 역할 레이어가 바뀌어 이전 진단 결과를 지웠습니다. 다시 [진단]을 누르세요.',
+      '읽을 동기화 기록이나 역할 레이어가 바뀌어 이전 진단 결과를 지웠습니다. 다시 [진단]을 누르세요.',
     );
   }, [context, result, inputKey]);
 
@@ -551,7 +551,7 @@ export function S06Diagnose({ context }: { context: JigContext }) {
         바뀌지 않습니다.
       </p>
       <fieldset className="jig-s06-sources">
-        <legend>읽을 Sync (연결 문서)</legend>
+        <legend>읽을 동기화 기록 (연결 문서)</legend>
         {rhino.length ? (
           rhino.map((source) => (
             <label key={source.id}>
@@ -572,7 +572,7 @@ export function S06Diagnose({ context }: { context: JigContext }) {
             </label>
           ))
         ) : (
-          <small>Rhino Sync가 없습니다. 연결 문서를 먼저 Sync하세요.</small>
+          <small>Rhino 동기화 기록이 없습니다. 연결 문서를 먼저 동기화하세요.</small>
         )}
       </fieldset>
       <div className="jig-s06-roles">

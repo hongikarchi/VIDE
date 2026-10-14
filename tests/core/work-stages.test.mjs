@@ -15,7 +15,7 @@ test('a running host request shows the stage of its latest event and real counts
     states(stages),
     'prepare:done understand:done query:done execute:active verify:pending result:pending',
   );
-  assert.equal(stages[2].detail, '조회 2회');
+  assert.equal(stages[2].detail, '읽기 2회');
   assert.equal(stages[3].detail, '실행 2회 · 오류 1회 (AI가 고쳐 다시 시도)');
 });
 
@@ -123,7 +123,11 @@ test('a direct turn has its own stages: no save-and-reopen check, the final answ
     { kind: 'query', text: '문서 조회 1회차', at: at(8) },
     { kind: 'thinking', text: '이제 실행', at: at(9) },
     { kind: 'execute', text: 'Rhino 문서에 바로 실행 1회차', at: at(10) },
-    { kind: 'result', text: '문서에 반영 · 추가 1 · 수정 0 · 삭제 0 · 되돌리기 1단계', at: at(11) },
+    {
+      kind: 'result',
+      text: '문서에 반영 · 추가 1 · 수정 0 · 삭제 0 · 되돌리기(마지막 변경)',
+      at: at(11),
+    },
     { kind: 'message', text: '정리 중', at: at(14) },
   ];
   const done = workStages({
@@ -140,10 +144,10 @@ test('a direct turn has its own stages: no save-and-reopen check, the final answ
   );
   assert.deepEqual(
     done.map((stage) => stage.label),
-    ['준비', '요청 이해', '모델 조회', '실행', '답변 정리', '결과'],
+    ['준비', '요청 이해', '모델 읽기', '실행', '답변 정리', '결과'],
   );
-  assert.equal(done[2].detail, '조회 1회'); // the note between tools is not a query
-  assert.equal(done[3].detail, '실행 1회 · 되돌리기 1단계');
+  assert.equal(done[2].detail, '읽기 1회'); // the note between tools is not a query
+  assert.equal(done[3].detail, '실행 1회 · 되돌리기(마지막 변경)');
   const ms = Object.fromEntries(done.map((stage) => [stage.key, stage.elapsedMs]));
   assert.equal(ms.prepare, 6000); // received → the model's first note
   assert.equal(ms.understand, 2000);
@@ -183,6 +187,6 @@ test('a direct turn has its own stages: no save-and-reopen check, the final answ
       host: 'rhino',
       activity: events('host', 'execute', 'result'),
     })[4].label,
-    '저장·재열기 검증',
+    '저장 확인',
   );
 });

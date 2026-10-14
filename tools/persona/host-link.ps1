@@ -14,6 +14,10 @@ ZWCAD:  ZWCAD.exe <document>; missing XREF/SHX prompts get '무시하고 계속'
         VIDECADLink is sent over COM from a separate process (SendCommand blocks while the modal
         dialog is open); the same dialogs are driven.
 Then GET /api/v1/projects/<id>/links is polled until the document's row has finished its first Sync.
+firstSync.ms is the engine's own Sync time (T-292): the `sync` line of that request in the engine
+log (-Logs, else the logs folder of the engine whose launch.json matches -Launch, else by port), read
+only. The wall clock from the link row to the finished Sync is linkToSyncWallMs (round 4: 20 ms,
+because the Sync had finished before the row was first seen; the engine said 1,408 ms).
 
 Refuses (exit 2) when: the document is not under <repo>\.vide\, the same host already runs (the
 person may be working), the project is not named '검증 루프 …' (unless -AnyProject), or the
@@ -44,6 +48,7 @@ param(
     [Parameter(ParameterSetName = 'Link')][int]$DialogTimeoutSec = 240,
     [Parameter(ParameterSetName = 'Link')][int]$SyncTimeoutSec = 600,
     [Parameter(ParameterSetName = 'Link')][string]$OutDir,
+    [Parameter(ParameterSetName = 'Link')][string]$Logs,
     [Parameter(Mandatory = $true, ParameterSetName = 'Close')][switch]$Close,
     [Parameter(ParameterSetName = 'Close')][string]$State
 )
@@ -393,7 +398,11 @@ $syncDeadline = (Get-Date).AddSeconds($SyncTimeoutSec)
 while ($true) {
     $found = Find-LinkedRow (ProjectLinks $target.id) $HostApp $documentPath $sinceLink
     if ($found.State -eq 'synced') {
-        $result.firstSync = [ordered]@{ requestId = $found.Row.lastSync.requestId; at = $found.Row.lastSync.at; ms = [int]((Get-Date) - $linkedAt).TotalMilliseconds }
+        $result.firstSync = [ordered]@{
+            requestId = $found.Row.lastSync.requestId; at = $found.Row.lastSync.at
+            ms = $null; hostMs = $null; objects = $null; state = $null; msSource = $null
+            linkToSyncWallMs = [int]((Get-Date) - $linkedAt).TotalMilliseconds
+        }
         break
     }
     if ($found.State -eq 'failed') { Fail "first Sync failed: $($found.Row.lastError)" }
@@ -401,6 +410,52 @@ while ($true) {
     Start-Sleep -Seconds 2
 }
 $result.timings.firstSyncMs = Elapsed
+
+# The engine's own time of that Sync (T-292). The request record (GET …/requests/<id>?view=summary)
+# says when it finished (state) but carries no duration; the engine writes it to its log as the
+# `sync` line (src/server/document-sync.ts), flushed within about a second. Read only.
+$syncId = [string]$result.firstSync.requestId
+if ($syncId) {
+    $projectPath = "/projects/$([Uri]::EscapeDataString($target.id))/requests/$([Uri]::EscapeDataString($syncId))?view=summary"
+    $logsDir = if ($Logs) { $Logs } else {
+        $engines = @(
+            @{ Dir = (Join-Path $env:LOCALAPPDATA 'VIDE'); Port = 47821 },
+            @{ Dir = (Join-Path $root '.vide\dev-data'); Port = 47831 }
+        )
+        foreach ($e in $engines) {
+            $launchJson = Join-Path $e.Dir 'launch.json'
+            $e.LaunchUrl = if (Test-Path -LiteralPath $launchJson) { try { (Get-Content -Raw -Encoding UTF8 $launchJson | ConvertFrom-Json).url } catch { $null } } else { $null }
+        }
+        Select-EngineLogsDir $origin $engines
+    }
+    $result.firstSync.logsDir = $logsDir
+    $logDeadline = (Get-Date).AddSeconds(15)
+    while ($true) {
+        if (-not $result.firstSync.state) {
+            try { $result.firstSync.state = [string](Api $projectPath $null).state } catch { Log "request $syncId`: $($_.Exception.Message)" }
+        }
+        if ($logsDir -and (Test-Path -LiteralPath $logsDir)) {
+            $days = @((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'), $linkedAt.ToUniversalTime().ToString('yyyy-MM-dd')) | Select-Object -Unique
+            $lines = foreach ($day in $days) {
+                $file = Join-Path $logsDir "engine-$day.jsonl"
+                if (Test-Path -LiteralPath $file) { try { [IO.File]::ReadAllLines($file, [Text.Encoding]::UTF8) } catch { Log "log $file busy: $($_.Exception.Message)" } }
+            }
+            $entry = Find-SyncLogEntry $lines $syncId
+            if ($entry) {
+                $result.firstSync.ms = $entry.ms; $result.firstSync.hostMs = $entry.hostMs
+                $result.firstSync.objects = $entry.objects; $result.firstSync.msSource = 'engine-log'
+                if ($entry.state) { $result.firstSync.state = $entry.state }
+                break
+            }
+        }
+        if ((Get-Date) -gt $logDeadline) {
+            $result.firstSync.msSource = if ($logsDir) { 'not-in-engine-log' } else { 'no-engine-log' }
+            Log "first Sync $syncId`: no engine log line ($logsDir); firstSync.ms stays null"
+            break
+        }
+        Start-Sleep -Milliseconds 1000
+    }
+}
 if (-not $Visible) { [void][HostLink.Native]::ShowWindow((MainHandle), 6) }   # SW_MINIMIZE
 
 # --- other projects (T-286: 다른 프로젝트 Link 변경 0) -----------------------------------------

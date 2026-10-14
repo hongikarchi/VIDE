@@ -2,8 +2,8 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 1.28
-updated: 2026-10-08
+version: 1.29
+updated: 2026-10-14
 owner: agent:codex
 related: [PLAN-47, SPEC-14, ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35, PLAN-36, ADR-039, PLAN-38, PLAN-39, PLAN-42, ADR-040, ADR-041, PLAN-43, SPEC-13, PLAN-46]
 ---
@@ -951,7 +951,7 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 | `engine-YYYY-MM-DD.jsonl` | 엔진(`src/server/diagnostics.ts`) | `request-start/-stages/-end`, `sync`(실패면 `code`·`phase`), `sync-failed`, `live-sync`/`live-sync-failed {code}`, `api-error {method, path(:id), status, code, requestId, projectId?, request?}`, `server-error`, `tool-call {requestId, tool, ms, bytes, ok, code?}`, `cli-start/-exit {provider, cliVersion, model, effort, kind, resume?, code, signal?, ms, stderrTail?}`, `host-refused {code, final}`, `client-error`, `health`, `step`(브레드크럼) |
 | `engine-stderr-YYYY-MM-DD.log`, `engine-exits.jsonl` | PC 프로그램(`Engine.cs`) | 엔진 표준 오류, 종료 코드 |
 | `shell-YYYY-MM-DD.jsonl` | PC 프로그램(`ShellLog.cs`) | 시작·종료, 트레이 동작, 업데이트 단계·적용, 엔진 시작·종료·재시작, WebView 실패·다시 불러오기·새로 만들기, 덤프 경로 |
-| `rhino-…`, `zwcad-…jsonl` | 호스트 플러그인(`hosts/common/DiagnosticLog.cs`) | `plugin-load {rhino/zwcad 버전}`, `call {method, ms, bytesIn, bytesOut, ok, code?}`(예외면 형식·메시지·스택), 자주 묻는 상태 조회는 1분 합계 `calls-summary` |
+| `rhino-…`, `zwcad-…jsonl` | 호스트 플러그인(`hosts/common/DiagnosticLog.cs`) | `plugin-load {rhino/zwcad 버전}`, `call {method, ms, bytesIn, bytesOut, ok, code?}`(예외면 형식·메시지·스택), 자주 묻는 상태 조회는 1분 합계 `calls-summary`, ZWCAD `displayPage`마다 단계 `call-stages {ms, bytesOut, waitMs, dispatchMs, readMs, serializeMs, writeMs, entities, coordinates, slowestMs?, slowestType?, slowestHandle?, slowestCoordinates?}`(T-285, 2026-10-14) |
 
 - **쓰기:** 엔진은 줄을 메모리에 모아 1초 또는 64 KB마다 한 번 붙여 쓴다(호출 쪽은 디스크를 기다리지 않음, 10,000줄 측정 줄당 약 3 µs, 이전의 줄마다 동기 append는 약 85 µs). 브레드크럼·충돌·`exit` 줄은 즉시 쓰고, 프로세스가 끝날 때 모인 줄을 동기로 쓴다. 하루 파일은 64 MB(플러그인·셸 32 MB)에서 멈추고 `log-cap` 한 줄과 버린 줄 수(`log-cap-dropped`)를 남긴다. 같은 경로·코드의 반복 `api-error`는 10초에 한 줄과 `repeated` 수로 줄인다. 플러그인·셸은 같은 방식으로 1초마다 풀 스레드에서 쓴다.
 - **요청 연결:** 요청 실행은 `withTrace`(AsyncLocalStorage, `src/core/breadcrumbs.ts`) 안에서 돌아 그 안의 줄에 `requestId`가 붙는다. AI 도구 범위는 발급 때의 요청을 기억한다. 바깥 텍스트(CLI 오류 출력, 화면 오류)는 `scrub`으로 키·토큰·Windows 사용자 이름을 지우고 2 KB로 자른다.

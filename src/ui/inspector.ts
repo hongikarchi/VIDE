@@ -191,7 +191,7 @@ export function buildInspectorView(
       ['객체 이름', object.name],
       ['레이어', layer],
       ['형상', native?.nativeType || object.kind || object.type || '—'],
-      ['호스트', result?.host === 'zwcad' ? 'ZWCAD' : 'Rhino'],
+      ['프로그램', result?.host === 'zwcad' ? 'ZWCAD' : 'Rhino'],
       ['네이티브 ID', native?.nativeId || object.nativeId || '—'],
       ['단위', 'm'],
       ['상태', '저장된 후보'],

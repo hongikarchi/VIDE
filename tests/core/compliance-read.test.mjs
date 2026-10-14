@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { classifiedModelSchema } from '../../src/contracts/compliance.ts';
 import {
   readClassifiedModel,
+  readClassifiedModelSliced,
   unitsToMeters,
 } from '../../src/jigs/official/compliance-kit/read-model.ts';
 import { LAYER_NAMES, layerRule } from '../../src/jigs/official/compliance-kit/conventions.ts';
@@ -525,4 +526,99 @@ test('a mass with a courtyard and a mass of two shells read as closed solids', (
   const t = objectOf(out, twin.nativeId);
   assert.equal(t?.role, 'mass', JSON.stringify(unusedOf(out, twin.nativeId)));
   assert.ok(Math.abs(t.shape.volume - 250) < 1e-6);
+});
+
+/** A closed cylinder as a render mesh (each face its own vertices, as Rhino meshes a brep). */
+function cylinderMesh(cx, cy, r, h, seg) {
+  const vertices = [];
+  const indices = [];
+  const at = (a, z) => [cx + r * Math.cos(a), cy + r * Math.sin(a), z];
+  for (let i = 0; i < seg; i++) {
+    const a0 = (i / seg) * 2 * Math.PI,
+      a1 = ((i + 1) / seg) * 2 * Math.PI;
+    let base = vertices.length / 3;
+    vertices.push(...at(a0, 0), ...at(a1, 0), ...at(a1, h), ...at(a0, h));
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    base = vertices.length / 3;
+    vertices.push(cx, cy, 0, ...at(a1, 0), ...at(a0, 0));
+    indices.push(base, base + 1, base + 2);
+    base = vertices.length / 3;
+    vertices.push(cx, cy, h, ...at(a0, h), ...at(a1, h));
+    indices.push(base, base + 1, base + 2);
+  }
+  return { vertices, indices };
+}
+
+test('T-274: a large read gives the event loop back and classifies exactly as before', async () => {
+  // Field document (VERIFY-2026-10-14 round 4): 3,045 objects, classify 5.3 s in one block. The
+  // test reads 1,000 objects in 5 ms slices: same output, it yields, and the loop never stops for
+  // a second. Slice length is wall-clock time, so it is logged, not asserted (npm test runs files
+  // side by side).
+  const layers = ['건물', 'Default', '주차', '조경', 'Layer 01::sub'];
+  const rows = [];
+  for (let i = 0; i < 1000; i++) {
+    const layer = layers[i % layers.length];
+    const x = i % 50,
+      y = Math.floor(i / 50);
+    const k = i % 5;
+    if (k === 2) {
+      const points = [];
+      for (let j = 0; j <= 64; j++) {
+        const a = (j / 64) * 2 * Math.PI;
+        points.push([x + Math.cos(a) * 0.4, y + Math.sin(a) * 0.4, 0]);
+      }
+      rows.push(curve(layer, points));
+    } else if (k === 3) rows.push(row(layer, cylinderMesh(x, y, 0.4, 0.0005, 48)));
+    else rows.push(row(layer, cylinderMesh(x, y, 0.4, 3, k === 4 ? 6 : 48)));
+  }
+  const records = [
+    { scope: 'object', key: rows[1].nativeId, role: 'mass' },
+    { scope: 'object', key: randomUUID(), role: 'mass' },
+  ].map((r) => ({
+    documentKey: SOURCE.documentKey,
+    ...r,
+    floor: null,
+    use: null,
+    by: 'person',
+    geometryHash: null,
+    at: '2026-10-14T00:00:00.000Z',
+  }));
+  const input = {
+    rows,
+    layers: [{ fullPath: 'Layer 01', visible: false }],
+    hiddenIds: rows.filter((_, i) => i % 97 === 0).map((r) => r.nativeId),
+    source: SOURCE,
+    units: 'Meters',
+    records,
+    rolesVersion: 3,
+    chosenOption: null,
+    includeHidden: false,
+  };
+  let t = performance.now();
+  const before = readClassifiedModel(input);
+  const syncMs = performance.now() - t;
+
+  // The longest gap between two ticks of a 10 ms timer while the sliced read runs.
+  let last = performance.now();
+  let longestGap = 0;
+  const ticker = setInterval(() => {
+    const now = performance.now();
+    longestGap = Math.max(longestGap, now - last);
+    last = now;
+  }, 10);
+  t = performance.now();
+  const after = await readClassifiedModelSliced(input, { sliceMs: 5 });
+  const slicedMs = performance.now() - t;
+  clearInterval(ticker);
+  longestGap = Math.max(longestGap, performance.now() - last);
+
+  const { longestSliceMs, yields, ...same } = after;
+  assert.deepEqual(same, before);
+  assert.ok(before.model.objects.length > 0 && before.model.unclassified.length > 0);
+  console.log(
+    `T-274 1,000 objects: one block ${Math.round(syncMs)} ms before; sliced ${Math.round(slicedMs)} ms total, ` +
+      `longest slice ${Math.round(longestSliceMs)} ms, longest timer gap ${Math.round(longestGap)} ms, ${yields} yields`,
+  );
+  assert.ok(yields > 0);
+  assert.ok(longestGap < 1000, `event loop held ${longestGap} ms`);
 });

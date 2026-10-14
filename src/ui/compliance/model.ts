@@ -186,6 +186,18 @@ export function stamp(iso: string | null | undefined) {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}:${pad(at.getMinutes())}`;
 }
+/**
+ * An earlier work copy the check read had a computed result then (SPEC-15.13, T-296): a source
+ * not computed yet is kept with no fingerprint and the epoch for its time.
+ */
+export function sourceComputed(ref: ComplianceResult['inputs']['limits']): boolean {
+  return !!ref && !!ref.hash && Date.parse(ref.at) > 0;
+}
+/** '작업본 1 · 계산 2026-10-14 13:30', '… · 계산 전' for one not computed then, or '없음'. */
+export function sourceText(ref: ComplianceResult['inputs']['limits']): string {
+  if (!ref) return '없음';
+  return `${ref.title} · ${sourceComputed(ref) ? `계산 ${stamp(ref.at)}` : '계산 전'}`;
+}
 /** The document revision of `<instance>|<documentId>|<revision>` (ARCH-03 §8). */
 export const revisionOf = (revisionKey: string) => revisionKey.split('|').at(-1) ?? revisionKey;
 
@@ -264,6 +276,10 @@ export function staleReasons(result: ComplianceResult, now: CurrentInputs): stri
     recompute: string,
   ) => {
     if (current === undefined) return;
+    // Not usable when checked and not usable now (not computed, to compute again, none): nothing
+    // the result read has moved (T-296: an uncomputed site model said '대지가 바뀜' at once).
+    const usableNow = !!current?.instanceId && !current.needsRecompute && current.ready !== false;
+    if (!sourceComputed(kept) && !usableNow) return;
     if (current?.needsRecompute) reasons.push(recompute);
     else if (current?.moved || (current?.instanceId ?? null) !== (kept?.instanceId ?? null))
       reasons.push(words);
@@ -553,7 +569,7 @@ export function reportHtml(result: ComplianceResult): string {
   const c = result.classification;
   const answers = answersOf(result);
   const source = (label: string, ref: ComplianceResult['inputs']['limits']) =>
-    `<tr><th>${label}</th><td>${ref ? `${escape(ref.title)} · 계산 ${escape(stamp(ref.at))}` : '없음'}</td></tr>`;
+    `<tr><th>${label}</th><td>${escape(sourceText(ref))}</td></tr>`;
   return `<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>법규 체크 보고서 ${escape(stamp(result.checkedAt))}</title><style>${REPORT_CSS}</style></head>

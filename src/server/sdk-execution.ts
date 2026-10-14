@@ -503,8 +503,8 @@ export class SdkExecution {
         activity.add(
           'result',
           counts
-            ? `실행 성공 · 추가 ${counts.added} · 수정 ${counts.modified} · 삭제 ${counts.removed} · 저장·재열기 검증`
-            : '실행 성공 · 저장·재열기 검증',
+            ? `실행 성공 · 추가 ${counts.added} · 수정 ${counts.modified} · 삭제 ${counts.removed} · 저장 확인`
+            : '실행 성공 · 저장 확인',
         );
         update({
           ...intent(),
@@ -652,8 +652,8 @@ export class SdkExecution {
               activity.add(
                 'result',
                 counts
-                  ? `실행 성공 · 추가 ${counts.added} · 수정 ${counts.modified} · 삭제 ${counts.removed} · 저장·재열기 검증`
-                  : '실행 성공 · 저장·재열기 검증',
+                  ? `실행 성공 · 추가 ${counts.added} · 수정 ${counts.modified} · 삭제 ${counts.removed} · 저장 확인`
+                  : '실행 성공 · 저장 확인',
               );
               update({
                 ...intent(),

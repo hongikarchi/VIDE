@@ -157,7 +157,8 @@ import type { SheetsReader } from '../core/drawing-sheets.ts';
 import { zwcadSheetsReader } from '../../hosts/zwcad/drawing-sheets.ts';
 import { tmpdir } from 'node:os';
 import { Extensions } from '../core/extensions.ts';
-import { AgentTools } from './agent-tools.ts';
+import { AgentTools, conversationSources, jigInputDeps } from './agent-tools.ts';
+import { assignJigInput } from './jig-input.ts';
 import { SdkExecution } from './sdk-execution.ts';
 import { ZwcadSdkExecution } from './zwcad-sdk-execution.ts';
 import { AiSettings } from '../core/ai-settings.ts';
@@ -2538,6 +2539,30 @@ export async function startServer({
             const result = workspace.submit(projectId, input);
             if (result.created) execution.start(result.request);
             return result.request;
+          },
+          // A card asked in a Plan turn is not applied on its answer (SPEC-02.20 2).
+          planTurn: (projectId, requestId) => {
+            try {
+              return requestMode(workspace.brief(projectId, requestId).input) === 'plan';
+            } catch {
+              return false;
+            }
+          },
+          // An input question card's answer sets the role at once (SPEC-07.18 9.4, T-293).
+          applyInput: async (projectId, conversation, asked) => {
+            const sources = conversationSources(workspace, conversation);
+            if (!sources.jigs) throw new DomainError('EXECUTOR_NOT_READY');
+            return assignJigInput(
+              jigInputDeps(sources, sources.jigs),
+              projectId,
+              asked.instanceId,
+              {
+                input: asked.input,
+                layers: asked.layers,
+                ...(asked.linkId ? { linkId: asked.linkId } : {}),
+                reason: '질문 카드에서 사람이 고름',
+              },
+            );
           },
         })
       )

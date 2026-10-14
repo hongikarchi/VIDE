@@ -177,7 +177,7 @@ function Inbox(props: Props) {
           </small>
           <span className="link-inbox-actions">
             <button type="button" className="link-button" onClick={() => props.onInboxUse(item)}>
-              작성기로
+              요청 입력으로
             </button>
             <button
               type="button"
@@ -205,7 +205,7 @@ function OfflineSwitch(props: Props) {
   return (
     <label
       className="link-offline"
-      title="켜면 각 연결 파일의 마지막 Sync를 보기 전용 모델(형상·레이어·문자, 원본 파일 아님)로 계정 사이트에 저장합니다. 끄면 사이트의 저장본을 지웁니다."
+      title="켜면 각 연결 파일의 마지막 동기화를 보기 전용 모델(형상·레이어·문자, 원본 파일 아님)로 계정 사이트에 저장합니다. 끄면 사이트의 저장본을 지웁니다."
     >
       <input
         type="checkbox"
@@ -221,7 +221,7 @@ function OfflineSwitch(props: Props) {
               ? '저장 대기'
               : saved.length
                 ? `${saved.length}개 저장 · ${size(total)}`
-                : 'Sync 후 저장'}
+                : '동기화 후 저장'}
         </small>
       ) : null}
     </label>
@@ -241,7 +241,7 @@ function SummarySwitch(props: Props) {
   return (
     <label
       className="link-offline"
-      title="켜면 PC가 꺼져 있어도 계정 사이트에서 이 프로젝트를 열 수 있습니다: 할 일(사이트에서 고치면 PC가 켜질 때 반영)과 작업 이력 요약(요청 글·답의 첫 줄·상태·시각·파일 이름). 호스트 문서 없이 한 대화는 요청·답 전문·활동·실행 코드·파일 이름까지 올려 구성원이 사이트와 자기 VIDE에서 읽습니다. 모델링 대화의 전문, 모델·첨부·핀 좌표는 올리지 않습니다. 끄면 사이트의 사본을 지웁니다."
+      title="켜면 PC가 꺼져 있어도 계정 사이트에서 이 프로젝트를 열 수 있습니다: 할 일(사이트에서 고치면 PC가 켜질 때 반영)과 작업 이력 요약(요청 글·답의 첫 줄·상태·시각·파일 이름). Rhino·ZWCAD 문서 없이 한 대화는 요청·답 전문·활동·실행 코드·파일 이름까지 올려 구성원이 사이트와 자기 VIDE에서 읽습니다. 모델링 대화의 전문, 모델·첨부·핀 좌표는 올리지 않습니다. 끄면 사이트의 사본을 지웁니다."
     >
       <input
         type="checkbox"
@@ -367,7 +367,7 @@ function LinkList(props: Props) {
             </li>
             <li>
               <span className="link-step-no">3</span>
-              <span>첫 Sync가 끝나면 이 목록과 화면에 나타납니다</span>
+              <span>첫 동기화가 끝나면 이 목록과 화면에 나타납니다</span>
             </li>
           </ol>
           <p className="link-hint">
@@ -438,10 +438,10 @@ function LinkList(props: Props) {
                     ? ` · ${time(link.lastSync.at)}`
                     : ''
                   : link.lastSync
-                    ? ` · Sync ${time(link.lastSync.at)}`
-                    : ' · Sync 전'}
+                    ? ` · 동기화 ${time(link.lastSync.at)}`
+                    : ' · 동기화 전'}
                 {connection ? ` · ${connection.objectCount.toLocaleString()}개` : ''}
-                {note ? ` · ${note}` : link.lastError ? ` · Sync 실패` : ''}
+                {note ? ` · ${note}` : link.lastError ? ` · 동기화 실패` : ''}
               </span>
             </button>
             <button
@@ -452,10 +452,10 @@ function LinkList(props: Props) {
               aria-hidden={file || undefined}
               title={
                 connection
-                  ? '지금 Sync (Shift: 전체 다시 읽기 · 행 오른쪽 클릭: 메뉴)'
+                  ? '지금 동기화 (Shift: 전체 다시 읽기 · 행 오른쪽 클릭: 메뉴)'
                   : '파일이 열려 있지 않습니다'
               }
-              aria-label={`${link.name} Sync`}
+              aria-label={`${link.name} 동기화`}
               onClick={(event) => props.onSync(link, event.shiftKey)}
               dangerouslySetInnerHTML={{ __html: iconSvg('refresh') }}
             />
@@ -465,7 +465,7 @@ function LinkList(props: Props) {
               title={
                 file
                   ? '목록에서 빼기 (VIDE의 사본과 기록을 지움, 원본 파일은 그대로)'
-                  : '연결 해제 · 목록에서 빼기 (VIDE의 Sync 기록을 지움, 파일과 객체는 그대로)'
+                  : '연결 해제 · 목록에서 빼기 (VIDE의 동기화 기록을 지움, 파일과 객체는 그대로)'
               }
               aria-label={`${link.name} ${file ? '목록에서 빼기' : '연결 해제'}`}
               onClick={() => props.onRemove(link)}
@@ -481,7 +481,7 @@ function LinkList(props: Props) {
                     props.onSync(link);
                   }}
                 >
-                  지금 Sync
+                  지금 동기화
                 </button>
                 <button
                   type="button"
@@ -503,7 +503,7 @@ function LinkList(props: Props) {
                 className="link-button link-back"
                 onClick={() => props.onBackToSync(link)}
               >
-                후보 표시 중 · Sync 결과로 돌아가기
+                후보 표시 중 · 동기화 결과로 돌아가기
               </button>
             ) : null}
           </li>
@@ -539,14 +539,18 @@ function LinkNote({ link, ...props }: Props & { link: LinkRow }) {
         </>
       ) : notice?.kind === 'stored' ? (
         <>
-          <span>연결 ID를 문서에 저장했습니다. 저장하면 다음에도 이어집니다</span>
+          <span title="문서에 VIDE 연결 ID를 저장했습니다">
+            이 파일을 프로젝트와 이어 두었습니다. 파일을 저장하면 다음에도 이어집니다
+          </span>
           <button type="button" className="link-button" onClick={() => props.onDismiss(link)}>
             확인
           </button>
         </>
       ) : notice?.kind === 'foreign' ? (
         <>
-          <span>다른 프로젝트의 연결 ID가 있던 문서 — 새 연결 파일로 추가함</span>
+          <span title="다른 프로젝트의 연결 ID가 있던 문서">
+            다른 프로젝트와 이어져 있던 문서 — 새 연결 파일로 추가함
+          </span>
           <button type="button" className="link-button" onClick={() => props.onDismiss(link)}>
             확인
           </button>
@@ -557,7 +561,7 @@ function LinkNote({ link, ...props }: Props & { link: LinkRow }) {
           <button
             type="button"
             className="link-button"
-            title={`이 항목의 Sync 기록을 '${cleanup.intoName}'(으)로 옮기고 이 항목을 뺍니다`}
+            title={`이 항목의 동기화 기록을 '${cleanup.intoName}'(으)로 옮기고 이 항목을 뺍니다`}
             onClick={() => props.onMerge(link, cleanup.into)}
           >
             합치기

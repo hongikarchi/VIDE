@@ -182,16 +182,16 @@ export const labels: Record<string, string> = {
   failed: '실패',
   cancelled: '중단됨',
   interrupted: '재시작으로 중단됨',
-  unknown: '호스트 결과 확인 필요',
+  unknown: 'CAD 프로그램 결과 확인 필요',
   'needs-confirmation': '진행 확인 필요',
 };
 export const errors: Record<string, string> = {
   ZWCAD_ATTACHED_EDIT_UNAVAILABLE:
     '현재 ZWCAD 연결은 화면 동기화용입니다. 이 도면의 AI 수정 연결은 아직 지원하지 않습니다.',
   APPLIED_SYNC_FAILED:
-    'Rhino 반영은 완료됐습니다. Sync를 다시 실행하세요. 모델링을 다시 요청하지 않아도 됩니다.',
+    'Rhino 반영은 완료됐습니다. 동기화를 다시 실행하세요. 모델링을 다시 요청하지 않아도 됩니다.',
   APPLICATION_FAILED: '원본 반영에 실패했습니다. 후보와 적용 결과를 확인하세요.',
-  HOST_BUSY: '호스트 명령이 끝난 뒤 다시 Sync하세요.',
+  HOST_BUSY: 'Rhino·ZWCAD 명령이 끝난 뒤 다시 동기화하세요.',
 
   UNSUPPORTED_DWG_EDIT:
     '이 DWG에서는 기존 독립 직선 경계의 이동·정점 수정만 가능합니다. 객체 추가·삭제 또는 관계가 있는 객체는 지원하지 않습니다.',
@@ -220,11 +220,11 @@ export const errors: Record<string, string> = {
   HOST_UNREACHABLE: '작업 PC가 응답하지 않습니다. 잠시 후 다시 여세요.',
 };
 Object.assign(errors, {
-  HOST_UNAVAILABLE: 'Rhino 설치와 호스트 연결 상태를 확인하세요.',
+  HOST_UNAVAILABLE: 'Rhino 설치와 Rhino 연결 상태를 확인하세요.',
   HOST_REJECTED: 'Rhino가 형상 생성을 완료하지 못했습니다. 입력을 수정해 다시 요청할 수 있습니다.',
   // Only requests stored before T-122 carry these two: the engine has no call or execute cap now.
   HOST_COMMAND_LIMIT:
-    '이전 판의 호스트 실행 횟수 상한에 걸려 멈춘 요청입니다. 지금은 상한이 없으니 다시 보내면 이어서 실행합니다.',
+    '이전 판의 CAD 프로그램 실행 횟수 상한에 걸려 멈춘 요청입니다. 지금은 상한이 없으니 다시 보내면 이어서 실행합니다.',
   AGENT_CALL_LIMIT:
     '이전 판의 도구 호출 횟수 상한에 걸려 멈춘 요청입니다. 지금은 상한이 없으니 다시 보내면 이어서 실행합니다.',
   INVALID_GEOMETRY: 'AI의 형상 제안이 검증을 통과하지 못했습니다.',
@@ -236,7 +236,7 @@ Object.assign(errors, {
     '프로젝트의 AI 작업 상한(기본 3개)에 도달했습니다. 요청은 대기열에 서서 앞 작업이 끝나면 시작합니다.',
   STALE_REFERENCE: '첨부한 객체가 이전 후보 기준입니다. 현재 모델에서 다시 첨부해 주세요.',
   LINK_NOTICE_GONE: '이미 나눴거나 따라감 알림이 사라졌습니다. 연결 파일 목록을 새로 고칩니다.',
-  HOST_RESULT_UNKNOWN: '호스트 응답을 확인하지 못했습니다. 자동 재실행하지 않았습니다.',
+  HOST_RESULT_UNKNOWN: 'CAD 프로그램의 응답을 확인하지 못했습니다. 자동 재실행하지 않았습니다.',
 });
 
 Object.assign(errors, {
@@ -351,13 +351,13 @@ Object.assign(errors, {
     '계획 모드에서는 문서를 바꾸지 않습니다. 계획 카드의 [진행]을 누르거나 Shift+Tab으로 자동으로 바꾸세요.',
   UNDO_NOT_LATEST:
     '이 실행 뒤에 문서가 더 바뀌어 여기서 되돌릴 수 없습니다. Rhino에서 Ctrl+Z로 순서대로 되돌리세요.',
-  UNDO_UNAVAILABLE: '되돌리기 기록을 찾지 못했습니다. 호스트에서 Ctrl+Z로 확인하세요.',
+  UNDO_UNAVAILABLE: '되돌리기 기록을 찾지 못했습니다. Rhino·ZWCAD에서 Ctrl+Z로 확인하세요.',
   DIRECT_ACTION_FAILED: '요청을 처리하지 못했습니다. 작업 상태를 다시 확인하세요.',
   GUARD_CONFIRMATION_REQUIRED:
     '되돌리기로 복구하기 어려운 변경이라 실행을 되돌리고 확인을 기다립니다. [진행]을 누르면 다시 실행합니다.',
   // Several linked files in one request (ADR-027).
   LINK_NOT_LIVE:
-    '그 연결 파일은 지금 열려 연결되어 있지 않아 실시간으로 읽거나 고칠 수 없습니다. AI는 마지막 Sync 기록으로만 읽습니다. 호스트에서 파일을 열고 연결한 뒤 다시 요청하세요.',
+    '그 연결 파일은 지금 열려 연결되어 있지 않아 실시간으로 읽거나 고칠 수 없습니다. AI는 마지막 동기화 기록으로만 읽습니다. Rhino·ZWCAD에서 파일을 열고 연결한 뒤 다시 요청하세요.',
   DOCUMENT_LOCKED:
     '다른 작업이 그 파일을 고치는 중이라 이 요청에서는 그 파일을 바꾸지 않았습니다. 그 작업이 끝난 뒤 다시 요청하세요.',
   // Execute-only turns on one file (SPEC-02.9 3): the turn read it before another change.
@@ -365,7 +365,7 @@ Object.assign(errors, {
   // A late [진행]·[되돌리기]·[확인함] on a request that already ended or runs again (409).
   REQUEST_SETTLED: '이 작업은 이미 끝났거나 진행 중입니다. 최신 상태로 다시 읽었습니다.',
   UNDO_PARTIAL:
-    '일부 파일은 되돌리지 못했습니다. 결과에 남은 파일을 호스트에서 Ctrl+Z(ZWCAD는 U)로 순서대로 되돌리세요.',
+    '일부 파일은 되돌리지 못했습니다. 결과에 남은 파일을 Rhino·ZWCAD에서 Ctrl+Z(ZWCAD는 U)로 순서대로 되돌리세요.',
 });
 
 // Codes the engine and hosts send that used to show raw: what happened and what to do.
@@ -381,9 +381,9 @@ Object.assign(errors, {
   FOLDER_NOT_FOUND: '이 PC에 그 폴더가 없습니다. 경로를 확인하세요.',
   FOLDER_NOT_ALLOWED:
     '이 폴더는 프로젝트 폴더로 정할 수 없습니다(드라이브 맨 위, VIDE 데이터 폴더, 키·로그인 폴더).',
-  RESYNC_REQUIRED: '문서가 많이 바뀌어 이어서 맞출 수 없습니다. Sync를 다시 실행하세요.',
+  RESYNC_REQUIRED: '문서가 많이 바뀌어 이어서 맞출 수 없습니다. 동기화를 다시 실행하세요.',
   EXECUTOR_NOT_READY:
-    '실행 준비가 아직 끝나지 않았습니다. 호스트 연결을 확인한 뒤 다시 시도하세요.',
+    '실행 준비가 아직 끝나지 않았습니다. Rhino·ZWCAD 연결을 확인한 뒤 다시 시도하세요.',
   CANCELLED: '작업을 중단했습니다.',
   JIG_VERSION_EXISTS:
     '같은 판 번호의 jig가 이미 설치돼 있고 내용이 다릅니다. 판 번호를 올린 뒤 다시 등록하세요.',
@@ -410,16 +410,17 @@ Object.assign(errors, {
     '의견이 가리키는 공유본을 찾을 수 없습니다. 공유 목록을 새로고침하세요.',
   AMBIGUOUS_OBJECT: '같은 이름의 객체가 여럿이라 하나로 정할 수 없습니다. 객체를 직접 고르세요.',
   DUPLICATE_OBJECT: '같은 객체가 두 번 골라졌습니다. 목록을 확인하세요.',
-  OBJECT_NOT_FOUND: '고른 객체가 지금 모델에 없습니다. Sync한 뒤 다시 고르세요.',
-  HOST_VERIFICATION_FAILED: '호스트가 불러온 결과를 확인하지 못했습니다. 파일을 다시 열어 보세요.',
+  OBJECT_NOT_FOUND: '고른 객체가 지금 모델에 없습니다. 동기화한 뒤 다시 고르세요.',
+  HOST_VERIFICATION_FAILED:
+    'CAD 프로그램이 불러온 결과를 확인하지 못했습니다. 파일을 다시 열어 보세요.',
   LINKED_TARGET_UNAVAILABLE:
-    '함께 다룰 연결 파일을 열 수 없습니다. 두 호스트가 연결돼 있는지 확인하세요.',
+    '함께 다룰 연결 파일을 열 수 없습니다. Rhino와 ZWCAD가 연결돼 있는지 확인하세요.',
   DOCUMENT_READ_ONLY:
     'Rhino 문서가 읽기 전용으로 열려 있어 바꾸지 않았습니다. 쓰기 가능하게 연 뒤 다시 보내세요.',
   OPERATION_CONFLICT:
     '같은 작업이 다른 내용으로 이미 실행됐습니다. 작업 상태를 확인한 뒤 다시 보내세요.',
-  HOST_INVALID_RESPONSE: '호스트 응답을 읽지 못했습니다. 호스트를 다시 연결한 뒤 시도하세요.',
-  HOST_RESPONSE_TOO_LARGE: '호스트 응답이 너무 큽니다. 범위를 좁혀 다시 시도하세요.',
+  HOST_INVALID_RESPONSE: 'CAD 프로그램의 응답을 읽지 못했습니다. 다시 연결한 뒤 시도하세요.',
+  HOST_RESPONSE_TOO_LARGE: 'CAD 프로그램의 응답이 너무 큽니다. 범위를 좁혀 다시 시도하세요.',
   HOST_RESULT_TOO_LARGE: '한 번에 읽을 결과가 너무 큽니다. 레이어나 범위를 좁혀 다시 시도하세요.',
   TURN_OUTPUT_INVALID: 'AI 답을 읽지 못했습니다. 같은 요청을 다시 보내세요.',
   QUERY_RESULT_TOO_LARGE: '조회 결과가 너무 큽니다. 범위를 좁혀 다시 요청하세요.',

@@ -21,7 +21,7 @@ export async function linkOpenDocument(
   await page.waitForFunction(
     (id) => {
       const row = document.querySelector(`.link-row[data-link-id="${id}"]`);
-      return row && !/Sync 전|Sync 중/.test(row.textContent);
+      return row && !/Sync 전|Sync 중|동기화 전|동기화 중/.test(row.textContent);
     },
     reply.body.id,
     { timeout },

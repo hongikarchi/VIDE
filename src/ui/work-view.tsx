@@ -35,7 +35,7 @@ const modeLabel = (message: Message) =>
   workMode(message) === 'plan'
     ? '계획 · 읽고 계획만'
     : (message.request?.input as { hostUse?: unknown } | undefined)?.hostUse === 'none'
-      ? '자동 · 호스트 문서를 쓰지 않음'
+      ? '자동 · CAD 문서를 쓰지 않음'
       : '자동 · 열린 문서에 바로 적용';
 
 // Direct mode (user decision 2026-09-30): each execution is one host undo record. The result
@@ -387,7 +387,7 @@ function FileGroups({
           {left(rollback).length
             ? `자동으로 되돌리지 못한 파일: ${left(rollback)
                 .map((file) => `${file.name}(${fileUndoState(file)})`)
-                .join(', ')} · 호스트에서 Ctrl+Z(ZWCAD는 U)로 되돌리거나 상태를 확인하세요.`
+                .join(', ')} · Rhino·ZWCAD에서 Ctrl+Z(ZWCAD는 U)로 되돌리거나 상태를 확인하세요.`
             : `${rollback.reason === 'cancelled' ? '중단해서' : '요청이 실패해서'} 모든 파일의 변경을 자동으로 되돌렸습니다.`}
         </p>
       ) : null}
@@ -397,7 +397,7 @@ function FileGroups({
           {left(undo)
             .map((file) => `${file.name}(${fileUndoState(file)})`)
             .join(', ')}{' '}
-          · 호스트에서 Ctrl+Z(ZWCAD는 U)로 순서대로 되돌리세요.
+          · Rhino·ZWCAD에서 Ctrl+Z(ZWCAD는 U)로 순서대로 되돌리세요.
         </p>
       ) : null}
       {undoable.length ? (
@@ -502,7 +502,9 @@ function PlanCard({
           <Action latch error={actions.error} run={() => actions.direct(message.id, 'continue')}>
             진행
           </Action>
-          <small>같은 대화에서 자동으로 실행합니다. 질문의 답은 작성기에 적어 보내도 됩니다.</small>
+          <small>
+            같은 대화에서 자동으로 실행합니다. 질문의 답은 요청 입력칸에 적어 보내도 됩니다.
+          </small>
         </div>
       ) : null}
     </section>
@@ -577,8 +579,8 @@ function Interventions({
           title={
             reason ||
             (request.input?.linkedTargets
-              ? '이 작업의 두 대상에 작성기 입력을 추가합니다. 저장된 부분 결과가 있으면 확인 후 이어갑니다.'
-              : '작성기의 입력을 조건으로 추가하고, 이전 작업이 끝나면 원 기준에서 다시 실행합니다.')
+              ? '이 작업의 두 대상에 요청 입력칸의 글을 추가합니다. 저장된 부분 결과가 있으면 확인 후 이어갑니다.'
+              : '요청 입력칸의 글을 조건으로 추가하고, 이전 작업이 끝나면 원 기준에서 다시 실행합니다.')
           }
           onClick={() => actions.intervene(message.id)}
         >
@@ -586,7 +588,7 @@ function Interventions({
         </button>
       ) : null}
       {result?.phase === 'host' ? (
-        <small>호스트에 쓰고 검증하는 중이라 이 단계가 끝난 뒤 중단할 수 있습니다.</small>
+        <small>CAD 프로그램에 쓰고 확인하는 중이라 이 단계가 끝난 뒤 중단할 수 있습니다.</small>
       ) : (
         <Action
           latch
@@ -742,9 +744,9 @@ function WorkView({
         })
         .join(' ↔ ')
     : jig === 'sync-review'
-      ? 'Sync jig 표 (호스트 없음)'
+      ? '동기화 jig 표 (CAD 프로그램 안 씀)'
       : (request?.input as { hostUse?: unknown } | undefined)?.hostUse === 'none'
-        ? 'VIDE 안 계산 (호스트 없음)'
+        ? 'VIDE 안 계산 (CAD 프로그램 안 씀)'
         : hostName(request?.input?.host || message.host) +
           (result?.sourceDocument?.name
             ? ' · ' + result.sourceDocument.name
@@ -753,7 +755,7 @@ function WorkView({
               : '');
   const checks = [
     request?.state === 'unknown'
-      ? '호스트 결과가 확인되지 않았습니다. 문서를 확인한 뒤 [확인함]을 누르세요. 그동안 다음 작업은 이 문서를 먼저 읽고 진행합니다.'
+      ? 'Rhino·ZWCAD 결과가 확인되지 않았습니다. 문서를 확인한 뒤 [확인함]을 누르세요. 그동안 다음 작업은 이 문서를 먼저 읽고 진행합니다.'
       : '',
     result?.recovered
       ? '사본에서 복구한 결과 · 목표 완료 미확인. 이어가기 전에 후보를 확인하세요.'
@@ -848,7 +850,7 @@ function WorkView({
         <h4>진행</h4>
         <StageList message={message} projectId={projectId} actions={actions} />
         {result?.targetResults?.length ? (
-          <ul className="work-targets" aria-label="호스트별 진행">
+          <ul className="work-targets" aria-label="프로그램별 진행">
             {result.targetResults.map((saved) => {
               const child = related.get(saved.requestId);
               const state = child?.request?.state ?? saved.state;

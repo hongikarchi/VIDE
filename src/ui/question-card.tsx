@@ -47,6 +47,11 @@ export interface QuestionCardsOptions {
   /** Called with the answer turn the server created. */
   onAnswered?: (request: { id: string }) => void;
   /**
+   * Called with the jig instances whose input roles the answers set (SPEC-07.18 9.4, T-293): the
+   * screen re-reads them (role cards, step rail).
+   */
+  onApplied?: (instanceIds: string[]) => void;
+  /**
    * The questions a running turn asks with the provider's own tool (Claude AskUserQuestion,
    * ADR-026 4): the answers go to this path and the same turn goes on (no new turn).
    */
@@ -139,6 +144,9 @@ export function QuestionCards({ api, options }: QuestionCardsProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  /** What VIDE set from the answers itself (input roles, T-293). */
+  const [applied, setApplied] = useState<string[]>([]);
+  const [anyApplied, setAnyApplied] = useState(false);
   if (!parsed.success || parsed.data.status !== 'question' || !parsed.data.questions.length)
     return null;
   const questions = parsed.data.questions;
@@ -180,8 +188,20 @@ export function QuestionCards({ api, options }: QuestionCardsProps) {
         `/projects/${encodeURIComponent(options.projectId)}/conversations/${encodeURIComponent(options.conversationId)}/answer`,
         'POST',
         { requestId: options.requestId, answers, ...(recommended ? { recommended: true } : {}) },
-      )) as { request?: { id: string } };
+      )) as {
+        request?: { id: string };
+        applied?: { ok: boolean; text: string; held?: string; instanceId?: string | null }[];
+      };
       setSent(true);
+      const applied = result?.applied ?? [];
+      // A held answer (proposal, plan, other card) says why in its own words (SPEC-07.18 9.4).
+      if (applied.length)
+        setApplied(applied.map((a) => (a.ok || a.held ? a.text : `넣지 못함: ${a.text}`)));
+      setAnyApplied(applied.some((a) => a.ok));
+      const instances = [
+        ...new Set(applied.flatMap((a) => (a.ok && a.instanceId ? [a.instanceId] : []))),
+      ];
+      if (instances.length) options.onApplied?.(instances);
       if (result?.request) options.onAnswered?.(result.request);
     } catch {
       setError('답을 보내지 못했습니다. 다시 시도해 주세요.');
@@ -203,7 +223,13 @@ export function QuestionCards({ api, options }: QuestionCardsProps) {
         />
       ))}
       {done ? (
-        <p className="qcard-note">답을 보냈습니다. 같은 대화에서 이어서 진행합니다.</p>
+        <p className="qcard-note">
+          {applied.length && anyApplied
+            ? `입력에 넣었습니다: ${applied.join(' · ')}. 같은 대화에서 결과를 이어서 알립니다.`
+            : applied.length
+              ? `답을 보냈습니다: ${applied.join(' · ')}. 같은 대화에서 이어서 진행합니다.`
+              : '답을 보냈습니다. 같은 대화에서 이어서 진행합니다.'}
+        </p>
       ) : (
         <footer className="qcard-actions">
           {error ? <span className="qcard-error">{error}</span> : null}

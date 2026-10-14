@@ -339,10 +339,10 @@ export function draftHolds(link: LinkRow) {
 export function syncNote(link: LinkRow): string | undefined {
   const sync = link.sync;
   if (!sync) return undefined;
-  if (sync.state === 'syncing') return 'Sync 중';
-  if (sync.state === 'held') return '자동 Sync 보류 · 이 파일 기준 작업 중';
-  if (sync.state === 'waiting') return '변경 중 · 곧 다시 Sync';
-  if (sync.state === 'failed') return errors[sync.code ?? ''] || 'Sync 실패';
+  if (sync.state === 'syncing') return '동기화 중';
+  if (sync.state === 'held') return '자동 동기화 보류 · 이 파일 기준 작업 중';
+  if (sync.state === 'waiting') return '변경 중 · 곧 다시 동기화';
+  if (sync.state === 'failed') return errors[sync.code ?? ''] || '동기화 실패';
   return undefined;
 }
 /**
@@ -357,7 +357,7 @@ export async function syncLink(link: LinkRow, full = false) {
   // The Sync shown now: a Live Sync into a new copy is drawn from it and the change (T-127).
   const shown = link.display?.requestId ?? link.lastSync?.requestId;
   linksState.linkSyncing = true;
-  linkNotes.set(link.id, 'Sync 중');
+  linkNotes.set(link.id, '동기화 중');
   renderLinkPanel();
   if (!linksState.currentLayers.length) viewportEmpty.sync('loading');
   try {
@@ -395,7 +395,7 @@ export async function syncLink(link: LinkRow, full = false) {
       linkNotes.delete(link.id);
       viewportEmpty.sync('idle');
     } else {
-      linkNotes.set(link.id, errors[request.result?.code ?? ''] || 'Sync 실패');
+      linkNotes.set(link.id, errors[request.result?.code ?? ''] || '동기화 실패');
       viewportEmpty.sync(linksState.currentLayers.length ? 'idle' : 'failed');
     }
   } catch (error) {
@@ -553,7 +553,7 @@ export function useInboxItem(item: InboxItem) {
   }
   render();
   $('body').focus();
-  message('사이트에서 남긴 요청을 작성기에 넣었습니다. 내용을 확인하고 보내세요.');
+  message('사이트에서 남긴 요청을 요청 입력칸에 넣었습니다. 내용을 확인하고 보내세요.');
   dismissInboxItem(item);
 }
 export function dismissInboxItem(item: InboxItem) {

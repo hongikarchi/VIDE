@@ -173,7 +173,7 @@ const ERRORS: Record<string, string> = {
   FILE_CHANGED: '계산 뒤 도면이 바뀌었습니다. 다시 계산하세요.',
   READ_FAILED: '도면을 읽지 못했습니다.',
   UNITS_NOT_MM: '도면 단위가 mm가 아니어서 반영 대상이 아닙니다.',
-  SOURCE_NOT_SYNCED: '원천 Rhino 문서의 Sync가 없습니다.',
+  SOURCE_NOT_SYNCED: '원천 Rhino 문서의 동기화 기록이 없습니다.',
   SOURCE_CHANGED: '계산 뒤 모델이 바뀌었습니다. 다시 계산하세요.',
   DIFF_NOT_FOUND: '계산 결과가 오래되었습니다. 다시 계산하세요.',
   DIFF_NOT_SETTLED: '계산 중에 도면이 바뀌었습니다. 다시 계산하세요.',
@@ -194,8 +194,8 @@ const ERRORS: Record<string, string> = {
   OP_REFUSED: '도면이 일부 행을 거절해 아무것도 바꾸지 않았습니다.',
   LAYER_NOT_IN_DRAWING: '그 도면에 없는 레이어입니다.',
   REVISION_CONFLICT: '다른 화면이 표를 먼저 고쳤습니다. 다시 여세요.',
-  STALE_REFERENCE: 'Sync 기록을 찾지 못했습니다. 다시 Sync하세요.',
-  TARGET_MISMATCH: 'Rhino와 ZWCAD Sync를 맞게 골랐는지 확인하세요.',
+  STALE_REFERENCE: '동기화 기록을 찾지 못했습니다. 다시 동기화하세요.',
+  TARGET_MISMATCH: 'Rhino와 ZWCAD 동기화 기록을 맞게 골랐는지 확인하세요.',
   NOTHING_TO_APPLY: '반영할 행이 없습니다.',
 };
 const QUIET = Object.keys(ERRORS);
@@ -685,7 +685,7 @@ function BackflowPanel({ context, openSync }: { context: JigContext; openSync: (
         baseline: typeof baseline;
       };
       setBaseline(value.baseline);
-      setNotice(`Sync 일치 ${pairs.length}행을 반영 기준으로 기록했습니다.`);
+      setNotice(`동기화 jig 일치 ${pairs.length}행을 반영 기준으로 기록했습니다.`);
     } catch (error) {
       setNotice(errorText(error));
     } finally {
@@ -880,7 +880,7 @@ function BackflowPanel({ context, openSync }: { context: JigContext; openSync: (
             disabled={!!busy}
             onChange={(e) => setRhino(e.target.value)}
           >
-            {sources.length ? null : <option value="">Sync한 Rhino 문서가 없습니다</option>}
+            {sources.length ? null : <option value="">동기화한 Rhino 문서가 없습니다</option>}
             {sources.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -890,9 +890,9 @@ function BackflowPanel({ context, openSync }: { context: JigContext; openSync: (
         </label>
         {syncNote === 'no-cad' ? (
           <p className="bf-warn">
-            이 도면의 ZWCAD Sync가 없습니다. ZWCAD에서 도면을 연결해 Sync하세요.{' '}
+            이 도면의 ZWCAD 동기화 기록이 없습니다. ZWCAD에서 도면을 연결해 동기화하세요.{' '}
             <button type="button" className="link-button" onClick={openSync}>
-              Sync jig 열기
+              동기화 jig 열기
             </button>
           </p>
         ) : syncNote ? (
@@ -903,7 +903,7 @@ function BackflowPanel({ context, openSync }: { context: JigContext; openSync: (
             {mm(a.translation[1] * 1000)}) mm · 짝 {a.pairs} · 오차 최대 {mm(a.residual.max * 1000)}{' '}
             mm
             {a.ambiguous ? (
-              <span className="bf-warn"> · 후보가 여럿 — Sync jig에서 확정하세요</span>
+              <span className="bf-warn"> · 후보가 여럿 — 동기화 jig에서 확정하세요</span>
             ) : null}
           </p>
         ) : root && rhino ? (
@@ -913,7 +913,7 @@ function BackflowPanel({ context, openSync }: { context: JigContext; openSync: (
           <span className="bf-faint">
             {baseline
               ? `반영 기준 ${baseline.pairs}짝 · ${baseline.updatedAt.slice(0, 16).replace('T', ' ')}`
-              : `반영 기준 없음 — Sync 일치 ${pairs.length}행을 짝으로 씁니다`}
+              : `반영 기준 없음 — 동기화 jig 일치 ${pairs.length}행을 짝으로 씁니다`}
           </span>
           {remote ? null : (
             <button

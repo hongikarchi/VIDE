@@ -196,6 +196,10 @@ try {
   await tabPicker.getByRole('button', { name: '다시 가져오기' }).click();
   await waited;
   assert.equal(runs.at(-1)?.until, 'confirmTarget', 'stops at the person step while it waits');
+  // T-295 (SPEC-02.17 2): the route row follows this run, not the start's first one.
+  await page.waitForFunction(() =>
+    /사람 확인 대기: 대상 필지 확정/.test(document.querySelector('#route-card')?.textContent ?? ''),
+  );
   const ranAfter = page.waitForResponse(
     (response) =>
       response.request().method() === 'POST' && /\/jig-instances\/[^/]+\/run$/.test(response.url()),
@@ -208,6 +212,41 @@ try {
     await tabRail(id, 'done').waitFor();
   await tabRail('summary', 'done').waitFor();
   await tabRail('make', 'waiting').waitFor();
+  // T-295 (SPEC-02.17 2): the route row follows the latest run — no '사람 확인 대기: 대상 필지
+  // 확정' or '멈춘 단계' once every step before Rhino에 만들기 has computed.
+  await page.waitForFunction(() => {
+    const text = document.querySelector('#route-card')?.textContent ?? '';
+    return /사이트 모델링/.test(text) && !/사람 확인 대기|멈춘 단계/.test(text);
+  });
+  // T-295 (R4 R1-B, SPEC-12.3의 3): a new work copy, one parcel found and chosen, the notice
+  // confirmed in this project — [대상 필지 확정] alone runs on to Rhino에 만들기: the first copy is
+  // fetched with it, so 수집 is never left '막힘' waiting for [가져오기].
+  await page.getByRole('button', { name: 'JIG', exact: true }).click();
+  const again = dialog.locator('.jig-card', { hasText: '사이트 모델링' }).first();
+  await again.getByRole('button', { name: '새로 열기' }).click();
+  await again.getByLabel('출력 레이어').fill('VIDE::대지2');
+  await again.locator('.jig-new').getByRole('button', { name: '열기', exact: true }).click();
+  const fresh = dialog.locator('[data-jig-panel="vide/site-model"]', { hasText: 'VIDE::대지2' });
+  await fresh.waitFor();
+  const freshPicker = fresh.locator('.site-picker');
+  const freshRail = (id, state) =>
+    fresh.locator(`.kit-rail li[data-step="${id}"][data-state="${state}"]`);
+  await freshPicker.getByLabel('주소·지번·PNU').fill('합성시 가나구 가나동 3');
+  await freshPicker.getByRole('button', { name: '찾기' }).click();
+  const one = freshPicker.locator('.qcard');
+  await one.waitFor();
+  await one.locator('.qcard-option').first().click();
+  await freshPicker.getByRole('button', { name: '이 필지로' }).click();
+  await freshPicker.locator('.site-target-list li').first().waitFor();
+  await freshRail('confirmTarget', 'waiting').waitFor();
+  const collectsBefore = fake.calls.length;
+  await freshPicker.getByRole('button', { name: '대상 필지 확정' }).click();
+  await freshPicker.getByText('대상 필지를 확정했습니다.').waitFor();
+  await freshRail('collect', 'done').waitFor();
+  await freshRail('summary', 'done').waitFor();
+  await freshRail('make', 'waiting').waitFor();
+  assert.ok(fake.calls.length > collectsBefore, 'the first copy was fetched with the confirmation');
+  assert.ok(await freshPicker.getByRole('button', { name: '다시 가져오기' }).isVisible());
   // The AI turn after the T-273 start is refused by the stub above (409); nothing else may fail.
   assert.deepEqual(
     errors.filter((e) => !/status of 409/.test(e)),

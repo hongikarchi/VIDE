@@ -27,6 +27,7 @@ import {
   rowObjects,
   rowTexts,
   safeLink,
+  sourceText,
   staleReasons,
 } from '../../src/ui/compliance/model.ts';
 import { complianceFixture, LINK, OBJ } from '../fixtures/compliance-result.mjs';
@@ -220,6 +221,54 @@ test('다시 체크 필요 names what changed and nothing when nothing did (SPEC
     '설정값·수정 사항이 바뀜',
   ]);
   assert.deepEqual(staleReasons(result, { stepStale: true }), ['입력이 바뀜']);
+});
+
+test('a source not computed at the check and still not computed is no change (T-296)', () => {
+  const raw = complianceFixture();
+  // R4 R1-C: the site model work copy had never computed — kept with no fingerprint, epoch time.
+  raw.inputs.siteModel = {
+    instanceId: 'site-1',
+    title: '사이트 모델링 작업본 1',
+    hash: '',
+    at: '1970-01-01T00:00:00.000Z',
+  };
+  const result = complianceResultSchema.parse(raw);
+  const pending = {
+    instanceId: 'site-1',
+    at: null,
+    needsRecompute: true,
+    moved: false,
+    ready: false,
+  };
+  assert.deepEqual(staleReasons(result, { siteModel: pending }), [], 'right after the check');
+  assert.deepEqual(
+    staleReasons(result, { siteModel: { ...pending, instanceId: null } }),
+    [],
+    'still none to read',
+  );
+  // It computed since: the check read nothing from it, so it is a change now.
+  assert.deepEqual(
+    staleReasons(result, {
+      siteModel: {
+        instanceId: 'site-1',
+        at: '2026-10-14T05:00:00.000Z',
+        needsRecompute: false,
+        moved: true,
+        ready: true,
+      },
+    }),
+    ['대지가 바뀜'],
+  );
+  // A computed source that must compute again still says so.
+  const used = parsed();
+  assert.deepEqual(
+    staleReasons(used, { siteModel: { ...pending, instanceId: used.inputs.siteModel.instanceId } }),
+    ['대지가 바뀜(사이트 모델링을 다시 계산)'],
+  );
+  assert.equal(sourceText(result.inputs.siteModel), '사이트 모델링 작업본 1 · 계산 전');
+  assert.match(sourceText(used.inputs.limits), /^매스 A · 계산 2026-10-08 \d\d:\d\d$/);
+  assert.equal(sourceText(null), '없음');
+  assert.doesNotMatch(reportHtml(result), /1970-01-01/);
 });
 
 test('exports wait for a check and for an up-to-date result (SPEC-15.12)', () => {

@@ -48,6 +48,8 @@ import {
   continueSkill,
   revertSkill,
   skillTurnStatus,
+  sameRequest,
+  alreadyOpenStatus,
 } from '../skill-start.ts';
 import { activeWorkspace, setWorkspace } from '../workspaces.ts';
 import { hostlessFromScreen } from '../screen-hostless.ts';
@@ -459,6 +461,7 @@ export async function sendSkillTurn(body: string, sendMode: WorkMode) {
 export async function runSkillRoute(route: Route, body: string) {
   const jig = route.jig!;
   const runMode = draftState.mode;
+  if (await skillAgain(jig.id, body, runMode)) return;
   workState.shownSkill = { body, route };
   renderSkillRow({ status: '여는 중…' });
   let start: SkillStart;
@@ -486,9 +489,12 @@ export async function runSkillRoute(route: Route, body: string) {
   if (start.conversationId) jigConversations.set(start.conversationId, start.instanceId || null);
   if (start.legacy) {
     renderSkillRow({ status: '열었습니다' });
+    // The words did their work (no AI turn takes them): the composer is empty again (T-291).
+    if (sameRequest(draftState.state.body, body)) clearComposer();
     return;
   }
   if (start.pending) {
+    if (sameRequest(draftState.state.body, body)) clearComposer();
     renderSkillRow({
       status: '계획 · [진행]을 누르면 계산합니다',
       progress: () => void progressSkill(start, body),
@@ -497,6 +503,35 @@ export async function runSkillRoute(route: Route, body: string) {
   }
   renderSkillRow({ status: '계산했습니다 · AI가 요약합니다' });
   await sendSkillTurn(body, runMode);
+}
+/**
+ * The jig a request names is open already (SPEC-02.17 2, T-291): nothing starts again. The same
+ * words bring its screen forward and say '이미 열려 있습니다' with the person steps ahead; other
+ * words go to the AI — the jig's conversation turn, or an ordinary turn for an older jig.
+ */
+async function skillAgain(jigId: string, body: string, runMode: WorkMode) {
+  const shown = workState.shownSkill;
+  const start = shown?.start;
+  if (!shown || !start || start.jigId !== jigId || !skillDeps.isTabOpen(start.instanceId))
+    return false;
+  skillDeps.openTab({ instanceId: start.instanceId, label: start.instanceTitle });
+  if (sameRequest(body, shown.body)) {
+    clearComposer();
+    renderSkillRow({
+      status: alreadyOpenStatus(start),
+      ...(start.pending ? { progress: () => void progressSkill(start, shown.body) } : {}),
+    });
+    return true;
+  }
+  if (start.legacy) {
+    hideSkillRow();
+    await submitRequest();
+    return true;
+  }
+  if (start.conversationId && skillDeps.conversations.active() !== start.conversationId)
+    skillDeps.conversations.select(start.conversationId);
+  await sendSkillTurn(body, runMode);
+  return true;
 }
 /** [진행] of a 계획 start: make or open, apply, compute, then the AI turn. */
 export async function progressSkill(start: SkillStart, body: string) {
@@ -563,16 +598,16 @@ export function runAppRoute(route: Route, body: string) {
     const link = routedLink(app.link);
     if (!link?.connection) {
       messageWithActions(
-        '다시 Sync 받을 연결 파일을 찾지 못했습니다. 연결 파일 목록에서 고르세요.',
+        '다시 동기화할 연결 파일을 찾지 못했습니다. 연결 파일 목록에서 고르세요.',
         [{ label: 'AI 작업으로 보내기', run: toAi }],
       );
       return;
     }
     // T1 (SPEC-02.19 7): proposed on a card and run by the person's press, never by the words alone.
     showRouteCard(
-      `'${link.name}'을(를) 다시 Sync 받을까요? 원본은 그대로입니다.`,
+      `'${link.name}'을(를) 다시 동기화할까요? 원본은 그대로입니다.`,
       {
-        label: 'Sync 받기',
+        label: '동기화하기',
         action: () => {
           clearComposer();
           void syncLink(link);
@@ -1259,14 +1294,14 @@ export function paintContext() {
   if (loosePins.length || pendingPins)
     chip(
       items,
-      `📌 고정 객체 ${loosePins.length}개${pendingPins ? ` · Sync 대기 ${pendingPins}개` : ''}`,
+      `📌 고정 객체 ${loosePins.length}개${pendingPins ? ` · 동기화 대기 ${pendingPins}개` : ''}`,
       () => {
         draftState.state.pins = draftState.state.pins.filter((pin) => pin.label);
         if (linksState.hostPinned.length) void setHostPins([]).catch(() => {});
         render();
       },
       loosePins.map((pin) => pin.name || pin.id).join('\n') ||
-        'Rhino에서 고정했지만 아직 Sync 전인 객체',
+        'Rhino에서 고정했지만 아직 동기화 전인 객체',
       () => {
         selectionState.selectedIds = loosePins.flatMap(
           (pin) => displayIdOf(objects, pin.basis, pin.id) ?? [],

@@ -124,13 +124,25 @@ export async function runClaude({ claude = 'claude', system, content, timeoutMs 
   }
 }
 
-const ACTIONS = new Set(['click', 'type', 'wait', 'ask_operator', 'declare_stuck', 'done']);
+const ACTIONS = new Set([
+  'click',
+  'type',
+  'select',
+  'wait',
+  'ask_operator',
+  'declare_stuck',
+  'done',
+]);
 /** The fact an `ask_operator` names: a short ASCII key such as `address` or `project_name`. */
 const FIELD = /^[a-z][a-z0-9_]{0,39}$/;
 const strings = (value) => Array.isArray(value) && value.every((v) => typeof v === 'string');
 
-/** Parses and validates one persona answer; throws with the reason when it is not usable. */
-export function parseStep(text) {
+/**
+ * Parses and validates one persona answer; throws with the reason when it is not usable. `choices`
+ * are the open native select's options (selectChoices) the last click found (T-292): a `select`
+ * action is valid only then, with `index` (the list number, 1-based) or `text` naming one of them.
+ */
+export function parseStep(text, { choices } = {}) {
   const raw = String(text ?? '').trim();
   const start = raw.indexOf('{');
   const end = raw.lastIndexOf('}');
@@ -150,6 +162,10 @@ export function parseStep(text) {
     )
       problems.push('action.x/y');
     if (action.type === 'type' && typeof action.text !== 'string') problems.push('action.text');
+    if (action.type === 'select') {
+      if (!choices?.length) problems.push('action.type (select: no open choice list)');
+      else if (!resolveSelect(action, choices).ok) problems.push('action.index/text');
+    }
     if (
       action.type === 'ask_operator' &&
       !(typeof action.field === 'string' && FIELD.test(action.field))
@@ -176,6 +192,9 @@ export function parseStep(text) {
       ...(typeof action.text === 'string' && action.type !== 'ask_operator'
         ? { text: action.text }
         : {}),
+      ...(action.type === 'select' && Number.isInteger(action.index)
+        ? { index: action.index }
+        : {}),
       ...(action.submit === true ? { submit: true } : {}),
       ...(action.type === 'ask_operator'
         ? {
@@ -198,7 +217,7 @@ export const STEP_SCHEMA = `{
   "sees": "화면에서 지금 보이는 것 한두 문장",
   "reads": ["화면 글을 그대로 옮긴 문자열", "..."],
   "unknownWords": ["처음 보는 말"],
-  "action": { "type": "click | type | wait | ask_operator | declare_stuck | done", "x": 0, "y": 0, "text": "type일 때 입력할 글", "submit": false, "field": "ask_operator일 때 물을 사실(address, project_name 등)", "question": "ask_operator일 때 선배에게 하는 질문 한 문장" },
+  "action": { "type": "click | type | select | wait | ask_operator | declare_stuck | done", "x": 0, "y": 0, "text": "type일 때 입력할 글, select일 때 고를 항목 글", "index": "select일 때 고를 항목 번호(1부터)", "submit": false, "field": "ask_operator일 때 물을 사실(address, project_name 등)", "question": "ask_operator일 때 선배에게 하는 질문 한 문장" },
   "confidence": 0.0,
   "stuck": false,
   "wrongTurn": false,
@@ -218,12 +237,13 @@ export function toldFacts(history = []) {
   return history.flatMap((step) => step.operatorAnswers ?? []);
 }
 
-export function stepPrompt(goal, history = []) {
+export function stepPrompt(goal, history = [], choices = null) {
   const recent = history.slice(-3);
   const told = toldFacts(history);
   return [
     `목표: ${goal}`,
     '',
+    ...(choices?.length ? [choicesPrompt(choices), ''] : []),
     ...(told.length
       ? [
           '선배에게 물어서 들은 것:\n' +
@@ -251,13 +271,14 @@ export async function personaStep({
   personaFile,
   claude = 'claude',
   timeoutMs,
+  choices = null,
 }) {
   const system = await readFile(personaFile, 'utf8');
   const image = (await readFile(screenshotPath)).toString('base64');
   let lastError;
   for (let attempt = 0; attempt < 2; attempt++) {
     const text =
-      stepPrompt(goal, history) +
+      stepPrompt(goal, history, choices) +
       (attempt
         ? `\n\n앞선 답은 쓸 수 없었습니다(${lastError.message}). 형식에 맞는 JSON만 다시 출력하세요.`
         : '');
@@ -272,7 +293,7 @@ export async function personaStep({
     });
     try {
       return {
-        ...parseStep(answer.text),
+        ...parseStep(answer.text, { choices }),
         meta: { model: answer.model, ms: answer.ms, attempts: attempt + 1 },
       };
     } catch (error) {
@@ -280,6 +301,78 @@ export async function personaStep({
     }
   }
   throw new Error('persona answer invalid twice: ' + lastError.message);
+}
+
+// --- native select (T-292) ----------------------------------------------------------------------
+/**
+ * The choosable options of a native <select> the persona clicked, numbered from 1. A screenshot
+ * never shows the opened list (Chrome draws it outside the page, R4 R1-D), so the driver reads the
+ * options and gives them to the persona as text. Disabled options and the empty-value placeholder
+ * ('레이어를 고르세요') are left out. Pure.
+ * @param {{ text: string, value: string, disabled?: boolean }[]} options in DOM order
+ * @returns {{ n: number, optionIndex: number, text: string, value: string }[]}
+ */
+export function selectChoices(options) {
+  return (Array.isArray(options) ? options : [])
+    .map((option, optionIndex) => ({
+      optionIndex,
+      text: String(option?.text ?? '').trim(),
+      value: String(option?.value ?? ''),
+      disabled: option?.disabled === true,
+    }))
+    .filter((option) => !option.disabled && option.value !== '')
+    .map(({ optionIndex, text, value }, i) => ({ n: i + 1, optionIndex, text, value }));
+}
+
+/** The prompt block that lists the open select's choices for the persona. Pure. */
+export function choicesPrompt(choices) {
+  return [
+    '방금 누른 칸은 고르는 칸입니다. 펼친 목록은 스크린샷에 보이지 않으므로 항목을 글로 적어 둡니다:',
+    ...choices.map((choice) => `${choice.n}. ${choice.text}`),
+    '이 중 하나를 고르려면 action에 {"type":"select","index":번호} 또는 {"type":"select","text":"항목 글"}을 적으세요. 고르지 않을 거면 다른 행동을 하세요.',
+  ].join('\n');
+}
+
+/**
+ * Which choice a `select` action names: `index` (the list number) first, else `text` (exact after
+ * trimming, then the one choice that contains it). Pure.
+ * @returns {{ ok: true, choice: object } | { ok: false, reason: string }}
+ */
+export function resolveSelect(action, choices) {
+  const list = Array.isArray(choices) ? choices : [];
+  if (!list.length) return { ok: false, reason: 'no open choice list' };
+  if (action?.index != null) {
+    const choice = Number.isInteger(action.index) ? list.find((c) => c.n === action.index) : null;
+    return choice
+      ? { ok: true, choice }
+      : { ok: false, reason: `index ${action.index} is not 1–${list.length}` };
+  }
+  const want = typeof action?.text === 'string' ? action.text.trim() : '';
+  if (!want) return { ok: false, reason: 'neither index nor text' };
+  const exact = list.find((c) => c.text === want);
+  if (exact) return { ok: true, choice: exact };
+  const partial = list.filter((c) => c.text.includes(want));
+  if (partial.length === 1) return { ok: true, choice: partial[0] };
+  return {
+    ok: false,
+    reason: partial.length
+      ? `text '${want}' matches ${partial.length} choices`
+      : `no choice '${want}'`,
+  };
+}
+
+// --- after the goal (T-292) ----------------------------------------------------------------------
+/**
+ * Whether an undo after the goal brought the view back (R1-HIDE: U shows the hidden objects
+ * again): true when objects were hidden and none are after, false when some still are, null when
+ * nothing was hidden before or the count could not be read (no 3D view). Pure.
+ * @returns {{ undoRestored: boolean | null, reason?: string }}
+ */
+export function undoVerdict(hiddenBefore, hiddenAfter) {
+  if (!Number.isFinite(hiddenBefore) || !Number.isFinite(hiddenAfter))
+    return { undoRestored: null, reason: 'hidden count unreadable (no 3D view)' };
+  if (hiddenBefore === 0) return { undoRestored: null, reason: 'nothing was hidden' };
+  return { undoRestored: hiddenAfter === 0 };
 }
 
 // --- operator answers (T-286) --------------------------------------------------------------------

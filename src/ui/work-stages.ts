@@ -66,7 +66,7 @@ function stageStates(input: StageInput): {
         : input.state === 'cancelled'
           ? '중단됨'
           : input.state === 'unknown'
-            ? '호스트 결과 확인 필요'
+            ? 'CAD 프로그램 결과 확인 필요'
             : input.acknowledged
               ? '결과 미확인 · 확인함'
               : input.state === 'interrupted'
@@ -112,7 +112,7 @@ function stageStates(input: StageInput): {
   }
   if (input.direct) return directStages(input, finish);
   // Host work: prepare → understand → query → run → verify → result.
-  const labels = ['기준 준비', '요청 이해', '모델 조회', '생성·수정 실행', '저장·재열기 검증'];
+  const labels = ['기준 준비', '요청 이해', '모델 읽기', '생성·수정 실행', '저장 확인'];
   const keys = ['prepare', 'understand', 'query', 'execute', 'verify'];
   const counts = [0, 0, 0, 0, 0];
   const starts: (number | undefined)[] = [input.startedAt];
@@ -143,7 +143,7 @@ function stageStates(input: StageInput): {
   const detail = [
     '',
     '',
-    counts[2] ? `조회 ${counts[2]}회` : '',
+    counts[2] ? `읽기 ${counts[2]}회` : '',
     counts[3] || errors
       ? `실행 ${counts[3]}회` + (errors ? ` · 오류 ${errors}회 (AI가 고쳐 다시 시도)` : '')
       : '',
@@ -187,7 +187,7 @@ function directStages(
 ): { stages: Stage[]; starts: (number | undefined)[]; end?: number } {
   const running = ACTIVE.includes(input.state);
   const keys = ['prepare', 'understand', 'query', 'execute', 'answer'];
-  const labels = ['준비', '요청 이해', '모델 조회', '실행', '답변 정리'];
+  const labels = ['준비', '요청 이해', '모델 읽기', '실행', '답변 정리'];
   const stageOf: Record<string, number> = { host: 0, query: 2, execute: 3, result: 3, error: 3 };
   const counts = [0, 0, 0, 0, 0];
   const starts: (number | undefined)[] = [input.startedAt];
@@ -239,10 +239,10 @@ function directStages(
   const detail = [
     '',
     '',
-    counts[2] ? `조회 ${counts[2]}회` : '',
+    counts[2] ? `읽기 ${counts[2]}회` : '',
     counts[3] || errors
       ? `실행 ${counts[3]}회` +
-        (undo ? ` · 되돌리기 ${undo}단계` : '') +
+        (undo ? (undo === 1 ? ' · 되돌리기(마지막 변경)' : ` · 되돌리기 ${undo}번`) : '') +
         (errors ? ` · 오류 ${errors}회 (AI가 고쳐 다시 시도)` : '')
       : '',
     '',

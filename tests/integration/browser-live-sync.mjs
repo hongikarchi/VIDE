@@ -169,7 +169,7 @@ try {
   };
   engineSync = { state: 'syncing', at: now };
   await page.waitForFunction(() =>
-    document.querySelector('.link-row')?.textContent.includes('Sync 중'),
+    document.querySelector('.link-row')?.textContent.includes('동기화 중'),
   );
   engineFullSync(syncId, [a, b]);
   engineSync = { state: 'idle', at: now };
@@ -218,7 +218,7 @@ try {
   // A moving document: the row says the engine will try again.
   engineSync = { state: 'waiting', code: 'SOURCE_CHANGED', at: now };
   await page.waitForFunction(() =>
-    document.querySelector('.link-row')?.textContent.includes('변경 중 · 곧 다시 Sync'),
+    document.querySelector('.link-row')?.textContent.includes('변경 중 · 곧 다시 동기화'),
   );
   engineSync = { state: 'idle', at: now };
 
@@ -280,7 +280,7 @@ try {
     while (pressed.length === count) await new Promise((r) => setTimeout(r, 50));
     // The row leaves 'Sync 중' when the answer is in.
     await page.waitForFunction(
-      () => !document.querySelector('.link-row')?.textContent.includes('Sync 중'),
+      () => !document.querySelector('.link-row')?.textContent.includes('동기화 중'),
     );
     return pressed.at(-1);
   };

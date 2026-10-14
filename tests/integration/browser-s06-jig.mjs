@@ -11,6 +11,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { startServer } from '../../src/server/server.ts';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { agentConnection } from '../../src/ai/agent-connection.ts';
+import { DocumentLinks } from '../../src/core/document-links.ts';
 import {
   CASES,
   fixtureFiles,
@@ -19,11 +23,55 @@ import {
 import { HOME, LAYERS, buildCase } from '../../extensions/jigs/s06-frame/fixtures/synthetic.ts';
 
 import { soleDb } from '../fixtures/store.mjs';
+/** The jig conversation turns the synthetic AI got (T-293). */
+const turns = [];
+/**
+ * A synthetic AI for the jig conversation (T-293): its first turn asks which layer is 기존 기초
+ * with jig_ask_input and ends with that card; the answer turn only reports. No real CLI.
+ */
+const askingProvider = (options) => ({
+  status: async () => ({ available: true }),
+  run: async (context) => {
+    const goal = String(context?.goal ?? '');
+    turns.push(goal);
+    const done = (text, questions = []) => ({
+      text: JSON.stringify({ status: questions.length ? 'question' : 'done', text, questions }),
+    });
+    if (goal.includes('질문 카드 답변')) return done('기존 기초를 넣고 다시 계산했습니다.');
+    const agent = options.agent && agentConnection(options.agent);
+    if (!agent?.tools.includes('jig_ask_input')) return done('입력 도구가 없습니다.');
+    const client = new Client({ name: 'synthetic-agent', version: '1.0.0' });
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(agent.url), {
+        requestInit: { headers: { Authorization: `Bearer ${agent.token}` } },
+      }),
+    );
+    const { question } = JSON.parse(
+      (
+        await client.callTool({
+          name: 'jig_ask_input',
+          arguments: {
+            input: 'existingFootings',
+            options: [
+              { layers: [LAYERS.existingFootings], recommended: true },
+              { layers: [LAYERS.basinGirders], recommended: false },
+            ],
+          },
+        })
+      ).content[0].text,
+    );
+    await client.close();
+    return done('기존 기초 레이어를 정해 주세요.', [question]);
+  },
+});
 const shot = process.env.VIDE_SHOT_DIR;
 const directory = await mkdtemp(join(tmpdir(), 'vide-s06-jig-'));
 let app, browser;
 try {
-  app = await startServer({ filename: join(directory, 'test.sqlite') });
+  app = await startServer({
+    filename: join(directory, 'test.sqlite'),
+    providerFactory: askingProvider,
+  });
   browser = await chromium.launch({ channel: 'chrome', headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } }),
     errors = [];
@@ -96,7 +144,7 @@ try {
       async (id) => (await (await fetch(`/api/v1/projects/${id}/requests`)).json()).length,
       projectId,
     );
-  const before = await requests();
+  let before = await requests();
 
   // JIG list → the S-06 jig → a new instance on the output layer → its context tab.
   await page.getByRole('button', { name: 'JIG', exact: true }).click();
@@ -195,10 +243,117 @@ try {
   });
   assert.match(await rail('assemble').textContent(), /기존 기초/);
 
-  // Every other role: candidates from the Sync layers that fit its hints, the first one confirmed
-  // by a person.
+  // T-293/T-294 (SPEC-07.18 9): in the jig's conversation the AI asks which layer is 기존 기초 with
+  // a layer card; the person's answer sets the role at once (confirmed in chat) and the assembly
+  // step runs again without a second AI turn deciding it; the answer message shows no option key.
+  const links = new DocumentLinks(app.store);
+  const linkOf = {
+    'structure-sync': links.fileLink(projectId, 'rhino', 'structure.3dm'),
+    'civil-sync': links.fileLink(projectId, 'rhino', 'civil.3dm'),
+  };
+  for (const [syncId, link] of Object.entries(linkOf))
+    soleDb(app.store)
+      .prepare(`UPDATE workspace_requests SET input=json_set(input,'$.linkId',?) WHERE id=?`)
+      .run(link.id, syncId);
+  const chat = await page.evaluate(async (id) => {
+    const call = async (path, method = 'GET', body) => {
+      const response = await fetch(`/api/v1/projects/${id}${path}`, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(`${path} ${response.status} ${JSON.stringify(data)}`);
+      return data;
+    };
+    const [instance] = (await call('/jig-instances')).instances;
+    const conversation = await call('/conversations', 'POST', {
+      kind: 'jig-run',
+      title: 'S-06 골조 배치',
+      provider: 'codex-cli',
+      jigInstanceId: instance.id,
+    });
+    const asked = crypto.randomUUID();
+    await call('/requests', 'POST', {
+      id: asked,
+      body: '구조 검토하고 싶은데 파악해줘',
+      provider: 'codex-cli',
+      // Auto: a Plan turn's input card stays a proposed input until [진행] (SPEC-02.20 2).
+      mode: 'auto',
+      hostUse: 'none',
+      conversationId: conversation.id,
+      pins: [],
+      sketches: [],
+      files: [],
+    });
+    let request;
+    for (let i = 0; i < 200; i++) {
+      request = await call(`/requests/${asked}`);
+      if (!['queued', 'running'].includes(request.state)) break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const card = request.result?.turnOutput?.questions?.[0];
+    if (!card) return { state: request.state, result: request.result };
+    const answered = await call(`/conversations/${conversation.id}/answer`, 'POST', {
+      requestId: asked,
+      answers: [{ questionId: card.id, optionId: card.options[0].id }],
+    });
+    // What the question card does with `applied` (question-card.tsx onApplied → thread.ts).
+    for (const applied of answered.applied ?? [])
+      if (applied.ok && applied.instanceId)
+        dispatchEvent(
+          new CustomEvent('vide:jig-params-changed', {
+            detail: { instanceId: applied.instanceId },
+          }),
+        );
+    return {
+      state: request.state,
+      card,
+      applied: answered.applied,
+      body: answered.request?.input?.body,
+    };
+  }, projectId);
+  assert.equal(chat.state, 'succeeded', JSON.stringify(chat));
+  assert.match(chat.card.id, /^input-existingFootings-/);
+  assert.equal(chat.card.options[0].label, LAYERS.existingFootings);
+  assert.deepEqual(
+    chat.applied.map((a) => [a.ok, a.text]),
+    [[true, `기존 기초 ← ${LAYERS.existingFootings}`]],
+  );
+  assert.doesNotMatch(chat.body, /\[|input-existingFootings|layers-1/);
+  assert.match(chat.body, new RegExp(`→ ${LAYERS.existingFootings}`));
+  const footingsCard = panel.locator('.kit-role[data-role="site.existingFootings"]');
+  await panel
+    .locator('.kit-role[data-role="site.existingFootings"][data-state="confirmed"]')
+    .waitFor();
+  assert.match(await footingsCard.textContent(), new RegExp(LAYERS.existingFootings));
+  await page.waitForFunction(() => {
+    const text = document.querySelector('.kit-rail li[data-step="assemble"]')?.textContent ?? '';
+    return !/필요한 입력이 없습니다/.test(text);
+  });
+  // Both required roles are in: the assembly step computed again (up to 입력 확인, a person's step).
+  await rail('assemble', 'done').waitFor();
+  await rail('confirmInputs', 'waiting').waitFor();
+  const instanceBody = await page.evaluate(async (id) => {
+    const base = `/api/v1/projects/${id}/jig-instances`;
+    const [instance] = (await (await fetch(base)).json()).instances;
+    return (await (await fetch(`${base}/${instance.id}`)).json()).body;
+  }, projectId);
+  assert.equal(instanceBody.assembly['site.existingFootings'].confirmed.by, 'user-chat');
+  // The answer turn only reports: two AI turns in all (the question and the summary).
+  await page.waitForFunction(
+    async (id) =>
+      (await (await fetch(`/api/v1/projects/${id}/requests`)).json()).every(
+        (r) => !['queued', 'running'].includes(r.state),
+      ),
+    projectId,
+  );
+  assert.equal(turns.length, 2);
+  before = await requests();
+
+  // Every other role (기존 기초 came from the chat answer above): candidates from the Sync layers
+  // that fit its hints, the first one confirmed by a person.
   const roles = [
-    ['site.existingFootings', '기존 기초'],
     ['site.basinGirders', '유수지 보'],
     ['site.existingGrid', '기존 그리드'],
     ['site.newEJ', '신설 E.J.'],

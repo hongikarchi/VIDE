@@ -2,8 +2,8 @@
 id: PLAN-23
 title: S-06 골조 jig와 구조 라이브러리 1차 — 진단·배치·해석·단면·일람표·Rhino에 만들기
 status: review
-version: 0.3
-updated: 2026-10-01
+version: 0.4
+updated: 2026-10-14
 owner: agent:claude
 related: [PLAN, PLAN-17, PLAN-22, PLAN-24, FR-23, FR-24, AC-40, AC-41, AC-42, AC-43, SPEC-06, SPEC-07, ARCH-02, ARCH-03, ADR-019, ADR-020, RESEARCH-10, RESEARCH-08, RESEARCH-09]
 ---
@@ -347,4 +347,5 @@ M5 수용(S-06 보조 jig를 만들기 대화로 만들기)은 SPEC-07.16에 따
 | T-054 단면 선정·부호·일람표 | 완료(c67bf57) | `tests/structure/{sizing,marks,schedule}.test.mjs`, `server.test.mjs` | 범용 구조 jig 화면의 일람표 CSV 내보내기(`GET …/schedule.csv`). 단면 선정 ≤ 1초는 합성 한 칸 골조에서만 확인. 부호 접두 표는 S-18 표준 파일 확인 전 '가정' |
 | T-056 ⑨ 단면 선정 ~ ⑫ Rhino에 만들기 | 구현·합성 검증 완료(c972e23, 선정 단면 적용·부호 원장 32bf8be). 상단선 만들기는 S-06 사본에서 실제 Rhino 확인(d8fb2ba) | [VERIFY-2026-09-30-s06-frame-m3](../tdd/VERIFY-2026-09-30-s06-frame-m3.md), [SPIKE-2026-09-30-jig-bake](../tdd/SPIKE-2026-09-30-jig-bake.md), `tests/core/{s06-m3,s06-m3-steps,s06-bakeplan}.test.mjs`, `jig:test` | 실데이터 부재(`members`·`member-columns`) 만들기 — 엔진에서 S-06 해석이 권한 제한 자식 프로세스 때문에 돌지 않음([PLAN-24](PLAN-24-ai-conversations.md#t-074) T-074, ARCH-03 §6.4 결정 필요). [선정 단면 적용]이 탭 안이 아니라 패널 행동 줄에 있음. 축선 미포함. `browser-s06-jig.mjs`·서랍 탭 12개 화면 확인 |
 | T-058 S-06 골조 보고서 | 01~05·부록 구현·합성 검증(c972e23) | `tests/core/s06-report.test.mjs`, `browser-report.mjs` | 실데이터 보고서와 인쇄 확인 VERIFY(실데이터 해석은 T-053에서 `ok`가 됨) |
+| T-293·T-294 대화로 정한 입력 역할·답 메시지 키(PLAN-51 R4) | 구현·합성 검증(2026-10-14, 미커밋). SPEC-07.18의 9·SPEC-07.5의 3·SPEC-06.10·SPEC-02.19의 6. AI 도구 `jig_set_input`·`jig_ask_input`. 입력 질문 카드의 답은 답 경로가 바로 역할에 넣고 다시 계산(`user-chat` 확인). 답 메시지에서 선택지 키 제거 | `tests/server/jig-input.test.mjs`, `tests/server/turn-output.test.mjs`, `browser-s06-jig.mjs`(채팅 답 → 기존 기초 확인 → 입력 조립 다시 계산) | 설치본 L1 R1-D 재측정. 질문 카드를 실제로 누르는 브라우저 시험(지금은 답 경로 호출 + 화면 갱신 이벤트). AI가 `jig_ask_input` 없이 만든 카드의 답은 다음 AI 턴의 `jig_set_input`에 기댐 |
 | T-067 구조 코어 확장 | 2차, 착수 전 | — | 2차 착수 지시 |

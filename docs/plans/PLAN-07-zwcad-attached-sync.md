@@ -2,10 +2,10 @@
 id: PLAN-07
 title: 현재 ZWCAD 도면 연결과 패널
 status: review
-version: 0.3
-updated: 2026-09-28
+version: 0.4
+updated: 2026-10-14
 owner: agent:codex
-related: [T-006, SPEC-01, HOST-ZWCAD, FR-02, FR-03, FR-16, AC-38]
+related: [T-006, T-285, PLAN-51, SPEC-01, HOST-ZWCAD, FR-02, FR-03, FR-16, AC-38]
 ---
 
 # 현재 ZWCAD 연결
@@ -30,3 +30,38 @@ ZWCAD 애드인 재로드가 불가능하면 검증 빌드를 먼저 완성하�
 별도 .NET 연결 플러그인·패널·문서 발견·읽기 Sync를 구현했다. 합성 CAD의 브라우저 표시·재열기·Live Sync·다중 도면·오류 경계는 통과했고 실제 사용자 창의 패널/연결도 확인했다. [검수](../tdd/VERIFY-2026-09-28-zwcad-attached-sync.md). 실제 기본도면은 이전 DLL에서 SDK 읽기 실패·수백 MB 외부참조 응답·시간 초과가 발생했다. 네이티브에서 실패 객체와 표시 데이터 폭증을 분리한 수정본은 큰 합성 블록 뒤의 정상 객체 표시까지 통과했다.
 
 최신 Rhino/UI/스케치 변경과 병합하고 관련 브라우저 회귀를 통과했다. 사용자 재시작 후 수정 DLL을 배치해 현재 기본도면의 실제 제품 Sync와 새로고침 후 표시 복원을 확인했다. 3,841개 중 3,369개를 표시했고 472개는 숨김·미지원 등으로 제외했다(대형 블록 14개 포함). 기존 서버와 분리한 로컬 시험 포트 63703에서 검수했다. 다음은 대형 외부참조의 공유 기하/인스턴싱과 문자·해치 표시 보완이다. 현재 사용자 CAD의 AI 편집은 별도 남은 작업이며 읽기 연결 성공만으로 완료 처리하지 않는다.
+
+## T-285 분석 — 첫 Sync 100 s (2026-10-14)
+
+[PLAN-51](PLAN-51-verify-loop.md) T-285: `cad.dwg`(모형 공간 3,719개) 첫 Sync가 단독으로 100.4 s(라운드 3, Sync `2885eabf`)·100.3 s(라운드 4, `ace931d3`)이고 `hostMs`가 98.9 s다. 경보선 20 s의 5배다. `hostMs`는 엔진의 `capture()` 전체(`src/server/document-sync.ts`의 `timed`)여서 플러그인 시간과 엔진의 쪽 처리·쪽 사이 대기를 함께 담는다. 아래는 엔진 로그와 플러그인 로그(`%LOCALAPPDATA%\VIDE\logs\zwcad-2026-10-14.jsonl`, `call` 줄의 시간은 요청 수신부터 답 쓰기 끝까지)를 시각으로 맞춰 나눈 값이다. 이 분석은 동작을 바꾸지 않는다.
+
+**흐름:** `capture()`(`hosts/zwcad/attached-documents.ts:404`)가 `attachedStatus` 뒤 100개씩 `displayPage`를 순서대로 부른다(같은 파일 426행). 플러그인은 한 번에 연결 하나만 받는 수신 루프(`hosts/zwcad/connection/AttachedDocument.cs:302` `Listen`)에서 요청을 큐에 넣고, ZWCAD `Idle` 한 번에 하나씩 꺼내 주 스레드에서 처리한다(같은 파일 101–105행). `displayPage`는 `AttachedDisplay.Page`(`AttachedDisplay.cs:172`)가 개체마다 `Collect`(321행)로 블록·외부참조를 재귀로 펼치고, 곡선을 표본점으로 나누고(호 72점, 볼록 폴리선 구간 24점), XCLIP이 있으면 선분마다 경계와 자르고(492행), 치수·패턴 해치는 `Explode`로 임시 개체를 만든다(401행). 답은 `JavaScriptSerializer`로 한 번에 직렬화한다(`AttachedDocument.cs:366`). 엔진은 쪽마다 JSON을 풀고 `pageSchema`(zod)로 전체를 검사한다(`attached-documents.ts:127`).
+
+| 구간 (라운드 4, `ace931d3`) | ms | 비율 | 근거 |
+|---|---:|---:|---|
+| `displayPage` 39회의 플러그인 시간 | 68,648 | 68.4% | `call` 줄 합계, 답 173.1 MB |
+| └ 무거운 쪽 4개 | 63,285 | 63.1% | 38,964 ms/20.1 MB · 14,837 ms/40.8 MB · 6,478 ms/16.1 MB(첫 쪽) · 3,006 ms/4.3 MB(마지막 쪽) |
+| └ 나머지 쪽 35개 | 5,363 | 5.3% | 쪽당 평균 153 ms |
+| 쪽 사이 간격 합계 | 30,075 | 30.0% | 앞 쪽 끝 ~ 다음 쪽 시작 |
+| └ 같은 수신 루프에 끼어든 상태 조회 | 14,230 | 14.2% | `attachedStatus`·`selection` 21회, 회당 0.5–1.0 s |
+| └ 그 밖(엔진의 쪽 처리·연결 등, 미분해) | 15,845 | 15.8% | 쪽당 약 0.4 s |
+| 마지막 쪽 뒤 ~ 끝 | 1,595 | 1.6% | 끝 `attachedStatus` 등 |
+| **합계(엔진 `ms`)** | **100,318** | | `hostMs` 98,885 |
+
+라운드 3(`2885eabf`)도 같은 모양이다: 쪽 39개, 플러그인 69,284 ms(무거운 쪽 39,576·15,004·6,059·3,048 ms), 간격 29,591 ms(상태 조회 22회 17,071 ms), 답 173.1 MB. 두 라운드의 쪽별 바이트가 같아 결과는 결정적이다.
+
+**판단:**
+
+1. **주 병목은 플러그인 읽기 중 쪽 2개다(약 54 s, 54%).** 보통 쪽은 같은 JSON 형식을 20–24 MB/s로 내보낸다(10.6 MB/447 ms, 13.2 MB/556 ms). 그런데 40.8 MB 쪽은 2.7 MB/s, 20.1 MB 쪽은 0.5 MB/s다. 직렬화·전송이 원인이면 바이트에 비례해야 하므로, 남는 약 50 s는 `Collect`의 기하 계산(또는 Idle 대기)에 있다고 추정한다. 바이트가 적은데 더 오래 걸린 20.1 MB 쪽은 좌표당 계산이 큰 경로 — XCLIP 자르기(선분마다 경계 전체와 교차·포함 검사, `AttachedDisplay.cs:492`·`Clip`·`Contains`)나 패턴 해치·치수 `Explode`(401행) — 를 의심한다. 같은 블록 정의를 삽입마다 다시 펼치는 것(337행, 정의 캐시 없음)도 큰 외부참조의 첫 쪽(16.1 MB/6.5 s)에 걸린다. 어느 개체인지는 로그에 없다(미측정).
+2. **상태 조회가 Sync 쪽 사이를 막는다(약 14 s).** 수신 루프가 연결을 하나씩 처리하므로 엔진의 1초 주기 패스(`src/server/sync-scheduler.ts:100`)와 화면의 문서 목록 조회가 부르는 `attachedStatus`·`selection`이 다음 쪽 요청 앞에 끼어든다. 조회 자체는 가볍지만 Idle 차례를 기다려 회당 0.5–1 s다.
+3. **엔진 쪽 처리 약 16 s는 아직 나누지 못했다.** 쪽마다 최대 41 MB JSON 파싱과 `pageSchema`의 좌표 배열 검사가 후보다.
+
+**계측 추가(동작 변경 없음):** 플러그인이 `displayPage`마다 `call-stages` 줄을 남긴다(ARCH-01 진단 기록). `waitMs`(큐에 넣은 뒤 Idle 차례까지), `dispatchMs`(주 스레드 처리), `readMs`(`Page` 읽기), `serializeMs`, `writeMs`, `entities`, `coordinates`, 가장 느린 개체의 `slowestType`·`slowestHandle`·`slowestMs`·`slowestCoordinates`. 변경: `hosts/zwcad/connection/AttachedDisplay.cs`(`PageTiming`, `Page`의 선택 인자), `AttachedDocument.cs`(`Listen`·`Reply`·`Stages`). 연결 플러그인과 작업 사본 워커 모두 Release 빌드가 오류 0으로 통과했다(임시 출력, 설치하지 않음). 라운드 5는 이 플러그인을 설치한 뒤 같은 Sync의 `call-stages`로 1·3의 미측정 부분을 가른다.
+
+**다음 웨이브 수정 후보**(라운드 5의 `call-stages`로 순서를 정한다):
+
+- `slowestType`이 블록·외부참조이면: 블록 정의를 한 번만 펼쳐 정의 좌표계로 캐시하고 삽입마다 변환만 한다. 이어서 이 문서 '진행'의 공유 기하/인스턴싱으로 답 크기(173 MB)를 줄인다.
+- XCLIP 자르기가 원인이면: 경계의 경계상자로 완전히 안·밖인 선분과 폴리선을 먼저 걸러 `Clip`·`Contains`를 건너뛴다.
+- 패턴 해치·치수 `Explode`가 원인이면: 정의(패턴·치수 블록)별로 결과를 캐시하거나 해치 선 수 상한(현재 20,000)을 좌표 기준으로 바꾼다.
+- 상태 조회 끼어듦: Sync가 도는 동안 같은 문서의 `attachedStatus` 폴링을 엔진에서 멈추거나, 플러그인이 `attachedStatus`·`fingerprint`를 큐 밖에서 답한다(약 14 s).
+- 엔진 쪽 처리: `pageSchema`의 좌표 배열 깊은 검사를 개수·형식 검사로 줄이는 효과를 먼저 잰다(최대 약 16 s).

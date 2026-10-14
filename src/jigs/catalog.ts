@@ -15,10 +15,10 @@ export const JIGS: JigEntry[] = [
   {
     id: 'sync',
     code: 'J-SYNC',
-    name: 'Sync · 도면↔모델',
+    name: '동기화 · 도면↔모델',
     summary:
       'Rhino 모델과 CAD 도면의 위치 관계(이동·회전·오차)를 계산하고, 서로 안 맞는 객체를 표로 보여 줍니다. AI 검토로 차이의 의미를 판정하고 한쪽 기준으로 맞춥니다.',
-    inputs: ['Rhino Sync', 'ZWCAD Sync'],
+    inputs: ['Rhino 동기화 기록', 'ZWCAD 동기화 기록'],
     status: 'available',
   },
   {
@@ -37,7 +37,7 @@ export const JIGS: JigEntry[] = [
     name: '구조 분석',
     summary:
       'CAD 도면이나 Rhino 모델(중심선·부재 솔리드)로 해석 모델을 만들고, 확정한 모델을 해석해 KDS 강구조 부재 검정비와 근거를 표와 모델 색으로 보여 줍니다. 탐색용 예비값입니다.',
-    inputs: ['Rhino Sync', 'ZWCAD Sync'],
+    inputs: ['Rhino 동기화 기록', 'ZWCAD 동기화 기록'],
     status: 'available',
     basis: 'S-18·S-10·S-05 · SPEC-06',
   },
@@ -57,7 +57,7 @@ export const JIGS: JigEntry[] = [
     name: '도면 반영',
     summary:
       '모델 변경을 기존 CAD 도면에 형식 그대로 반영합니다(레이어·블록·Handle·DWG 버전 유지). 열린 도면은 바로 고치고 되돌릴 수 있으며, 닫힌 도면은 같은 폴더에 새 파일로 씁니다. 도면의 도곽을 찾아 프로젝트 CTB로 미리 봅니다.',
-    inputs: ['Rhino Sync', 'ZWCAD 연결 도면', '레이어 대응'],
+    inputs: ['Rhino 동기화 기록', 'ZWCAD 연결 도면', '레이어 대응'],
     status: 'available',
     basis: 'SPEC-14 · PLAN-47 T-232~T-235',
   },

@@ -71,13 +71,32 @@ Check 'check script path' ($py -like "*C:/repo/.vide/x/stored-links.json*")
 Check 'check script strips other projects only' ($py -like "*if True:*" -and $py -like "*if n != 'link:p1':*")
 Check 'check script without strip' ((New-RhinoCheckScript 'a.json' 'p1' $false) -like '*if False:*')
 
+# T-292: the first Sync's ms comes from the engine log's `sync` line, found by request id.
+$logLines = @(
+    '{"at":"2026-10-14T05:00:01.000Z","event":"sync-begin","request":"bb1e9031-x"}',
+    'not json',
+    '{"at":"2026-10-14T05:00:02.400Z","v":"0.2.34","event":"sync","request":"other","ms":9,"hostMs":1}',
+    '{"at":"2026-10-14T05:00:02.410Z","v":"0.2.34","event":"sync","request":"bb1e9031-x","projectId":"p1","host":"rhino","state":"succeeded","ms":1408,"hostMs":634,"objects":3045}'
+)
+$entry = Find-SyncLogEntry $logLines 'bb1e9031-x'
+Check 'sync log ms' ($entry.ms -eq 1408 -and $entry.hostMs -eq 634 -and $entry.objects -eq 3045 -and $entry.state -eq 'succeeded')
+Check 'sync log missing' ($null -eq (Find-SyncLogEntry $logLines 'nope'))
+Check 'sync log empty' ($null -eq (Find-SyncLogEntry @() 'bb1e9031-x'))
+$engines = @(
+    @{ Dir = 'C:\Users\me\AppData\Local\VIDE'; Port = 47821; LaunchUrl = 'http://127.0.0.1:47821/#t' },
+    @{ Dir = 'C:\repo\.vide\dev-data'; Port = 47831; LaunchUrl = 'http://localhost:52010/#t' }
+)
+Check 'logs by launch origin (loopback names)' ((Select-EngineLogsDir 'http://127.0.0.1:52010' $engines) -eq 'C:\repo\.vide\dev-data\logs')
+Check 'logs by port' ((Select-EngineLogsDir 'http://localhost:47821' @(@{ Dir = 'C:\v'; Port = 47821; LaunchUrl = $null })) -eq 'C:\v\logs')
+Check 'logs unknown engine' ($null -eq (Select-EngineLogsDir 'http://127.0.0.1:40000' $engines))
+
 # The main script parses (PowerShell 5.1 parser) and has its parameters.
 $tokens = $null; $errors = $null
 $main = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'host-link.ps1'
 [void][System.Management.Automation.Language.Parser]::ParseFile($main, [ref]$tokens, [ref]$errors)
 Check 'host-link.ps1 parses' ($errors.Count -eq 0)
 $names = (Get-Command $main).Parameters.Keys
-Check 'parameters' (@(@('HostApp', 'Document', 'Project', 'Launch', 'Visible', 'Close', 'StripLinkId') | Where-Object { $names -notcontains $_ }).Count -eq 0)
+Check 'parameters' (@(@('HostApp', 'Document', 'Project', 'Launch', 'Visible', 'Close', 'StripLinkId', 'Logs') | Where-Object { $names -notcontains $_ }).Count -eq 0)
 Check 'Host alias' ((Get-Command $main).Parameters['HostApp'].Aliases -contains 'Host')
 
 if ($failed) { Write-Output "$failed failed"; exit 1 }

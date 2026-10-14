@@ -250,7 +250,7 @@ try {
   assert.equal(await getPlan.isDisabled(), true);
   // The structured parts: input chips (with the shapes of host layers), a setting row, a step
   // row, outputs, a pass condition, the starting point (blank by default).
-  await brief.getByRole('button', { name: '호스트 레이어', exact: true }).click();
+  await brief.getByRole('button', { name: 'Rhino·CAD 레이어', exact: true }).click();
   await brief
     .getByRole('group', { name: '레이어에서 읽는 형상' })
     .getByRole('button', { name: '점' })
@@ -281,7 +281,7 @@ try {
   assert.ok(firstTurn, 'the first turn was sent');
   assert.equal(firstTurn.conversationId, 'conv-make');
   assert.match(firstTurn.body, /■ 목적: 격자 기둥 배치/);
-  assert.match(firstTurn.body, /호스트 레이어 \[sync-layers\]: 점/);
+  assert.match(firstTurn.body, /Rhino·CAD 레이어 \[sync-layers\]: 점/);
   assert.match(firstTurn.body, /X 경간 · 길이 \(m\) · 기본값 8m/);
   assert.match(firstTurn.body, /1\. 기둥 배치 · 맡는 쪽 계산/);
   assert.match(firstTurn.body, /Rhino에 만들기: 기둥 돌출/);

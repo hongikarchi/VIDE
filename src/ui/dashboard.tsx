@@ -79,7 +79,7 @@ function Links({ data }: { data: DashboardData }) {
               </span>
               <span className="dash-t">{link.name}</span>
               <span className="dash-d">
-                {link.lastSync ? `마지막 Sync ${when(link.lastSync)}` : 'Sync 전'}
+                {link.lastSync ? `마지막 동기화 ${when(link.lastSync)}` : '동기화 전'}
               </span>
             </div>
           ))}

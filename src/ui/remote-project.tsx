@@ -259,7 +259,7 @@ function RemoteProject({
       </header>
       <p className="remote-banner" role="status">
         이 프로젝트는 {owner}의 PC{project?.hostName ? `(${project.hostName})` : ''}에서 돌아갑니다.
-        모델·Sync·AI 작업은 그 PC에서만 할 수 있고, 여기서는 사이트에 올라간 자료를 봅니다.
+        모델·동기화·AI 작업은 그 PC에서만 할 수 있고, 여기서는 사이트에 올라간 자료를 봅니다.
         {project && !project.hostOnline ? ' 지금 그 PC는 꺼져 있습니다.' : ''}
       </p>
       {error ? <p className="remote-error">{error}</p> : null}

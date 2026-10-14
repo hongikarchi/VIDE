@@ -72,7 +72,7 @@ export function SharedHistory({ projectId }: { projectId: string | undefined }) 
     <div className="shared-history" aria-label="다른 구성원의 대화">
       <h4 className="shared-history-head">
         다른 구성원의 대화
-        <small title="호스트 문서 없이 한 대화만 공유됩니다. 모델링 대화는 그 PC에만 남습니다.">
+        <small title="Rhino·ZWCAD 문서 없이 한 대화만 공유됩니다. 모델링 대화는 그 PC에만 남습니다.">
           {reply.online ? '보기 전용' : '보기 전용 · 사이트 연결 안 됨'}
         </small>
       </h4>

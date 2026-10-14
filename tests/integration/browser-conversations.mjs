@@ -37,7 +37,7 @@ try {
   await page.route('**/api/v1/models', (route) =>
     route.fulfill({
       json: [
-        { id: 'auto', name: '자동 (Jev)', provider: 'claude-cli', efforts: ['default'] },
+        { id: 'auto', name: '자동', provider: 'claude-cli', efforts: ['default'] },
         { id: 'sonnet', name: 'Sonnet', provider: 'claude-cli', efforts: ['default', 'low'] },
         { id: 'opus', name: 'Opus', provider: 'claude-cli', efforts: ['default', 'low'] },
       ],
@@ -99,6 +99,13 @@ try {
   // The server's /route answers, scripted per request text.
   const answers = {
     '구조 검토 열어줘': { target: 'jig', by: 'rules', jig: 'structure', jigName: '구조 검토' },
+    '구조 검토 열어줘.': { target: 'jig', by: 'rules', jig: 'structure', jigName: '구조 검토' },
+    '구조 검토 열어줘 기둥 축력도 같이 봐줘': {
+      target: 'jig',
+      by: 'rules',
+      jig: 'structure',
+      jigName: '구조 검토',
+    },
     'Codex 로그인': { target: 'app', by: 'rules', app: 'login', provider: 'codex-cli' },
     'Claude 로그인': { target: 'app', by: 'rules', app: 'login', provider: 'claude-cli' },
     '이 프로젝트 결정 사항 알려줘': { target: 'ask', by: 'jev' },
@@ -223,6 +230,33 @@ try {
     ['구조 검토 열어줘'],
   );
   assert.deepEqual(reverted, [{ target: 'jig', by: 'rules' }]);
+  assert.ok(await page.locator('#route-card').isHidden());
+  // T-291 (SPEC-02.17 2): the jig's words did their work, so the composer is empty; the same
+  // sentence again while the jig is open says so (nothing starts again, nothing goes to the AI),
+  // and more words go to the AI as an ordinary turn of this conversation (an older jig).
+  posted.length = 0;
+  await send('구조 검토 열어줘');
+  await page.waitForFunction(() =>
+    /열었습니다/.test(document.querySelector('#route-card').textContent),
+  );
+  assert.equal(await page.locator('#body').inputValue(), '');
+  await send('구조 검토 열어줘.');
+  await page.waitForFunction(() =>
+    /이미 열려 있습니다/.test(document.querySelector('#route-card').textContent),
+  );
+  assert.equal(
+    await page.locator('#route-card button').filter({ hasText: '일반 대화로' }).count(),
+    1,
+  );
+  assert.equal(await page.locator('#body').inputValue(), '');
+  await page.waitForTimeout(200);
+  assert.deepEqual(posted, []);
+  await send('구조 검토 열어줘 기둥 축력도 같이 봐줘');
+  for (let i = 0; i < 40 && !posted.length; i++) await page.waitForTimeout(50);
+  assert.deepEqual(
+    posted.map((input) => input.body),
+    ['구조 검토 열어줘 기둥 축력도 같이 봐줘'],
+  );
   assert.ok(await page.locator('#route-card').isHidden());
   // Signing in is done outside VIDE (ADR-025): a notice that says where; nothing runs.
   await send('Codex 로그인');

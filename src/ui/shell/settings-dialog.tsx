@@ -81,7 +81,7 @@ const DisplaySection = memo(function DisplaySection() {
           <p>{`전체 ${coverage.total.toLocaleString()}개 · 화면 표시 ${coverage.displayed.toLocaleString()}개 · 표현 미지원 ${coverage.omitted.toLocaleString()}개`}</p>
           {coverage.omitted ? (
             <>
-              <p>화면 표현 미지원 객체도 목록·네이티브 파일에 보존됩니다.</p>
+              <p>화면에 그릴 수 없는 객체도 목록·네이티브 파일에 보존됩니다.</p>
               <small>
                 {Object.entries(coverage.omittedTypes)
                   .map(([kind, count]) => `${kind} ${count.toLocaleString()}개`)

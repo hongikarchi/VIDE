@@ -40,9 +40,11 @@ import {
   formatAnswers,
   turnOutputItem,
   turnOutputSchema,
+  type AppliedAnswer,
   type TurnAnswer,
   type TurnQuestion,
 } from './turn-output.ts';
+import type { JigInputResult } from './jig-input.ts';
 
 type Provider = 'claude-cli' | 'codex-cli';
 type Kind = (typeof conversationKinds)[number];
@@ -305,6 +307,25 @@ const answerInput = z
     recommended: z.boolean().optional(),
   })
   .strict();
+/** A jig_ask_input card's record (agent-tools.ts): what each option sets on which role. */
+const inputQuestionBody = z
+  .object({
+    appAction: z.literal('input-question'),
+    instanceId: id,
+    questionId: questionKey,
+    input: z.string().min(1).max(200),
+    options: z.record(
+      z.string(),
+      z
+        .object({
+          label: z.string().optional(),
+          layers: z.array(z.string()).min(1),
+          linkIds: z.array(z.string()),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
 /** The question and answer IDs in the ledger (SPEC-02.19 6: a decided thing is not asked again). */
 function askedQuestions(items: LedgerItem[]) {
   const ids = new Set<string>();
@@ -1341,7 +1362,61 @@ export class ConversationService {
         },
       }),
     );
-    return { conversation, body: formatAnswers(answers), items, askedIn: input.requestId };
+    return {
+      conversation,
+      body: formatAnswers(answers),
+      answers,
+      items,
+      askedIn: input.requestId,
+      inputs: this.inputQuestions(conversationId, answers),
+    };
+  }
+  /**
+   * The answers to input question cards (jig_ask_input, SPEC-07.18 9.4): what each sets — the
+   * option's layers, or the layers the person wrote in the free answer — on the instance the card
+   * asked about. Other answers are not here. `hold` keeps an answer out of the role (SPEC-07.18
+   * 9.4): a card the person saw that is not the card VIDE recorded (`mismatch`), or a
+   * [권장값으로 진행] answer, an assumption (`recommended`, SPEC-02.19 6).
+   */
+  private inputQuestions(conversationId: string, answers: readonly TurnAnswer[]) {
+    const asked = new Map<string, z.infer<typeof inputQuestionBody>>();
+    for (const item of this.store.ledger(conversationId, { current: true })) {
+      const body = inputQuestionBody.safeParse(item.body);
+      if (item.kind === 'result-ref' && body.success) asked.set(body.data.questionId, body.data);
+    }
+    return answers.flatMap(({ question, option, text, recommended }) => {
+      const card = asked.get(question.id);
+      if (!card) return [];
+      const chosen = option ? card.options[option.id] : undefined;
+      const written = text
+        ?.split(/[,，、\n]+/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+      const layers = chosen?.layers ?? written ?? [];
+      if (!layers.length) return [];
+      // The card shown is the AI's turn output: it must be the recorded card, option by option.
+      const same =
+        question.options.length === Object.keys(card.options).length &&
+        question.options.every((shown) => {
+          const kept = card.options[shown.id];
+          return !!kept && typeof kept.label === 'string' && kept.label === shown.label;
+        });
+      const hold: 'mismatch' | 'recommended' | undefined = !same
+        ? 'mismatch'
+        : recommended
+          ? 'recommended'
+          : undefined;
+      return [
+        {
+          questionId: question.id,
+          instanceId: card.instanceId,
+          input: card.input,
+          layers,
+          ...(chosen?.linkIds.length === 1 ? { linkId: chosen.linkIds[0] } : {}),
+          ...(hold ? { hold } : {}),
+        },
+      ];
+    });
   }
   /** Takes back recorded answers whose turn was not submitted (they can be answered again). */
   withdraw(conversationId: string, items: LedgerItem[]) {
@@ -1481,13 +1556,43 @@ export interface ConversationRouteContext {
     /** The request whose question is answered: the answer turn keeps its Plan/Auto mode. */
     askedIn?: string,
   ) => Promise<unknown>;
+  /**
+   * Sets a jig input role from an input question card's answer (SPEC-07.18 9.4, T-293): the role
+   * path of jig-input.ts on the conversation's bound instance. Omitted, the AI turn applies it.
+   */
+  /**
+   * Whether a request ran in Plan mode (ADR-022): an input card asked in a Plan turn is not applied
+   * on its answer; it stays a proposed input until [진행] (SPEC-02.20 2, SPEC-07.18 9.4).
+   */
+  planTurn?: (projectId: string, requestId: string) => boolean;
+  applyInput?: (
+    projectId: string,
+    conversation: { id: string; projectId: string; jigInstanceId: string | null },
+    request: { instanceId: string; input: string; layers: string[]; linkId?: string },
+  ) => Promise<JigInputResult>;
 }
 
+/** Why an input card's answer was not set on the role (SPEC-07.18 9.4). */
+function heldText(held: NonNullable<AppliedAnswer['held']>, layers: readonly string[]) {
+  const named = layers.join(', ');
+  if (held === 'mismatch') return `카드가 달라 넣지 않음: ${named}`;
+  if (held === 'plan') return `제안된 입력(계획 — [진행] 뒤에 넣습니다): ${named}`;
+  return `제안된 입력(권장값은 가정이라 넣지 않음): ${named}`;
+}
 /** Answers `/api/v1/projects/:id/conversations…`; false when the request is not one. */
 export async function conversationRoutes(
   url: URL,
   request: IncomingMessage,
-  { service, body, send, remote, chooseModel, submit }: ConversationRouteContext,
+  {
+    service,
+    body,
+    send,
+    remote,
+    chooseModel,
+    submit,
+    applyInput,
+    planTurn,
+  }: ConversationRouteContext,
 ): Promise<boolean> {
   // The conversation length setting (SPEC-02.19 5): changed only on this computer.
   if (url.pathname === '/api/v1/settings/conversations') {
@@ -1583,6 +1688,58 @@ export async function conversationRoutes(
     if (!submit) throw new DomainError('EXECUTOR_NOT_READY');
     const next = randomUUID();
     const answered = service.answer(projectId, conversationId, await body(request), next);
+    // An input question card's answer is the person's confirmation (SPEC-07.18 9.4): VIDE sets the
+    // role and recalculates now; the answer turn only reports it.
+    const applied: (AppliedAnswer & { result?: JigInputResult })[] = [];
+    const plan = !!planTurn?.(projectId, answered.askedIn);
+    if (applyInput)
+      for (const asked of answered.inputs) {
+        if (asked.instanceId !== answered.conversation.jigInstanceId) continue;
+        // Not the person's confirmation yet (SPEC-07.18 9.4): told, never set.
+        const held = asked.hold ?? (plan ? 'plan' : undefined);
+        if (held) {
+          applied.push({
+            questionId: asked.questionId,
+            ok: false,
+            held,
+            text: heldText(held, asked.layers),
+          });
+          continue;
+        }
+        let result: JigInputResult;
+        try {
+          result = await applyInput(projectId, answered.conversation, asked);
+        } catch (error) {
+          result = {
+            ok: false,
+            error: 'UNKNOWN_INPUT',
+            message: error instanceof DomainError ? error.code : '입력을 넣지 못했습니다',
+          };
+        }
+        applied.push({
+          questionId: asked.questionId,
+          ok: result.ok,
+          text: result.ok
+            ? `${result.role.title} ← ${result.layers.map((l) => l.layer).join(', ')}`
+            : result.message,
+          result,
+        });
+        if (result.ok)
+          service.addLedger(projectId, conversationId, {
+            kind: 'result-ref',
+            requestId: next,
+            body: {
+              appAction: 'jig_input',
+              by: 'user',
+              via: 'question-card',
+              instanceId: asked.instanceId,
+              questionId: asked.questionId,
+              role: result.role,
+              layers: result.layers.map((l) => l.layer),
+            },
+          });
+      }
+    if (applied.length) answered.body = formatAnswers(answered.answers, applied);
     try {
       // `permission: 'review'` (Plan) is the fallback; submit sets the asked turn's mode.
       const created = await submit(
@@ -1600,7 +1757,21 @@ export async function conversationRoutes(
         },
         answered.askedIn,
       );
-      send(201, { request: created, answers: answered.items });
+      send(201, {
+        request: created,
+        answers: answered.items,
+        ...(applied.length
+          ? {
+              applied: applied.map(({ questionId, ok, text, held, result }) => ({
+                questionId,
+                ok,
+                text,
+                ...(held ? { held } : {}),
+                ...(result?.ok ? { instanceId: answered.conversation.jigInstanceId } : {}),
+              })),
+            }
+          : {}),
+      });
     } catch (error) {
       service.withdraw(conversationId, answered.items);
       throw error;

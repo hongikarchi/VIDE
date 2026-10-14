@@ -9,7 +9,8 @@
       "jigs": [],
       "expertSteps": 2,
       "goalEvidence": "3D 화면에 보(BEAM 레이어 객체)만 보이고 나머지가 숨겨짐. AI 요청 없이 바뀌고 되돌리기가 가능함",
-      "expect": { "aiRequests": 0 }
+      "expect": { "aiRequests": 0 },
+      "afterGoal": { "type": "undo", "key": "u", "toastButton": "되돌리기" }
     },
     {
       "id": "R1-D",

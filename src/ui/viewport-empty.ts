@@ -14,13 +14,13 @@ export function viewportEmptyView({ connection, sync, hidden }: ViewportEmptyFie
   const state = sync === 'idle' ? (connection ? 'connected' : 'idle') : sync;
   const [title, detail] =
     sync === 'loading'
-      ? [host + ' 모델을 가져오는 중', 'Sync가 끝나면 여기에 표시됩니다.']
+      ? [host + ' 모델을 가져오는 중', '동기화가 끝나면 여기에 표시됩니다.']
       : sync === 'failed'
-        ? ['모델을 가져오지 못했습니다', 'Sync 실패 · 하단 오류 기록에서 원인을 확인하세요.']
+        ? ['모델을 가져오지 못했습니다', '동기화 실패 · 하단 오류 기록에서 원인을 확인하세요.']
         : connection
           ? [
               host + ' 연결됨',
-              '첫 Sync를 기다리는 중입니다. 연결 파일 목록의 ⟳로 바로 가져올 수 있습니다.',
+              '첫 동기화를 기다리는 중입니다. 연결 파일 목록의 ⟳로 바로 가져올 수 있습니다.',
             ]
           : [
               '아직 가져온 모델이 없습니다',

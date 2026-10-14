@@ -139,7 +139,7 @@ export async function attachPanelSelection() {
       panelView.selection = selected.filter((id) => !linksState.hostPinned.includes(id));
       render();
       void pollHostLink();
-      if (!rhinoBasis(target)) message('첨부했습니다. 요청에 포함하려면 먼저 Sync 하세요.');
+      if (!rhinoBasis(target)) message('첨부했습니다. 요청에 포함하려면 먼저 동기화하세요.');
       return;
     }
     const selection = hostSelectionSchema.parse(
@@ -152,7 +152,7 @@ export async function attachPanelSelection() {
     if (basis && sessionState.project) await withObjects(sessionState.project.id, basis.id);
     const count = attachHostSelection(draftState.state, rhinoBasis(target)?.request, selection);
     render();
-    message(count ? `${count}개 객체를 요청에 첨부했습니다.` : '먼저 Sync 하세요.');
+    message(count ? `${count}개 객체를 요청에 첨부했습니다.` : '먼저 동기화하세요.');
   } catch (cause) {
     message(readableError(cause).message);
   }
@@ -281,12 +281,12 @@ export async function pollHostLink() {
       panelView.state = item.live ? 'live' : 'connected';
       panelView.detail = [
         basis?.request.createdAt
-          ? 'Sync ' +
+          ? '동기화 ' +
             new Date(basis.request.createdAt).toLocaleTimeString('ko-KR', {
               hour: '2-digit',
               minute: '2-digit',
             })
-          : 'Sync 필요',
+          : '동기화 필요',
         `${item.objectCount.toLocaleString()}개`,
       ].join(' · ');
       // Rhino reports its selection with the document; CAD is asked separately.
@@ -539,7 +539,7 @@ export async function boot() {
     showLost(text);
     setConnectionBanner({ hidden: false, checking: false });
     setConnectionStatus('연결 상태 확인 필요');
-    setHostStatus('호스트 상태 확인 필요');
+    setHostStatus('CAD 프로그램 상태 확인 필요');
     recovery.lost();
     render();
   });

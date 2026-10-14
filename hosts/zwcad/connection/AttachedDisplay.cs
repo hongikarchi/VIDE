@@ -97,6 +97,7 @@ namespace Vide.Zwcad.Connection
         internal sealed class EntityRead
         {
             internal string Handle;
+            internal string Type;
             internal object Object;
             internal Dictionary<string, object> Item;
             internal string Omitted;
@@ -109,6 +110,7 @@ namespace Vide.Zwcad.Connection
             try {
                 var entity = tx.GetObject(oid, OpenMode.ForRead) as Entity;
                 if (entity == null) return null;
+                read.Type = entity.GetType().Name;
                 var display = new Display();
                 context.Unsupported = new Dictionary<string, int>();
                 var own = Resolve(entity, null, context);
@@ -146,6 +148,20 @@ namespace Vide.Zwcad.Connection
             }
             return read;
         }
+        /**
+         * Where one page's time goes (T-285): the whole read and its slowest entity (type, handle, ms,
+         * coordinates). Diagnostics only — the page itself is read exactly as without it.
+         */
+        internal sealed class PageTiming
+        {
+            internal double ReadMs;
+            internal double SlowestMs;
+            internal string SlowestType;
+            internal string SlowestHandle;
+            internal int SlowestCoordinates;
+            internal int Coordinates;
+            internal int Entities;
+        }
         private static Context ContextOf(Transaction tx, Database db) =>
             new Context { Tx = tx, Scale = Scale(db), Layers = (LayerTable)tx.GetObject(db.LayerTableId, OpenMode.ForRead) };
 
@@ -153,8 +169,9 @@ namespace Vide.Zwcad.Connection
          * A page of model space (or of the layout block `spaceId`: a paper space of the title block
          * preview, PLAN-47 T-235); `seen` receives every entity read (Live Sync's display state).
          */
-        internal static object Page(Database db, int offset, int limit, long revision, out int next, out int total, Action<EntityRead> seen = null, ObjectId spaceId = default(ObjectId))
+        internal static object Page(Database db, int offset, int limit, long revision, out int next, out int total, Action<EntityRead> seen = null, ObjectId spaceId = default(ObjectId), PageTiming timing = null)
         {
+            var pageClock = timing != null ? System.Diagnostics.Stopwatch.StartNew() : null;
             using (var tx = db.TransactionManager.StartTransaction()) {
                 var table = (BlockTable)tx.GetObject(db.BlockTableId, OpenMode.ForRead);
                 var space = (BlockTableRecord)tx.GetObject(spaceId.IsNull ? table[BlockTableRecord.ModelSpace] : spaceId, OpenMode.ForRead);
@@ -165,7 +182,16 @@ namespace Vide.Zwcad.Connection
                 var omitted = new Dictionary<string, int>(); var warnings = new Dictionary<string, int>(); int displayed = 0, read = 0, pageCoordinates = 0;
                 foreach (var oid in ids.Skip(offset).Take(limit)) {
                     read++;
+                    double entityStart = pageClock != null ? pageClock.Elapsed.TotalMilliseconds : 0;
                     var entity = Read(tx, oid, context);
+                    if (pageClock != null) {
+                        double entityMs = pageClock.Elapsed.TotalMilliseconds - entityStart;
+                        timing.Entities++;
+                        if (entity != null) timing.Coordinates += entity.Coordinates;
+                        if (entity != null && entityMs > timing.SlowestMs) {
+                            timing.SlowestMs = entityMs; timing.SlowestType = entity.Type; timing.SlowestHandle = entity.Handle; timing.SlowestCoordinates = entity.Coordinates;
+                        }
+                    }
                     if (entity == null) continue;
                     seen?.Invoke(entity);
                     if (entity.Item != null) { objects.Add(entity.Object); scene.Add(entity.Item); displayed++; pageCoordinates += entity.Coordinates; }
@@ -174,6 +200,7 @@ namespace Vide.Zwcad.Connection
                     if (pageCoordinates > 2000000) break;
                 }
                 next = offset + read; total = ids.Length;
+                if (pageClock != null) timing.ReadMs = pageClock.Elapsed.TotalMilliseconds;
                 return new { ok = true, offset, total = ids.Length, next = offset + read, revision,
                     objects, scene, displayed, omitted = read - displayed, omittedTypes = omitted, displayWarnings = warnings };
             }

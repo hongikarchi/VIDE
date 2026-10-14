@@ -133,3 +133,44 @@ with open('$report' + '.tmp', 'w') as f:
 os.rename('$report' + '.tmp', '$report')
 "@
 }
+
+# The engine's logs folder for a launch origin (T-292): the engine (@{ Dir; LaunchUrl; Port })
+# whose launch.json url has the same host and port, else the one on the same port; $null when none.
+# Loopback names (localhost, 127.0.0.1) count as the same host.
+function Select-EngineLogsDir([string]$Origin, $Engines) {
+    $key = {
+        param([string]$Url)
+        try { $u = [Uri]$Url } catch { return $null }
+        if (-not $u.IsAbsoluteUri) { return $null }
+        $h = if ($u.IsLoopback) { 'loopback' } else { $u.Host.ToLowerInvariant() }
+        return '{0}:{1}' -f $h, $u.Port
+    }
+    $want = & $key $Origin
+    if (-not $want) { return $null }
+    foreach ($e in @($Engines)) { if ($e.LaunchUrl -and (& $key $e.LaunchUrl) -eq $want) { return (Join-Path $e.Dir 'logs') } }
+    $port = $want.Split(':')[-1]
+    foreach ($e in @($Engines)) { if ([string]$e.Port -eq $port) { return (Join-Path $e.Dir 'logs') } }
+    return $null
+}
+
+# The engine log's `sync` line of one Sync request (src/server/document-sync.ts: ms = the whole
+# Sync, hostMs = the host read) among engine-<day>.jsonl lines (strings), or $null (T-292: the
+# first Sync's ms comes from the engine, not from host-link's polling).
+function Find-SyncLogEntry($Lines, [string]$RequestId) {
+    $needle = '"request":"' + $RequestId + '"'
+    $hit = $null
+    foreach ($line in @($Lines)) {
+        if (-not $line -or $line.IndexOf($needle) -lt 0 -or $line.IndexOf('"event":"sync"') -lt 0) { continue }
+        try { $value = $line | ConvertFrom-Json } catch { continue }
+        if ($value.event -eq 'sync' -and $value.request -eq $RequestId) { $hit = $value }
+    }
+    if (-not $hit) { return $null }
+    $props = $hit.PSObject.Properties.Name
+    return [ordered]@{
+        ms      = if ($props -contains 'ms') { [int]$hit.ms } else { $null }
+        hostMs  = if ($props -contains 'hostMs') { [int]$hit.hostMs } else { $null }
+        objects = if ($props -contains 'objects') { [int]$hit.objects } else { $null }
+        state   = if ($props -contains 'state') { [string]$hit.state } else { $null }
+        at      = [string]$hit.at
+    }
+}

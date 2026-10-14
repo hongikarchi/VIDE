@@ -311,7 +311,7 @@ function highlightTarget(detail: SelectNativeDetail) {
   if (!ids.length) {
     message(
       fileShown
-        ? `${detail.label} 객체가 화면의 Sync에 아직 없습니다. Sync 뒤 다시 누르세요.`
+        ? `${detail.label} 객체가 화면의 동기화 기록에 아직 없습니다. 동기화 뒤 다시 누르세요.`
         : `${detail.label} 객체가 있는 연결 파일이 화면에 없습니다.`,
     );
     return;

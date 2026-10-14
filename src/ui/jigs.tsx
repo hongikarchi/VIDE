@@ -148,7 +148,7 @@ function syncEmptyReason(
 ): string {
   if (compared > 0 || !read) return '';
   if (!read.objects)
-    return `${side} Sync에서 저장된 객체를 읽지 못했습니다 — ${side}를 다시 Sync한 뒤 실행하세요.`;
+    return `${side} 동기화 기록에서 저장된 객체를 읽지 못했습니다 — ${side}를 다시 동기화한 뒤 실행하세요.`;
   if (read.comparable > 0) return `고른 ${side} 레이어에 비교할 직선 요소가 없습니다.`;
   const n = (v: number) => v.toLocaleString('ko-KR');
   const types = read.skipped
@@ -157,8 +157,8 @@ function syncEmptyReason(
     .join(' · ');
   const rest = read.skipped.length > 4 ? ' 등' : '';
   if (side === 'CAD')
-    return `CAD Sync에 비교할 직선 요소가 없습니다 — 개체 ${n(read.objects)}개(${types}${rest})에 선분이 없습니다.`;
-  return `Rhino Sync에 비교할 요소가 없습니다 — 객체 ${n(read.objects)}개(${types}${rest})에 선·폴리선이 없고, 단면 높이에 걸친 솔리드도 없습니다. 단면 높이를 바꿔 보세요. 면·블록·점은 비교하지 않습니다.`;
+    return `CAD 동기화 기록에 비교할 직선 요소가 없습니다 — 개체 ${n(read.objects)}개(${types}${rest})에 선분이 없습니다.`;
+  return `Rhino 동기화 기록에 비교할 요소가 없습니다 — 객체 ${n(read.objects)}개(${types}${rest})에 선·폴리선이 없고, 단면 높이에 걸친 솔리드도 없습니다. 단면 높이를 바꿔 보세요. 면·블록·점은 비교하지 않습니다.`;
 }
 const metres = (v: number) => `${Math.round(v * 1000) / 1000} m`;
 /** Which rule made each side's elements (SPEC-05.8, T-283). Empty when nothing was compared. */
@@ -383,7 +383,7 @@ const root = createRoot(dialog);
 
 type LegacyKind = 'sync' | 'structure' | 'knowledge' | 'finish' | 'legal' | 'drawing';
 const LEGACY: Record<LegacyKind, { title: string; purpose: string }> = {
-  sync: { title: 'Sync · 도면↔모델', purpose: 'Sync' },
+  sync: { title: '동기화 · 도면↔모델', purpose: '동기화' },
   structure: { title: '구조 분석', purpose: '구조' },
   knowledge: { title: '프로젝트 자료 · 시험판', purpose: '자료' },
   finish: { title: '마감 일람표', purpose: '마감' },
@@ -694,7 +694,7 @@ function instanceHost(jig: OpenJig): JigHost {
           return undefined;
         }
       }
-      return '연결한 Rhino 문서의 Sync에 이 객체가 없습니다. 원본에 반영한 뒤 Sync를 다시 하면 보입니다.';
+      return '연결한 Rhino 문서의 동기화 기록에 이 객체가 없습니다. 원본에 반영한 뒤 다시 동기화하면 보입니다.';
     },
     openReport: (reportId: string) =>
       void import('./report-tab.tsx').then((screen) => screen.openReport(jig.instanceId, reportId)),
@@ -1102,9 +1102,9 @@ function Gallery({ context }: { context: JigContext }) {
       </nav>
       <div className="jig-gallery-main">
         <p className="jig-intro">
-          jig는 한 가지 작업을 위한 도구입니다. 계산 단계는 매번 같은 결과를 내고, AI 단계는 계산
-          결과만 근거로 판정합니다. 연 jig는 위의 탭에서 3D와 함께 쓰고, 준비 중인 jig는 과거 작업을
-          옮겨 오는 중입니다.
+          JIG · 도구 — jig는 한 가지 작업을 위한 도구입니다. 계산 단계는 매번 같은 결과를 내고, AI
+          단계는 계산 결과만 근거로 판정합니다. 연 jig는 위의 탭에서 3D와 함께 쓰고, 준비 중인 jig는
+          과거 작업을 옮겨 오는 중입니다.
         </p>
         {notice ? <p role="status">{notice}</p> : null}
         <ImportJig projectId={projectId} onImported={() => setLoaded((n) => n + 1)} />
@@ -1479,7 +1479,7 @@ function SyncJig({ context }: { context: JigContext }) {
     try {
       if (kind === 'review')
         await context.send({
-          body: 'Sync jig 결과(첨부 sync-jig.json)를 검토해 줘. 위치 관계가 믿을 만한지, 레이어 대응이 맞는지, 오차·한쪽에만 있는 행이 실제 불일치인지 의도된 표현(중심선/외곽선, 층 높이, 도면 표기 관례 등)인지 판정하고, 어느 쪽을 고쳐야 할지 행 번호(R숫자)와 표의 수치만 인용해서 정리해 줘. 표에 없는 수치나 행은 만들지 마.',
+          body: '동기화 jig 결과(첨부 sync-jig.json)를 검토해 줘. 위치 관계가 믿을 만한지, 레이어 대응이 맞는지, 오차·한쪽에만 있는 행이 실제 불일치인지 의도된 표현(중심선/외곽선, 층 높이, 도면 표기 관례 등)인지 판정하고, 어느 쪽을 고쳐야 할지 행 번호(R숫자)와 표의 수치만 인용해서 정리해 줘. 표에 없는 수치나 행은 만들지 마.',
           files: [{ name: 'sync-jig.json', text: table() }],
           permission: 'review',
           jig: { kind: 'sync-review', rows: result.rows.map((row) => row.id) },
@@ -1544,8 +1544,12 @@ function SyncJig({ context }: { context: JigContext }) {
       <div className="jig-inputs">
         <label>
           Rhino Sync
-          <select aria-label="Rhino Sync" value={rhino} onChange={(e) => setRhino(e.target.value)}>
-            {!rhinoSources.length ? <option value="">Rhino Sync가 없습니다</option> : null}
+          <select
+            aria-label="Rhino 동기화 기록"
+            value={rhino}
+            onChange={(e) => setRhino(e.target.value)}
+          >
+            {!rhinoSources.length ? <option value="">Rhino 동기화 기록이 없습니다</option> : null}
             {rhinoSources.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.label}
@@ -1555,8 +1559,12 @@ function SyncJig({ context }: { context: JigContext }) {
         </label>
         <label>
           ZWCAD Sync
-          <select aria-label="ZWCAD Sync" value={cad} onChange={(e) => setCad(e.target.value)}>
-            {!cadSources.length ? <option value="">ZWCAD Sync가 없습니다</option> : null}
+          <select
+            aria-label="ZWCAD 동기화 기록"
+            value={cad}
+            onChange={(e) => setCad(e.target.value)}
+          >
+            {!cadSources.length ? <option value="">ZWCAD 동기화 기록이 없습니다</option> : null}
             {cadSources.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.label}
@@ -1943,7 +1951,7 @@ const kindText: Record<string, string> = {
   library: '라이브러리',
   ai: 'AI',
   human: '사람',
-  host: '호스트',
+  host: 'CAD 프로그램',
 };
 const byText: Record<string, string> = {
   default: '기본값',

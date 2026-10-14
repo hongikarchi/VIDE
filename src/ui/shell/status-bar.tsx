@@ -31,10 +31,10 @@ const HostButton = memo(function HostButton() {
   const text = useStore(sessionState, (s) => s.connection.hostText);
   return (
     <button
-      aria-label="호스트 준비 상태"
+      aria-label="CAD 프로그램 준비 상태"
       onClick={(event) => statusState.actions.open(event.currentTarget, 'status')}
     >
-      {text.split(' · 문서 연결')[0] || '호스트 · 확인 전'}
+      {text.split(' · 문서 연결')[0] || 'CAD 프로그램 · 확인 전'}
     </button>
   );
 });
@@ -42,7 +42,7 @@ const DisplayButton = memo(function DisplayButton() {
   const coverage = useStore(statusState, (s) => s.coverage);
   // The label keeps the last count while the button is hidden, as the old button did.
   const label = useRef('');
-  if (coverage) label.current = `표시 미지원 ${coverage.omitted.toLocaleString()}`;
+  if (coverage) label.current = `화면에 그릴 수 없는 객체 ${coverage.omitted.toLocaleString()}개`;
   return (
     <button
       aria-label="모델 표시 상태"

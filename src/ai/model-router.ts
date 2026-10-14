@@ -12,7 +12,7 @@ import { join } from 'node:path';
 
 /** One entry in the model menu; the server picks service, model and effort per request. */
 export const AUTO_MODELS = [
-  { id: 'auto', name: '자동 (Jev)', provider: 'claude-cli', efforts: ['default'] },
+  { id: 'auto', name: '자동', provider: 'claude-cli', efforts: ['default'] },
 ] as const;
 export const isAutoModel = (model: unknown) => AUTO_MODELS.some((entry) => entry.id === model);
 /**

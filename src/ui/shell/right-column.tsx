@@ -151,7 +151,7 @@ export const RightColumn = memo(function RightColumn() {
       <aside id="right">
         <PanelTop />
         <div className="chat-heading">
-          <h2>AI WORK</h2>
+          <h2>작업</h2>
         </div>
         <AgendaHelper />
         <ConversationChips />

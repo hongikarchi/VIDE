@@ -224,7 +224,7 @@ try {
   assert.equal(await requests(), before);
   // The analysis view is still there and keeps working beside the diagnosis.
   await dialog.getByRole('button', { name: '해석 모델' }).click();
-  await dialog.getByLabel('입력 Sync').waitFor();
+  await dialog.getByLabel('입력 동기화 기록').waitFor();
   await dialog.getByRole('button', { name: '배치 진단' }).click();
   assert.equal(await kpi('파일캡 간섭'), '4곳', 'switching views keeps the result');
 

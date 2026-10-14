@@ -17,7 +17,7 @@ export function attachSharedFeedback(state: DraftState, note: ReceivedFeedback) 
   if (!source?.result?.hostExecuted || (input.objectId && !object))
     throw Error('의견의 원래 후보와 객체를 확인할 수 없습니다.');
   if ((source.result.host || 'rhino') !== state.host)
-    throw Error('의견의 기준 호스트와 현재 작업 호스트가 다릅니다.');
+    throw Error('의견의 기준 프로그램(Rhino·ZWCAD)과 현재 작업 프로그램이 다릅니다.');
   const name = 'Shared-feedback-' + note.id + '.json',
     text = JSON.stringify(note, null, 2),
     sketches = input.sketches ?? [];

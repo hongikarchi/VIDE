@@ -452,7 +452,7 @@ try {
   );
   assert.equal(await page.locator('#selection').textContent(), 'o1');
   await preserved.getByRole('button', { name: 'G9', exact: true }).click();
-  await dialog.getByText(/Rhino 문서의 Sync에 이 객체가 없습니다/).waitFor();
+  await dialog.getByText(/Rhino 문서의 동기화 기록에 이 객체가 없습니다/).waitFor();
   await bakeCard.getByText('만든 기록 1개').click();
   assert.match(
     await bakeCard.locator('.bake-records li').textContent(),

@@ -119,7 +119,7 @@ test('the schema is strict for both services: every property required, nothing e
         recommended: false,
       },
     ]),
-    /a 경간 방향은\? → Y 방향 · "코어 쪽" \[a=y\]/,
+    /a 경간 방향은\? → Y 방향 · "코어 쪽"$/m,
   );
 });
 
@@ -310,7 +310,9 @@ test('Claude: a turn without the host gets --json-schema; cards go in the result
   const next = answered.data.request;
   assert.equal(next.input.conversationId, ctx.conversation.id);
   assert.match(next.input.body, /slab 경간 방향은\? → "코어 쪽 우선"/);
-  assert.match(next.input.body, /span-dir 경간 방향은\? → Y 방향 \[span-dir=y\]/);
+  assert.match(next.input.body, /span-dir 경간 방향은\? → Y 방향$/m);
+  // The answer message shows the chosen words only, never the option keys (T-294).
+  assert.doesNotMatch(next.input.body, /\[span-dir=|\[slab/);
   await ctx.settled();
   const runs = ctx.fake.runs();
   assert.equal(runs.length, 2);

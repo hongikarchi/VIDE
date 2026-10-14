@@ -49,6 +49,32 @@ Rhino가 비어 있을 때 사람이 실행한다. 에이전트는 Rhino를 띄�
 
 ## B — 터미널 Claude Code
 
+### B 준비 (이 PC, 2026-10-14 확인)
+
+B는 제3자 [rhinomcp](https://github.com/jingcheng-chen/rhinomcp)(Rhino 플러그인 + Python MCP 서버, 루프백 TCP 1999)를 쓴다. 플러그인과 서버 판을 0.4.1.1로 맞춘다.
+
+1. Rhino 플러그인(Rhino가 꺼져 있어도 됨, 다음 Rhino 시작 때 읽힘):
+
+   ```text
+   "C:\Program Files\Rhino 8\System\Yak.exe" install rhinomcp
+   "C:\Program Files\Rhino 8\System\Yak.exe" list        # rhinomcp (0.4.1.1)
+   ```
+
+   설치 위치는 `%APPDATA%\McNeel\Rhinoceros\packages\8.0\rhinomcp\0.4.1.1\net8.0\rhinomcp.rhp`. Rhino 안의 Package Manager에서 `rhinomcp`를 설치해도 같다.
+2. MCP 서버를 사용자 범위로 등록(모든 폴더의 `claude`가 봄, `uvx`는 `C:\Users\user\.local\bin`):
+
+   ```text
+   claude mcp add --scope user rhino -e RHINO_MCP_HOST=127.0.0.1 -- uvx rhinomcp@0.4.1.1
+   claude mcp get rhino      # Scope: User config, Status: Connected
+   claude mcp list           # rhino: uvx rhinomcp@0.4.1.1 - Connected
+   ```
+
+   `Connected`는 stdio 서버가 떴다는 뜻일 뿐이다(도구 70개 노출). Rhino에서 `mcpstart`가 켜져 있지 않으면 도구 호출은 `Could not connect to Rhino at 127.0.0.1:1999`로 실패한다. 포트를 바꾸려면 `-e RHINO_MCP_PORT=<포트>`.
+3. 런마다: 사용자가 Rhino 8을 직접 띄우고 명령줄에 `mcpstart`(끝낼 때 `mcpstop`). 그 뒤 `claude` 세션을 새로 시작해야 rhino 도구가 붙는다. 대화형에서는 `/mcp`로 `rhino` 연결을 확인한다. 제품 A 쪽은 `--strict-mcp-config`로 실행해 이 등록의 영향을 받지 않는다.
+4. 해제: `claude mcp remove rhino -s user`, 플러그인은 `Yak.exe uninstall rhinomcp`(Rhino가 꺼진 상태에서).
+
+### 요청마다
+
 요청마다 다음을 반복한다.
 
 1. Rhino에서 `ab-fixture.3dm`을 다시 연다(저장하지 않고). 시작 상태가 매번 같아야 한다. R4는 `RAIL GUIDE` 곡선을 선택해 둔다.

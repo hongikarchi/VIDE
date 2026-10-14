@@ -373,7 +373,7 @@ try {
     .getByLabel('위치 관계')
     .getByText(/이동 \(1500, -2000\) mm · 짝 2/)
     .waitFor();
-  await jig.getByText('반영 기준 없음 — Sync 일치 2행을 짝으로 씁니다').waitFor();
+  await jig.getByText('반영 기준 없음 — 동기화 jig 일치 2행을 짝으로 씁니다').waitFor();
   const sync = calls.find((c) => c.path === '/jigs/sync');
   assert.deepEqual(sync.body, { rhino: 'sync-rhino', cad: 'sync-cad' });
 

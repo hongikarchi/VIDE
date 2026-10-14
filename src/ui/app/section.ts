@@ -8,7 +8,7 @@ import { message } from './status.ts';
 
 type Triple = [number, number, number];
 const AXES = ['x', 'y', 'z'] as const;
-const NO_MODEL = '단면을 만들 모델이 없습니다. 문서를 연결하고 Sync하세요.';
+const NO_MODEL = '단면을 만들 모델이 없습니다. 문서를 연결하고 동기화하세요.';
 
 function set(next: Partial<SectionPanel>) {
   viewerState.section = { ...viewerState.section, ...next };

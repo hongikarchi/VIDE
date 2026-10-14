@@ -92,7 +92,7 @@ try {
   await summary.uncheck();
   assert.equal(await summary.isChecked(), false);
   // "작성기로": the request text goes to the composer for the user to read and send.
-  await panel.getByRole('button', { name: '작성기로' }).click();
+  await panel.getByRole('button', { name: '요청 입력으로' }).click();
   await page.waitForFunction(
     () => document.querySelector('#body').value === 'X3열 보를 H-400으로 바꿔줘',
   );

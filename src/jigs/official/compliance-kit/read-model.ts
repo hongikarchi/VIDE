@@ -441,8 +441,8 @@ export interface ReadOutput {
   notes: string[];
 }
 
-/** Display rows + records → `ClassifiedModel` (checked against the contract). */
-export function readClassifiedModel(input: ReadInput): ReadOutput {
+/** The per-row step of a read: the frame and the hidden test (SPEC-15.3 3). */
+function rowReader(input: ReadInput) {
   const toMeters = unitsToMeters(input.units);
   const frame: Frame = {
     scale: input.coordinates === 'document' ? (toMeters ?? 1) : 1,
@@ -452,16 +452,70 @@ export function readClassifiedModel(input: ReadInput): ReadOutput {
   const offLayers = (input.layers ?? []).filter((l) => !l.visible).map((l) => l.fullPath);
   const onOffLayer = (layer: string) =>
     offLayers.some((off) => layer === off || layer.startsWith(off + '::'));
-
-  const facts: RowFacts[] = [];
-  for (const row of input.rows) {
-    if (!row || typeof row !== 'object') continue;
+  return (row: Record<string, unknown>): RowFacts | null => {
+    if (!row || typeof row !== 'object') return null;
     const id = typeof row.nativeId === 'string' ? row.nativeId.toLowerCase() : '';
     const layer = layerOfRow(row);
     const hidden = hiddenIds.has(id) || onOffLayer(layer) || row.hidden === true;
-    const fact = analyzeRow(row, frame, hidden);
+    return analyzeRow(row, frame, hidden);
+  };
+}
+
+/** Display rows + records → `ClassifiedModel` (checked against the contract). */
+export function readClassifiedModel(input: ReadInput): ReadOutput {
+  const read = rowReader(input);
+  const facts: RowFacts[] = [];
+  for (const row of input.rows) {
+    const fact = read(row);
     if (fact) facts.push(fact);
   }
+  return classify(input, facts);
+}
+
+/** How long the longest run between two yields of `readClassifiedModelSliced` took. */
+export interface SliceStats {
+  /** Longest synchronous run (ms) of the row analysis, one row included in full. */
+  longestSliceMs: number;
+  /** Times the analysis gave the event loop back. */
+  yields: number;
+}
+
+/**
+ * The same read as `readClassifiedModel` (identical output) with the row analysis cut into runs
+ * of about `sliceMs`, giving the event loop back between them (T-274: one read of a 3,000-object
+ * document held the engine for about 5 s). A single row is never cut, so one very large mesh can
+ * still make a longer run.
+ */
+export async function readClassifiedModelSliced(
+  input: ReadInput,
+  options: { sliceMs?: number } = {},
+): Promise<ReadOutput & SliceStats> {
+  const sliceMs = options.sliceMs ?? 50;
+  const read = rowReader(input);
+  const facts: RowFacts[] = [];
+  let longestSliceMs = 0;
+  let yields = 0;
+  let start = performance.now();
+  for (const row of input.rows) {
+    const fact = read(row);
+    if (fact) facts.push(fact);
+    const ran = performance.now() - start;
+    if (ran >= sliceMs) {
+      longestSliceMs = Math.max(longestSliceMs, ran);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      yields++;
+      start = performance.now();
+    }
+  }
+  // The last rows and the classification run as one piece.
+  const out = classify(input, facts);
+  longestSliceMs = Math.max(longestSliceMs, performance.now() - start);
+  return { ...out, longestSliceMs, yields };
+}
+
+/** Facts (any order) + records → the classified model. */
+function classify(input: ReadInput, facts: RowFacts[]): ReadOutput {
+  const toMeters = unitsToMeters(input.units);
   facts.sort((a, b) => (a.objectId < b.objectId ? -1 : a.objectId > b.objectId ? 1 : 0));
 
   const index = indexRecords(input.records);

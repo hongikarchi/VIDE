@@ -100,15 +100,15 @@ try {
   const rhino = await open('panel=rhino&instance=1:1&document=1');
   const head = rhino.page.locator('.host-panel-head');
   await head.getByText('구조(터구조)_260928.3dm').waitFor();
-  await head.getByText(/Live · Sync 필요 · 531개/).waitFor();
-  assert.equal(await rhino.page.getByRole('button', { name: 'Sync', exact: true }).count(), 1);
+  await head.getByText(/Live · 동기화 필요 · 531개/).waitFor();
+  assert.equal(await rhino.page.getByRole('button', { name: '동기화', exact: true }).count(), 1);
   assert.equal(
     await head.getByRole('switch', { name: /Live/ }).getAttribute('aria-checked'),
     'true',
   );
   await rhino.page
     .locator('.usage-service[data-provider="claude-cli"]')
-    .getByText('5h 62%')
+    .getByText('5시간 한도 62%')
     .waitFor();
   assert.equal(
     await rhino.page
@@ -149,7 +149,7 @@ try {
   const cadHead = cad.page.locator('.host-panel-head');
   await cadHead.getByText('평면도_2F.dwg').waitFor();
   assert.equal(await cadHead.locator('.host-badge').textContent(), 'CAD');
-  await cadHead.getByText(/연결됨 · Sync 필요 · 2,140개/).waitFor();
+  await cadHead.getByText(/연결됨 · 동기화 필요 · 2,140개/).waitFor();
   assert.equal(
     await cadHead.getByRole('switch', { name: /Live/ }).getAttribute('aria-checked'),
     'false',
@@ -183,7 +183,7 @@ try {
   await main.goto(app.launchUrl);
   await main
     .locator('.statusbar .usage-service[data-provider="claude-cli"]')
-    .getByText('한도')
+    .getByText('한도 도달')
     .waitFor();
   console.log('Host panel checks passed');
 } finally {

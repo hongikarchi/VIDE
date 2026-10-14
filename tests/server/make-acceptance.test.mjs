@@ -525,7 +525,16 @@ test('M5 replay: a make-conversation writes, checks and asks; the pinned jig mat
   assert.equal(answered.status, 201, JSON.stringify(answered.json));
   const second = await settle(project.id, answered.json.request.id);
   assert.equal(second.state, 'succeeded', JSON.stringify(second.result));
-  assert.match(seen.answerPacket, /ej-on-line=flag/);
+  // The answer message is the person's words (T-294); the keys stay in the ledger's answer item.
+  assert.match(seen.answerPacket, /→ 문제로 표시/);
+  assert.doesNotMatch(seen.answerPacket, /ej-on-line=flag/);
+  const ledger = (await api(`/projects/${project.id}/conversations/${conversation.id}`)).json
+    .ledger;
+  const answer = ledger.find((item) => item.kind === 'answer');
+  assert.deepEqual(
+    [answer.body.questionId, answer.body.optionId, answer.body.by],
+    ['ej-on-line', 'flag', 'user'],
+  );
   // The answer turn of a make-conversation runs on the make budgets (SPEC-07.9).
   assert.deepEqual(second.input.executionLimits, {
     maxToolCalls: 100,

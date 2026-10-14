@@ -133,7 +133,7 @@ function rememberDraft(projectId: string, draftId: string | undefined) {
 const BY_KIND: Record<string, string> = {
   code: '계산',
   library: '라이브러리',
-  host: '호스트',
+  host: 'CAD 프로그램',
   ai: 'AI',
   human: '사람',
 };
@@ -1495,7 +1495,7 @@ function PreviewPanel({
       <small className="kit-muted">
         {preview.fixture ? `시험 자료 ${preview.fixture} · ` : ''}
         {preview.at ? `계산 ${clock(preview.at)}` : ''}
-        {preview.ms !== undefined ? ` · ${seconds(preview.ms)}` : ''} · 호스트 쓰기 없음
+        {preview.ms !== undefined ? ` · ${seconds(preview.ms)}` : ''} · CAD 프로그램에 쓰지 않음
       </small>
     </div>
   );

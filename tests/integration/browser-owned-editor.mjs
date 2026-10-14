@@ -197,7 +197,7 @@ try {
   await page.goto(app.launchUrl);
   await page.locator('#project-picker').selectOption(project.id);
   await page.getByRole('button', { name: '문서에 적용', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '호스트 원본 적용' });
+  const dialog = page.getByRole('dialog', { name: 'Rhino·ZWCAD 원본 적용' });
   await dialog.getByRole('button', { name: '영향 검토', exact: true }).click();
   await dialog.getByRole('status').filter({ hasText: '수정 1' }).waitFor();
   await dialog.getByRole('button', { name: '검토한 변경 적용', exact: true }).click();

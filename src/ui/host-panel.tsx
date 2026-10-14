@@ -87,7 +87,7 @@ function Header(props: HeaderProps) {
             onClick={props.onSync}
             title={`지금 ${hostName(props.host)} 파일을 VIDE로 가져옵니다`}
           >
-            {props.syncing ? 'Sync 중…' : 'Sync'}
+            {props.syncing ? '동기화 중…' : '동기화'}
           </button>
           <button
             type="button"
@@ -134,7 +134,7 @@ function LinkCard({ host, file }: { host: PanelHost; file: string }) {
       </span>
       <strong>이 파일을 VIDE 프로젝트에 연결하세요</strong>
       <p>
-        연결하면 {file ? <b>{file}</b> : '이 파일'}이(가) 바로 Sync되고, 이 패널에서 AI에게 작업을
+        연결하면 {file ? <b>{file}</b> : '이 파일'}이(가) 바로 동기화되고, 이 패널에서 AI에게 작업을
         맡기고 결과를 볼 수 있습니다.
       </p>
       <button type="button" className="host-panel-primary" onClick={() => hostAction('link')}>

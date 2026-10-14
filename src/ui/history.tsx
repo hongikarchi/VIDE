@@ -134,12 +134,12 @@ export function Candidate({
         {displayOnly ? '이 모델 보기' : '이 후보 보기'}
       </button>
       {result.syncState === 'failed' ? (
-        <small>Rhino 반영 완료 · Sync를 다시 실행하세요. 파일 저장은 별도입니다.</small>
+        <small>Rhino 반영 완료 · 동기화를 다시 실행하세요. 파일 저장은 별도입니다.</small>
       ) : null}
       <small>
         {displayOnly
           ? `${host} 화면 동기화 · 원본 변경 없음`
-          : `${host} ${['file', 'document'].includes(message.source ?? '') ? '작업 사본' : '후보'} · 저장·재열기 검증됨`}
+          : `${host} ${['file', 'document'].includes(message.source ?? '') ? '작업 사본' : '후보'} · 저장 확인됨`}
       </small>
       {result.sourceDocument ? (
         <small>
@@ -151,7 +151,9 @@ export function Candidate({
         <small>
           {omitted.toLocaleString()}개는{' '}
           {displayOnly ? `원본 ${host}에 유지` : '목록·네이티브 파일에 보존'} ·{' '}
-          {host === 'ZWCAD' && displayOnly ? '표시 제외 (숨김·미지원 포함)' : '화면 표현 미지원'}
+          {host === 'ZWCAD' && displayOnly
+            ? '표시 제외 (숨김·미지원 포함)'
+            : '화면에 그릴 수 없는 객체'}
         </small>
       ) : null}
       {host === 'ZWCAD' && displayOnly && result.displayCoverage?.omittedTypes.OversizedDisplay ? (

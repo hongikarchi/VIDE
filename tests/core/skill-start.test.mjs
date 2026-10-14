@@ -2,10 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   continueSkill,
+  followRun,
   revertSkill,
   leftSteps,
   skillChecklist,
   skillTurnStatus,
+  sameRequest,
+  alreadyOpenStatus,
   startSkill,
   untilAfterConfirmed,
 } from '../../src/ui/skill-start.ts';
@@ -555,4 +558,79 @@ test('untilAfterConfirmed: a confirmed human step lets the run go on to the next
     'check',
     'no view yet',
   );
+});
+
+test('sameRequest·alreadyOpenStatus (T-291, SPEC-02.17 2): a jig sentence sent again', () => {
+  const words = '연결된 Rhino 모델(r4-small.3dm)이랑 도면(cad.dwg)을 서로 맞춰주세요.';
+  assert.equal(
+    sameRequest(words, '  연결된 Rhino 모델(r4-small.3dm)이랑  도면(cad.dwg)을 서로 맞춰주세요'),
+    true,
+  );
+  assert.equal(sameRequest(words, words + ' 레이어 대응도 다시 봐줘'), false);
+  assert.equal(alreadyOpenStatus({ legacy: true }), '이미 열려 있습니다');
+  assert.equal(alreadyOpenStatus(undefined), '이미 열려 있습니다');
+  assert.equal(
+    alreadyOpenStatus({ legacy: false, pending: true }),
+    '이미 열려 있습니다 — [진행] 전',
+  );
+  assert.equal(
+    alreadyOpenStatus({
+      legacy: false,
+      pending: false,
+      summary: { done: 3, waiting: ['해석 확정'], failed: [] },
+      left: ['해석 확정', 'Rhino에 만들기'],
+    }),
+    "이미 열려 있습니다 — '해석 확정' 전 · 'Rhino에 만들기' 전",
+  );
+  assert.equal(
+    alreadyOpenStatus({ legacy: false, pending: false, left: [] }),
+    '이미 열려 있습니다',
+  );
+});
+
+test('followRun (T-295, SPEC-02.17 2): the route row follows the work copy’s later runs', () => {
+  const titles = {
+    candidates: '필지 후보',
+    confirmTarget: '대상 필지 확정',
+    collect: '수집',
+    summary: '대지 요약',
+    make: 'Rhino에 만들기',
+  };
+  const first = {
+    steps: [
+      { id: 'candidates', kind: 'code', status: 'done' },
+      { id: 'confirmTarget', kind: 'human', status: 'waiting' },
+      { id: 'collect', kind: 'code', status: 'gate-failed' },
+    ],
+  };
+  const start = {
+    legacy: false,
+    pending: false,
+    instanceTitle: '작업본 2',
+    report: first,
+    stepTitles: titles,
+    summary: { done: 1, waiting: ['대상 필지 확정'], failed: ['수집'] },
+    left: [],
+  };
+  // R4 R1-B: confirmed, fetched, every step before Rhino에 만들기 computed.
+  const after = {
+    steps: [
+      { id: 'candidates', kind: 'code', status: 'done' },
+      { id: 'confirmTarget', kind: 'human', status: 'confirmed' },
+      { id: 'collect', kind: 'code', status: 'done' },
+      { id: 'summary', kind: 'code', status: 'done' },
+      { id: 'make', kind: 'host', status: 'waiting' },
+    ],
+  };
+  assert.equal(followRun(start, after), true);
+  assert.deepEqual(start.summary, { done: 3, waiting: [], failed: [] });
+  assert.deepEqual(start.left, ['Rhino에 만들기']);
+  assert.equal(start.report, after);
+  assert.match(skillTurnStatus('succeeded', start), /'Rhino에 만들기' 전$/);
+  // A superseded run, a 계획 start still waiting for [진행], a legacy jig: nothing moves.
+  assert.equal(followRun(start, { ...first, superseded: true }), false);
+  assert.equal(followRun({ ...start, pending: true }, first), false);
+  assert.equal(followRun({ ...start, legacy: true }, first), false);
+  assert.equal(followRun(start, undefined), false);
+  assert.deepEqual(start.summary.failed, []);
 });

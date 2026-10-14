@@ -141,7 +141,7 @@ export function objectById(id: string | null | undefined): DraftObject | undefin
  */
 export const AUTO_MODEL = 'auto';
 export const models: ModelOption[] = [
-  { id: AUTO_MODEL, name: '자동 (Jev)', provider: 'claude-cli', efforts: ['default'] },
+  { id: AUTO_MODEL, name: '자동', provider: 'claude-cli', efforts: ['default'] },
 ];
 /** The model a new draft starts with: "자동 (Jev)", or the first model when the catalog lacks it. */
 export const defaultModel = () =>

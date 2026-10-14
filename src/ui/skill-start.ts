@@ -113,6 +113,8 @@ export interface SkillStart {
   summary?: { done: number; waiting: string[]; failed: string[] };
   /** Steps a person presses that the computation left (a `manual` step such as '법규 체크'). */
   left?: string[];
+  /** Step titles by id, for following the work copy's later runs (T-295). */
+  stepTitles?: Record<string, string>;
   /**
    * The address looked up for a jig with a `site-data` input (SPEC-12.3의 6): the one the request
    * names, else the project's known site address (the latest workbook whose target a person
@@ -314,6 +316,20 @@ export function leftSteps(report: SkillRunReport | undefined, titles: Map<string
 }
 
 /**
+ * A later run of the started work copy (a person confirmed a step, fetched, changed a setting):
+ * the route row's 사람 확인 대기 · 멈춘 단계 · 남은 단계 follow it, never the start's first run
+ * (SPEC-02.17 2, T-295). False when nothing changed (a superseded run, a start still waiting).
+ */
+export function followRun(start: SkillStart, report: SkillRunReport | undefined): boolean {
+  if (!report || report.superseded || start.legacy || start.pending || !start.report) return false;
+  const titles = new Map(Object.entries(start.stepTitles ?? {}));
+  start.report = report;
+  start.summary = summarize(report, titles);
+  start.left = leftSteps(report, titles);
+  return true;
+}
+
+/**
  * The route row's status once the AI turn after a start has ended (SPEC-02.17 2, T-272): the
  * turn's end and the work copy's state, so the row never stays at 'AI가 요약하는 중'. undefined
  * while the turn is still queued or running.
@@ -330,6 +346,31 @@ export function skillTurnStatus(state: string, start: SkillStart | undefined): s
   const parts = [turn, `작업본 '${start.instanceTitle}' 열림`];
   for (const title of start.left ?? []) parts.push(`'${title}' 전`);
   return parts.join(' · ');
+}
+
+/**
+ * The same words again (SPEC-02.17 2, T-291): a jig-opening sentence sent once more while its jig
+ * is open. Spacing and closing punctuation do not count.
+ */
+export function sameRequest(a: string, b: string) {
+  const plain = (text: string) =>
+    text
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/[\s.!?~…。]+$/u, '');
+  return plain(a) === plain(b);
+}
+
+/**
+ * The route row when the jig a request names is open already (SPEC-02.17 2, T-291): '이미 열려
+ * 있습니다' and the person steps still ahead ('[진행] 전' for a 계획 start).
+ */
+export function alreadyOpenStatus(start: SkillStart | undefined): string {
+  const head = '이미 열려 있습니다';
+  if (!start || start.legacy) return head;
+  if (start.pending) return `${head} — [진행] 전`;
+  const left = [...new Set([...(start.summary?.waiting ?? []), ...(start.left ?? [])])];
+  return left.length ? `${head} — ${left.map((title) => `'${title}' 전`).join(' · ')}` : head;
 }
 
 /** Record in the conversation's ledger (SPEC-02.19 1); a failure never stops the start. */
@@ -555,6 +596,7 @@ async function run(
     ...(start.until ? { until: start.until } : {}),
   })) as SkillRunReport;
   start.report = report;
+  start.stepTitles = Object.fromEntries(titles);
   start.summary = summarize(report, titles);
   start.left = leftSteps(report, titles);
   start.pending = false;

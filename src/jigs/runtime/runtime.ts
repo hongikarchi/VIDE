@@ -8,7 +8,9 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { gunzipSync, gzipSync } from 'node:zlib';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { promisify } from 'node:util';
+import { gunzip, gunzipSync, gzip, gzipSync } from 'node:zlib';
 import { DomainError } from '../../contracts/errors.ts';
 import { isNewerVersion } from '../../contracts/jig-version.ts';
 import { layerRootProblem } from '../../contracts/layer-path.ts';
@@ -167,6 +169,18 @@ export interface RoleSnapshot {
   sources?: { linkId: string; revisionKey: string }[];
 }
 
+/** A jig input read to keep (`recordRead`). */
+export interface RecordReadInput {
+  linkId: string;
+  revisionKey: string;
+  layers: string[];
+  includeHidden: boolean;
+  purpose: 'assembly' | 'pre-bake' | 'check';
+  model: ReadModel;
+}
+const gzipAsync = promisify(gzip);
+const gunzipAsync = promisify(gunzip);
+
 const decode64 = (value: unknown) => {
   if (typeof value !== 'string' || !value) return '';
   try {
@@ -257,6 +271,17 @@ export class JigRuntime {
     const target = this.file(ref);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, gzipSync(Buffer.from(JSON.stringify(value), 'utf8')));
+  }
+  /** `writeGz` with the compression and the write off the event loop (T-274: large reads). */
+  private async writeGzAsync(ref: string, value: unknown) {
+    const target = this.file(ref);
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, await gzipAsync(Buffer.from(JSON.stringify(value), 'utf8')));
+  }
+  private async readGzAsync<T = unknown>(ref: string): Promise<T | undefined> {
+    const target = this.file(ref);
+    if (!existsSync(target)) return undefined;
+    return JSON.parse((await gunzipAsync(await readFile(target))).toString('utf8')) as T;
   }
   private readGz<T = unknown>(ref: string): T | undefined {
     const target = this.file(ref);
@@ -605,22 +630,25 @@ export class JigRuntime {
 
   // --- reads and assembly --------------------------------------------------------------------
   /** Keep a jig input read (§8): the model goes to `<data>/jigs/reads/`, the row to `jig_reads`. */
-  recordRead(
-    projectId: string,
-    instanceId: string,
-    input: {
-      linkId: string;
-      revisionKey: string;
-      layers: string[];
-      includeHidden: boolean;
-      purpose: 'assembly' | 'pre-bake' | 'check';
-      model: ReadModel;
-    },
-  ): JigRead & { objectCount: number; layerTable: { fullPath: string; objectCount: number }[] } {
+  recordRead(projectId: string, instanceId: string, input: RecordReadInput) {
     this.store.instance(projectId, instanceId);
     const ref = `reads/${randomUUID()}.json.gz`;
+    this.writeGz(ref, input.model);
+    return this.addRead(instanceId, ref, input);
+  }
+  /** `recordRead` with the compression and the write off the event loop (T-274). */
+  async recordReadAsync(projectId: string, instanceId: string, input: RecordReadInput) {
+    this.store.instance(projectId, instanceId);
+    const ref = `reads/${randomUUID()}.json.gz`;
+    await this.writeGzAsync(ref, input.model);
+    return this.addRead(instanceId, ref, input);
+  }
+  private addRead(
+    instanceId: string,
+    ref: string,
+    input: RecordReadInput,
+  ): JigRead & { objectCount: number; layerTable: { fullPath: string; objectCount: number }[] } {
     const { model } = input;
-    this.writeGz(ref, model);
     const row = this.store.addRead(instanceId, {
       linkId: input.linkId,
       revisionKey: input.revisionKey,
@@ -638,6 +666,16 @@ export class JigRuntime {
   readModel(instanceId: string, readId: string): { read: JigRead; model: ReadModel } {
     const read = this.store.read(instanceId, readId);
     const model = this.readGz<ReadModel>(read.ref);
+    if (!model) throw new DomainError('STALE_REFERENCE');
+    return { read, model };
+  }
+  /** `readModel` with the file read and the decompression off the event loop (T-274). */
+  async readModelAsync(
+    instanceId: string,
+    readId: string,
+  ): Promise<{ read: JigRead; model: ReadModel }> {
+    const read = this.store.read(instanceId, readId);
+    const model = await this.readGzAsync<ReadModel>(read.ref);
     if (!model) throw new DomainError('STALE_REFERENCE');
     return { read, model };
   }
@@ -850,7 +888,7 @@ export class JigRuntime {
         : kept.model;
     const hash = hashValue([kept.revisionKey, kept.rolesVersion, hashValue(content)]);
     const ref = `models/${instanceId}/${key.replace(/[^A-Za-z0-9_.-]/g, '_')}-${hash.slice(0, 16)}.json.gz`;
-    this.writeGz(ref, kept.model);
+    await this.writeGzAsync(ref, kept.model);
     const body = bodyOf(instance.body);
     const previous = body.hostDocuments?.[key];
     const entry: HostDocumentRef = {

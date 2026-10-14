@@ -29,6 +29,7 @@ import {
   rowTexts,
   ruleLabel,
   safeLink,
+  sourceText,
   stamp,
   unusedCounts,
   valueText,
@@ -630,8 +631,7 @@ function Classification({ result }: { result: ComplianceResult }) {
 function Inputs({ result }: { result: ComplianceResult }) {
   const model = result.inputs.model;
   const answers = answersOf(result);
-  const ref = (r: ComplianceResult['inputs']['limits']) =>
-    r ? `${r.title} · 계산 ${stamp(r.at)}` : '없음';
+  const ref = sourceText;
   return (
     <table className="kit-table" aria-label="입력">
       <tbody>

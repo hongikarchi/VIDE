@@ -20,8 +20,8 @@ const usageSchema = z.object({
   ),
 });
 const SERVICES = [
-  { id: 'claude-cli', name: 'Claude', short: '5h' },
-  { id: 'codex-cli', name: 'ChatGPT', short: '단기' },
+  { id: 'claude-cli', name: 'Claude', short: '5시간 한도' },
+  { id: 'codex-cli', name: 'ChatGPT', short: '단기 한도' },
 ];
 
 function meter(parent: HTMLElement, label: string, percent: number) {
@@ -63,11 +63,11 @@ export function mountUsageBars(element: HTMLElement) {
         if (row.limitReached) {
           const limit = document.createElement('small');
           limit.className = 'usage-limit';
-          limit.textContent = '한도';
+          limit.textContent = '한도 도달';
           group.append(limit);
         }
         if (row.session) meter(group, service.short, row.session.percent);
-        if (row.weekly) meter(group, '7일', row.weekly.percent);
+        if (row.weekly) meter(group, '7일 한도', row.weekly.percent);
         if (!row.session && !row.weekly && !row.limitReached) continue;
         element.append(group);
         shown++;

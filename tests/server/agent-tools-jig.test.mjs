@@ -182,6 +182,9 @@ test('one registry: connection allowlist equals the defined tools, conversation 
       'jig_output',
       'jig_run',
       'jig_set',
+      // 대화로 정한 입력 역할 (SPEC-07.18 9, T-293): with an open jig only.
+      'jig_set_input',
+      'jig_ask_input',
       'jig_state',
       'links_layers',
       'ui_go',

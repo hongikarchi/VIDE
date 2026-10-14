@@ -42,6 +42,8 @@ namespace Vide.Zwcad.Connection
         private sealed class Shown { internal string Omitted; internal Dictionary<string, int> Warnings; }
         private Dictionary<string, Shown> shown, building;
         private long buildingRevision = -1; private int buildingNext;
+        // The last display page's read timing (T-285), set on ZWCAD's thread and logged after its reply.
+        private AttachedDisplay.PageTiming pageTiming;
         private static Shown ShownOf(AttachedDisplay.EntityRead read) =>
             new Shown { Omitted = read.Item == null ? read.Omitted : null, Warnings = read.Warnings };
 
@@ -145,9 +147,10 @@ namespace Vide.Zwcad.Connection
                 if (offset == 0) { building = new Dictionary<string, Shown>(); buildingRevision = revision; buildingNext = 0; }
                 if (building != null && (buildingRevision != revision || offset != buildingNext)) building = null;
                 var record = building;
+                var timing = new AttachedDisplay.PageTiming(); pageTiming = timing;
                 using (Document.LockDocument(DocumentLockMode.Read, null, null, false)) {
                     object result = AttachedDisplay.Page(Document.Database, offset, Convert.ToInt32(request["limit"]), revision, out next, out total,
-                        record == null ? null : (Action<AttachedDisplay.EntityRead>)(read => record[read.Handle] = ShownOf(read)));
+                        record == null ? null : (Action<AttachedDisplay.EntityRead>)(read => record[read.Handle] = ShownOf(read)), default(ObjectId), timing);
                     if (record != null) {
                         buildingNext = next;
                         if (next >= total) { shown = record; building = null; }
@@ -321,10 +324,14 @@ namespace Vide.Zwcad.Connection
                             throw new InvalidOperationException("DOCUMENT_MISMATCH");
                         if (Value(envelope, "type") != "vide") throw new InvalidOperationException("UNSUPPORTED_METHOD");
                         var completion = new TaskCompletionSource<object>();
+                        // T-285 stages of a display page: waiting for ZWCAD's idle turn, the read itself.
+                        double queuedMs = clock.Elapsed.TotalMilliseconds, startedMs = -1, dispatchedMs = -1;
                         pending.Enqueue(delegate {
                             if (completion.Task.IsCompleted) return;
                             try {
+                                startedMs = clock.Elapsed.TotalMilliseconds; pageTiming = null;
                                 var result = Dispatch(request);
+                                dispatchedMs = clock.Elapsed.TotalMilliseconds;
                                 // An AI write runs later as a ZWCAD command (one UNDO step).
                                 if (result is Task<object> job)
                                     job.ContinueWith(done => {
@@ -336,8 +343,10 @@ namespace Vide.Zwcad.Connection
                             } catch (System.Exception error) { completion.TrySetException(error); }
                         });
                         if (!completion.Task.Wait(60000)) { completion.TrySetCanceled(); throw new InvalidOperationException("HOST_BUSY"); }
-                        bytesOut = Reply(stream, completion.Task.Result);
+                        double serializeMs, writeMs;
+                        bytesOut = Reply(stream, completion.Task.Result, out serializeMs, out writeMs);
                         PluginLog.Log.Call(method, clock.Elapsed.TotalMilliseconds, bytesIn, bytesOut);
+                        if (method == "displayPage") Stages(method, clock.Elapsed.TotalMilliseconds, queuedMs, startedMs, dispatchedMs, serializeMs, writeMs, bytesOut, pageTiming);
                     } catch (System.Exception error) {
                         var cause = error is AggregateException ? ((AggregateException)error).GetBaseException() : error;
                         string code = cause is InvalidOperationException ? cause.Message : "HOST_READ_FAILED";
@@ -351,10 +360,37 @@ namespace Vide.Zwcad.Connection
         }
         private static string Value(Dictionary<string, object> request, string key) { object value; return request.TryGetValue(key, out value) ? Convert.ToString(value) : null; }
         private static byte[] Read(Stream stream, int size) { var bytes = new byte[size]; int at = 0; while (at < size) { int n = stream.Read(bytes, at, size - at); if (n == 0) throw new EndOfStreamException(); at += n; } return bytes; }
-        private static long Reply(Stream stream, object result) {
+        private static long Reply(Stream stream, object result) { double serializeMs, writeMs; return Reply(stream, result, out serializeMs, out writeMs); }
+        private static long Reply(Stream stream, object result, out double serializeMs, out double writeMs) {
+            var clock = Stopwatch.StartNew();
             var body = Encoding.UTF8.GetBytes(new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.Serialize(new { status = "success", result }));
+            serializeMs = clock.Elapsed.TotalMilliseconds;
             var header = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(body.Length)); stream.Write(header, 0, 4); stream.Write(body, 0, body.Length);
+            writeMs = clock.Elapsed.TotalMilliseconds - serializeMs;
             return body.Length;
+        }
+        /// <summary>
+        /// One display page's stages for the plugin log (T-285): waiting for ZWCAD's idle turn, the
+        /// read (and its slowest entity: type, handle, ms, coordinates), JSON serialization and the
+        /// socket write. Times, sizes, types and handles only — never drawing contents.
+        /// </summary>
+        private static void Stages(string method, double totalMs, double queuedMs, double startedMs, double dispatchedMs,
+            double serializeMs, double writeMs, long bytesOut, AttachedDisplay.PageTiming timing)
+        {
+            var fields = new Dictionary<string, object> {
+                ["method"] = method, ["ms"] = Math.Round(totalMs), ["bytesOut"] = bytesOut,
+                ["waitMs"] = startedMs >= 0 ? Math.Round(startedMs - queuedMs) : -1,
+                ["dispatchMs"] = startedMs >= 0 && dispatchedMs >= 0 ? Math.Round(dispatchedMs - startedMs) : -1,
+                ["serializeMs"] = Math.Round(serializeMs), ["writeMs"] = Math.Round(writeMs),
+            };
+            if (timing != null) {
+                fields["readMs"] = Math.Round(timing.ReadMs); fields["entities"] = timing.Entities; fields["coordinates"] = timing.Coordinates;
+                if (timing.SlowestType != null) {
+                    fields["slowestMs"] = Math.Round(timing.SlowestMs); fields["slowestType"] = timing.SlowestType;
+                    fields["slowestHandle"] = timing.SlowestHandle; fields["slowestCoordinates"] = timing.SlowestCoordinates;
+                }
+            }
+            PluginLog.Log.Write("call-stages", fields);
         }
         public void Dispose()
         {

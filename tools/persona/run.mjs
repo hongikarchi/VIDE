@@ -9,7 +9,14 @@
 //     [--launch-file .vide/dev-data/launch.json | --launch <url#token>]
 //     [--persona intern] [--max-steps 12] [--out .vide/persona/<stamp>] [--claude claude] [--headless]
 //     [--no-fresh-conversation] [--no-fresh-jigs] [--idle-timeout 600] [--answers <json | file.json>]
-//     [--no-host-check] [--logs <engine logs dir>]
+//     [--no-host-check] [--logs <engine logs dir>] [--no-after-goal]
+//
+// Native selects (T-292): a click that lands on a <select> (document.elementFromPoint) does not
+// open Chrome's popup, which a screenshot never shows; the driver reads the options and lists them
+// in the next prompt, and the persona answers {"type":"select","index"|"text"}; the driver applies
+// it with selectOption (input + change events). After the goal (T-292): a scenario's `afterGoal`
+// (R1-HIDE: undo) runs once the persona loop ends — U (or the toast's 되돌리기) — and records
+// whether the view's hidden count went back to 0 (`afterGoal.undoRestored`).
 //
 // Hosts (T-286): the scenario's `hosts` (e.g. ["rhino"]) must match the project's open links before
 // the run starts (GET …/links); an open link of another host or a missing one ends the run
@@ -45,6 +52,9 @@ import {
   hostsCheck,
   operatorAnswer,
   personaStep,
+  resolveSelect,
+  selectChoices,
+  undoVerdict,
 } from './persona-step.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -66,6 +76,7 @@ const { values: args } = parseArgs({
     'idle-timeout': { type: 'string', default: '600' },
     answers: { type: 'string' },
     'host-check': { type: 'boolean', default: true },
+    'after-goal': { type: 'boolean', default: true },
   },
   allowNegative: true,
 });
@@ -174,6 +185,8 @@ const run = {
   isolation: null, // { status: full|partial|none|off, jigs[], limits[] } (isolation.mjs)
   logsDir,
   cliSessions: [], // { requestId, cliStarts, resume|null, provider, model } from the engine log
+  selects: 0, // select actions applied to a native <select> (T-292)
+  afterGoal: null, // the scenario's afterGoal check (T-292): { type, how, hiddenBefore, hiddenAfter, undoRestored, … }
 };
 const save = () => writeFile(join(out, 'run.json'), JSON.stringify(run, null, 2));
 let aborted = false;
@@ -330,6 +343,26 @@ try {
   const banned = new Set();
   const history = [];
   let previous;
+  // The native <select> the last click landed on (T-292): its handle, point and numbered choices.
+  let open = null;
+  const closeSelect = async () => {
+    await open?.handle.dispose().catch(() => {});
+    open = null;
+  };
+  /** The enabled <select> under a point (or the one its <label> names), as a handle, or null. */
+  const selectAt = async (x, y) => {
+    const handle = await page.evaluateHandle(
+      ([px, py]) => {
+        const hit = document.elementFromPoint(px, py);
+        const select = hit?.closest?.('select') ?? (hit?.tagName === 'LABEL' ? hit.control : null);
+        return select instanceof HTMLSelectElement && !select.disabled ? select : null;
+      },
+      [x, y],
+    );
+    const element = handle.asElement();
+    if (!element) await handle.dispose();
+    return element;
+  };
   run.status = 'completed';
   for (let step = 1; step <= maxSteps; step++) {
     if (aborted) {
@@ -355,6 +388,7 @@ try {
         history,
         personaFile,
         claude: args.claude,
+        choices: open?.choices ?? null,
       });
     } catch (error) {
       run.status = 'driver-failed';
@@ -363,7 +397,54 @@ try {
     }
     run.model ??= persona.meta?.model ?? null;
     const action = persona.action;
-    if (action.type === 'click') await page.mouse.click(action.x, action.y);
+    let selectOpened; // the choices offered after a click on a native <select>
+    let selected; // the outcome of a select action
+    if (action.type === 'select') {
+      const resolved = resolveSelect(action, open?.choices);
+      if (!resolved.ok) selected = { ok: false, reason: resolved.reason };
+      else {
+        const { n, text: optionText, value, optionIndex } = resolved.choice;
+        selected = { n, text: optionText, value };
+        try {
+          // A re-render may have replaced the element: find it again at the clicked point.
+          let target = open.handle;
+          if (!(await target.evaluate((el) => el.isConnected).catch(() => false)))
+            target = (await selectAt(open.x, open.y)) ?? target;
+          await target.selectOption({ index: optionIndex }); // dispatches input and change
+          selected.ok = true;
+          run.selects++;
+        } catch (error) {
+          selected.ok = false;
+          selected.reason = String(error?.message ?? error).split('\n')[0];
+        }
+      }
+      await closeSelect();
+    } else if (action.type === 'click') {
+      await closeSelect();
+      const element = await selectAt(action.x, action.y);
+      const options = element
+        ? await element.evaluate((el) =>
+            [...el.options].map((o) => ({ text: o.text, value: o.value, disabled: o.disabled })),
+          )
+        : [];
+      const choices = selectChoices(options);
+      if (element && choices.length) {
+        // Chrome draws the opened list outside the page (no screenshot shows it): focus the field
+        // and hand the persona its options as text instead.
+        await element.focus().catch(() => {});
+        const label = await element
+          .evaluate((el) => el.getAttribute('aria-label') || el.labels?.[0]?.innerText || '')
+          .catch(() => '');
+        open = { handle: element, x: action.x, y: action.y, choices };
+        selectOpened = {
+          label,
+          choices: choices.map(({ n, text: t, value }) => ({ n, text: t, value })),
+        };
+      } else {
+        await element?.dispose();
+        await page.mouse.click(action.x, action.y);
+      }
+    } else await closeSelect();
     if (action.type === 'type') {
       if (action.x != null) await page.mouse.click(action.x, action.y);
       await page.keyboard.type(action.text ?? '');
@@ -412,6 +493,8 @@ try {
       textHash: textHash.slice(0, 16),
       requestIds: fresh,
       ...(told ? { operatorAnswers: [told] } : {}),
+      ...(selectOpened ? { selectOpened } : {}),
+      ...(selected ? { selected } : {}),
       ms: meta?.ms,
     };
     history.push(entry);
@@ -423,6 +506,10 @@ try {
     console.log(
       `${step}. ${action.type}${action.x != null ? ` (${action.x},${action.y})` : ''}${action.text ? ` "${action.text}"` : ''}` +
         (told ? ` ${told.field} → ${told.answer ?? `(no answer: ${told.reason})`}` : '') +
+        (selectOpened ? ` select [${selectOpened.choices.length} choices]` : '') +
+        (selected
+          ? ` → ${selected.ok ? `'${selected.text}'` : `failed: ${selected.reason}`}`
+          : '') +
         ` — ${persona.sees.slice(0, 80)}`,
     );
     if (action.type === 'done' || persona.done) {
@@ -431,6 +518,55 @@ try {
     }
     if (action.type === 'declare_stuck') break;
   }
+  await closeSelect();
+  // After the goal (T-292): e.g. R1-HIDE's undo — U (or the toast's 되돌리기) must bring the
+  // hidden objects back. Read through the viewport API the screen itself uses (window.videViewport).
+  const after = scenario.afterGoal;
+  if (after?.type === 'undo' && args['after-goal'] && run.status === 'completed' && run.steps) {
+    const hiddenCount = () =>
+      page
+        .evaluate(() => {
+          const viewport = window.videViewport;
+          return typeof viewport?.hiddenCount === 'function' ? viewport.hiddenCount() : null;
+        })
+        .catch(() => null);
+    const hiddenBefore = await hiddenCount();
+    const label = after.toastButton ?? '되돌리기';
+    const button = page
+      .locator('#message:not([hidden]) .message-action', { hasText: label })
+      .first();
+    let how;
+    if (await button.isVisible().catch(() => false)) {
+      await button.click();
+      how = 'toast:' + label;
+    } else {
+      // Keys reach the 3D view only when no input has focus (src/ui/app/viewport.ts viewKeys).
+      await page.evaluate(() => document.activeElement?.blur?.()).catch(() => {});
+      await page.keyboard.press(after.key ?? 'u');
+      how = 'key:' + (after.key ?? 'u');
+    }
+    await page.waitForTimeout(1500);
+    const hiddenAfter = await hiddenCount();
+    const screenshot = 'steps/after-goal.png';
+    await page.screenshot({ path: join(out, screenshot) }).catch(() => {});
+    run.afterGoal = {
+      type: 'undo',
+      how,
+      personaDone: run.personaDone,
+      hiddenBefore,
+      hiddenAfter,
+      ...undoVerdict(hiddenBefore, hiddenAfter),
+      screenshot,
+    };
+    console.log(
+      `after goal: ${how}, hidden ${hiddenBefore} → ${hiddenAfter}, undoRestored ${run.afterGoal.undoRestored}`,
+    );
+  } else if (after)
+    run.afterGoal = {
+      type: after.type,
+      skipped: args['after-goal'] ? `run ${run.status}` : 'off',
+      undoRestored: null,
+    };
   if (run.steps === 0 && run.status === 'completed') {
     run.status = 'untested';
     run.reason = 'no screenshot step was taken';

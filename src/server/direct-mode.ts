@@ -1244,7 +1244,7 @@ export async function runDirectTurn(turn: DirectTurn) {
           'result',
           named(
             doc,
-            `문서에 반영 · 추가 ${countOf(outcome.changes, 'added')} · 수정 ${countOf(outcome.changes, 'changed')} · 삭제 ${countOf(outcome.changes, 'removed')} · 되돌리기 1단계`,
+            `문서에 반영 · 추가 ${countOf(outcome.changes, 'added')} · 수정 ${countOf(outcome.changes, 'changed')} · 삭제 ${countOf(outcome.changes, 'removed')} · 되돌리기(마지막 변경)`,
           ),
         );
       } else activity.add('result', named(doc, '실행 성공 · 바뀐 객체 없음'));

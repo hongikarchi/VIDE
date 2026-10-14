@@ -111,7 +111,7 @@ try {
   await page.getByRole('button', { name: 'JIG', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'JIG', exact: true });
   await dialog
-    .locator('.jig-card[data-status="available"]', { hasText: 'Sync · 도면↔모델' })
+    .locator('.jig-card[data-status="available"]', { hasText: '동기화 · 도면↔모델' })
     .getByRole('button', { name: '열기' })
     .click();
   await dialog.getByRole('button', { name: '정렬·비교 실행' }).click();
@@ -268,14 +268,14 @@ try {
     box.width,
   );
   if (shot) await page.screenshot({ path: join(shot, 'jig-folded.png') });
-  await dialog.getByRole('button', { name: 'Sync · 도면↔모델 펼치기' }).click();
+  await dialog.getByRole('button', { name: '동기화 · 도면↔모델 펼치기' }).click();
   assert.deepEqual(await jigState(), before);
   await dialog.getByRole('button', { name: '닫기' }).click();
   await dialog.waitFor({ state: 'hidden' });
   // The rail's JIG opens the list; the same jig opens again with its state.
   await page.getByRole('button', { name: 'JIG', exact: true }).click();
   await dialog
-    .locator('.jig-card[data-status="available"]', { hasText: 'Sync · 도면↔모델' })
+    .locator('.jig-card[data-status="available"]', { hasText: '동기화 · 도면↔모델' })
     .getByRole('button', { name: '열기' })
     .click();
   await dialog.locator('.jig-relation').waitFor();

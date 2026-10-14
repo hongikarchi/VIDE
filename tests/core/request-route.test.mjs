@@ -192,7 +192,7 @@ test('words decided without Jev: login, jig words, making a jig, the file', asyn
   assert.equal(routeCard(synced), undefined);
   // Jev's app answer still makes the Sync card (the screen's buttons and Jev keep it).
   const sync = { target: 'app', by: 'jev', app: { action: 'sync_link', tier: 'T1' } };
-  assert.equal(routeCard(sync).run, 'Sync 받기');
+  assert.equal(routeCard(sync).run, '동기화하기');
   const jig = routeRequest('구조 검토하고 싶어', [], [], context);
   assert.deepEqual([jig.target, jig.jig.id], ['jig', 'structure']);
   // A jig opens at once (ADR-026 4): the route row says so, no proposal button.

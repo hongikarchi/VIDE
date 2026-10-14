@@ -112,7 +112,7 @@ try {
     .click();
   await dialog.getByText('탐색용 예비값입니다').waitFor();
   assert.match(
-    await dialog.getByLabel('입력 Sync').locator('option:checked').textContent(),
+    await dialog.getByLabel('입력 동기화 기록').locator('option:checked').textContent(),
     /frame\.3dm/,
   );
   // Role layers (optional): several layers per role, sent as layer hints.

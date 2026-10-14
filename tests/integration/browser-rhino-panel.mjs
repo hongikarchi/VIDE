@@ -149,7 +149,7 @@ try {
   // Attach Rhino's selection (the composer chip) before any Sync: pending until the basis exists.
   await page.locator('#context .selection-chip').filter({ hasText: 'Rhino 선택 1개 첨부' }).click();
   await page.waitForFunction(() =>
-    document.querySelector('#context').textContent.includes('Sync 대기 1개'),
+    document.querySelector('#context').textContent.includes('동기화 대기 1개'),
   );
   assert.deepEqual(pinPosts.at(-1).ids, [wall]);
   // The engine's first Sync of the linked file resolves the pending pin into the request draft;
@@ -160,7 +160,10 @@ try {
     document.querySelector('#context').textContent.includes('고정 객체 1개'),
   );
   // The panel's Sync button forces another Sync of the same linked file.
-  await page.locator('.host-panel-head').getByRole('button', { name: 'Sync', exact: true }).click();
+  await page
+    .locator('.host-panel-head')
+    .getByRole('button', { name: '동기화', exact: true })
+    .click();
   await page.waitForFunction(() => document.querySelector('#right'));
   while (captures < 1) await new Promise((resolve) => setTimeout(resolve, 20));
   // Pins changed in Rhino (another client) appear in the panel without a reload.

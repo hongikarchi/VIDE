@@ -272,6 +272,7 @@ async function fixture(t, { propose, windows, stale = [] } = {}) {
     },
   };
   const asked = [];
+  const logs = [];
   const proposeFn =
     propose &&
     (async (request) => {
@@ -294,6 +295,7 @@ async function fixture(t, { propose, windows, stale = [] } = {}) {
           links,
           sdk,
           propose: proposeFn,
+          log: (event, data) => logs.push({ event, ...data }),
         })) ||
         (await jigRoutes(url, Object.assign(Readable.from([]), { method, headers: {} }), {
           workspace,
@@ -350,6 +352,7 @@ async function fixture(t, { propose, windows, stale = [] } = {}) {
     workspace,
     links,
     targets,
+    logs,
   };
 }
 
@@ -556,6 +559,11 @@ test('the check read classifies the whole document, keeps it as the step input, 
   assert.equal(first.data.unusedByReason['역할 없음'], 1);
   assert.equal(first.data.rolesVersion, 0);
   assert.equal(first.data.rows.find((r) => r.objectId === altB).reason, '고르지 않은 대안');
+  // T-274: one timing line per read, with the longest synchronous run of the classification.
+  const timing = f.logs.findLast((l) => l.event === 'compliance-read');
+  assert.equal(timing.objects, 5);
+  for (const k of ['readMs', 'recordMs', 'classifyMs', 'classifySliceMs', 'keepMs', 'ms'])
+    assert.equal(typeof timing[k], 'number', k);
 
   // The step reads the kept ClassifiedModel; its coordinates are local to the massing frame.
   const run = await call('POST', `${base}/jig-instances/${iid}/run`, { mode: 'confirmed' });

@@ -212,7 +212,7 @@ export function grasshopperHandlers(turn: GrasshopperTurn): Record<string, Handl
       turn.onUse(
         doc,
         done === results.length ? 'result' : 'error',
-        `Grasshopper에 반영 · 작업 ${done}/${results.length}개${undoId ? ' · 되돌리기 1단계' : ''}`,
+        `Grasshopper에 반영 · 작업 ${done}/${results.length}개${undoId ? ' · 되돌리기(마지막 변경)' : ''}`,
       );
       return bounded({
         ...answer,

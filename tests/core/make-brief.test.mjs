@@ -47,7 +47,7 @@ test('the filled form reads as sentences; empty table rows are left out', () => 
     checks: [{ text: '간격 ≤ 1.2 m', level: 'warn' }],
     start: 'example-grid',
   });
-  assert.match(text, /- 호스트 레이어 \[sync-layers\]: 곡선/);
+  assert.match(text, /- Rhino·CAD 레이어 \[sync-layers\]: 곡선/);
   assert.match(text, /- 사람이 그리는 구역 \[zone\]: 폴리곤/);
   assert.match(text, /- 쌍기둥 간격 · 길이 \(m\) · 기본값 0\.6m · 범위 0\.3~1\.2 · 근거 가정/);
   assert.match(text, /1\. 이음 선 찾기 · 맡는 쪽 라이브러리 · 선 교차/);

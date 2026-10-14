@@ -347,7 +347,7 @@ try {
   await openWork('unknown-history');
   const unknownCard = page.locator('.work-view[data-request-id="unknown-history"]');
   await unknownCard.waitFor();
-  assert.match(await unknownCard.textContent(), /호스트 결과 확인 필요/);
+  assert.match(await unknownCard.textContent(), /CAD 프로그램 결과 확인 필요/);
   assert.equal(
     await page.getByRole('button', { name: '입력을 초안으로 복원', exact: true }).count(),
     0,
@@ -419,12 +419,12 @@ try {
   });
   await page.reload();
   await page.getByRole('button', { name: '문서에 적용', exact: true }).click();
-  const application = page.getByRole('dialog', { name: '호스트 원본 적용', exact: true });
+  const application = page.getByRole('dialog', { name: 'Rhino·ZWCAD 원본 적용', exact: true });
   await application.getByRole('button', { name: '영향 검토', exact: true }).click();
   await page.waitForFunction(
     () => !document.querySelector('.application-dialog button:last-child').disabled,
   );
-  await application.getByLabel('적용할 호스트 문서', { exact: true }).selectOption('2');
+  await application.getByLabel('적용할 Rhino·ZWCAD 문서', { exact: true }).selectOption('2');
   assert.equal(
     await application.getByRole('button', { name: '검토한 변경 적용', exact: true }).isDisabled(),
     true,

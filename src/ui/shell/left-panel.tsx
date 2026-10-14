@@ -130,7 +130,7 @@ export const LeftPanel = memo(function LeftPanel() {
         >
           <div className="card-head">
             <h3 className="panel-heading">연결 파일</h3>
-            <select id="host-target" className="visually-hidden" aria-label="작업 호스트">
+            <select id="host-target" className="visually-hidden" aria-label="작업 프로그램">
               <option value="rhino">Rhino · 3D</option>
               <option value="zwcad">ZWCAD · 도면</option>
             </select>
@@ -139,7 +139,7 @@ export const LeftPanel = memo(function LeftPanel() {
           <button
             id="import-model"
             className="link-button"
-            title="열린 호스트 대신 3DM·DWG 파일을 작업 사본으로 엽니다"
+            title="열린 Rhino·ZWCAD 대신 3DM·DWG 파일을 작업 사본으로 엽니다"
           >
             파일에서 열기 · 3DM/DWG
           </button>

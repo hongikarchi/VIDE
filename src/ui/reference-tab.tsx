@@ -586,7 +586,7 @@ function Editor({
           </button>
           <p>
             {!ai
-              ? '작성기에서 AI 모델을 고르세요.'
+              ? '요청 입력칸에서 AI 모델을 고르세요.'
               : !ai.images
                 ? NO_IMAGES + '. 이미지를 읽는 모델을 고르세요.'
                 : `지금 대화 · ${ai.name}에 이미지와 영역 ${effectiveRegions(regions).length}개를 보냅니다. 답이 오면 말풍선으로 보입니다.`}

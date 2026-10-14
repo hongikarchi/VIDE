@@ -27,7 +27,7 @@ import { isFileLink, type DocumentLink, type DocumentLinks } from '../core/docum
 import type { Workspace } from '../core/workspace.ts';
 import { JigStore } from '../core/jig-store.ts';
 import { layersOf, type ReadModel } from '../jigs/runtime/runtime.ts';
-import { readClassifiedModel } from '../jigs/official/compliance-kit/read-model.ts';
+import { readClassifiedModelSliced } from '../jigs/official/compliance-kit/read-model.ts';
 import {
   checkComplianceRoles,
   complianceRolesRequest,
@@ -230,7 +230,9 @@ export async function complianceRoutes(
     if (input.instanceId) {
       const rt = runtimeOf(ctx);
       const kept = await keptDocument(ctx, projectId, input.instanceId);
-      hashes = kept ? hashesOf(rt.readModel(input.instanceId, kept.readId).model) : undefined;
+      hashes = kept
+        ? hashesOf((await rt.readModelAsync(input.instanceId, kept.readId)).model)
+        : undefined;
     }
     send(
       200,
@@ -377,7 +379,8 @@ export async function readForCheck(
     .map((row) => String(row.nativeId))
     .filter((nativeId) => !visible.has(nativeId.toLowerCase()));
   const tRecord = performance.now();
-  const record = rt.recordRead(projectId, input.instanceId, {
+  // T-274: the raw model is compressed and written off the event loop.
+  const record = await rt.recordReadAsync(projectId, input.instanceId, {
     linkId: full.linkId,
     revisionKey: full.revisionKey,
     layers: [],
@@ -389,7 +392,8 @@ export async function readForCheck(
   const documentKey = full.linkId;
   const rolesVersion = ctx.roles.version(projectId);
   const source = (full.model.sourceDocument ?? {}) as { units?: unknown };
-  const out = readClassifiedModel({
+  // T-274: the row analysis gives the event loop back every ~50 ms (identical output).
+  const out = await readClassifiedModelSliced({
     rows: (full.model.scene ?? []) as Record<string, unknown>[],
     layers: Array.isArray(full.model.layers)
       ? (full.model.layers as { fullPath: string; visible: boolean }[])
@@ -424,6 +428,8 @@ export async function readForCheck(
     hiddenMs: Math.round(tRecord - tRead),
     recordMs: Math.round(tClassify - tRecord),
     classifyMs: Math.round(tKeep - tClassify),
+    classifySliceMs: Math.round(out.longestSliceMs),
+    classifyYields: out.yields,
     keepMs: Math.round(tEnd - tKeep),
     ms: Math.round(tEnd - t0),
     rssMb: Math.round(process.memoryUsage().rss / 1048576),
@@ -561,8 +567,8 @@ async function propose(
   if (!kept) throw new DomainError('COMPLIANCE_NOT_READ');
   const model = kept.model as ClassifiedModel;
   if (model.source.toMeters === null) throw new DomainError('COMPLIANCE_UNITS_UNKNOWN');
-  const raw = runtimeOf(ctx).readModel(input.instanceId, kept.readId).model;
-  const { facts } = readClassifiedModel({
+  const raw = (await runtimeOf(ctx).readModelAsync(input.instanceId, kept.readId)).model;
+  const { facts } = await readClassifiedModelSliced({
     rows: (raw.scene ?? []) as Record<string, unknown>[],
     source: model.source,
     units: 'meters',

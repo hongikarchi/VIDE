@@ -147,9 +147,9 @@ try {
   engineSync = { state: 'idle' };
   const row = page.locator('.link-row[data-link-id="link-a"]');
   await page.waitForFunction(
-    () => !window.document.querySelector('.link-row')?.textContent.includes('Sync 전'),
+    () => !window.document.querySelector('.link-row')?.textContent.includes('동기화 전'),
   );
-  assert.match(await row.textContent(), /Live · Sync/);
+  assert.match(await row.textContent(), /Live · 동기화/);
   await page.waitForFunction(
     () => !window.document.querySelector('#viewport-empty').checkVisibility(),
   );
@@ -213,7 +213,7 @@ try {
   // A closed file stays listed with its last Sync; forced Sync needs the open file.
   connected = false;
   await page.waitForFunction(() => window.document.querySelector('.link-sync').disabled);
-  assert.match(await row.textContent(), /닫힘 · Sync/);
+  assert.match(await row.textContent(), /닫힘 · 동기화/);
   assert.deepEqual(errors, []);
   await page.screenshot({ path: join(directory, 'attached-sync.png') });
   console.log(

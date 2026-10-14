@@ -52,7 +52,7 @@ export interface Brief {
 
 /** Labels in the words of the screen; the manifest kinds go to the AI in brackets. */
 export const INPUTS: readonly { key: BriefInput; label: string; kind: string }[] = [
-  { key: 'layers', label: '호스트 레이어', kind: 'sync-layers' },
+  { key: 'layers', label: 'Rhino·CAD 레이어', kind: 'sync-layers' },
   { key: 'assembly', label: '역할별로 모으는 입력', kind: 'assembly' },
   { key: 'zone', label: '사람이 그리는 구역', kind: 'zone' },
   { key: 'table', label: '표 파일', kind: 'table-file' },

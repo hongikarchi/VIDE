@@ -127,6 +127,15 @@ function engine(initial = {}) {
   const result = () => {
     const r = complianceFixture();
     r.inputs.model.rolesVersion = state.rolesVersion;
+    // T-296 (R4 R1-C): the site model work copy never computed — the check keeps it with no
+    // fingerprint and the epoch for its time (compliance-kit check-step `refOf`).
+    if (state.siteUncomputed)
+      r.inputs.siteModel = {
+        instanceId: 'site-1',
+        title: '사이트 모델링 작업본 1',
+        hash: '',
+        at: '1970-01-01T00:00:00.000Z',
+      };
     return r;
   };
   const source = (key, jig, instanceId, title) => ({
@@ -217,6 +226,15 @@ function engine(initial = {}) {
         ready: false,
         reason: '앞 jig의 작업본이 없습니다',
       });
+    if (out && out[1] === 'siteModel' && state.siteUncomputed) {
+      const site = source('siteModel', 'vide/site-model', 'site-1', '사이트 모델링 작업본 1');
+      return json({
+        ...site,
+        current: { ...site.current, status: 'pending', at: null, hash: null },
+        ready: false,
+        reason: '앞 작업본에서 아직 계산하지 않았습니다',
+      });
+    }
     if (out)
       return json(
         out[1] === 'limits'
@@ -789,6 +807,25 @@ try {
     );
     await panel.locator('[data-check-button="top"]').waitFor();
     assert.equal(fake.state.rolesWithoutKey, 0);
+    assert.deepEqual(errors, []);
+    await page.close();
+  }
+
+  // ── T-296 (R4 R1-C): a site model work copy not computed — no '다시 체크 필요' right after the
+  // check, and its time reads '계산 전', never 1970 ─────────────────────────────────────────────
+  {
+    const { page, panel, errors } = await open(browser, { engine: { siteUncomputed: true } });
+    await panel.locator('[data-check-button="top"]').click();
+    await panel.getByRole('table', { name: '법규 체크 결과' }).waitFor();
+    // The source reads come back after the run: give them time, then the band must not be there.
+    await page.waitForTimeout(500);
+    assert.equal(await panel.locator('[data-stale-band]').count(), 0, 'no band right after');
+    const drawer = panel.locator('.cmp-drawer');
+    await drawer.getByRole('tab', { name: /^입력/ }).click();
+    const inputs = drawer.getByRole('table', { name: '입력' });
+    await inputs.waitFor();
+    assert.match(await inputs.textContent(), /사이트 모델링 작업본 1 · 계산 전/);
+    assert.doesNotMatch(await inputs.textContent(), /1970/);
     assert.deepEqual(errors, []);
     await page.close();
   }

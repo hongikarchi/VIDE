@@ -121,7 +121,7 @@ export function renderReport(
 <h2>작업 요청</h2><p>${escape(request.input.body)}</p><p>${escape(context)}</p><h2>검토 화면</h2><img src="${image}" alt="해당 후보의 3D 뷰포트">${unsupported.length ? `<small>3D 표시 미지원 ${unsupported.length}개 (${escape([...new Set(unsupported)].join(', '))}). 표와 파일의 객체 목록은 별도입니다.</small>` : ''}<h2>결과</h2><p>${escape(request.result.text)}</p>
 <h2>호스트 측정값</h2><p>${escape(filter)} · ${table.rows.length}개</p>${groups}<table><thead><tr><th>객체</th><th>유형</th><th>레이어</th><th>길이(m)</th><th>기하 면적(m²)</th><th>체적(m³)</th></tr></thead><tbody>${rows}</tbody></table>
 <p>입체의 기하 면적은 표면적이며 건축면적·연면적을 뜻하지 않습니다. 닫힌 평면 곡선은 경계 면적입니다. —는 미측정입니다.</p>
-<small>${escape(state)}. 네이티브 파일 저장·재열기 검증: ${request.result.verified ? '통과' : '미확인'}.</small></html>`;
+<small>${escape(state)}. 네이티브 파일 저장 확인: ${request.result.verified ? '통과' : '미확인'}.</small></html>`;
 }
 
 // --- jig study report (SPEC-07.11, ARCH-03 §5.2, PLAN-22 T-057) ---------------------------------
