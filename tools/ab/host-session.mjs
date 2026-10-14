@@ -62,18 +62,23 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const REG =
   'HKCU\\Software\\McNeel\\Rhinoceros\\8.0\\Plug-ins\\6bde756c-cb1f-45bc-90fa-784c098c2c38\\PlugIn';
-const INSTALLED = join(
-  process.env.LOCALAPPDATA ?? '',
-  'VIDE',
-  'plugins',
-  'rhino',
-  '0.2.31-9d050376',
-  'VIDE.Worker.rhp',
-);
 async function registered() {
   const { stdout } = await exec('reg', ['query', REG, '/v', 'FileName'], { windowsHide: true });
   return /FileName\s+REG_SZ\s+(.+)/.exec(stdout)?.[1].trim() ?? null;
 }
+// The installed plugin the person's Rhino loads: whatever the registry names now, before the DEV
+// plugin is loaded (a fixed version here once restored a release that was no longer installed).
+const INSTALLED = noHost ? null : await registered().catch(() => null);
+const installedRoot = join(process.env.LOCALAPPDATA ?? '', 'VIDE', 'plugins', 'rhino');
+if (
+  !noHost &&
+  (!INSTALLED ||
+    relative(installedRoot, INSTALLED).startsWith('..') ||
+    !existsSync(INSTALLED))
+)
+  throw new Error(
+    `The registered VIDE plugin (${INSTALLED}) is not an installed release under ${installedRoot}; restore it first (POST /api/v1/connectors/rhino8/install on the installed engine).`,
+  );
 
 // Refuse when a Rhino or ZWCAD already runs: the person may be working.
 const { stdout: tasks } = await exec('tasklist', ['/FO', 'CSV', '/NH'], { windowsHide: true });
@@ -131,6 +136,7 @@ async function stop(reason) {
   log('STOP ' + reason);
   await app?.close().catch((e) => log('engine close: ' + e));
   await host?.stop().catch((e) => log('host stop: ' + e));
+  if (!INSTALLED) return; // --no-host: no Rhino, no plugin registry to restore.
   let name = await registered().catch(() => null);
   if (name && name.toLowerCase() !== INSTALLED.toLowerCase()) {
     log(`registry points at ${name}; restoring the installed plugin`);

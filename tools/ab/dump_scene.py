@@ -18,12 +18,28 @@ def b64(text):
     return base64.b64encode((text or '').encode('utf-8')).decode('ascii')
 
 
+def hexColor(color):
+    return '#%02x%02x%02x' % (color.R, color.G, color.B)
+
+
+def material(obj):
+    try:
+        mat = obj.GetMaterial(True)
+        return hexColor(mat.DiffuseColor) if mat else None
+    except Exception:
+        return None
+
+
 rows = []
 for obj in doc.Objects.GetObjectList(Rhino.DocObjects.ObjectEnumeratorSettings()):
     box = obj.Geometry.GetBoundingBox(True)
     if not box.IsValid:
         continue
     rows.append({
+        # Effective colours, so a colour-only change counts as modified (checks.mjs diff); a dump
+        # compared with an older one without these fields must use a before dump of the same kind.
+        'displayColor': hexColor(obj.Attributes.DrawColor(doc)),
+        'materialColor': material(obj),
         'id': str(obj.Id),
         'name64': b64(obj.Attributes.Name),
         'layer64': b64(doc.Layers[obj.Attributes.LayerIndex].FullPath),

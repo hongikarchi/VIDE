@@ -121,6 +121,27 @@
           "max": 0
         }
       ]
+    },
+    {
+      "id": "R1-COLOR",
+      "title": "기둥 색 변경",
+      "body": "이 기둥 빨간색으로 바꿔줘",
+      "pin": {
+        "layer": "S-COLUMN",
+        "role": "target"
+      },
+      "note": "PLAN-51 T-012 baseline: A pins the S-COLUMN object (C-PIN); B starts with C-PIN selected in Rhino.",
+      "expect": "The pinned S-COLUMN column changes colour (modified >= 1), nothing removed.",
+      "checks": [
+        {
+          "type": "modifiedMin",
+          "min": 1
+        },
+        {
+          "type": "removedMax",
+          "max": 0
+        }
+      ]
     }
   ]
 }

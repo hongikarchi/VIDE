@@ -19,6 +19,7 @@
 //     [--provider claude-cli|codex-cli] [--model <id>] [--effort <level>] [--fresh-project]
 //     [--only R1,R3] [--chain] [--timeout 900] [--scale auto|<n>] [--out <dir>] [--dry-run]
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -123,7 +124,12 @@ if (args.launch && !args.logs)
   throw new Error("--launch needs --logs <that engine's data>/logs (stages, exits and route lines are read there).");
 const launchFile = args['launch-file'] ? resolve(args['launch-file']) : null;
 const launch = new URL(args.launch ?? JSON.parse(await readFile(launchFile, 'utf8')).url);
-const logsDir = resolve(args.logs ?? join(dirname(launchFile), 'logs'));
+// host-session.mjs writes launch.json in <dir> and the engine logs in <dir>/data/logs.
+const besideLaunch = launchFile ? join(dirname(launchFile), 'logs') : null;
+const inData = launchFile ? join(dirname(launchFile), 'data', 'logs') : null;
+const logsDir = resolve(
+  args.logs ?? (besideLaunch && !existsSync(besideLaunch) && existsSync(inData) ? inData : besideLaunch),
+);
 const identity = identifyEngine({
   origin: launch.origin,
   launchFile,
