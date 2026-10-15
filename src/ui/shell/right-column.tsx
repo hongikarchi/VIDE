@@ -13,6 +13,7 @@ import { Composer } from './composer.tsx';
 import { PartBoundary } from './part-boundary.tsx';
 import { RouteCard } from './route-card.tsx';
 import { AgendaHelper } from './agenda-helper.tsx';
+import { ProposalCards } from '../proposal-card.tsx';
 
 /** Filled and shown by the panel-mode start; React never redraws these containers. */
 const PanelTop = memo(function PanelTop() {
@@ -156,6 +157,8 @@ export const RightColumn = memo(function RightColumn() {
         <AgendaHelper />
         <ConversationChips />
         <MakeSide />
+        {/* 갱신 제안 카드 (Design SCR-47): the request cards' place, at the top of the work list. */}
+        <ProposalCards />
         <RecentSection />
         {'\n'}
         <QuestionCards />

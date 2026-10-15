@@ -13,7 +13,8 @@ import { z } from 'zod';
 import { DomainError } from '../core/store.ts';
 import type { Workspace } from '../core/workspace.ts';
 import { JigStore } from '../core/jig-store.ts';
-import { JigInvalidError } from '../jigs/runtime/loader.ts';
+import { JigInvalidError, readManifestFile } from '../jigs/runtime/loader.ts';
+import { SpecRefusedError, assertSpec, specStatuses } from '../jigs/runtime/spec-check.ts';
 import { validateDraftDir } from '../jigs/runtime/drafts.ts';
 import type { JigSource } from '../jigs/runtime/manifest.ts';
 import { packJig, validateJig } from '../jigs/runtime/pack.ts';
@@ -50,6 +51,7 @@ export const jigSubmitStatuses: Record<string, number> = {
   JIG_PACK_INVALID: 422,
   JIG_SUBMIT_FAILED: 502,
   UPLOADS_DISABLED: 503,
+  ...specStatuses,
 };
 
 const note = z.string().max(NOTE_MAX).optional();
@@ -93,6 +95,9 @@ async function packFor(
     const report = await validateJig(dir, { source });
     if (!report.ok) throw new JigInvalidError(report.issues);
   }
+  // The pack carries the spec (README.md is a package file); none, or one that differs from
+  // jig.json, is not sent (SPEC-07.19 2·3).
+  assertSpec(dir, readManifestFile(dir) as Record<string, unknown>);
   return packJig(dir, { dataDir: dataDirectory, bundle: false, skipTests: true, source });
 }
 
@@ -149,6 +154,10 @@ export async function jigSubmitRoutes(
   } catch (error) {
     if (error instanceof JigInvalidError) {
       send(422, { code: 'JIG_INVALID', issues: error.issues });
+      return true;
+    }
+    if (error instanceof SpecRefusedError) {
+      send(409, error.body());
       return true;
     }
     throw error;

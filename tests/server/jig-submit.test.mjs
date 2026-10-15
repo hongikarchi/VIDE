@@ -101,6 +101,31 @@ test('a draft is packed and sent only on a confirmed request from this PC (T-201
   );
   assert.equal(site.uploads.length, 0, 'nothing went out before the confirmed request');
 
+  // No 명세, nothing sent (SPEC-07.19 3, PLAN-54 T-353); [명세 고치기] writes it from jig.json.
+  const missing = await submit('POST', { ...body, confirm: true });
+  assert.equal(missing.status, 409);
+  assert.equal(missing.data.code, 'SPEC_MISSING');
+  assert.equal(site.uploads.length, 0);
+  await make('POST', `/api/v1/projects/${project.id}/jig-drafts/${draft.id}/spec/regenerate`);
+  // A spec that differs from jig.json is not sent either, with what differs and the two choices.
+  const readme = readFileSync(join(draft.path, 'README.md'), 'utf8');
+  writeFileSync(
+    join(draft.path, 'README.md'),
+    readme.replace('| 개수 (`count`) | EA | 3 |', '| 개수 (`count`) | EA | 5 |'),
+  );
+  const differs = await submit('POST', { ...body, confirm: true });
+  assert.equal(differs.status, 409);
+  assert.equal(differs.data.code, 'SPEC_MISMATCH');
+  assert.deepEqual(
+    differs.data.differences.map((d) => [d.section, d.field, d.item]),
+    [['④', 'default', '개수']],
+  );
+  assert.deepEqual(
+    differs.data.choices.map((c) => c.label),
+    ['명세대로 다시 만들기', '명세 고치기'],
+  );
+  writeFileSync(join(draft.path, 'README.md'), readme);
+
   const sent = await submit('POST', { ...body, confirm: true });
   assert.equal(sent.status, 201, JSON.stringify(sent.data));
   assert.equal(site.uploads.length, 1);
@@ -116,6 +141,7 @@ test('a draft is packed and sent only on a confirmed request from this PC (T-201
   assert.equal(pack.version, meta.version);
   assert.ok(pack.sig?.mac, "signed with this PC's key");
   assert.ok(pack.files['jig.json']);
+  assert.ok(pack.files['README.md'], 'the pack carries the 명세 (SPEC-07.19 2)');
   assert.ok(!Object.keys(pack.files).some((p) => p.startsWith('dist/')), 'no bundle');
   const entries = Object.entries(pack.files).map(([path, data]) => ({
     path,

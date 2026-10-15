@@ -38,12 +38,21 @@ export function ChartLinks({
   placed,
   styles,
   state,
+  onPick,
+  pickable,
+  marked,
 }: {
   links: readonly ChartLink[];
   placed: ReadonlyMap<string, PlacedItem>;
   styles: Record<string, LinkStyle>;
   /** 'on' (in the chosen chain), 'dim' (outside it), 'later' (after the cursor) or 'base'. */
   state: (link: ChartLink) => 'on' | 'dim' | 'later' | 'base';
+  /** Links that can be pressed (a wide invisible hit line is drawn over them). */
+  onPick?: ((link: ChartLink) => void) | undefined;
+  /** Which links `onPick` takes (all when omitted). */
+  pickable?: ((link: ChartLink) => boolean) | undefined;
+  /** Drawn marked (e.g. a designated 동기화 쌍); the same colour, a heavier line. */
+  marked?: ((link: ChartLink) => boolean) | undefined;
 }) {
   return (
     <g className="chart-links">
@@ -57,17 +66,36 @@ export function ChartLinks({
         const d = same
           ? `M${from.x},${from.y - 6} L${to.x},${to.y + 6}`
           : `M${from.x},${from.y} C${(from.x + to.x) / 2},${from.y} ${(from.x + to.x) / 2},${to.y} ${to.x},${to.y}`;
-        return (
+        const isMarked = marked?.(link) ?? false;
+        const line = (
           <path
             key={`${link.kind}-${link.from}-${link.to}-${index}`}
-            className={`chart-link chart-link-${state(link)}${style.faint ? ' chart-link-faint' : ''}`}
+            className={`chart-link chart-link-${state(link)}${style.faint ? ' chart-link-faint' : ''}${isMarked ? ' chart-link-marked' : ''}`}
             data-kind={link.kind}
             d={d}
             fill="none"
-            strokeWidth={style.width}
+            strokeWidth={isMarked ? style.width * 1.6 : style.width}
             strokeDasharray={style.dash}
             markerEnd={style.arrow ? `url(#${ARROW_ID})` : undefined}
           />
+        );
+        if (!onPick || !(pickable?.(link) ?? true)) return line;
+        return (
+          <g key={`${link.kind}-${link.from}-${link.to}-${index}`}>
+            {line}
+            <path
+              className="chart-link-hit"
+              data-kind={link.kind}
+              d={d}
+              fill="none"
+              stroke="transparent"
+              strokeWidth={10}
+              onClick={(event) => {
+                event.stopPropagation();
+                onPick(link);
+              }}
+            />
+          </g>
         );
       })}
     </g>

@@ -246,7 +246,10 @@ export async function notesRoute(
   if (path.length === 1 && method === 'PATCH') {
     const input = await body(request);
     const title = titleOf(input.title, row.title);
-    const kind = row.kind === 'journal' ? 'journal' : kindOf(input.kind, row.kind);
+    // A journal and a meeting keep their kind, and no note becomes either (SPEC-10.9 1).
+    const fixed = row.kind === 'journal' || row.kind === 'meeting';
+    const kind = fixed ? row.kind : kindOf(input.kind, row.kind);
+    if (kind !== row.kind && kind === 'meeting') throw new HttpError(400, 'INVALID_KIND');
     await db
       .prepare('UPDATE notes SET title=?,kind=?,updated_at=?,updated_by=? WHERE id=?')
       .bind(title, kind, Date.now(), user, row.id)

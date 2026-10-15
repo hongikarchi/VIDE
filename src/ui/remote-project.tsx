@@ -331,7 +331,11 @@ function RemoteProject({
                     <li key={note.id}>
                       {note.title.trim() || '제목 없음'}
                       {/* One kind on screen (SPEC-10.2): only a journal is marked. */}
-                      {note.kind === 'journal' ? <small> · 퇴근 기록</small> : null}
+                      {note.kind === 'journal' ? (
+                        <small> · 퇴근 기록</small>
+                      ) : note.kind === 'meeting' ? (
+                        <small> · 회의록</small>
+                      ) : null}
                     </li>
                   ))}
                 </ul>

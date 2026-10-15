@@ -3,8 +3,10 @@ import * as Y from 'yjs';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import { fromBase64, toBase64 } from '../contracts/note-sync.ts';
 import { api } from './gateway.ts';
+import { ScheduleView } from './notes-schedule.tsx';
 import {
   NotesWorkspace,
+  type FolderCopy,
   type NoteItem,
   type NoteLinkStatus,
   type NotesBackend,
@@ -31,7 +33,30 @@ function backendFor(projectId: string): NotesBackend & { setUser(name: string): 
       if (value.user) backend.user = value.user;
       return value;
     },
-    create: async () => (await api(base, 'POST', { kind: 'note' })) as NoteItem,
+    create: async (input: { kind?: 'note' | 'meeting'; title?: string } = {}) =>
+      (await api(base, 'POST', { kind: 'note', ...input })) as NoteItem,
+    // 작업 폴더 사본의 상태와 [버리기] (SPEC-10.10 3·4); 작업 폴더가 없으면 표시 없음.
+    folderCopies: async () =>
+      (
+        (await api(
+          `/projects/${encodeURIComponent(projectId)}/workspace/folder-copies`,
+          'GET',
+          undefined,
+          {
+            quiet: ['NO_WORKSPACE'],
+          },
+        )) as { copies: FolderCopy[] }
+      ).copies,
+    discardCopy: async (key: string) => {
+      await api(
+        `/projects/${encodeURIComponent(projectId)}/workspace/folder-copies/discard`,
+        'POST',
+        {
+          key,
+        },
+      );
+    },
+    schedule: () => <ScheduleView projectId={projectId} />,
     update: async (id: string, input: object) =>
       (await api(`${base}/${id}`, 'PUT', input)) as NoteItem,
     remove: async (id: string) => {

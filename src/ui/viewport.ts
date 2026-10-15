@@ -108,6 +108,8 @@ export type OverlayTone =
   | 'warn'
   | 'ng'
   | 'na'
+  /** The selection accent (갱신 제안 겹쳐 보기, Design SCR-47). */
+  | 'accent'
   | OverlayCategory;
 /** The categorical order of overlay colours (`--ov-cat-1`…`12`, e.g. 패널 타입, SPEC-16.8). */
 export type OverlayCategory = `ov-cat-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12}`;

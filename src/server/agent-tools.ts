@@ -2317,7 +2317,11 @@ export function conversationSources(
     requestId,
     ledger,
     openLinks,
-  }: Pick<ConversationToolSources, 'requestId' | 'ledger' | 'openLinks'> = {},
+    turnStart = false,
+  }: Pick<ConversationToolSources, 'requestId' | 'ledger' | 'openLinks'> & {
+    /** A make turn starts here: what a person changed in the spec is noted (T-353). */
+    turnStart?: boolean;
+  } = {},
 ): ConversationToolSources {
   const data = workspace.store.dataDirectory();
   return {
@@ -2351,6 +2355,7 @@ export function conversationSources(
       ? {
           draft: draftOf(workspace, data, conversation.projectId, conversation.draftId, {
             turns: turnCount(workspace, conversation.projectId, conversation.id),
+            turnStart,
           }),
         }
       : {}),
@@ -2500,14 +2505,17 @@ function draftOf(
   dataDirectory: string,
   projectId: string,
   draftId: string,
-  { turns = 1 }: { turns?: number } = {},
+  { turns = 1, turnStart = false }: { turns?: number; turnStart?: boolean } = {},
 ) {
   const drafts = draftsFor(workspace, dataDirectory);
   try {
     const draft = drafts.get(projectId, draftId);
-    return draft.state === 'open'
-      ? { draftId, dir: draft.path, drafts, guard: new MakeTurnGuard(turns) }
-      : undefined;
+    if (draft.state !== 'open') return undefined;
+    // What a person changed in the spec since the last turn is kept from this turn (T-353).
+    // Only at the turn's start: an input card answered mid-turn must not take the AI's edits
+    // for a person's.
+    if (turnStart) drafts.specTurnStart(projectId, draftId);
+    return { draftId, dir: draft.path, drafts, guard: new MakeTurnGuard(turns) };
   } catch {
     return undefined;
   }

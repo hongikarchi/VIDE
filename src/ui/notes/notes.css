@@ -369,3 +369,64 @@
 .notes-workspace .ProseMirror-hideselection {
   caret-color: transparent;
 }
+
+/* 폴더 사본의 상태 (SPEC-10.10 3·4, Design SCR-23): a small mark on the row, one line under the
+   head of the open note. Warning colour and a subtle background only — no side bar. */
+.notes-folder {
+  font-size: 11px;
+  color: var(--n-muted);
+  flex: none;
+}
+.notes-folder.changed {
+  color: var(--warn, #a8660b);
+}
+.note-folder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border-radius: var(--n-radius);
+  color: var(--n-muted);
+  font-size: var(--fs-sm, 12px);
+}
+.note-folder.changed {
+  background: var(--warn-subtle, #fdf3e3);
+  color: var(--warn, #a8660b);
+}
+.note-folder-text {
+  flex: 1 1 260px;
+}
+.note-folder-ask {
+  color: var(--text-1, inherit);
+}
+.note-folder button {
+  border: 1px solid var(--n-line);
+  background: transparent;
+  border-radius: var(--n-radius);
+  padding: 3px 9px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.note-folder button:hover {
+  background: var(--n-hover);
+}
+/* 일정 (SPEC-10.9 4): the pinned first row and the month calendar in the editor's place. */
+.notes-pinned {
+  border-bottom: 1px solid var(--n-line);
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+}
+.notes-schedule-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+}
+.notes-schedule-title {
+  margin: 0;
+  font-weight: 600;
+}

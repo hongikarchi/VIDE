@@ -19,7 +19,7 @@ import { DrawingJig } from './drawing-backflow.tsx';
 import { JigIconMark, legacyJigIcon, noteJigIcon } from './jig-icons.ts';
 import { behindCard, listedTools, openDrafts, type PinnedRow } from './jig-list.ts';
 import { createDraft, listDrafts, type DraftSummary } from './make-api.ts';
-import { DraftCard, ImportJig, MakeCard, openDraft } from './make-tab.tsx';
+import { DraftCard, ImportJig, MakeCard, SpecMissingBadge, openDraft } from './make-tab.tsx';
 import type { Point3 } from './model.ts';
 import { openSkill } from './skill-start.ts';
 import { StructureJig } from './structure-jig.tsx';
@@ -812,9 +812,20 @@ const packageSchema = z
     icon: z.string().optional(),
     /** False when a copy could not run in the compute box (steps import outside the jig; T-101). */
     forkable: z.boolean().optional(),
+    /** No 명세 or a fixed section missing (SPEC-07.2 명세 규칙 2): the '명세 없음' badge. */
+    specMissing: z.boolean().optional(),
+    /** ① 목적's first paragraph, the card's description before `summary` (Design SCR-18). */
+    purpose: z.string().optional(),
   })
   .passthrough();
 type Package = z.infer<typeof packageSchema>;
+/** Built-in screen jigs' 명세 (src/jigs/builtin-specs): 명세 없음 and ① by jig id. */
+const builtinSpecsSchema = z
+  .record(
+    z.string(),
+    z.object({ specMissing: z.boolean(), purpose: z.string().optional() }).passthrough(),
+  )
+  .catch({});
 const instanceRowSchema = z
   .object({
     id: z.string(),
@@ -849,6 +860,7 @@ const when = (iso: string) =>
 function Gallery({ context }: { context: JigContext }) {
   const [legacy, setLegacy] = useState<Jig[]>();
   const [packages, setPackages] = useState<Package[]>([]);
+  const [builtinSpecs, setBuiltinSpecs] = useState<z.infer<typeof builtinSpecsSchema>>({});
   const [pinned, setPinned] = useState<PinnedRow[]>([]);
   const [instances, setInstances] = useState<InstanceRow[]>([]);
   const [drafts, setDrafts] = useState<DraftSummary[]>([]);
@@ -871,10 +883,14 @@ function Gallery({ context }: { context: JigContext }) {
       .then((value) => live && setLegacy(z.array(jigSchema).parse(value)))
       .catch((error: Error) => live && setNotice(error.message));
     void api('/jigs/packages')
-      .then(
-        (value) =>
-          live && setPackages(z.object({ jigs: z.array(packageSchema) }).parse(value).jigs),
-      )
+      .then((value) => {
+        if (!live) return;
+        const read = z
+          .object({ jigs: z.array(packageSchema), builtin: builtinSpecsSchema.optional() })
+          .parse(value);
+        setPackages(read.jigs);
+        setBuiltinSpecs(read.builtin ?? {});
+      })
       .catch(() => undefined);
     void api(`${project}/jigs`)
       .then(
@@ -991,6 +1007,7 @@ function Gallery({ context }: { context: JigContext }) {
           <span className="jig-card-title">
             <JigIconMark icon={entry.icon} />
             <strong>{entry.name}</strong>
+            {entry.specMissing ? <SpecMissingBadge /> : null}
           </span>
           <span className="pill" data-ok={String(!entry.corrupt)}>
             {entry.corrupt ? '열 수 없음' : '사용 가능'}
@@ -999,7 +1016,7 @@ function Gallery({ context }: { context: JigContext }) {
         <p>
           {entry.corrupt
             ? '설치한 뒤 파일이 바뀌어 열 수 없습니다. 다시 가져오세요.'
-            : entry.summary}
+            : (entry.purpose ?? entry.summary)}
         </p>
         <small>
           {stageText[entry.stage]} · 버전 {entry.version}
@@ -1167,12 +1184,19 @@ function Gallery({ context }: { context: JigContext }) {
                       <span className="jig-card-title">
                         <JigIconMark icon={legacyJigIcon(jig.id)} />
                         <strong>{jig.name}</strong>
+                        {/* A built-in jig the engine has no 명세 for is 명세 없음 too (SPEC-07.2). */}
+                        {(builtinSpecs[jig.id]?.specMissing ??
+                        Object.keys(builtinSpecs).length > 0) ? (
+                          <SpecMissingBadge />
+                        ) : null}
                       </span>
                       <span className="pill" data-ok={String(jig.status === 'available')}>
                         {jig.status === 'available' ? '사용 가능' : '준비 중'}
                       </span>
                     </div>
-                    <p>{jig.summary}</p>
+                    <p className="jig-card-purpose">
+                      {builtinSpecs[jig.id]?.purpose ?? jig.summary}
+                    </p>
                     <small>
                       {jig.code} · 입력: {jig.inputs.join(', ')}
                       {jig.basis ? ` · 근거 ${jig.basis}` : ''}

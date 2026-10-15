@@ -80,6 +80,11 @@ export const recordAttachmentsSchema = z
       })
       .optional(),
     objects: z.array(z.string().min(1).max(200)).max(5000).optional(),
+    /** 갱신 제안 (SPEC-05.12 7, ARCH-01 '동기화 쌍과 갱신 제안'): the pair, the card, its rows. */
+    pairId: z.string().min(1).max(200).optional(),
+    proposalId: z.string().min(1).max(200).optional(),
+    rows: z.array(z.string().min(1).max(40)).max(5000).optional(),
+    applyId: z.string().min(1).max(200).optional(),
   })
   .strict();
 export type RecordAttachments = z.infer<typeof recordAttachmentsSchema>;

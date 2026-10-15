@@ -166,6 +166,8 @@ test('pinning installs a read-only ai-draft package and pins it; discarding remo
   const t = setup();
   try {
     const draft = t.drafts.create(t.projectId, { name: 'pin me', from: 'blank' });
+    // A jig is pinned only with its 명세 (T-353): [명세 고치기] writes it from jig.json.
+    t.drafts.regenerateSpec(t.projectId, draft.id);
     const pinned = await t.drafts.pin(t.projectId, draft.id, { version: '0.2.0' });
     assert.equal(pinned.id, 'project/pin-me');
     assert.equal(pinned.version, '0.2.0');
@@ -183,6 +185,7 @@ test('pinning installs a read-only ai-draft package and pins it; discarding remo
     await assert.rejects(t.drafts.pin(t.projectId, draft.id, {}), /DRAFT_NOT_OPEN/);
     // Another draft with the same id and version but different content is refused.
     const other = t.drafts.create(t.projectId, { name: 'pin me', from: 'blank' });
+    t.drafts.regenerateSpec(t.projectId, other.id);
     t.drafts.writeFile(t.projectId, other.id, 'skill.md', '---\nname: x\n---\n\n다름\n');
     await assert.rejects(
       t.drafts.pin(t.projectId, other.id, { version: '0.2.0' }),
@@ -201,6 +204,8 @@ test('[수정하기] copies a pinned jig into a writable draft with the same id 
   const t = setup();
   try {
     const first = t.drafts.create(t.projectId, { name: 'fork me', from: 'blank' });
+    // A jig is pinned only with its 명세 (T-353): [명세 고치기] writes it from jig.json.
+    t.drafts.regenerateSpec(t.projectId, first.id);
     const pinned = await t.drafts.pin(t.projectId, first.id);
     assert.equal(pinned.version, '0.1.0');
     const jigs = new JigStore(t.store);
@@ -349,6 +354,7 @@ test('a draft file is deleted inside the folder only; empty folders go with it',
     refused('node_modules/x/index.js', 'DRAFT_FORBIDDEN_FILE');
     assert.ok(existsSync(join(t.dir, 'vide.sqlite')));
     // A pinned draft is closed to changes.
+    t.drafts.regenerateSpec(t.projectId, draft.id);
     await t.drafts.pin(t.projectId, draft.id, {});
     refused('skill.md', 'DRAFT_NOT_OPEN');
   } finally {
@@ -363,6 +369,7 @@ test('the pin drops step files left empty and named by no step', async () => {
     t.drafts.writeFile(t.projectId, draft.id, 'steps/old.ts', '  \n');
     t.drafts.writeFile(t.projectId, draft.id, 'steps/kept.ts', 'export const k = 1;\n');
     assert.equal((await t.drafts.validate(t.projectId, draft.id)).ok, true);
+    t.drafts.regenerateSpec(t.projectId, draft.id);
     const pinned = await t.drafts.pin(t.projectId, draft.id, {});
     assert.ok(!existsSync(join(pinned.path, 'steps', 'old.ts')));
     assert.ok(existsSync(join(pinned.path, 'steps', 'kept.ts')));

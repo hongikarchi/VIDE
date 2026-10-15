@@ -34,6 +34,10 @@ import {
 } from './workspace-map-api.ts';
 import { MAP_LINK_KINDS, type MapLinkKind, type MapRole } from '../contracts/workspace-map.ts';
 import { setWorkspace } from './workspaces.ts';
+import { statusState } from './store/status.ts';
+import { useStore } from './store/core.ts';
+import { pairOf } from './sync-pairs-api.ts';
+import { SyncPairStrip, useSyncPairs } from './sync-pair-strip.tsx';
 import './files-tab.css';
 
 type View = 'list' | 'map';
@@ -177,11 +181,13 @@ function FileList({
 }
 
 function FileMap({
+  projectId,
   map,
   selected,
   onSelect,
   onList,
 }: {
+  projectId: string;
   map: WorkspaceMap;
   selected: string[];
   onSelect: (ids: string[]) => void;
@@ -191,6 +197,10 @@ function FileMap({
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [width, setWidth] = useState(720);
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | undefined>();
+  // 동기화 쌍 (Design SCR-47): the Rhino↔CAD Sync line pressed, and the project's designated pairs.
+  const [pickedLink, setPickedLink] = useState<{ from: string; to: string } | undefined>();
+  const { pairs, reload: reloadPairs } = useSyncPairs(projectId);
+  const remote = useStore(statusState, (slice) => slice.remote);
   const frame = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const element = frame.current;
@@ -349,6 +359,17 @@ function FileMap({
           </ul>
         </details>
       </div>
+      {pickedLink && nodeById.get(pickedLink.from) && nodeById.get(pickedLink.to) ? (
+        <SyncPairStrip
+          projectId={projectId}
+          model={nodeById.get(pickedLink.from)!}
+          drawing={nodeById.get(pickedLink.to)!}
+          pairs={pairs}
+          remote={remote}
+          onChanged={() => void reloadPairs()}
+          onClose={() => setPickedLink(undefined)}
+        />
+      ) : null}
       <div className="files-map-body" onMouseLeave={() => setTip(undefined)}>
         <div className="files-map-names" style={{ width: NAME_COLUMN }}>
           {layout.rows.map((row) => (
@@ -405,6 +426,12 @@ function FileMap({
             placed={layout.items}
             styles={LINK_STYLES}
             state={linkState}
+            pickable={(link) => link.kind === 'sync-pair'}
+            onPick={(link) => setPickedLink({ from: link.from, to: link.to })}
+            marked={(link) =>
+              link.kind === 'sync-pair' &&
+              !!pairOf(pairs, nodeById.get(link.from)?.path, nodeById.get(link.to)?.path)
+            }
           />
           {model.milestones.map((milestone, index) => {
             const placed = milestone.items
@@ -576,6 +603,7 @@ function FilesTab({ projectId }: { projectId: string }) {
         />
       ) : (
         <FileMap
+          projectId={projectId}
           map={map}
           selected={selected}
           onSelect={setSelected}

@@ -2,7 +2,7 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 1.15
+version: 1.17
 updated: 2026-10-15
 owner: agent:claude
 related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, PLAN-45, SPEC-12, RESEARCH-10, RESEARCH-12, SPEC-13, PLAN-46, SPEC-15, PLAN-48, SPEC-16, PLAN-49, PLAN-54]
@@ -53,7 +53,9 @@ related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-
 └─ skill.md              AI 설명서
 ```
 
-`README.md`는 SPEC-07.2 명세 규칙 1의 고정 절을 그 순서대로 2단계 제목(`## `)으로 둔다. 제목 앞의 원문자(①~⑨)로 절을 찾고, 제목 문구는 바뀌어도 된다. 없거나 원문자 절이 빠지면 카탈로그·점검은 '명세 없음'으로 본다. 실행기는 `README.md`를 읽지 않는다(실행 권위는 `jig.json`).
+`README.md`는 SPEC-07.2 명세 규칙 1의 고정 절을 그 순서대로 2단계 제목(`## `)으로 둔다. 제목 줄은 `## ①`~`## ⑨`(원문자 바로 뒤 공백 하나, 그 뒤 절 이름)이고 공식 jig 명세가 이 형식이다. 원문자로 절을 찾고 제목 문구는 바뀌어도 된다. 절 안의 소제목은 3단계(`### `)이며, 다음 `## ` 줄까지가 그 절이다. 파일이 없거나 원문자 절이 하나라도 빠지면(중복도 같음) 카탈로그·점검은 '명세 없음'으로 본다. 실행기는 명세를 실행 권위로 쓰지 않는다(실행 권위는 `jig.json`). 다만 적재기(`loader.ts`)가 `README.md`(64 KB까지)를 읽어 `LoadedJig.spec {state: 'missing'|'mismatch'|'ok', differences, purpose}`로 대조 결과를 들고, 실행기는 이것으로 §11 `spec-match` 경고만 낸다. 읽기·대조는 `src/jigs/spec-readme.ts`(순수)와 `src/jigs/runtime/spec-check.ts`(파일, `packageSpec`·`assertSpec`·`builtinSpec`)다.
+
+**내장 jig의 명세.** 화면 코드로 된 내장 jig(Sync·구조 분석·프로젝트 자료, SPEC-07.2 명세 규칙 6)는 패키지 폴더가 없으므로 명세를 `src/jigs/builtin-specs/<id>.md`(목록 id `sync`·`structure`·`knowledge` → `sync.md` 등)에 같은 절 형식으로 두고 설치본에 포함한다. 카탈로그는 이 파일로 '명세 없음' 여부와 ② 절을 읽고, 등록부 목록 `GET /api/v1/jigs/packages`는 `builtin: {sync|structure|knowledge: {specMissing, purpose?}}`로 싣는다(화면 카드의 설명은 ① 첫 문단). 이 파일이 없는 내장 jig(지금 마감·도면·법규 레거시 카드)는 화면이 '명세 없음'으로 보인다. 사본 불가(SPEC-07.3)는 그대로라 [사본 만들기]·작업 폴더 사본·제출 묶음에 이 파일을 넣지 않으며, 설명서(`jig.json`)가 없으므로 `spec-match`(§11) 대상이 아니다.
 
 `views/`(격리 커스텀 뷰)는 RESEARCH-10 §16 B13 결정 전에는 두지 않는다.
 
@@ -71,6 +73,8 @@ related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-
 |---|---|---|
 | 공식 라이브러리 | `src/jigs/official/<name>/` | 빌드에 포함, 설치본과 함께 갱신 |
 | 공식 작업 jig | `src/jigs/official/jigs/<name>/`(`site-model` T-207, `buildable-mass` T-209) | 빌드에 포함. 등록부가 `jig.json`의 `vide/*` id만 `source: builtin`·`stage: official`로 적재하고(`officialJigRoot`), `vide/*` id는 설치본·저장소 소스보다 먼저 찾는다. 계산 단계는 엔진에서 돈다(§6.1). 화면은 `panel.json`을 페이지 빌드에 함께 묶는다(`declared-jig.tsx`). `npm run jig:validate·jig:test`는 이 폴더를 `builtin`으로 본다 |
+| 내장 jig 명세 | `src/jigs/builtin-specs/<id>.md` | 빌드에 포함. 명세만 두며 사본·제출 대상이 아니다(§2.1) |
+| 초안 명세 기준 | `<data>/jigs/drafts/.results/<draftId>.json`의 `specBase` | 엔진이 마지막으로 쓴(또는 읽은) 명세의 절별 해시. 사람이 폴더에서 고친 절을 찾는 데 쓴다(§5.3) |
 | 프로젝트 jig 소스(개발) | `extensions/jigs/<name>/` | 저장소. 설치본 빌드 제외 |
 | 설치된 버전 | `<data>/jigs/installed/<id>@<version>/` | 읽기 전용, 바꾸지 않음. `id`의 `/`는 `~`로 바꾼 폴더 이름(잠정) |
 | 초안 | `<data>/jigs/drafts/<draftId>/` | 제작 대화의 쓰기 범위. 개발 모드(`.vide/dev-data`는 저장소 안)의 초안 폴더는 저장소 밖에 둔다(잠정, ADR-021 SPIKE) |
@@ -339,7 +343,20 @@ export type Binding = `step.${string}` | `$${string}` | 'params' | `inputs.${str
 | `intent_en` | 문자열(600자) | Jev 판정용 영어 한 줄. 있으면 Jev는 이것을, 없으면 `description`을 읽는다 |
 | `tools`, `limits` | 배열 | 기존 그대로 |
 
-**명세에서 만드는 필드.** `words`·`not_for`·`examples`는 `README.md`의 ② 절(언제 쓰나 / 언제 아니다)에서 만든다(SPEC-07.2 명세 규칙 4). ② 절의 '언제 쓰나' 아래 목록 항목은 `examples`, 그 항목에서 뽑은 판정 낱말은 `words`, '언제 아니다' 아래 목록 항목은 `not_for`가 된다. 명세를 저장하면 엔진이 `skill.md` 앞머리의 이 세 필드만 다시 쓰고 나머지 필드·본문은 두지 않는다. 명세가 없으면 `skill.md`를 손으로 쓴 그대로 읽는다.
+**명세에서 만드는 필드.** `examples`·`words`·`not_for`는 `README.md`의 ② 절에서 만든다(SPEC-07.2 명세 규칙 4). ② 절의 세 소제목과 필드의 대응은 고정이다.
+
+| ② 절의 소제목 | 앞머리 필드 |
+|---|---|
+| `### 언제 쓰나` | `examples` |
+| `### 판정 낱말` | `words` |
+| `### 언제 아니다` | `not_for` |
+
+- 각 소제목 아래 다음 `###`·`##` 줄까지의 목록 항목(`- `·`* `·`1. `로 시작하는 줄)만 읽고, 목록이 아닌 설명 문단은 넣지 않는다. 항목 글은 앞뒤 공백과 Markdown 강조 표시(`**`·`` ` ``)를 빼고 그대로 쓰며, 같은 글이 두 번이면 하나만 남긴다. 소제목 순서는 따지지 않는다.
+- 소제목이 없거나 목록이 비면 그 필드를 앞머리에서 뺀다(`words`가 없으면 SPEC-02.17의 규칙 판정은 `examples`만 쓴다).
+- 명세를 저장하면 엔진이 `skill.md` 앞머리의 이 세 필드만 다시 쓴다. 다른 앞머리 필드와 본문은 손대지 않고, `skill.md`가 없으면 `name`(jig.json `name`)·`description`(① 절 첫 문단, 500자까지)과 세 필드로 새로 만든다.
+- **다시 쓰는 때(구현 2026-10-15).** Claude 만들기 턴은 엔진을 거치지 않고 초안 폴더에 직접 쓰므로, 엔진은 네 시점에 명세를 읽어 `skill.md`를 맞춘다: 초안 만들기(`POST …/jig-drafts {readme?}` — 양식으로 만든 명세를 쓰고 바로 맞춤), 만들기 턴 시작(`specTurnStart`, 사람이 고친 절이 있을 때), 만들기 턴 끝(`makeTurnResult` → `specTurnEnd`, 턴 결과 `makeSpec {changed, history, restored?}`), [명세 고치기](`POST …/jig-drafts/:did/spec/regenerate` → `{draft, kept}`). 공식 jig·내장 jig의 `skill.md`는 저장소 파일이라 엔진이 다시 쓰지 않고, 서버 카탈로그가 읽을 때 ② 값으로 세 필드를 대신한다(공식 jig는 `OFFICIAL_TOOL_ROUTING`의 낱말을 계속 합침).
+- **사람이 고친 절 보호.** 턴 시작 때 지금 README의 절별 해시를 `specBase`(§2.3)와 비교해 다른 절을 '사람이 고친 절'로 기억한다(만들기 턴 시작에서만 — 같은 턴 중 입력 질문 카드 답변은 다시 기억하지 않음). 턴 끝에 AI가 그 절을 사람이 고치기 전의 글로 되돌렸으면 사람 글로 복원하고(`restored`), 다른 글로 고친 것은 받아들인다. [명세 고치기]는 ③~⑦을 `jig.json`으로 다시 쓰되 사람이 고친 절은 남기고(`kept`), 명세가 없거나 절이 빠졌으면 ①은 `jig.json` `summary`, ②는 `skill.md`의 `examples`·`not_for`에서 새로 만든다. 어느 경우나 ⑨에 이력 한 줄을 더한다(⑨가 목록 형식이면 목록으로).
+- 명세가 없으면 `skill.md`를 손으로 쓴 그대로 읽는다. 내장 jig는 `src/jigs/builtin-specs/`의 명세에서 같은 규칙으로 카탈로그 항목을 만든다(`skill.md` 파일은 쓰지 않음).
 
 배열은 한 줄 목록(`[a, b]`)과 블록 목록(`- a`)을, 긴 글은 블록 문자열(`|`·`>`)을 받는다. 형식이 맞지 않는 필드는 빼고 읽는다.
 
@@ -470,7 +487,8 @@ jig·보고서 경로는 `src/server/jig-routes.ts`, 초안 경로(`jig-drafts`)
 | `GET …/:iid/jig-outputs/:key` | — | `jig-output` 입력의 상태(§8.5): `{input, chosen, current, ready, reason, candidates[{instanceId, title, version, at, ready, reason?}], used, stale}`. `current`는 고른 작업본 또는 가장 최근에 계산된 작업본(`{instanceId, title, jig, version, step, status, at, hash, reason?}`), `stale`은 마지막 계산 때 읽은 결과(`used.hash`)와 지금이 다름. 제공자가 주는 입력(법규)은 `service: true`, `chosen: null`, `candidates: []`, `current = {instanceId: '', title: '서비스 결과', jig, step: <output>, status: 'done', at: null, hash}`, `ready: true`이고 `stale`은 같은 비교(T-214 F-8) |
 | `PUT …/:iid/jig-outputs/:key` | `{instanceId: string \| null}` | 앞 작업본 고르기(`null` = 최근 계산된 작업본). 같은 프로젝트의 `from.jig` 작업본만(자기 자신·다른 jig는 422 `INVALID_INPUT`). 그 입력을 읽는 단계가 `stale` |
 | `GET …/:iid/reports/:name` | — | 해석된 보고서(§5.2). 보고용 미리보기 `?tier=public&sections=&title=&as=html`, 응답의 `public` 블록과 `POST …/reports/:name/public`([보고용 만들기]), `GET /api/v1/projects/:id/outputs[/:name/files/:file]`은 ARCH-01 「외부 도메인 서비스」의 보고용 산출물 경로가 소유한다. 보관된 단계 결과·설정값 원장·남은 조건·해석 보기를 읽고, `previewOnly` 결과는 확정으로 쓰지 않는다. 화면이 부품으로 그린다(CSP가 인라인 스타일을 막으므로 HTML을 내려보내지 않음). 일람표 CSV는 표 부품의 `csv`로 화면이 만든다 |
-| `GET·POST /api/v1/projects/:id/jig-drafts` | POST `{name, from?}` 또는 `{from: {jig, version?}}` | 초안 목록·만들기(`from`은 시작 본). 201. `from`이 jig이면 [수정하기](T-101): 등록부에서 그 버전(없으면 이 프로젝트의 고정 버전)을 찾아 `project/` 도구 jig만 사본으로 만든다 — 패키지 파일을 초안 경로 규칙으로 하나씩 복사(`dist/` 묶음과 `derived` 선언은 빼고), id 유지, 버전은 그 id의 설치본·열린 초안·원본 중 가장 높은 것의 패치 +1. 출처 `{jigId, version, name, at}`는 `.results/<did>.json`의 `origin`에 두고 초안 보기에 실린다. 사본은 계산 상자에서 돌므로, 단계 소스(타입을 걷어 낸 본문)의 import가 패키지 파일·공식 라이브러리 밖(저장소 상대 경로·`node:`·꾸러미 이름)으로 가면 `JIG_NOT_FORKABLE`(422)로 거절한다(`drafts.ts` `forkable`, 판단은 상자의 모듈 규칙 `compute-box.ts` `boxImportTarget`과 같음). 등록부 목록(`GET /api/v1/jigs/packages`)의 도구 항목은 같은 판단을 `forkable`로 싣는다. 없는 jig 404, 그 밖 `INVALID_INPUT` |
+| `GET·POST /api/v1/projects/:id/jig-drafts` | POST `{name, from?, readme?}`(`readme`는 [계획 받기] 양식으로 만든 명세, 64 KB까지 — 초안 폴더에 쓰고 `skill.md`를 ②에 맞춤; [수정하기] 사본은 원본 명세를 이어받음) 또는 `{from: {jig, version?}}` | 초안 목록·만들기(`from`은 시작 본). 201. `from`이 jig이면 [수정하기](T-101): 등록부에서 그 버전(없으면 이 프로젝트의 고정 버전)을 찾아 `project/` 도구 jig만 사본으로 만든다 — 패키지 파일을 초안 경로 규칙으로 하나씩 복사(`dist/` 묶음과 `derived` 선언은 빼고), id 유지, 버전은 그 id의 설치본·열린 초안·원본 중 가장 높은 것의 패치 +1. 출처 `{jigId, version, name, at}`는 `.results/<did>.json`의 `origin`에 두고 초안 보기에 실린다. 사본은 계산 상자에서 돌므로, 단계 소스(타입을 걷어 낸 본문)의 import가 패키지 파일·공식 라이브러리 밖(저장소 상대 경로·`node:`·꾸러미 이름)으로 가면 `JIG_NOT_FORKABLE`(422)로 거절한다(`drafts.ts` `forkable`, 판단은 상자의 모듈 규칙 `compute-box.ts` `boxImportTarget`과 같음). 등록부 목록(`GET /api/v1/jigs/packages`)의 도구 항목은 같은 판단을 `forkable`로 싣는다. 없는 jig 404, 그 밖 `INVALID_INPUT` |
+| `POST …/jig-drafts/:did/spec/regenerate` | — | [명세 고치기](T-353): ③~⑦을 `jig.json`으로 다시 쓰고 사람이 고친 절은 남긴 뒤 ⑨에 한 줄을 더한다(§5.3) → `{draft, kept}`. 원격 세션 `FORBIDDEN`. 초안 보기(`DraftView`)에는 `spec {text, updatedAt, state, missing, differences, purpose, editedBy, personAt, history}`가 실린다 |
 | `GET·DELETE …/jig-drafts/:did` | — | 초안 하나. `DELETE`는 버리기: 상태 `discarded`, 초안 폴더와 그 초안에 붙은 만들기 대화의 공급자 기록을 지우고 열린 대화를 닫는다. 엔진이 DELETE를 받는 경로는 이것과 jig 고정 해제(위), 프로젝트 삭제(ARCH-01)뿐이다 |
 | `POST …/jig-drafts/:did/validate·test·preview` | preview `{fixture?}` | 형식 점검·자체 시험·미리보기(계산 상자, §6.5). 마지막 결과는 초안 폴더 밖 `.results/<did>.json`에 둔다 |
 | `PUT …/jig-drafts/:did/icon` | `{icon}` | 열린 초안의 `jig.json` `icon`만 바꾼다(목록 밖 이름 `INVALID_INPUT`, 고정·버린 초안 `DRAFT_NOT_OPEN`). 등록부 항목(`GET /api/v1/jigs/packages`)·작업본 보기(`jig.icon`)·skill 카탈로그가 `icon`을 싣는다. 내장 화면 jig(Sync·구조·자료)의 아이콘은 같은 파일의 `LEGACY_JIG_ICONS` |
@@ -810,7 +828,7 @@ CREATE TABLE IF NOT EXISTS project_roots(projectId TEXT PRIMARY KEY REFERENCES p
 |---|---|---|
 | before-run | `inputs-present`, `units-si`, `stale-input`, `fact-valid` | block(`fact-valid`는 미확정 근거면 warn) |
 | before-run | `inputs-confirmed` | warn(만들기 전에는 block) |
-| 계산·고정·제출 | `spec-match` | warn(작업본 계산) · block(초안 고정·관리자 제출). `README.md`가 있는 jig만. 대조 항목: ③ 입력 역할 ↔ `inputs` 항목, ④ 설정값 이름·단위·기본값 ↔ `params`, ⑥ 결과 종류 ↔ 출력·만들기 선언, ⑦ 통과 조건의 수 ↔ 선언한 점검 수 |
+| 계산·고정·제출 | `spec-match` | warn(작업본 계산) · block(초안 고정·관리자 제출). `README.md`가 있는 jig만(내장 jig 제외). jig가 `steps[].gates`에 선언하지 않아도 실행기가 명세와 다른(`mismatch`) jig에만 첫 단계 before-run에 warn 하나를 넣는다(일치하면 행을 넣지 않음). 고정·제출 거절은 409 `SPEC_MISSING`·`SPEC_MISMATCH` `{code, differences|missing, choices: [{id: 'rebuild', label}, {id: 'fix-spec', label}]}`(`specStatuses`). 대조 규칙은 아래 「명세 대조 규칙」 |
 | before-run | `basis-required` | warn(근거가 '물어볼 것'인 설정값이 기본값 그대로임) |
 | after-run | `non-empty`, `no-nan`, `ids-stable`, `ring-orientation`, `polygon-valid` | block |
 | after-run | `inside-boundary`, `no-overlap`, `planar-curve` | block 또는 isolate(jig가 고름) |
@@ -821,6 +839,19 @@ CREATE TABLE IF NOT EXISTS project_roots(projectId TEXT PRIMARY KEY REFERENCES p
 | before-bake | `solid-closed`, `tag-scope`, `count-match`, `layer-scope`, `hidden-target`, `bake-args-safe`, `inputs-confirmed`, `analysis-confirmed`, `target-confirmed`, `paneling-confirmed` | block |
 
 `analysis-confirmed`는 부재 만들기에 같은 입력 지문의 확정 해석이 있어야 통과한다(SPEC-06). `target-confirmed`는 `confirm-target` 사람 단계가 확정 상태여야 통과한다(SPEC-12.3의 3). `paneling-confirmed`는 만들기 선언의 단계(`items`가 가리키는 단계 id `preview`·`members`·`optimize`)와 그 앞 단계의 설정값 가운데 출처가 '가정'(`by: 'default'`)인 것이 없어야 통과한다 — 단계는 설정값 `group`('1단계 미리보기'·'2단계 부재'·'3단계 최적화·타입화')으로 나누고, 다른 값과 함께만 읽는 값(합치기 기준·투영 평면)은 그 값을 골랐을 때만 센다. 미리보기는 늘 통과한다(계약 `makeAllowed`, SPEC-16.4 3, `src/jigs/runtime/paneling-confirmed.ts`). `non-empty`는 `args.message`로 jig의 문장을 줄 수 있다(예: 대상 필지 경계 없음). 점검 실패 이유는 단계 레일에 건축 문장으로 보인다(문구는 Design). 목록에 있으나 아직 구현되지 않은 점검은 선언한 수준으로 실패한다(fail closed)—설명서 검사가 `JIG_GATE_PENDING` 경고로 알린다. 항목 점검의 인자는 `items`(출력 안 배열 경로)·`key`(안정 키 필드)·`field`(다각형·점 필드)·`boundary`(입력 경로 또는 `output.` 접두 출력 경로)다.
+
+**명세 대조 규칙(`spec-match`, SPEC-07.14, PLAN-54 T-353).** 판정 의미(무엇이 '명세와 다름'인지, 고치는 방향을 사람이 고름)는 SPEC-07.14가, 아래 읽기·비교 형식은 이 절이 소유한다. 명세는 §2.1의 절 형식으로 읽는다. 이름 비교는 양쪽 모두 끝의 괄호 보조 설명(`(…)`·`（…）`)과 앞뒤 공백을 뗀 앞부분으로 하고, 대소문자·전각/반각 차이는 무시한다(예: 명세 `건폐율 상한(coverage)` ↔ `params[].title` `건폐율 상한`). 어긋난 항목마다 `{section: '③'|'④'|'⑥'|'⑦', item, field: 'missing'|'extra'|'unit'|'default'|'count'|'kind', spec, jig}`를 만들고, 화면 문장은 이 값으로 만든다(문구는 Design).
+
+| 절 | 명세에서 읽는 것 | 설명서에서 읽는 것 | 일치 조건 |
+|---|---|---|---|
+| ③ 입력 | `###` 블록마다: 블록 안 표의 첫 머리글이 `역할`이면 그 소제목 하나가 입력 하나(역할 묶음) · 표에 `입력` 열이 있으면 그 열의 고유값 · 그 밖의 표는 첫 열의 행들 · 표가 없으면 소제목 이름(모두 괄호 뗀 이름) | `inputs[].title` | 두 이름 집합이 같다 |
+| ④ 설정값 | 절 안 표들의 행: 첫 열 = 이름, `단위` 열, `기본` 열(열은 머리글 이름으로 찾음). 이름 끝 괄호 안이 식별자(`key`, 백틱 허용)이면 그것으로 먼저 `params[].key`와 맞추고, 아니면 괄호 뗀 이름으로 맞춘다(끝 괄호만 다른 두 설정값이 같은 이름이 되지 않게) | `params[]`의 `key`·`title`, 단위 = {`display.unit`, `unit`, 형식 단위(`ratio`는 `%`, `choice`는 `선택`, `toggle`은 `onoff`)}, `default` | 이름 집합이 같고, 같은 이름끼리 정규화한 단위가 설명서 단위 가운데 하나와 같고 기본값이 같다 |
+| ⑥ 결과 | `###` 소제목 또는 한 줄짜리 굵은 글(`**…**`)로 시작하는 문단 가운데 `화면`·`Rhino에 만들기`·`넘겨줄 결과`·`파일`(괄호 뒤는 무시). 그 아래 다음 줄이 `- 없음`이면 그 종류는 없음 | `panel` 있음 → 화면, `bake` 있음 → Rhino에 만들기, `outputs` 하나 이상 → 넘겨줄 결과, `reports/` 틀 하나 이상 또는 파일을 내는 패널 부품(`FILE_PARTS` = `table`·`report`·`compliance-result`·`paneling-result`) 있음 → 파일 | 두 종류 집합이 같다 |
+| ⑦ 통과 조건 | 절 안 맨 왼쪽 번호 목록(`1. ` 줄)의 항목 수. 들여 쓴 목록·문단(자체 시험 설명 등)은 세지 않는다. 번호 목록이 없으면 첫 칸이 숫자인 표 행(`\| 1 \| …`)의 수 | `steps[].gates`의 개수 합 | 두 수가 같다 |
+
+- **단위 정규화 표:** 단위 칸은 끝 괄호(공식 명세의 `m (화면 mm)`·`비율 (화면 %)` 같은 화면 단위 보조 설명)를 떼고 정규화한다. `도`·`°`·`deg` → `deg` · `㎡`·`m²`·`m2` → `m2` · `㎥`·`m³`·`m3` → `m3` · `%`·`비율`·`ratio`·`비`·`배` → `%` · `개`·`EA`·`ea`·`층`·`대`·`번호`·`개소` → `EA` · `선택`·`choice` → `choice` · `켬/끔` → `onoff` · `mm`·`m`은 그대로 · 빈칸·`-`·`—` → 단위 없음. 표에 없는 단위는 글자 그대로 비교한다. `toggle`·`choice` 설정값은 명세 단위가 없어도 일치로 본다.
+- **기본값 비교:** 숫자는 천 단위 쉼표와 단위 글자를 떼고 수로 비교한다(같은 값, 상대 오차 1e-9 이하). 명세 값이 저장값 또는 화면값(`m` → `mm` ×1000, `ratio` → `%` ×100) 가운데 하나와 같으면 일치다(예: `1.2 (1,200 mm)`). `choice`는 명세 글 전체 또는 끝 괄호 안(`면 위 길이(arc-length)`)이 기본 선택지의 `label` 또는 `value`와 같아야 한다. 참/거짓은 `예`·`켬`·`켜짐`·`참`·`포함`·`true` ↔ `true`, `아니오`·`끔`·`꺼짐`·`거짓`·`false` ↔ `false`. 그 밖의 글은 앞뒤 공백을 뗀 문자열이 같아야 한다.
+- **수준:** 작업본 계산 중 `warn`(결과는 내고 단계 레일에 표시), 초안 고정·관리자 제출 전 `block`(고정·제출을 하지 않음). 명세가 '명세 없음'(§2.1)이면 이 점검을 돌리지 않고 '명세 없음'만 보인다. 내장 jig(§2.1 「내장 jig의 명세」)는 대상이 아니다.
 
 ## 12. 가져오기와 서명(1차)
 

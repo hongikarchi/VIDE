@@ -9,6 +9,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { DomainError } from '../core/store.ts';
+import { BUILTIN_SPEC_IDS, builtinSpec } from '../jigs/runtime/spec-check.ts';
 import { JigStore } from '../core/jig-store.ts';
 import type { Workspace } from '../core/workspace.ts';
 import { isFileLink, type DocumentLink, type DocumentLinks } from '../core/document-links.ts';
@@ -348,7 +349,15 @@ export async function jigRoutes(
         ? { ...entry, forkable: forkable(entry.path) }
         : entry,
     );
-    send(200, { jigs });
+    // Built-in screen jigs have their spec beside the code (ARCH-03 §2.1): 명세 없음 and ①.
+    const builtin = Object.fromEntries(
+      BUILTIN_SPEC_IDS.map((id) => {
+        const spec = builtinSpec(id);
+        const purpose = spec.purpose ? { purpose: spec.purpose } : {};
+        return [id, { specMissing: spec.specMissing, ...purpose }];
+      }),
+    );
+    send(200, { jigs, builtin });
     return true;
   }
   if (url.pathname === '/api/v1/jigs/import' && method === 'POST') {

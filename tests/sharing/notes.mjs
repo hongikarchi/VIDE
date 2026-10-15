@@ -386,6 +386,34 @@ try {
     ).value.kind,
     'journal',
   );
+  // 회의록 (SPEC-10.9 1, D1 0019): made as a meeting, it stays one; no other note becomes one.
+  const meeting = await call(base, {
+    method: 'POST',
+    cookie: bob.cookie,
+    data: { title: '10월 15일 회의', kind: 'meeting' },
+  });
+  assert.equal(meeting.status, 201);
+  assert.equal(meeting.value.kind, 'meeting');
+  assert.equal(
+    (
+      await call(`${base}/${meeting.value.id}`, {
+        method: 'PATCH',
+        cookie: alice.cookie,
+        data: { kind: 'note' },
+      })
+    ).value.kind,
+    'meeting',
+  );
+  assert.equal(
+    (
+      await call(`${base}/${noteId}`, {
+        method: 'PATCH',
+        cookie: alice.cookie,
+        data: { kind: 'meeting' },
+      })
+    ).status,
+    400,
+  );
   // Titles (T-184): a new note starts empty (screens show '제목 없음'), an emptied title stays
   // empty, and a journal's title changes while its date keeps it the day's entry.
   const untitled = await call(base, { method: 'POST', cookie: bob.cookie, data: {} });

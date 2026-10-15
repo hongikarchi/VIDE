@@ -24,6 +24,8 @@ import {
 } from '../ui/skill-catalog.ts';
 import type { RouteJigQuery } from '../ai/request-router.ts';
 import { jigRuntimeFor } from './jig-routes.ts';
+import { parseSpecReadme, skillFieldsFromSpec, specPurpose } from '../jigs/spec-readme.ts';
+import { builtinSpec, readSpecText } from '../jigs/runtime/spec-check.ts';
 
 const MAX_SKILL_BYTES = 64 * 1024;
 function readSkill(dir: string, file: string) {
@@ -59,6 +61,19 @@ export async function skillCatalog(
       continue;
     }
     const front = skillFront(readSkill(jig.dir, jig.manifest.skill));
+    // A jig with a spec takes `examples`·`words`·`not_for` from its ② (ARCH-03 §5.3): they are
+    // written in one place only; without a complete spec skill.md is read as written.
+    const spec = parseSpecReadme(readSpecText(jig.dir));
+    if (spec.complete) {
+      const fields = skillFieldsFromSpec(spec);
+      if (fields.examples.length) front.examples = fields.examples;
+      else delete front.examples;
+      if (fields.words.length) front.words = fields.words;
+      else delete front.words;
+      if (fields.notFor.length) front.not_for = fields.notFor;
+      else delete front.not_for;
+      front.description ??= specPurpose(spec)?.slice(0, 500);
+    }
     // An official tool jig's own routing words join those of its skill.md (SPEC-07.18).
     const routing = entry.stage === 'official' ? OFFICIAL_TOOL_ROUTING[jig.id] : undefined;
     const words = [...new Set([...(front.words ?? []), ...(routing?.words ?? [])])];
@@ -83,6 +98,10 @@ export async function skillCatalog(
   for (const legacy of JIGS) {
     const routing = OFFICIAL_JIG_ROUTING[legacy.id];
     if (legacy.status !== 'available' || !routing) continue;
+    // A built-in jig's spec gives its examples and not-for cases (ARCH-03 §5.3); its words are
+    // the routing words unless the spec lists its own.
+    const spec = builtinSpec(legacy.id);
+    const fields = spec.specMissing ? undefined : skillFieldsFromSpec(spec.parsed);
     out.push({
       id: legacy.id,
       name: legacy.name,
@@ -90,8 +109,10 @@ export async function skillCatalog(
       scope: 'official',
       ...(LEGACY_JIG_ICONS[legacy.id] ? { icon: LEGACY_JIG_ICONS[legacy.id] } : {}),
       description: legacy.summary,
+      ...(fields?.examples.length ? { examples: fields.examples } : {}),
       intent: routing.intent,
-      words: routing.words,
+      words: fields?.words.length ? fields.words : routing.words,
+      ...(fields?.notFor.length ? { notFor: fields.notFor } : {}),
       invocation: 'auto',
       open: DEFAULT_OPEN,
       fromRequest: [],

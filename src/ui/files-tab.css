@@ -311,3 +311,43 @@ body[data-workspace='files'] .files-workspace {
     font-size: 10px;
   }
 }
+/* 동기화 쌍 띠 (Design SCR-47): the impact strip's recessed line, by the map. */
+.sync-pair-strip {
+  margin: 4px 0;
+  padding: 4px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-recessed);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.sync-pair-strip p {
+  margin: 0;
+}
+.sync-pair-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.sync-pair-line > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-1);
+}
+.sync-pair-close {
+  margin-left: auto;
+}
+.sync-pair-note {
+  color: var(--text-3);
+  font-size: 11px;
+}
+.sync-pair-warn {
+  color: var(--warn);
+  font-size: 11px;
+}
+.chart-link-hit {
+  cursor: pointer;
+  pointer-events: stroke;
+}

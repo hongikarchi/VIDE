@@ -16,6 +16,35 @@ export const draftOriginSchema = z
   .passthrough();
 export type DraftOrigin = z.infer<typeof draftOriginSchema>;
 
+/** The draft's 명세 (`README.md`, PLAN-54 T-353) as the engine reports it. */
+export const draftSpecSchema = z
+  .object({
+    text: z.string(),
+    updatedAt: z.string().default(''),
+    /** 'missing': a fixed section is missing (명세 없음); 'mismatch': 명세와 다름. */
+    state: z.enum(['missing', 'mismatch', 'ok']).catch('missing'),
+    missing: z.array(z.string()).default([]),
+    differences: z
+      .array(
+        z
+          .object({
+            section: z.string(),
+            item: z.string(),
+            field: z.string(),
+            spec: z.string().default(''),
+            jig: z.string().default(''),
+          })
+          .passthrough(),
+      )
+      .default([]),
+    purpose: z.string().nullable().default(null),
+    editedBy: z.enum(['vide', 'ai', 'person']).catch('vide'),
+    personAt: z.string().nullable().default(null),
+    history: z.string().nullable().default(null),
+  })
+  .passthrough();
+export type DraftSpec = z.infer<typeof draftSpecSchema>;
+
 export const draftSummarySchema = z
   .object({
     id: z.string(),
@@ -40,6 +69,8 @@ export const draftSummarySchema = z
       .nullable()
       .optional()
       .catch(undefined),
+    /** The 명세; null when the draft has none (명세 없음). */
+    spec: draftSpecSchema.nullable().optional().catch(undefined),
   })
   .passthrough();
 export type DraftSummary = z.infer<typeof draftSummarySchema>;
@@ -168,6 +199,7 @@ export const draftDetailSchema = z
     files: z.array(fileSchema).default([]),
     /** `skill.md` (the AI 설명서), read-only on this screen. */
     skill: z.string().nullable().optional(),
+    spec: draftSpecSchema.nullable().optional().catch(undefined),
     validate: validateResultSchema.nullable().optional(),
     test: testResultSchema.nullable().optional(),
     preview: previewResultSchema.nullable().optional(),
@@ -188,6 +220,8 @@ export interface DraftDetail {
   manifest: DraftManifest;
   files: DraftFile[];
   skill?: string;
+  /** The 명세; null when the draft has none (명세 없음), undefined when the engine did not say. */
+  spec?: DraftSpec | null;
   validate?: ValidateResult;
   test?: TestResult;
   preview?: PreviewResult;
@@ -322,6 +356,11 @@ export function readDetail(value: unknown): DraftDetail {
     manifest: manifest.success ? manifest.data : manifestSchema.parse({}),
     files,
     ...(raw.skill ? { skill: raw.skill } : skillFile ? { skill: skillFile.content } : {}),
+    ...(raw.spec !== undefined
+      ? { spec: raw.spec }
+      : draft.spec !== undefined
+        ? { spec: draft.spec }
+        : {}),
     ...(raw.validate ? { validate: raw.validate } : {}),
     ...(raw.test ? { test: raw.test } : {}),
     ...(raw.preview ? { preview: raw.preview } : {}),
@@ -350,7 +389,9 @@ export type DraftStart = 'example-grid' | 'blank';
  */
 export async function createDraft(
   projectId: string,
-  input: { name: string; from?: DraftStart } | { from: { jig: string; version?: string } },
+  input:
+    | { name: string; from?: DraftStart; readme?: string }
+    | { from: { jig: string; version?: string } },
 ): Promise<DraftSummary> {
   const value = await api(base(projectId), 'POST', input);
   const record = value && typeof value === 'object' && 'draft' in value ? value.draft : value;
@@ -385,6 +426,17 @@ export async function pinDraft(projectId: string, draftId: string) {
   return pinResultSchema.parse(
     await api(`${one(projectId, draftId)}/pin`, 'POST', { confirm: true }),
   );
+}
+/**
+ * [명세 고치기] (SPEC-07.14): the spec's ③~⑦ written again from the draft's jig.json; sections a
+ * person changed stay (`kept`) and ⑨ gets one row.
+ */
+export async function regenerateSpec(projectId: string, draftId: string) {
+  const value = z
+    .object({ draft: z.unknown(), kept: z.array(z.string()).default([]) })
+    .passthrough()
+    .parse(await api(`${one(projectId, draftId)}/spec/regenerate`, 'POST', {}));
+  return { draft: readDetail(value.draft), kept: value.kept };
 }
 /** Change the draft's icon (`jig.json` `icon`, one of the fixed list; PLAN-26 T-100). */
 export async function setDraftIcon(projectId: string, draftId: string, icon: string) {

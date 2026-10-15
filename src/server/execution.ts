@@ -1695,6 +1695,7 @@ export class Execution {
         turn && !host && this.tools
           ? conversationSources(this.workspace, turn.conversation, {
               requestId: id,
+              turnStart: true,
               openLinks: () => this.openLinkIds(projectId),
               ledger: (item) =>
                 this.conversations!.addLedger(projectId, turn!.conversation.id, item),

@@ -253,13 +253,28 @@ try {
   // vide/compliance-check (PLAN-48). J-07 패널링 shows its tool card (vide/paneling,
   // PLAN-49 T-252) instead of the planned one.
   assert.equal(await official.count(), 15);
-  assert.equal(await official.filter({ hasText: '법규 체크' }).count(), 1);
+  assert.equal(
+    await official
+      .filter({ has: page.locator('.jig-card-title', { hasText: '법규 체크' }) })
+      .count(),
+    1,
+  );
   assert.equal(
     await dialog.locator('.jig-card[data-source="official"][data-status="planned"]').count(),
     4,
   );
-  assert.equal(await official.filter({ hasText: '건축개요' }).count(), 1);
-  assert.equal(await official.filter({ hasText: '사이트 모델링' }).count(), 1);
+  assert.equal(
+    await official
+      .filter({ has: page.locator('.jig-card-title', { hasText: '건축개요' }) })
+      .count(),
+    1,
+  );
+  assert.equal(
+    await official
+      .filter({ has: page.locator('.jig-card-title', { hasText: '사이트 모델링' }) })
+      .count(),
+    1,
+  );
   assert.equal(await official.getByRole('button', { name: '삭제', exact: true }).count(), 0);
   const installed = dialog.locator('.jig-card[data-source="project"]', {
     hasText: '합성 점검 jig',

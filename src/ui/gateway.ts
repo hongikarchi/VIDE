@@ -442,6 +442,10 @@ Object.assign(errors, {
   JIG_SELFTEST_FAILED:
     'jig의 자체 시험이 통과하지 못했습니다. 시험 결과를 확인해 고친 뒤 다시 등록하세요.',
   JIG_DIGEST_MISMATCH: '설치된 jig 파일이 바뀌었습니다. jig를 다시 가져오세요.',
+  SPEC_MISSING:
+    '명세가 없어 고정하거나 제출하지 않았습니다. [명세 고치기]로 지금 jig에서 명세를 만드세요.',
+  SPEC_MISMATCH:
+    '명세와 다름: 명세와 jig가 어긋나 고정하거나 제출하지 않았습니다. [명세대로 다시 만들기] 또는 [명세 고치기]를 고르세요.',
   JIG_PACK_FAILED: 'jig 묶음을 만들지 못했습니다. 작업본의 파일과 오류를 확인하세요.',
   JIG_LIBRARY_UNKNOWN: 'jig가 이 VIDE에 없는 기능을 씁니다. VIDE를 업데이트하거나 jig를 고치세요.',
   DRAFT_NOT_OPEN: '이 jig 작업본은 이미 닫혔습니다. 새 작업본에서 이어 하세요.',

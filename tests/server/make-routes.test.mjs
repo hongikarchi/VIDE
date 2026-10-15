@@ -106,6 +106,11 @@ test("a draft's icon is set from the fixed list and goes into the pinned jig (PL
     /INVALID_INPUT/,
   );
   assert.equal((await call('POST', `${base}/${draft.id}/validate`)).data.ok, true);
+  // A blank draft has no 명세 yet: not pinned until [명세 고치기] writes one (PLAN-54 T-353).
+  const missing = await call('POST', `${base}/${draft.id}/pin`, { confirm: true });
+  assert.equal(missing.status, 409);
+  assert.equal(missing.data.code, 'SPEC_MISSING');
+  assert.equal((await call('POST', `${base}/${draft.id}/spec/regenerate`)).status, 200);
   const pinned = await call('POST', `${base}/${draft.id}/pin`, { confirm: true });
   assert.equal(pinned.status, 200);
   const listed = (await jigRuntimeFor(workspace, root).registry.list()).find(
@@ -119,6 +124,7 @@ test("a draft's icon is set from the fixed list and goes into the pinned jig (PL
 test('[수정하기] forks the pinned jig by route; re-pin moves the list; [올리기] moves an instance (T-101)', async (t) => {
   const { call, base, workspace, root, project } = setup(t);
   const first = (await call('POST', base, { name: 'upgrade me', from: 'blank' })).data;
+  await call('POST', `${base}/${first.id}/spec/regenerate`);
   assert.equal((await call('POST', `${base}/${first.id}/pin`, { confirm: true })).status, 200);
   const runtime = jigRuntimeFor(workspace, root);
   const instance = await runtime.createInstance(
@@ -161,6 +167,15 @@ test('[수정하기] forks the pinned jig by route; re-pin moves the list; [올�
     join(forked.data.path, 'fixtures', 'basic', 'expect.json'),
     JSON.stringify({ steps: { main: { total: 3 } } }),
   );
+  // The copy inherited the 명세; its changed default is '명세와 다름' until [명세 고치기].
+  assert.ok(existsSync(join(forked.data.path, 'README.md')));
+  const differs = await call('POST', `${base}/${forked.data.id}/pin`, { confirm: true });
+  assert.equal(differs.data.code, 'SPEC_MISMATCH');
+  assert.deepEqual(
+    differs.data.differences.map((d) => [d.section, d.field, d.item]),
+    [['④', 'default', '개수']],
+  );
+  await call('POST', `${base}/${forked.data.id}/spec/regenerate`);
   const repinned = await call('POST', `${base}/${forked.data.id}/pin`, { confirm: true });
   assert.equal(repinned.status, 200, JSON.stringify(repinned.data));
   assert.deepEqual(

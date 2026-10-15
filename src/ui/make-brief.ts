@@ -2,6 +2,7 @@
 // fills before a draft exists, the first turn assembled from it, the plan card it gives until
 // [만들기 시작], and where this browser keeps it per draft. Pure, except the storage helpers.
 import type { DraftDetail, DraftStart } from './make-api.ts';
+import { specDraft } from '../jigs/spec-readme.ts';
 
 export type BriefInput = 'layers' | 'assembly' | 'zone' | 'table' | 'facts' | 'jig';
 export type BriefOutput =
@@ -194,6 +195,71 @@ export function briefPrompt(brief: Brief): string {
     '이번 턴에는 코드와 파일을 쓰지 말고, 입력·설정값·단계·화면·결과를 한 장의 계획으로 정리해 주세요. 비운 칸은 가정으로 채우고 가정이라고 적어 주세요. 정할 수 없는 것만 질문 카드로 물어 주세요. 제가 [만들기 시작]을 보내면 그때 작성합니다.',
   );
   return lines.join('\n');
+}
+
+/** The lines of a free-text box (one item per line, list marks removed). */
+const linesOf = (text: string) =>
+  text
+    .split(/\n+/)
+    .map((line) => line.replace(/^\s*(?:[-*·]|\d+\.)\s*/, '').trim())
+    .filter(Boolean);
+/** The result kinds of the 명세 ⑥ the chosen outputs give (SPEC-07.2 명세 규칙 1). */
+function briefKinds(brief: Brief): { kind: string; text?: string }[] {
+  const has = (...keys: BriefOutput[]) => keys.some((key) => brief.outputs.includes(key));
+  const labels = (keys: BriefOutput[]) =>
+    OUTPUTS.filter((o) => keys.includes(o.key) && brief.outputs.includes(o.key))
+      .map((o) => o.label)
+      .join('·');
+  const kinds: { kind: string; text?: string }[] = [];
+  if (!brief.outputs.length) return kinds;
+  kinds.push({ kind: '화면', text: labels(['preview', 'table', 'report']) || undefined });
+  if (has('curve', 'sweep', 'extrude', 'textdot'))
+    kinds.push({ kind: 'Rhino에 만들기', text: labels(['curve', 'sweep', 'extrude', 'textdot']) });
+  if (has('handoff')) kinds.push({ kind: '넘겨줄 결과', text: labels(['handoff']) });
+  if (has('table', 'report')) kinds.push({ kind: '파일', text: labels(['table', 'report']) });
+  return kinds;
+}
+/**
+ * The 명세 draft of the start form ([계획 받기], SPEC-07.16 0): the form's items in the nine fixed
+ * sections; a section the form left empty holds '아직 적지 않음' and the AI fills it from the plan.
+ */
+export function briefReadme(brief: Brief, date = new Date().toISOString().slice(0, 10)): string {
+  const { params, steps, checks } = filled(brief);
+  return specDraft({
+    name: brief.purpose.trim().split('\n')[0].slice(0, 100),
+    purpose: brief.purpose.trim(),
+    when: linesOf(brief.when),
+    notWhen: linesOf(brief.notWhen),
+    inputs: brief.inputs.map((key) => {
+      const input = INPUTS.find((item) => item.key === key)!;
+      const shapes =
+        key === 'layers' ? brief.layerShapes : key === 'zone' ? brief.zoneShapes : ([] as string[]);
+      return { role: input.label, form: shapes.join('·') || undefined };
+    }),
+    params: params.map((p) => ({
+      name: p.name.trim(),
+      unit: p.unit || (p.type === 'choice' ? '선택' : ''),
+      value: p.value.trim(),
+      range: p.min || p.max ? `${p.min || '?'} ~ ${p.max || '?'}` : '',
+      basis: p.basis === 'confirmed' ? '확정' : '가정',
+    })),
+    steps: steps.map((step) => ({
+      name: step.name.trim(),
+      by: labelOf(STEP_BY, step.by),
+      person: step.by === 'human',
+      note: step.note,
+    })),
+    outputs: briefKinds(brief),
+    checks: checks.map((c) => `${c.text.trim()} (${c.level === 'block' ? '막음' : '주의'})`),
+    history: {
+      version: 'v0.1.0',
+      date,
+      reason:
+        brief.start === 'example-grid'
+          ? '시작 양식에서 만든 명세 초안(본보기 격자 예제에서 시작)'
+          : '시작 양식에서 만든 명세 초안',
+    },
+  });
 }
 
 export interface BriefPlanItem {

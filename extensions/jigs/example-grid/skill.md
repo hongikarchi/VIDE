@@ -3,6 +3,7 @@ name: 격자 골조 배치 예제
 intent_en: place columns on a rotated grid inside a slab outline and connect neighbours with beams
 words: [격자, 기둥 배치, 보 연결, 경간, 예제]
 not_for: [실제 프로젝트 설계, 구조 해석, 기존 객체 수정]
+examples: [격자를 9 m로 넓혀, 각도 15도로 돌려, C3-2 기둥은 빼]
 tools: []
 limits: [직사각형에 가까운 슬래브에서 잘 맞음, 보이드는 기둥만 피함, 캔틸레버·비정형 격자 없음]
 ---

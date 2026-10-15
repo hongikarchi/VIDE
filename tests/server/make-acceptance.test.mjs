@@ -119,8 +119,79 @@ const caseInput = (capX) => ({
   },
 });
 /** The files the first make turn writes (what the AI wrote, reduced to one step). */
+/**
+ * The draft's 명세 (README.md, PLAN-54 T-353) as the AI writes it first; `onLine` is the default
+ * of '선 위 기둥', which turn 2 changes in jig.json and here in the same turn (SPEC-07.16 4).
+ */
+function draftSpec(onLine, history = []) {
+  return [
+    '# EJ twin check',
+    '',
+    '## ① 목적',
+    '',
+    '신설 E.J.마다 양쪽 기둥과 공통 파일캡이 있는지 본다(합성 시험).',
+    '',
+    '## ② 언제 쓰나 / 언제 아니다',
+    '',
+    '### 언제 쓰나',
+    '',
+    '- E.J. 쌍기둥 봐 줘',
+    '',
+    '### 판정 낱말',
+    '',
+    '- 쌍기둥',
+    '- 신설 E.J.',
+    '- 파일캡',
+    '',
+    '### 언제 아니다',
+    '',
+    '- 구조 계산',
+    '',
+    '## ③ 입력',
+    '',
+    '| 역할 | 형태 |',
+    '|---|---|',
+    '| 신설 E.J.·기둥·파일캡 | 역할별로 모으는 입력 |',
+    '',
+    '## ④ 설정값',
+    '',
+    '| 이름(코드값) | 단위 | 기본 | 범위 | 근거 |',
+    '|---|---|---|---|---|',
+    '| E.J.에서 가까운 기둥 범위 (`nearDist`) | m | 2 | 0.5 ~ 5 | 가정 |',
+    '| 쌍기둥 간격 상한 (`spacingMax`) | m | 2.5 | 0.5 ~ 6 | 가정 |',
+    `| 선 위 기둥 (onLine) | 선택 | ${onLine} | 문제로 표시 · 판정에서 제외 | 가정 |`,
+    '',
+    '## ⑤ 단계',
+    '',
+    '1. **쌍기둥·파일캡 판정** — 계산',
+    '',
+    '## ⑥ 결과',
+    '',
+    '- **화면:** 정상 쌍 수와 쌍기둥 표.',
+    '- **파일:** 쌍기둥 표(CSV).',
+    '- **Rhino에 만들기:** 없음.',
+    '',
+    '## ⑦ 통과 조건',
+    '',
+    '1. 쌍기둥·파일캡 판정 — 숫자 오류 없음',
+    '',
+    '## ⑧ 한계·가정',
+    '',
+    '- 합성 시험 자료.',
+    '',
+    '## ⑨ 이력',
+    '',
+    '| 버전 | 날짜 | 바꾼 이유 |',
+    '|---|---|---|',
+    '| v0.1.0 | 2026-10-15 | 첫 작성 |',
+    ...history,
+    '',
+  ].join('\n');
+}
+
 function draftFiles(manifest) {
   return {
+    'README.md': draftSpec('판정에서 제외'),
     'jig.json': json({
       ...manifest,
       summary: '신설 E.J.마다 양쪽 기둥과 공통 파일캡이 있는지 본다(합성 시험).',
@@ -400,6 +471,11 @@ test('M5 replay: a make-conversation writes, checks and asks; the pinned jig mat
         manifest.params.find((p) => p.key === 'onLine').default = 'flag';
         side.use('Edit', { file_path: file, old_string: '"ignore"', new_string: '"flag"' });
         writeFileSync(file, json(manifest));
+        // The same turn changes the 명세 and adds one history row (SPEC-07.16 4).
+        writeFileSync(
+          join(side.draftDir, 'README.md'),
+          draftSpec('문제로 표시', ['| v0.1.0 | 2026-10-15 | 선 위 기둥을 문제로 표시 |']),
+        );
         side.use('mcp__vide__jig_test', {});
         seen.retest = await side.tool('jig_test');
         return side.end({ status: 'done', text: '점검·시험 통과.', questions: [] });

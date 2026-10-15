@@ -2,7 +2,7 @@
 id: PLAN-54
 title: 산출물 등급 · 외부 계정 배포 · 갱신 제안 카드 · JIG README · 팀 기록 공유 (T-340~T-359)
 status: draft
-version: 0.4
+version: 0.5
 updated: 2026-10-15
 owner: user
 related: [C-11, C-12, FR-10, FR-13, FR-14, FR-18, FR-19, FR-24, FR-26, SPEC-05, SPEC-07, SPEC-10, SPEC-12, SPEC-13, SPEC-14, SPEC-15, ADR-033, ADR-037, ADR-040, ADR-041, ADR-042, ADR-043, RESEARCH-17, PLAN-32, PLAN-33, SPEC-04, PLAN-35, PLAN-36, PLAN-47, PLAN-52, PLAN-53, ARCH-01, ARCH-03, SPEC-01, SPEC-17]
@@ -132,8 +132,10 @@ PLAN-53 기록 모델 ◄── 3부의 D 기록, 5부의 회의록·일지
 |---|---|---|---|
 | T-348 SPEC 보완 | SPEC-05.8 갱신 제안, SPEC-14 제안 표시 레이어, C-12 역링크 | `docs:check` | 감지·표시·지움·기록이 각각 한 절 |
 | T-349 감지와 카드 | 쌍 등록, 변경 감지, 카드(목록·세 단추), 중복 억제 | 단위: 가짜 변경 이벤트 → 카드 1개; 브라우저 시험 | 지정하지 않은 쌍에는 카드가 없음, 닫힌 연결은 조용함 |
+| | 구현(2026-10-15): `src/core/sync-pairs.ts`·`src/server/proposal-watch.ts`·`proposal-wiring.ts`·`sync-pair-routes.ts`, 화면 `src/ui/proposal-card.tsx`·`sync-pair-strip.tsx`. 시험 `tests/core/sync-pairs.test.mjs`·`tests/server/proposal-watch.test.mjs`·`tests/integration/browser-proposal-card.mjs`. 편차는 ARCH-01 「동기화 쌍과 갱신 제안」, SPEC-05 R-83~R-86, SPEC-01 R-87 | | 실호스트 확인 대기 |
 | T-350 호스트 표시 | ZWCAD rev cloud·문자, Rhino 강조·반투명 '이후', 지움 보장 | `.vide/` 사본으로 실호스트 1회(ZWCAD·Rhino 각각), 저장 뒤 문서에 레이어 없음 확인 | 표시 뒤 [무시]하면 문서가 바뀌기 전과 같음(해시 비교) |
 | T-351 적용·기록 | [적용] → 역반영 경로, 되돌리기, D 기록 | PLAN-47 T-234 검수 형식 재사용 | 적용 결과가 요청 이력에 남고 한 번에 되돌려짐 |
+| | 구현(2026-10-15): 모델이 바뀐 쌍만 기존 `DrawingBackflowService.syncApply`로 맞추고, 기본 선택에서 지우는 행을 뺀다(SPEC-14.10의 3). 도면이 바뀐 쌍은 `PROPOSAL_DIRECTION_PENDING`(아래 질문). [적용]·[무시]는 기록 후보 D. 검수 기록 `VERIFY-2026-10-DD-proposal-apply.md`는 T-350과 함께 실호스트에서 쓴다 | | 실호스트 검수 대기 |
 
 ## 4부. JIG README 표준 — 자연어 명세가 정본 (T-352~T-354)
 
@@ -160,7 +162,9 @@ README 고정 절의 목록은 SPEC-07.2 「명세(README) 규칙」 1이 소유
 |---|---|---|---|
 | T-352 SPEC 보완 | SPEC-07.2·07.14·07.16·07.19, skill.md 생성 관계 | `docs:check` | README 절 목록이 한 곳(SPEC-07.2)에만 있음 |
 | T-353 저장·갱신·점검 | 양식→README, 대화 갱신, skill.md frontmatter 생성, 대조 점검, 카탈로그 표시 | 단위: 양식 입력 → README 절 9개; README의 입력을 고치면 점검 실패; `browser-make.mjs` | 새 jig는 README 없이 만들어지지 않음 |
+| | 구현(2026-10-15): `src/jigs/spec-readme.ts`·`src/jigs/runtime/spec-check.ts`, 초안·턴 시작/끝·[명세 고치기], `spec-match` 경고·고정/제출 거절(`SPEC_MISSING`·`SPEC_MISMATCH`), 카드 ① 설명·'명세 없음' 배지. 시험 `tests/core/spec-readme.test.mjs`·`tests/server/jig-spec.test.mjs`·`browser-make.mjs`. 공식·예제 jig 7개 모두 `spec-match` 일치(site-model ⑥ 보완, ⑦ 번호 표 행도 셈). 물리 계약은 ARCH-03 §2.1·§5.3·§11(1.17), 화면 편차는 Design R-90 | | 완료(관리자 제출함 쪽 명세 표시는 후속) |
 | T-354 소급·제출 | 공식 jig README 작성, 제출 묶음 포함 | 각 README를 비개발자 1명(페르소나 가능)이 읽고 입력·결과를 맞게 말하는지 | 공식 jig 전부 '명세 없음' 0 |
+| | 상태(2026-10-15): 공식 jig README 7개 완료(f681c153), 내장 화면 jig 명세 3개(`src/jigs/builtin-specs/` sync·structure·knowledge) 작성. 마감·도면·법규 내장 카드는 명세가 없어 '명세 없음' 배지. 남은 일: 관리자 제출함(SCR-27)에서 묶음의 README를 꺼내 맨 위에 보이기(사이트 D1·Worker·화면), 비개발자 읽기 검증 | | 부분 완료 |
 
 ## 5부. 팀 기록 공유 — 일지·회의록·일정 (T-355~T-357)
 
@@ -182,6 +186,7 @@ README 고정 절의 목록은 SPEC-07.2 「명세(README) 규칙」 1이 소유
 |---|---|---|---|
 | T-355 SPEC-10 보완 | `meeting`·`schedule` 종류, 폴더 사본 규칙, ADR-037 참조 | `docs:check` | 종류별 정본·사본 위치가 표로 하나 |
 | T-356 종류·사본 | 회의록·일정 노트, `01_운영/` 사본 쓰기, 폴더 변경 표시, 할 일 추출 | 단위: 노트 저장 → md 사본 경로·내용; 사본 수정 → 표시만; 브라우저 시험 | 폴더의 md만 읽어도 그날 일지·회의록이 재구성됨 |
+| | 구현(2026-10-15): 회의록(`meeting`)·일정 행, 일지·회의록·일정 폴더 사본, '폴더에서 바뀜'·[버리기] — `src/server/folder-copy-routes.ts`, 회의록 할 일 추출. 시험 `tests/server/meeting-notes.test.mjs`·`tests/core/note-doc.test.mjs`·`tests/server/workspace-outputs.test.mjs`·`tests/integration/browser-notes.mjs`·`tests/sharing/notes.mjs`(회의록). **사이트 D1 `0019-notes-meeting.sql` 배포 전에는 VIDE·사이트의 [새 회의록]이 실패한다(T-357과 묶음).** 편차는 ARCH-01 「공유 노트」·산출물 경로, SPEC-10 R-88·R-89 | | D1 0019 배포 대기 |
 | T-357 배포·2대 검수 | PLAN-32/33/35/36 미완 배포, 두 기기(PC + 폰)에서 회의록 작성→폴더 사본 확인 | VERIFY 기록(두 기기, 시각) | 사용자 확인 대기 항목이 각 PLAN에서 닫힘 |
 
 ## 예비 번호
@@ -213,6 +218,9 @@ T-358·T-359는 비워 둔다(이 계획 범위의 후속 결함·보완용. 재
   - **보고용 머리 표기·CLI 내보내기:** SPEC-07.11 R-44(회차 앞 8자), R-45(CLI가 범위 선택 없이 만듦) — 사용자 결정 대기.
 - **남은 조건(사용자):** GitHub 개인 토큰과 시험 저장소로 실제 푸시 1회, Cloudflare API 토큰·계정 ID와 시험 계정으로 실제 배포 1회와 폰 확인, 공유 사이트에 D1 마이그레이션 0017 적용과 Worker 배포(wrangler, 사람), 스테이징에서 보고용 게시 업로드를 열지(`UPLOADS_ENABLED`는 [ADR-038](../decisions/ADR-038-r2-free-tier-reenable.md)의 R2 결정 전까지 꺼져 있어 'VIDE 공유 사이트' 게시가 '사이트가 지금 새 업로드를 받지 않습니다'로 실패한다 — 그동안 [공유] 카드는 그 문구를 남기고 Cloudflare가 연결돼 있으면 그쪽을 고른다).
 - 2026-10-15 0.4: 3~5부 SPEC 선행 완료(T-348·T-352·T-355) — 남은 것: T-349~351(T-350은 실호스트), T-353·354, T-356·357. 검토 반영으로 갱신 제안은 SPEC-05.12(번호 부여), 동기화 쌍의 의미는 SPEC-01.13의 11, 기록 후보 행은 SPEC-17.3, README 물리 계약은 ARCH-03 §2.1·§5.3·§11에 두었다.
+- 2026-10-15 0.5: **3~5부 구현(오프라인) — T-349·T-351·T-353·T-356.** 호스트를 띄우지 않았고 시험은 가짜 연결·가짜 사이트(miniflare)로 했다. 물리 계약 편차는 ARCH-01 1.37(동기화 쌍·갱신 제안, 공유 노트 `meeting`, 산출물 경로)과 ARCH-03 1.17(명세 대조 규칙·skill.md 다시 쓰는 때·`specBase`), 화면 편차는 Design 1.26 SCR-16·18·23·27·47의 '구현(2026-10-15)' 줄, SPEC과 다른 동작은 SPEC-05 R-83~R-86·SPEC-01 R-87·SPEC-10 R-88·R-89·Design R-90에 적었다.
+  - **남은 것:** T-350 호스트 안 표시(ZWCAD rev cloud·Rhino 화면 표시)와 H-ZWCAD-18·H-RHINO-14 검증, 실제 Rhino 기둥 500 mm 이동 → 카드 → [적용] → ZWCAD Ctrl+Z 한 번의 수용 결과, '[적용] 뒤 다음 도면 편집에 카드가 뜨는지' — 모두 사용자에게 먼저 알린 뒤 실호스트에서 한다. T-354는 README 7개·내장 3개 완료, 관리자 제출함의 명세 표시가 남음. T-357은 D1 0017·0019 적용과 Worker 배포, 두 기기 검수.
+  - **후속(코드):** 카드에 맞출 수 없는 행의 이유를 미리 싣기와 닫힌 연결에서 [적용] 끄기(SPEC-05 R-85), Sync jig의 [위치 관계 확정](R-83), `pairs.json` → 매니페스트 옮기기, 동기화 쌍 응답 형식을 `src/contracts/`로 모으기.
 - **남은 조건(코드):** 보고용 종이의 Design §07 금지어 검사, 보고용 [폴더 열기], jig 계산 상자 안 CSV 작성기 통합, `/r/<id>/login` 시도 횟수 제한, 느린 회선에서 5 MiB 조각이 `deviceFetch` 10초 제한을 넘는 경우의 긴 업로드 경로, 게시 뒤 보고용 목록의 `published` 즉시 갱신.
 
 ## 결정이 필요한 질문
@@ -221,7 +229,11 @@ T-358·T-359는 비워 둔다(이 계획 범위의 후속 결함·보완용. 재
 - **Cloudflare 배포 방식:** T-347 SPIKE(문서 + 가짜 API)로 REST API만으로 가능하다고 보고 wrangler를 동봉하지 않았다. 실제 계정 배포 1회로 확인한다.
 - **보고용 게시 업로드 허용:** 스테이징 사이트의 `UPLOADS_ENABLED`(ADR-038)를 보고용 게시에만 따로 열지, R2 결정 때 함께 열지.
 - **PRD §12.2 문구:** '제안은 허용, 적용은 사람'으로 좁힐지(C-12)는 PRD에서 결정한다.
-- **갱신 제안의 적용 방향(SPEC-05.12의 6):** 도면이 바뀐 쌍도 'Rhino를 CAD에 맞춤'으로 [적용]할지, 모델 → 도면 한 방향만 둘지. SPEC은 양방향으로 적었고 확인 전에는 이 질문을 가리킨다.
+- **갱신 제안의 적용 방향(SPEC-05.12의 6):** 도면이 바뀐 쌍도 'Rhino를 CAD에 맞춤'으로 [적용]할지, 모델 → 도면 한 방향만 둘지. SPEC은 양방향으로 적었고 확인 전에는 이 질문을 가리킨다. 구현(2026-10-15)은 결정 전이라 도면이 바뀐 쌍의 [적용]을 끄고 Sync jig로 안내한다(Design R-82).
+- **동기화 쌍의 위치 관계와 지정 조건:** 쌍을 지정할 때 위치 관계를 자동으로 정해도 되는지, Sync jig에 [위치 관계 확정]을 둘지(SPEC-05 R-83). 저장만으로도 감지할지(R-84). 비교만 한 두 파일도 지정하게 할지, [짝 기록]을 조건으로 둘지(SPEC-01 R-87).
+- **일정 행의 화면 범위:** 계정 사이트 노트 목록에도 일정 행을 둘지(SPEC-10 R-88).
+- **명세 화면의 세부:** '명세 고침' 줄을 대화 기둥에 둘지, 계획 단계의 '명세와 다름' 행을 숨길지, README 없는 기존 jig의 제출 거절 안내(Design R-90).
+- **예전 회의록 경로의 고아 사본:** T-356 전에 `01_운영/회의록/`에 쓰인 `note`·`discussion` 사본은 더 갱신되지 않는다. 정리할지는 사용자가 정한다.
 - **갱신 제안의 경계 사례:** 두 쪽이 모두 바뀌면 카드 없이 '양쪽 변경'만 보임(SPEC-05.12의 2), [무시]는 같은 어긋남 집합만 다시 띄우지 않음(4), 한 Rhino 문서가 여러 도면과 각각 쌍이 될 수 있음(SPEC-01.13의 11) — 이대로 둘지.
 - **jig 명세 점검 수준(SPEC-07.14 `spec-match`):** 작업본 계산 중 경고, 초안 고정·관리자 제출 전 막음으로 적었다. 명세 없는 기존 jig는 '명세 없음' 표시만 하고 실행은 막지 않는다(SPEC-07.2 명세 규칙 2).
 - **일정의 정본:** 이 계획의 처음 문구는 '일정도 사이트 정본'이었으나 현행 SPEC-01.14 1·SPEC-04.10 2는 작업 PC가 원본이다. SPEC-10.10은 현행대로 적었다. 옮기려면 SPEC-01.14·SPEC-04.10을 함께 고친다.

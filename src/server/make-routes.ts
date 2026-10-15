@@ -11,6 +11,7 @@ import type { Workspace } from '../core/workspace.ts';
 import { JigStore } from '../core/jig-store.ts';
 import { DRAFT_LIMITS, DRAFT_TEMPLATES, JigDrafts, failureReason } from '../jigs/runtime/drafts.ts';
 import { JigInvalidError } from '../jigs/runtime/loader.ts';
+import { SPEC_MAX_BYTES, SpecRefusedError, specStatuses } from '../jigs/runtime/spec-check.ts';
 import type { ConversationService } from './conversations.ts';
 import { jigRuntimeFor } from './jig-routes.ts';
 import { copyProjectJig, workspaceOutputsFor } from './workspace-outputs.ts';
@@ -35,6 +36,7 @@ export const makeStatuses: Record<string, number> = {
   DRAFT_PATH_INVALID: 422,
   DRAFT_TEMPLATE_MISSING: 500,
   MAKE_STOPPED: 409,
+  ...specStatuses,
 };
 
 const id = z.string().regex(/^[a-zA-Z0-9-]{1,100}$/);
@@ -48,6 +50,8 @@ const createInput = z.union([
     .object({
       name: z.string().trim().min(1).max(100),
       from: z.enum(DRAFT_TEMPLATES).optional(),
+      // The spec draft the start form made ([계획 받기], SPEC-07.16 0).
+      readme: z.string().max(SPEC_MAX_BYTES).optional(),
     })
     .strict(),
   z
@@ -92,7 +96,7 @@ export async function makeRoutes(
   context: MakeRouteContext,
 ): Promise<boolean> {
   const route =
-    /^\/api\/v1\/projects\/([^/]+)\/jig-drafts(?:\/([^/]+)(?:\/(validate|test|preview|pin|icon))?)?$/.exec(
+    /^\/api\/v1\/projects\/([^/]+)\/jig-drafts(?:\/([^/]+)(?:\/(validate|test|preview|pin|icon|spec\/regenerate))?)?$/.exec(
       url.pathname,
     );
   if (!route) return false;
@@ -162,6 +166,12 @@ export async function makeRoutes(
     return true;
   }
   if (method !== 'POST') return false;
+  // [명세 고치기] (SPEC-07.14): ③~⑦ again from jig.json, the sections a person changed kept.
+  if (action === 'spec/regenerate') {
+    if (remote) throw new DomainError('FORBIDDEN');
+    send(200, drafts.regenerateSpec(projectId, draftId));
+    return true;
+  }
   if (action === 'validate') send(200, await drafts.validate(projectId, draftId));
   else if (action === 'test') send(200, await drafts.test(projectId, draftId));
   else if (action === 'preview')
@@ -182,6 +192,10 @@ export async function makeRoutes(
     } catch (error) {
       if (error instanceof JigInvalidError) {
         send(422, { code: 'JIG_INVALID', issues: error.issues });
+        return true;
+      }
+      if (error instanceof SpecRefusedError) {
+        send(409, error.body());
         return true;
       }
       throw error;
@@ -290,7 +304,8 @@ function filesOf(result: { text?: unknown; structured?: unknown }) {
 
 export interface MakeTurnDraft {
   draftId: string;
-  drafts: Pick<JigDrafts, 'writeFile' | 'deleteFile' | 'validate' | 'test'>;
+  drafts: Pick<JigDrafts, 'writeFile' | 'deleteFile' | 'validate' | 'test'> &
+    Partial<Pick<JigDrafts, 'specTurnEnd'>>;
   guard?: MakeTurnGuard;
 }
 /** The card of a stopped make turn: one question card, the reason and the model's own words. */
@@ -383,6 +398,15 @@ export async function makeTurnResult(
     }
     patch.makeFiles = made;
   }
+  // The spec after the turn (SPEC-07.16 4): a person's section the turn put back is restored,
+  // skill.md follows ②, and the screen shows '명세 고침 · 이력: <이유>' when it changed.
+  const spec = draft.drafts.specTurnEnd?.(projectId, draft.draftId);
+  if (spec?.changed)
+    patch.makeSpec = {
+      changed: true,
+      history: spec.history,
+      ...(spec.restored.length ? { restored: spec.restored } : {}),
+    };
   const stop = draft.guard?.stop;
   if (stop)
     Object.assign(

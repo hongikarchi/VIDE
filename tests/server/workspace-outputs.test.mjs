@@ -167,7 +167,7 @@ test('notes: 일지 and 회의록 under 운영 marked with the site as the sourc
   const created = Date.parse('2026-10-14T03:00:00Z');
   const first = await outputs.writeNote(
     PROJECT,
-    { id: 'n2', kind: 'discussion', title: '구조 협의', createdAt: created },
+    { id: 'n2', kind: 'meeting', title: '구조 협의', createdAt: created },
     '# 구조 협의\n\n철골 보 춤',
   );
   const day = minuteOf(new Date(created)).slice(0, 10);
@@ -178,11 +178,22 @@ test('notes: 일지 and 회의록 under 운영 marked with the site as the sourc
   );
   const renamed = await outputs.writeNote(
     PROJECT,
-    { id: 'n2', kind: 'discussion', title: '구조/설비 협의', createdAt: created },
+    { id: 'n2', kind: 'meeting', title: '구조/설비 협의', createdAt: created },
     '# 구조 협의\n\n철골 보 춤',
   );
   assert.equal(renamed, join(root, '01_운영', '회의록', `${day}-구조_설비 협의.md`));
   assert.deepEqual(await readdir(join(root, '01_운영', '회의록')), [`${day}-구조_설비 협의.md`]);
+  // A plain note or 협의 사항 gets no folder copy (SPEC-10.10 표, T-356).
+  for (const kind of ['note', 'discussion'])
+    assert.equal(
+      await outputs.writeNote(
+        PROJECT,
+        { id: `x-${kind}`, kind, title: '메모', createdAt: created },
+        '본문',
+      ),
+      null,
+    );
+  assert.equal((await readdir(join(root, '01_운영', '회의록'))).length, 1);
   // Operations Markdown of another kind (할 일 내보내기) goes to its own sub-folder.
   const todo = await outputs.writeOpsMarkdown(
     PROJECT,

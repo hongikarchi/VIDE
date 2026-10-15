@@ -8,6 +8,7 @@
 import type { GateUse, JigManifest } from './manifest.ts';
 import type { ParamValue } from './params.ts';
 import { panelingMakeAllowed, stageOfStep, stageSources } from './paneling-confirmed.ts';
+import { differenceSentence, specMatchMessage, type SpecDifference } from '../spec-readme.ts';
 
 export type GateTiming = 'before-run' | 'after-run' | 'after-ai' | 'before-render' | 'before-bake';
 export type GateLevel = 'block' | 'warn' | 'isolate';
@@ -28,6 +29,9 @@ const GATE_TABLE = {
   'stale-input': { timing: 'before-run', level: 'block', implemented: true },
   'fact-valid': { timing: 'before-run', level: 'block', implemented: true },
   'basis-required': { timing: 'before-run', level: 'warn', implemented: true },
+  // 명세와 다름 (SPEC-07.14, ARCH-03 §11): the core adds it to a working copy's first step when the
+  // jig's README differs from jig.json; pin and submission refuse instead (spec-check.ts).
+  'spec-match': { timing: 'before-run', level: 'warn', implemented: true },
   'non-empty': { timing: 'after-run', level: 'block', implemented: true },
   'no-nan': { timing: 'after-run', level: 'block', implemented: true },
   'ids-stable': { timing: 'after-run', level: 'block', implemented: true },
@@ -90,6 +94,8 @@ export interface GateContext {
   previous?: { inputHash: string; output: unknown } | null;
   /** Assembly roles and whether a person confirmed them. */
   assembly?: Record<string, { confirmed?: unknown; sources?: { revisionKey: string }[] }>;
+  /** Differences of the jig's spec from its manifest, for `spec-match` (none: passes). */
+  spec?: readonly SpecDifference[];
   /** Current document revision keys by link, for `stale-input`; absent means unknown (passes). */
   currentRevisions?: Record<string, string>;
   layerRoot?: string;
@@ -535,6 +541,13 @@ const checks: Record<GateName, Check> = {
     return {
       failed: allowed ? [] : assumed.length ? assumed : ['(settings)'],
       message: allowed ? '' : `가정 값 ${assumed.length}개를 확인하면 만들 수 있습니다`,
+    };
+  },
+  'spec-match': (ctx) => {
+    const differences = ctx.spec ?? [];
+    return {
+      failed: differences.map(differenceSentence),
+      message: specMatchMessage(differences),
     };
   },
   'target-confirmed': (ctx) => {

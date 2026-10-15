@@ -13,6 +13,8 @@ import type { JigStore } from '../../core/jig-store.ts';
 // Pure (zod and the part registry only): the same check the screen runs before drawing.
 import { scopeOf, validatePanel } from '../../ui/jig-panel/spec.ts';
 import { sha256 } from './hash.ts';
+import type { SpecDifference } from '../spec-readme.ts';
+import { packageSpec } from './spec-check.ts';
 import {
   validateManifest,
   type DerivedValues,
@@ -35,6 +37,15 @@ export interface LoadedJig {
   issues: ManifestIssue[];
   /** `dist/steps.mjs` is present (made by `jig:pack`). */
   bundled: boolean;
+  /**
+   * The package's 명세 (`README.md`, PLAN-54 T-353) against its manifest. The runner never reads
+   * the spec to run (ARCH-03 §2.1); a working copy's calculation only warns when it differs.
+   */
+  spec: {
+    state: 'missing' | 'mismatch' | 'ok';
+    differences: SpecDifference[];
+    purpose: string | null;
+  };
 }
 
 export class JigInvalidError extends DomainError {
@@ -200,6 +211,7 @@ export async function loadJig(
   const digest = digestDir(absolute, files);
   if (options.expectDigest && options.expectDigest !== digest)
     throw new DomainError('JIG_DIGEST_MISMATCH');
+  const checked = packageSpec(absolute, raw as Record<string, unknown>);
   return {
     dir: absolute,
     id: manifest.id,
@@ -211,6 +223,7 @@ export async function loadJig(
     source,
     issues,
     bundled: files.includes('dist/steps.mjs'),
+    spec: { state: checked.state, differences: checked.differences, purpose: checked.purpose },
   };
 }
 
@@ -230,6 +243,10 @@ export interface RegistryEntry {
   capabilities: { name: string; reason: string }[];
   /** An installed package whose files no longer match its recorded digest. */
   corrupt?: boolean;
+  /** No `README.md` or a fixed section missing ('명세 없음', SPEC-07.2 명세 규칙 2). */
+  specMissing?: boolean;
+  /** ① 목적's first paragraph: the card's description before `summary` (Design SCR-18). */
+  purpose?: string;
 }
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -427,6 +444,8 @@ const summary = (jig: LoadedJig): RegistryEntry => ({
   name: jig.manifest.name,
   summary: jig.manifest.summary,
   ...(jig.manifest.icon ? { icon: jig.manifest.icon } : {}),
+  ...(jig.manifest.kind === 'tool' ? { specMissing: jig.spec.state === 'missing' } : {}),
+  ...(jig.spec.purpose ? { purpose: jig.spec.purpose } : {}),
   source: jig.source,
   stage: 'project',
   capabilities: jig.manifest.capabilities.map((c) => ({ name: c.name, reason: c.reason })),

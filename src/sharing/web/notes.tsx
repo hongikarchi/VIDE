@@ -16,7 +16,8 @@ export function ProjectNotes({ project, user }: { project: Project; user: string
         notes: ((await api(base)) as { notes: NoteItem[] }).notes,
         online: true,
       }),
-      create: async () => (await api(base, 'POST', { kind: 'note' })) as NoteItem,
+      create: async (input: { kind?: 'note' | 'meeting'; title?: string } = {}) =>
+        (await api(base, 'POST', { kind: 'note', ...input })) as NoteItem,
       update: async (id, input) => (await api(`${base}/${id}`, 'PATCH', input)) as NoteItem,
       remove: async (id) => {
         await api(`${base}/${id}`, 'DELETE');

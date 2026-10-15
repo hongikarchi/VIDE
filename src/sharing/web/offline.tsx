@@ -347,7 +347,11 @@ function OfflineNotes({
             <li key={note.id}>
               <button type="button" onClick={() => open?.(note.id)}>
                 <strong>{note.title.trim() || '제목 없음'}</strong>
-                {note.kind === 'journal' ? <small> · 퇴근 기록</small> : null}
+                {note.kind === 'journal' ? (
+                  <small> · 퇴근 기록</small>
+                ) : note.kind === 'meeting' ? (
+                  <small> · 회의록</small>
+                ) : null}
                 {note.updatedByName ? <small> · {note.updatedByName}</small> : null}
               </button>
             </li>

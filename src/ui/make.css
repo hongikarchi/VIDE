@@ -536,3 +536,47 @@ body[data-workspace='make'] .make-side {
 .make-flow small {
   color: var(--muted);
 }
+
+/* 명세 (PLAN-54 T-353, Design SCR-16·18): the '명세 없음' badge, [명세 보기] and '명세와 다름'. */
+.spec-missing {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: 4px;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: normal;
+  line-height: 16px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.jig-card-purpose {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.make-spec {
+  display: grid;
+  gap: 6px;
+  min-height: 0;
+  overflow: auto;
+}
+.make-spec details summary {
+  cursor: pointer;
+}
+.make-spec-body {
+  white-space: pre-wrap;
+  font: inherit;
+  line-height: 1.6;
+  margin: 4px 0 8px;
+}
+.make-spec-note {
+  display: block;
+}
+.make-spec-diff {
+  margin: 4px 0;
+  padding-left: 18px;
+}

@@ -31,6 +31,12 @@ import {
   type PanelSetting,
 } from './jig-panel/bindings.ts';
 import { scopeOf, validatePanel, type PanelIssue } from './jig-panel/spec.ts';
+import {
+  SPEC_MARKS,
+  differenceSentence,
+  parseSpecReadme,
+  type SpecDifference,
+} from '../jigs/spec-readme.ts';
 import { BakeCard, type BakePlan } from './kit/cards.tsx';
 import type { PartOf, PartUse } from './kit/registry.ts';
 import { FactBadge, SettingGroup, SettingRow, SliderBoard } from './kit/settings.tsx';
@@ -46,11 +52,13 @@ import {
   makeConversation,
   pinDraft,
   previewDraft,
+  regenerateSpec,
   setDraftIcon,
   testDraft,
   validateDraft,
   type DraftDetail,
   type DraftManifest,
+  type DraftSpec,
   type DraftStart,
   type DraftStepReport,
   type DraftSummary,
@@ -71,6 +79,7 @@ import {
   ZONE_SHAPES,
   PHASES,
   briefPrompt,
+  briefReadme,
   briefReady,
   emptyBrief,
   emptyCheck,
@@ -209,6 +218,11 @@ export function pinBlocked(detail: DraftDetail): string | undefined {
     return failed ? `시험 ${failed}건이 통과하지 않았습니다` : '시험이 통과하지 않았습니다';
   if (detail.files.some((file) => file.changed))
     return '점검 뒤 파일이 바뀌었습니다. 점검·시험을 다시 하세요';
+  // A new jig is not pinned without its 명세, nor while it differs (SPEC-07.16 7, Design SCR-16).
+  if (detail.spec === null || detail.spec?.state === 'missing')
+    return '명세 없음 — 명세가 있어야 고정하고 제출할 수 있습니다';
+  if (detail.spec?.state === 'mismatch')
+    return '명세와 다름 — 아래 점검에서 고치는 방향을 고르세요';
   return undefined;
 }
 // --- Mounting ---
@@ -340,7 +354,11 @@ function MakeTab({ projectId }: { projectId: string }) {
   );
   const [detail, setDetail] = useState<DraftDetail>();
   const [notice, setNotice] = useState('');
-  const [busy, setBusy] = useState<'validate' | 'test' | 'preview' | 'pin' | 'delete' | 'icon'>();
+  const [busy, setBusy] = useState<
+    'validate' | 'test' | 'preview' | 'pin' | 'delete' | 'icon' | 'spec'
+  >();
+  /** [명세 보기]: the read-only spec panel in place of the conversation's plan (Design SCR-16). */
+  const [specOpen, setSpecOpen] = useState(false);
   const [picking, setPicking] = useState(false);
   const [asking, setAsking] = useState<'pin' | 'delete'>();
   const [center, setCenter] = useState<'screen' | 'flow' | 'skill'>('screen');
@@ -489,6 +507,14 @@ function MakeTab({ projectId }: { projectId: string }) {
         });
       else setWorkspace('jig');
     });
+  // [명세 고치기] (SPEC-07.14): the spec follows the jig as it is; a person's sections stay.
+  const fixSpec = () =>
+    id &&
+    void act('spec', async () => {
+      const result = await regenerateSpec(projectId, id);
+      setDetail((d) => (d ? { ...d, ...result.draft, draft: d.draft } : d));
+      void read(id);
+    });
   const discard = () =>
     id &&
     void act('delete', async () => {
@@ -589,7 +615,28 @@ function MakeTab({ projectId }: { projectId: string }) {
             {detail.turns !== undefined ? (
               <small data-over={String(detail.turns >= 20)}>턴 {detail.turns}/20</small>
             ) : null}
+            {detail.spec ? (
+              <button
+                type="button"
+                className="link-button"
+                aria-pressed={specOpen}
+                onClick={() => setSpecOpen((open) => !open)}
+                data-action="spec-view"
+              >
+                {specOpen ? '대화로 돌아가기' : '명세 보기'}
+              </button>
+            ) : detail.spec === null ? (
+              <SpecMissingBadge />
+            ) : null}
           </div>
+          {detail.spec?.editedBy === 'ai' && detail.spec.history ? (
+            <small className="kit-muted make-spec-note">
+              명세 고침 · 이력: {detail.spec.history}
+            </small>
+          ) : null}
+          {specOpen && detail.spec ? (
+            <SpecPanel spec={detail.spec} onClose={() => setSpecOpen(false)} />
+          ) : null}
           <ol className="make-phases" aria-label="진행">
             {PHASES.map((p) => (
               <li key={p} aria-current={p === phase ? 'step' : undefined}>
@@ -645,7 +692,8 @@ function MakeTab({ projectId }: { projectId: string }) {
                 target={{ projectId, draftId: detail.draft.id }}
                 name={name}
                 version={m.version}
-                disabled={!!busy}
+                // No 명세, or 명세와 다름: not sent (SPEC-07.19 3, Design SCR-16).
+                disabled={!!busy || (detail.spec !== undefined && detail.spec?.state !== 'ok')}
               />
               <button
                 type="button"
@@ -967,6 +1015,17 @@ function MakeTab({ projectId }: { projectId: string }) {
         validateErrors={validateErrors.length}
         onValidate={runValidate}
         onTest={runTest}
+        onFixSpec={fixSpec}
+        onRebuild={
+          conversation
+            ? () => {
+                setNotice('');
+                void sendMakeTurn(conversation, '명세대로 다시 만들어 주세요').then((result) => {
+                  if (result !== 'sent') setNotice(TURN_NOTICE[result]);
+                });
+              }
+            : undefined
+        }
       />
       {sidePanel}
     </>
@@ -1074,18 +1133,114 @@ function partNames(panel: unknown): string[] {
   return out;
 }
 
+/** '명세 없음' (Design SCR-18): a small grey badge; the jig still opens. */
+export function SpecMissingBadge() {
+  return (
+    <span className="spec-missing" title="명세가 없어 관리자에게 제출할 수 없습니다">
+      명세 없음
+    </span>
+  );
+}
+/** [명세 보기]: the nine sections, read-only, who changed it last (Design SCR-16). */
+function SpecPanel({ spec, onClose }: { spec: DraftSpec; onClose: () => void }) {
+  const parsed = parseSpecReadme(spec.text);
+  const by = spec.editedBy === 'person' ? '사람' : spec.editedBy === 'ai' ? 'AI' : 'VIDE';
+  return (
+    <section className="make-spec" aria-label="명세">
+      <div className="make-head">
+        <strong>명세</strong>
+        <small className="kit-muted">
+          {[spec.updatedAt ? clock(spec.updatedAt) : '', `고친 쪽 ${by}`]
+            .filter(Boolean)
+            .join(' · ')}
+        </small>
+      </div>
+      {spec.personAt ? (
+        <small className="kit-muted">사람이 고침 · {clock(spec.personAt)}</small>
+      ) : null}
+      {SPEC_MARKS.map((mark) => {
+        const section = parsed.sections[mark];
+        return (
+          <details key={mark} open={mark === '①'}>
+            <summary>
+              {mark} {section?.title ?? '(없음)'}
+            </summary>
+            <pre className="make-spec-body">{section?.body ?? ''}</pre>
+          </details>
+        );
+      })}
+      <button type="button" onClick={onClose} data-action="spec-close">
+        대화로 돌아가기
+      </button>
+    </section>
+  );
+}
+/** The '명세와 다름' or '명세 없음' row of the check log, with the two ways to settle it. */
+function SpecRow({
+  spec,
+  busy,
+  onFixSpec,
+  onRebuild,
+}: {
+  spec: DraftSpec | null | undefined;
+  busy?: string;
+  onFixSpec?: () => void;
+  onRebuild?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (spec === undefined || spec?.state === 'ok') return null;
+  const missing = spec === null || spec.state === 'missing';
+  const differences = (spec?.differences ?? []) as SpecDifference[];
+  return (
+    <li data-level="error" data-check="spec-match">
+      <button
+        type="button"
+        className="make-case"
+        aria-expanded={missing ? undefined : open}
+        onClick={() => setOpen(!open)}
+        disabled={missing}
+      >
+        ✕ {missing ? '명세 없음' : `명세와 다름 ${differences.length}건`}
+      </button>
+      {!missing && open ? (
+        <ul className="make-spec-diff">
+          {differences.slice(0, 30).map((d, i) => (
+            <li key={i}>{differenceSentence(d)}</li>
+          ))}
+        </ul>
+      ) : null}
+      <div className="kit-actions">
+        {!missing && onRebuild ? (
+          <button type="button" disabled={!!busy} onClick={onRebuild} data-action="spec-rebuild">
+            명세대로 다시 만들기
+          </button>
+        ) : null}
+        {onFixSpec ? (
+          <button type="button" disabled={!!busy} onClick={onFixSpec} data-action="spec-fix">
+            {busy === 'spec' ? '고치는 중…' : '명세 고치기'}
+          </button>
+        ) : null}
+      </div>
+    </li>
+  );
+}
+
 function Console({
   detail,
   busy,
   validateErrors,
   onValidate,
   onTest,
+  onFixSpec,
+  onRebuild,
 }: {
   detail: DraftDetail;
   busy?: string;
   validateErrors: number;
   onValidate: () => void;
   onTest: () => void;
+  onFixSpec?: () => void;
+  onRebuild?: () => void;
 }) {
   const [tab, setTab] = useState<'all' | 'validate' | 'test'>('all');
   const [open, setOpen] = useState<string>();
@@ -1139,6 +1294,9 @@ function Console({
         </div>
       </div>
       <ul className="make-log">
+        {showValidate ? (
+          <SpecRow spec={detail.spec} busy={busy} onFixSpec={onFixSpec} onRebuild={onRebuild} />
+        ) : null}
         {showValidate && !v ? <li className="kit-muted">아직 점검하지 않았습니다.</li> : null}
         {showValidate && v?.ok && !issues.length ? (
           <li data-ok="true">
@@ -1576,7 +1734,12 @@ export function MakeBrief({
     if (!ready || busy) return;
     setBusy(true);
     setError('');
-    createDraft(projectId, { name: brief.purpose.trim(), from: brief.start })
+    createDraft(projectId, {
+      name: brief.purpose.trim(),
+      from: brief.start,
+      // The form's items as the 명세 draft (SPEC-07.16 0); it does not count as writing.
+      readme: briefReadme(brief),
+    })
       .then((draft) => {
         keepBrief(draft.id, { brief, started: false });
         firstTurns.set(draft.id, briefPrompt(brief));
@@ -1964,10 +2127,13 @@ export function DraftCard({ projectId, draft }: { projectId: string; draft: Draf
         <span className="jig-card-title">
           <JigIconMark icon={draft.manifest?.icon} />
           <strong>{name}</strong>
+          {draft.spec === null || draft.spec?.state === 'missing' ? <SpecMissingBadge /> : null}
         </span>
         <span className="pill">작성 중</span>
       </div>
-      <p>{draft.manifest?.summary || '만들기 대화에서 쓰고 있는 초안입니다.'}</p>
+      <p className="jig-card-purpose">
+        {draft.spec?.purpose || draft.manifest?.summary || '만들기 대화에서 쓰고 있는 초안입니다.'}
+      </p>
       <small>
         내 초안{draft.version ? ` · v${draft.version}` : ''}
         {draft.updatedAt ? ` · ${savedAt(draft.updatedAt)}` : ''}

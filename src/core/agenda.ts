@@ -124,12 +124,39 @@ export function setAgendaActor(store: Store, actor: () => AgendaActor | null) {
   actors.set(store, actor);
 }
 
+const changeListeners = new WeakMap<Store, Set<(projectId: string) => void>>();
+/**
+ * Calls `listener` after any write to a project's 할 일·일정 items through any `Agenda` of `store`
+ * (dashboard routes, AI tools, notes → 할 일, the site's offline view). The 일정 folder copy
+ * (SPEC-10.10, PLAN-54 T-356) listens here. Returns the unsubscribe.
+ */
+export function onAgendaChange(store: Store, listener: (projectId: string) => void) {
+  let set = changeListeners.get(store);
+  if (!set) changeListeners.set(store, (set = new Set()));
+  set.add(listener);
+  return () => void set.delete(listener);
+}
+
 export class Agenda {
   private readonly store: Store;
   private readonly now: () => Date;
   constructor(store: Store, { now = () => new Date() }: { now?: () => Date } = {}) {
     this.store = store;
     this.now = now;
+  }
+  /** Tells the change listeners (never throws), then gives `value` back. */
+  private changed<T>(projectId: string, value: T): T {
+    for (const listener of changeListeners.get(this.store) ?? [])
+      try {
+        listener(projectId);
+      } catch {
+        /* a listener never fails the write */
+      }
+    return value;
+  }
+  /** A write transaction of the project's items; the listeners hear of it once it is done. */
+  private write<T>(projectId: string, db: ReturnType<Store['db']>, task: () => T): T {
+    return this.changed(projectId, this.store.tx(db, task));
   }
   /** The given account, or (undefined) the one this engine is signed in to. */
   private actor(given: AgendaActor | null | undefined): AgendaActor | null {
@@ -186,7 +213,7 @@ export class Agenda {
     const input = parsed(agendaCreateSchema, value);
     const actor = this.actor(given);
     this.store.project(projectId);
-    return this.store.tx(this.store.db(projectId), () => {
+    return this.write(projectId, this.store.db(projectId), () => {
       const count = this.store
         .db(projectId)
         .prepare('SELECT count(*) AS n, max(ord) AS last FROM agenda_items WHERE projectId=?')
@@ -237,7 +264,7 @@ export class Agenda {
   set(projectId: string, id: string, value: unknown, given?: AgendaActor | null): AgendaItem {
     const input = parsed(agendaUpdateSchema, value);
     const actor = this.actor(given);
-    return this.store.tx(this.store.db(projectId), () => {
+    return this.write(projectId, this.store.db(projectId), () => {
       const before = this.get(projectId, id);
       if (input.revision !== before.revision) throw new DomainError('REVISION_CONFLICT');
       const date = input.date === undefined ? before.date : input.date;
@@ -284,7 +311,7 @@ export class Agenda {
   order(projectId: string, value: unknown): AgendaItem[] {
     const { ids } = parsed(agendaOrderSchema, value);
     if (new Set(ids).size !== ids.length) throw new DomainError('INVALID_INPUT');
-    return this.store.tx(this.store.db(projectId), () => {
+    return this.write(projectId, this.store.db(projectId), () => {
       const places = ids.map((id) => this.get(projectId, id).order).sort((a, b) => a - b);
       const update = this.store
         .db(projectId)
@@ -302,7 +329,7 @@ export class Agenda {
       .db(projectId)
       .prepare('DELETE FROM agenda_items WHERE projectId=? AND id=?')
       .run(projectId, id);
-    return this.list(projectId);
+    return this.changed(projectId, this.list(projectId));
   }
   /** [완료 비우기]: removes every done item. */
   removeDone(projectId: string) {
@@ -311,7 +338,7 @@ export class Agenda {
       .db(projectId)
       .prepare('DELETE FROM agenda_items WHERE projectId=? AND doneAt IS NOT NULL')
       .run(projectId);
-    return this.list(projectId);
+    return this.changed(projectId, this.list(projectId));
   }
   /**
    * Takes back what an AI write changed ([되돌리기]): an added item is removed, a changed one gets
@@ -324,7 +351,7 @@ export class Agenda {
   revert(projectId: string, changes: readonly AgendaChange[], given?: AgendaActor | null) {
     this.store.project(projectId);
     const actor = this.actor(given);
-    return this.store.tx(this.store.db(projectId), () => {
+    return this.write(projectId, this.store.db(projectId), () => {
       let reverted = 0,
         skipped = 0;
       const rewound = new Map<string, number>();
@@ -387,7 +414,7 @@ export class Agenda {
       db
         .prepare("SELECT * FROM day_log WHERE projectId=? AND date=? AND kind='day-end'")
         .get(projectId, localDate(this.now())) as Record<string, unknown> | undefined;
-    return this.store.tx(db, () => {
+    return this.write(projectId, db, () => {
       const today = localDate(this.now());
       const finished = this.list(projectId).filter(
         (item) => item.doneAt && localDate(new Date(item.doneAt)) === today,

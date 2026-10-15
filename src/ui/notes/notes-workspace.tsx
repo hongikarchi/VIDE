@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
-import { noteTitle, type NoteKind } from '../../contracts/note-doc';
+import {
+  meetingTitle,
+  noteKindMark,
+  noteTitle,
+  SCHEDULE_KIND,
+  seedMeeting,
+  type NoteKind,
+} from '../../contracts/note-doc';
 import { NoteEditor, userColor } from './note-editor';
 import './notes.css';
 
@@ -10,7 +17,9 @@ import './notes.css';
  * live editor. The same screen on the account site and in VIDE; each passes its own backend (site
  * API and socket, or the PC engine and its local stream). Every note looks the same here
  * (2026-10-06 사용자 결정 "노트로 통일"): no kind to pick or filter; a journal — the dated note
- * [퇴근하기] writes to — only carries a small '퇴근 기록' mark.
+ * [퇴근하기] writes to — only carries a small '퇴근 기록' mark. A 회의록 ([새 회의록], SPEC-10.9 1)
+ * is marked '회의록'; VIDE adds the project's '일정' row on top (SPEC-10.9 4) and the work folder
+ * copies' '폴더에서 바뀜' with [버리기] (SPEC-10.10 3).
  */
 export interface NoteItem {
   id: string;
@@ -28,10 +37,17 @@ export interface NoteLinkStatus {
   pending?: boolean;
   error?: string;
 }
+/** A work folder copy's state (VIDE): key `note:<id>` or `schedule:<YYYY-MM>`. */
+export interface FolderCopy {
+  key: string;
+  state: 'written' | 'changed-in-folder' | 'not-written';
+  path?: string | null;
+}
 export interface NotesBackend {
   user: string;
   list(): Promise<{ notes: NoteItem[]; online: boolean }>;
-  create(): Promise<NoteItem>;
+  /** A new note; `meeting` is a 회의록 ([새 회의록]). */
+  create(input?: { kind?: 'note' | 'meeting'; title?: string }): Promise<NoteItem>;
   update(id: string, input: { title?: string }): Promise<NoteItem>;
   remove(id: string): Promise<void>;
   /** Connects `doc` to the note; returns the disconnect. */
@@ -45,7 +61,19 @@ export interface NotesBackend {
   toAgenda?(id: string): Promise<{ added: number; skipped: number }>;
   /** Where 할 일 sending happens when this screen cannot (the account site). */
   agendaHint?: string;
+  /** VIDE only: the work folder copies (none: no work folder). */
+  folderCopies?(): Promise<FolderCopy[]>;
+  /** VIDE only: [버리기] — the folder copy written again from its source. */
+  discardCopy?(key: string): Promise<void>;
+  /** VIDE only: the 일정 view (the dashboard's month calendar); absent, no 일정 row. */
+  schedule?: () => ReactNode;
 }
+/** This screen's local date, 'YYYY-MM-DD' (a meeting's 날짜 절). */
+const localToday = () => {
+  const at = new Date();
+  const two = (n: number) => String(n).padStart(2, '0');
+  return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}`;
+};
 const ago = (at: number) => {
   const minutes = Math.round((Date.now() - at) / 60000);
   if (minutes < 1) return '방금';
@@ -63,14 +91,85 @@ const errorText = (error: unknown) => {
       : code || '요청을 처리하지 못했습니다.';
 };
 
+/**
+ * '폴더에서 바뀜' (SPEC-10.10 3, Design SCR-23): one warning line with [버리기] (one confirm), or
+ * '폴더에 아직 안 씀' (SPEC-10.10 4). Nothing when the copy is as written.
+ */
+function FolderNotice({
+  copy,
+  what,
+  onDiscard,
+}: {
+  copy?: FolderCopy;
+  what: string;
+  onDiscard: () => Promise<void>;
+}) {
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  if (!copy || copy.state === 'written') return null;
+  if (copy.state === 'not-written')
+    return (
+      <p className="note-folder" role="status">
+        폴더에 아직 안 씀 — 작업 폴더에 쓰지 못했습니다. 다음에 다시 씁니다.
+      </p>
+    );
+  return (
+    <div className="note-folder changed" role="status">
+      <span className="note-folder-text">
+        폴더의 사본이 이 {what}
+        {what === '일정' ? '과' : '와'} 다릅니다. 폴더에서 고친 글은 여기로 들어오지 않습니다.
+        {error ? ` ${error}` : ''}
+      </span>
+      {confirm ? (
+        <>
+          <span className="note-folder-ask">폴더 사본을 이 {what} 내용으로 다시 씁니다</span>
+          <button
+            type="button"
+            className="note-danger"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await onDiscard();
+                setConfirm(false);
+              } catch (failure) {
+                setError(errorText(failure));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            버리기
+          </button>
+          <button type="button" className="note-quiet" onClick={() => setConfirm(false)}>
+            취소
+          </button>
+        </>
+      ) : (
+        <button type="button" className="note-action" onClick={() => setConfirm(true)}>
+          버리기
+        </button>
+      )}
+    </div>
+  );
+}
+
 function OpenNote({
   backend,
   note,
+  seed,
+  folder,
+  onDiscard,
   onChanged,
   onRemoved,
 }: {
   backend: NotesBackend;
   note: NoteItem;
+  /** A 회의록 this screen just made: its template goes in once, with this date (SPEC-10.9 1). */
+  seed?: string;
+  folder?: FolderCopy;
+  onDiscard: () => Promise<void>;
   onChanged: (note: NoteItem) => void;
   onRemoved: () => void;
 }) {
@@ -87,12 +186,22 @@ function OpenNote({
   // an empty document would write its own empty first paragraph into the shared note.
   const [ready, setReady] = useState(false);
   useEffect(() => setTitle(note.title), [note.title]);
+  // Only the screen that made the 회의록 fills its template, once the server's content is here,
+  // so two screens never both put it in.
+  const seeded = useRef(false);
   useEffect(() => {
+    const begin = () => {
+      if (seed && !seeded.current) {
+        seeded.current = true;
+        seedMeeting(doc, seed);
+      }
+      setReady(true);
+    };
     const stop = backend.connect(note.id, doc, awareness, (next) => {
       setStatus(next);
-      if (next.synced) setReady(true);
+      if (next.synced) begin();
     });
-    const fallback = setTimeout(() => setReady(true), 2000);
+    const fallback = setTimeout(begin, 2000);
     const seen = () =>
       setPeople(
         [...awareness.getStates().entries()]
@@ -105,7 +214,7 @@ function OpenNote({
       clearTimeout(fallback);
       stop();
     };
-  }, [backend, note.id, doc, awareness]);
+  }, [backend, note.id, doc, awareness, seed]);
   const user = useMemo(
     () => ({ name: backend.user, color: userColor(backend.user) }),
     [backend.user],
@@ -142,7 +251,9 @@ function OpenNote({
           onKeyDown={(event) => event.key === 'Enter' && event.currentTarget.blur()}
         />
         <div className="note-meta">
-          {note.kind === 'journal' ? <span className="note-kind">퇴근 기록</span> : null}
+          {noteKindMark(note.kind) ? (
+            <span className="note-kind">{noteKindMark(note.kind)}</span>
+          ) : null}
           <span
             className={`note-status ${status.synced && !status.pending ? 'ok' : ''}`}
             role="status"
@@ -202,6 +313,7 @@ function OpenNote({
             </button>
           )}
         </div>
+        <FolderNotice copy={folder} what="노트" onDiscard={onDiscard} />
         {message ? (
           <p className="note-message" role="status">
             {message}
@@ -234,6 +346,14 @@ export function NotesWorkspace({
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState(initial ?? '');
   const [message, setMessage] = useState('');
+  const [copies, setCopies] = useState<Map<string, FolderCopy>>(new Map());
+  const [seed, setSeed] = useState<{ id: string; date: string } | undefined>();
+  const readCopies = useCallback(async () => {
+    if (!backend.folderCopies) return;
+    // No work folder (or no reply): no folder marks.
+    const rows = await backend.folderCopies().catch(() => [] as FolderCopy[]);
+    setCopies(new Map(rows.map((row) => [row.key, row])));
+  }, [backend]);
   const refresh = useCallback(async () => {
     try {
       const value = await backend.list();
@@ -242,7 +362,8 @@ export function NotesWorkspace({
     } catch (error) {
       setMessage(errorText(error));
     }
-  }, [backend]);
+    await readCopies();
+  }, [backend, readCopies]);
   useEffect(() => {
     void refresh();
     const timer = setInterval(() => void refresh(), 15_000);
@@ -253,14 +374,34 @@ export function NotesWorkspace({
     setOpenId(note.id);
     onOpen?.(note.id);
   };
-  const create = async () => {
+  const create = async (kind: 'note' | 'meeting' = 'note') => {
     try {
       setMessage('');
-      open(await backend.create());
+      if (kind === 'note') return open(await backend.create());
+      const date = localToday();
+      const note = await backend.create({ kind, title: meetingTitle(date) });
+      setSeed({ id: note.id, date });
+      open(note);
     } catch (error) {
       setMessage(errorText(error));
     }
   };
+  const discard = async (keys: string[]) => {
+    for (const key of keys) await backend.discardCopy?.(key);
+    await readCopies();
+  };
+  /** The 일정 row's copies: every month whose copy is not as written. */
+  const scheduleCopies = [...copies.values()].filter(
+    (copy) => copy.key.startsWith('schedule:') && copy.state !== 'written',
+  );
+  const scheduleCopy =
+    scheduleCopies.find((copy) => copy.state === 'changed-in-folder') ?? scheduleCopies[0];
+  const folderMark = (copy?: FolderCopy) =>
+    copy?.state === 'changed-in-folder' ? (
+      <small className="notes-folder changed">폴더에서 바뀜</small>
+    ) : copy?.state === 'not-written' ? (
+      <small className="notes-folder">폴더에 아직 안 씀</small>
+    ) : null;
   const words = query.trim().toLowerCase();
   const shown = (notes ?? [])
     .filter(
@@ -277,6 +418,13 @@ export function NotesWorkspace({
         <div className="notes-new">
           <button type="button" className="notes-create" onClick={() => void create()}>
             새 노트
+          </button>
+          <button
+            type="button"
+            className="notes-create-meeting"
+            onClick={() => void create('meeting')}
+          >
+            새 회의록
           </button>
         </div>
         <input
@@ -298,6 +446,26 @@ export function NotesWorkspace({
           </p>
         ) : null}
         <ul className="notes-list">
+          {backend.schedule ? (
+            <li className="notes-pinned">
+              <button
+                type="button"
+                className={openId === SCHEDULE_KIND ? 'selected' : ''}
+                aria-current={openId === SCHEDULE_KIND}
+                onClick={() => {
+                  setOpenId(SCHEDULE_KIND);
+                  onOpen?.(SCHEDULE_KIND);
+                }}
+              >
+                <span className="notes-row-head">
+                  <strong>프로젝트 일정</strong>
+                  <small className="notes-kind">일정</small>
+                  {folderMark(scheduleCopy)}
+                </span>
+                <small className="notes-row-meta">할 일·일정 항목을 달마다 봅니다</small>
+              </button>
+            </li>
+          ) : null}
           {notes === null ? <li className="notes-empty">불러오는 중…</li> : null}
           {notes && !shown.length ? (
             <li className="notes-empty">
@@ -314,7 +482,10 @@ export function NotesWorkspace({
               >
                 <span className="notes-row-head">
                   <strong className={note.title.trim() ? '' : 'untitled'}>{noteTitle(note)}</strong>
-                  {note.kind === 'journal' ? <small className="notes-kind">퇴근 기록</small> : null}
+                  {noteKindMark(note.kind) ? (
+                    <small className="notes-kind">{noteKindMark(note.kind)}</small>
+                  ) : null}
+                  {folderMark(copies.get(`note:${note.id}`))}
                 </span>
                 <small className="notes-row-meta">
                   {ago(note.updatedAt)}
@@ -327,11 +498,23 @@ export function NotesWorkspace({
         </ul>
       </aside>
       <div className="notes-main">
-        {current ? (
+        {openId === SCHEDULE_KIND && backend.schedule ? (
+          <div className="notes-schedule-wrap">
+            <FolderNotice
+              copy={scheduleCopy}
+              what="일정"
+              onDiscard={() => discard(scheduleCopies.map((copy) => copy.key))}
+            />
+            {backend.schedule()}
+          </div>
+        ) : current ? (
           <OpenNote
             key={current.id}
             backend={backend}
             note={current}
+            seed={seed?.id === current.id ? seed.date : undefined}
+            folder={copies.get(`note:${current.id}`)}
+            onDiscard={() => discard([`note:${current.id}`])}
             onChanged={(changed) =>
               setNotes(
                 (all) => all?.map((n) => (n.id === changed.id ? { ...n, ...changed } : n)) ?? all,
@@ -344,8 +527,8 @@ export function NotesWorkspace({
           />
         ) : (
           <p className="notes-placeholder">
-            왼쪽에서 노트를 고르거나 [새 노트]로 시작하세요. 프로젝트 구성원 모두가 같은 노트를
-            동시에 고칠 수 있습니다.
+            왼쪽에서 노트를 고르거나 [새 노트]·[새 회의록]으로 시작하세요. 프로젝트 구성원 모두가
+            같은 노트를 동시에 고칠 수 있습니다.
           </p>
         )}
       </div>

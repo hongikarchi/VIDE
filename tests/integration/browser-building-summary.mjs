@@ -38,7 +38,9 @@ try {
   // JIG → the official 건축개요 card (J-11, once) → a new instance.
   await page.getByRole('button', { name: 'JIG', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'JIG', exact: true });
-  const cards = dialog.locator('.jig-card', { hasText: '건축개요' });
+  const cards = dialog.locator('.jig-card', {
+    has: page.locator('.jig-card-title', { hasText: '건축개요' }),
+  });
   await cards.first().waitFor();
   assert.equal(await cards.count(), 1, 'one card for J-11');
   const card = cards.first();

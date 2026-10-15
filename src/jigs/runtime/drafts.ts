@@ -64,6 +64,23 @@ import {
 } from './pack.ts';
 import { applyChanges, initialParams, type ParamChange } from './params.ts';
 import { MemoryCache, executeSteps, type StepReport } from './runner.ts';
+import {
+  SPEC_MARKS,
+  appendHistory,
+  lastHistoryReason,
+  parseSpecReadme,
+  replaceSection,
+  rewriteSkillFrontMatter,
+  skillFieldsFromSpec,
+  skillFieldsOf,
+  specDraft,
+  specPurpose,
+  specSectionsFromManifest,
+  panelWritesFiles,
+  type SpecDifference,
+  type SpecMark,
+} from '../spec-readme.ts';
+import { SPEC_FILE, SPEC_MAX_BYTES, assertSpec, packageSpec, readSpecText } from './spec-check.ts';
 
 export const DRAFT_TEMPLATES = ['example-grid', 'blank'] as const;
 export type DraftTemplate = (typeof DRAFT_TEMPLATES)[number];
@@ -218,6 +235,35 @@ export interface DraftResults {
   validate?: ValidationReport & { at: string };
   test?: SelftestReport & { at: string };
   preview?: DraftPreview & { at: string };
+  /** The spec as VIDE or a make turn last left it (PLAN-54 T-353); kept outside the folder. */
+  specBase?: DraftSpecBase;
+}
+/**
+ * Section hashes of `README.md` as VIDE or a make turn last left them, and the sections a person
+ * changed in the folder between turns (the AI does not undo them, SPEC-07.16 4).
+ */
+export interface DraftSpecBase {
+  hashes: Partial<Record<SpecMark, string>>;
+  by: 'vide' | 'ai' | 'person';
+  at: string;
+  /** Sections a person changed: the hash of their text and of the text it replaced. */
+  person?: Partial<Record<SpecMark, { hash: string; before: string | null; at: string }>>;
+}
+/** The spec of a draft as the make screen shows it ([명세 보기], Design SCR-16). */
+export interface DraftSpec {
+  text: string;
+  updatedAt: string;
+  /** 'missing': a fixed section is missing (명세 없음); else the spec-match verdict. */
+  state: 'missing' | 'mismatch' | 'ok';
+  missing: SpecMark[];
+  differences: SpecDifference[];
+  purpose: string | null;
+  /** Who changed it last: VIDE (form, [명세 고치기]), the make conversation, or a person. */
+  editedBy: 'vide' | 'ai' | 'person';
+  /** When a person last changed it in the folder. */
+  personAt: string | null;
+  /** The reason of the last ⑨ row (the '명세 고침 · 이력' line). */
+  history: string | null;
 }
 export interface DraftOrigin {
   jigId: string;
@@ -241,6 +287,8 @@ export interface DraftView extends JigDraft, DraftResults {
   files: { path: string; size: number; updatedAt: string }[];
   /** `skill.md` of the draft (the AI 설명서), when present. */
   skill: string | null;
+  /** `README.md` of the draft (the 명세), null when there is none. */
+  spec: DraftSpec | null;
 }
 export interface PinResult {
   id: string;
@@ -348,6 +396,11 @@ export class JigDrafts {
           skill = readFileSync(join(draft.path, path), 'utf8');
       }
     }
+    const { specBase, ...results } = this.results(draft.id);
+    const spec =
+      draft.state !== 'discarded' && existsSync(draft.path)
+        ? this.specView(draft.path, manifest, specBase, files)
+        : null;
     // The open make-conversation of the draft, if any (the row's own column is not kept).
     const conversation = this.of(draft.projectId)
       .prepare(
@@ -362,8 +415,242 @@ export class JigDrafts {
       manifest,
       files,
       skill,
-      ...this.results(draft.id),
+      spec,
+      ...results,
     };
+  }
+
+  // --- 명세 (README.md, PLAN-54 T-353) ----------------------------------------------------------
+  /** The spec of a draft folder for the screen, or null without `README.md`. */
+  private specView(
+    dir: string,
+    manifest: Record<string, unknown> | null,
+    base: DraftSpecBase | undefined,
+    files: DraftView['files'],
+  ): DraftSpec | null {
+    const text = readSpecText(dir);
+    if (text === null) return null;
+    const checked = packageSpec(dir, manifest ?? {});
+    const changed = this.changedSince(text, base);
+    const personAt = changed.length
+      ? (files.find((file) => file.path === SPEC_FILE)?.updatedAt ?? null)
+      : (Object.values(base?.person ?? {})
+          .map((entry) => entry?.at ?? '')
+          .sort()
+          .pop() ?? null);
+    return {
+      text,
+      updatedAt: files.find((file) => file.path === SPEC_FILE)?.updatedAt ?? '',
+      state: manifest ? checked.state : checked.state === 'missing' ? 'missing' : 'ok',
+      missing: checked.missing,
+      differences: manifest ? checked.differences : [],
+      purpose: checked.purpose,
+      editedBy: changed.length ? 'person' : (base?.by ?? 'vide'),
+      personAt,
+      history: lastHistoryReason(checked.parsed),
+    };
+  }
+  /** Section hashes of a spec text (a section's body, trimmed). */
+  private specHashes(text: string | null): Partial<Record<SpecMark, string>> {
+    const parsed = parseSpecReadme(text);
+    const out: Partial<Record<SpecMark, string>> = {};
+    for (const mark of SPEC_MARKS) {
+      const section = parsed.sections[mark];
+      if (section) out[mark] = sha256(section.body).slice(0, 16);
+    }
+    return out;
+  }
+  /** Marks whose section differs from the base (all of them when there is no base yet). */
+  private changedSince(text: string | null, base: DraftSpecBase | undefined): SpecMark[] {
+    if (!base) return [];
+    const now = this.specHashes(text);
+    return SPEC_MARKS.filter((mark) => (now[mark] ?? null) !== (base.hashes[mark] ?? null));
+  }
+  /** Records the spec as `by` left it (the person sections stay unless `person` replaces them). */
+  private markSpec(
+    draftId: string,
+    dir: string,
+    by: DraftSpecBase['by'],
+    person?: DraftSpecBase['person'],
+  ) {
+    const old = this.results(draftId).specBase;
+    this.keep(draftId, 'specBase', {
+      hashes: this.specHashes(readSpecText(dir)),
+      by,
+      at: new Date().toISOString(),
+      ...((person ?? old?.person) ? { person: person ?? old?.person } : {}),
+    });
+  }
+  /**
+   * `skill.md`'s `examples`·`words`·`not_for` from ② of a complete spec (ARCH-03 §5.3); true when
+   * the file changed. Without a complete spec `skill.md` stays as written.
+   */
+  private syncSkill(dir: string): boolean {
+    const parsed = parseSpecReadme(readSpecText(dir));
+    if (!parsed.complete) return false;
+    let manifest: Record<string, unknown> = {};
+    try {
+      manifest = (readManifestFile(dir) as Record<string, unknown>) ?? {};
+    } catch {
+      /* a draft may not have a readable jig.json yet */
+    }
+    const skillPath = typeof manifest.skill === 'string' ? manifest.skill : 'skill.md';
+    const file = join(dir, ...skillPath.split('/'));
+    const current =
+      existsSync(file) && lstatSync(file).size <= SPEC_MAX_BYTES
+        ? readFileSync(file, 'utf8')
+        : null;
+    const next = rewriteSkillFrontMatter(current, skillFieldsFromSpec(parsed), {
+      name: typeof manifest.name === 'string' ? manifest.name : (parsed.title ?? 'jig'),
+      description: specPurpose(parsed),
+    });
+    if (next === current) return false;
+    this.writeIn(dir, skillPath, next);
+    return true;
+  }
+  /**
+   * The start of a make turn: sections that differ from what VIDE or the last turn left were
+   * changed by a person in the folder; they are recorded so the turn does not undo them.
+   */
+  specTurnStart(projectId: string, draftId: string): SpecMark[] {
+    const draft = this.store.draft(projectId, draftId);
+    if (draft.state !== 'open' || !existsSync(draft.path)) return [];
+    const base = this.results(draftId).specBase;
+    const text = readSpecText(draft.path);
+    if (!base) {
+      if (text !== null) this.markSpec(draftId, draft.path, 'vide');
+      return [];
+    }
+    const changed = this.changedSince(text, base);
+    if (!changed.length) {
+      this.rememberPersonSections(draftId, draft.path);
+      return [];
+    }
+    const hashes = this.specHashes(text);
+    const at = new Date().toISOString();
+    const person = { ...(base.person ?? {}) };
+    for (const mark of changed)
+      if (hashes[mark])
+        person[mark] = { hash: hashes[mark]!, before: base.hashes[mark] ?? null, at };
+    this.markSpec(draftId, draft.path, 'person', person);
+    this.syncSkill(draft.path);
+    this.rememberPersonSections(draftId, draft.path);
+    return changed;
+  }
+  /**
+   * The end of a make turn: a section a person changed that the turn put back to the text the
+   * person replaced is restored (SPEC-07.16 4); `skill.md` follows ②; the base moves to this
+   * spec. Returns whether the spec changed and the last history reason (the '명세 고침' line).
+   */
+  specTurnEnd(
+    projectId: string,
+    draftId: string,
+  ): { changed: boolean; history: string | null; restored: SpecMark[] } {
+    const draft = this.store.draft(projectId, draftId);
+    if (draft.state !== 'open' || !existsSync(draft.path))
+      return { changed: false, history: null, restored: [] };
+    const base = this.results(draftId).specBase;
+    let text = readSpecText(draft.path);
+    const changed = base ? this.changedSince(text, base) : text === null ? [] : [...SPEC_MARKS];
+    if (!changed.length) return { changed: false, history: null, restored: [] };
+    const restored: SpecMark[] = [];
+    // The person's own text of a section is gone only from the base; it is put back from the
+    // hash only when the turn wrote the very text the person had replaced.
+    const kept = this.personTexts.get(draftId);
+    if (text !== null && base?.person)
+      for (const mark of changed) {
+        const entry = base.person[mark];
+        const now = this.specHashes(text)[mark] ?? null;
+        const body = kept?.[mark];
+        if (entry && body !== undefined && now === entry.before) {
+          text = replaceSection(text, mark, () => body);
+          restored.push(mark);
+        }
+      }
+    if (restored.length && text !== null) this.writeIn(draft.path, SPEC_FILE, text);
+    this.syncSkill(draft.path);
+    this.markSpec(draftId, draft.path, 'ai');
+    return {
+      changed: true,
+      history: changed.includes('⑨') ? lastHistoryReason(text) : null,
+      restored,
+    };
+  }
+  /** Person section texts of the running turn (kept in memory from `specTurnStart`). */
+  private readonly personTexts = new Map<string, Partial<Record<SpecMark, string>>>();
+  /** Keeps the bodies of the person sections for the turn's end (see `specTurnEnd`). */
+  private rememberPersonSections(draftId: string, dir: string) {
+    const person = this.results(draftId).specBase?.person;
+    const parsed = parseSpecReadme(readSpecText(dir));
+    const bodies: Partial<Record<SpecMark, string>> = {};
+    for (const mark of Object.keys(person ?? {}) as SpecMark[]) {
+      const section = parsed.sections[mark];
+      if (section && sha256(section.body).slice(0, 16) === person?.[mark]?.hash)
+        bodies[mark] = section.body;
+    }
+    this.personTexts.set(draftId, bodies);
+  }
+  /**
+   * [명세 고치기] (SPEC-07.14): ③~⑦ of the spec written again from `jig.json`, a section a person
+   * changed kept as it is, and one ⑨ row. Without a spec one is made (① from the summary, ② from
+   * `skill.md`). Returns the draft and the sections kept.
+   */
+  regenerateSpec(projectId: string, draftId: string): { draft: DraftView; kept: SpecMark[] } {
+    const dir = this.open(projectId, draftId).path;
+    let manifest: Record<string, unknown>;
+    try {
+      manifest = readManifestFile(dir) as Record<string, unknown>;
+    } catch {
+      throw new DomainError('DRAFT_PATH_INVALID');
+    }
+    if (!manifest || typeof manifest !== 'object') throw new DomainError('DRAFT_PATH_INVALID');
+    const base = this.results(draftId).specBase;
+    let text = readSpecText(dir);
+    const name = typeof manifest.name === 'string' ? manifest.name : 'jig';
+    if (text === null || !parseSpecReadme(text).complete) {
+      const skillFile = join(dir, typeof manifest.skill === 'string' ? manifest.skill : 'skill.md');
+      const skill = existsSync(skillFile) ? readFileSync(skillFile, 'utf8') : '';
+      const front = skillFieldsOf(skill);
+      const draft = specDraft({
+        name,
+        purpose: typeof manifest.summary === 'string' ? manifest.summary : '',
+        when: front.examples,
+        notWhen: front.notFor,
+      });
+      // Keep whatever sections the old text had (a person or the AI wrote them).
+      const old = parseSpecReadme(text);
+      text = draft;
+      for (const mark of SPEC_MARKS)
+        if (old.sections[mark]?.body)
+          text = replaceSection(text, mark, () => old.sections[mark]!.body);
+    }
+    const panel =
+      typeof manifest.panel === 'string' && existsSync(join(dir, manifest.panel))
+        ? readFileSync(join(dir, manifest.panel), 'utf8')
+        : null;
+    const sections = specSectionsFromManifest(manifest, { tablePart: panelWritesFiles(panel) });
+    const pending = this.changedSince(text, base);
+    const hashes = this.specHashes(text);
+    const kept: SpecMark[] = [];
+    for (const mark of ['③', '④', '⑤', '⑥', '⑦'] as const) {
+      const person = base?.person?.[mark];
+      if (pending.includes(mark) || (person && person.hash === hashes[mark])) {
+        kept.push(mark);
+        continue;
+      }
+      text = replaceSection(text, mark, () => sections[mark]);
+    }
+    text = appendHistory(text, {
+      version: `v${typeof manifest.version === 'string' ? manifest.version : '0.1.0'}`,
+      date: new Date().toISOString().slice(0, 10),
+      reason: kept.length
+        ? `지금 jig에 맞춰 명세 고침(사람이 고친 ${kept.join('')} 절은 그대로)`
+        : '지금 jig에 맞춰 명세 고침',
+    });
+    this.writeIn(dir, SPEC_FILE, text);
+    this.syncSkill(dir);
+    this.markSpec(draftId, dir, 'vide');
+    return { draft: this.get(projectId, draftId), kept };
   }
   /** The folder of an open (or pinned) draft; a discarded one is gone. */
   dir(projectId: string, draftId: string): string {
@@ -378,10 +665,18 @@ export class JigDrafts {
     return draft;
   }
 
-  /** A new draft from a starting example (the general grid example or a blank one). */
+  /**
+   * A new draft from a starting example (the general grid example or a blank one). `readme` is the
+   * spec draft the start form made ([계획 받기], SPEC-07.16 0); it replaces the example's spec and
+   * does not count as writing. `skill.md` follows its ② (ARCH-03 §5.3).
+   */
   create(
     projectId: string,
-    { name, from = 'example-grid' }: { name: string; from?: DraftTemplate },
+    {
+      name,
+      from = 'example-grid',
+      readme,
+    }: { name: string; from?: DraftTemplate; readme?: string },
   ): DraftView {
     const title = name.trim();
     if (!title || title.length > 100 || !DRAFT_TEMPLATES.includes(from))
@@ -405,10 +700,13 @@ export class JigDrafts {
         for (const [path, text] of Object.entries(blankFiles(title, id)))
           this.writeIn(dir, path, text);
       }
+      if (readme !== undefined) this.writeIn(dir, SPEC_FILE, readme);
       const at = new Date().toISOString();
       this.of(projectId)
         .prepare("INSERT INTO jig_drafts VALUES(?,?,?,?,'open',?,?)")
         .run(draftId, projectId, null, dir, at, at);
+      this.syncSkill(dir);
+      if (readSpecText(dir) !== null) this.markSpec(draftId, dir, 'vide');
     } catch (error) {
       rmSync(dir, { recursive: true, force: true });
       throw error;
@@ -469,6 +767,8 @@ export class JigDrafts {
         name: source.name,
         at,
       });
+      // The copy inherits the source's spec (SPEC-07.16 0); it is the conversation's first context.
+      if (readSpecText(dir) !== null) this.markSpec(draftId, dir, 'vide');
     } catch (error) {
       rmSync(dir, { recursive: true, force: true });
       throw error;
@@ -654,6 +954,8 @@ export class JigDrafts {
     const dir = draft.path;
     const validation = await validateDraftDir(dir);
     if (!validation.ok) throw new JigInvalidError(validation.issues);
+    // A new jig is not pinned without its spec, nor with a spec that differs (SPEC-07.16 7).
+    assertSpec(dir, readManifestFile(dir) as Record<string, unknown>);
     const test = await selftestInBox(await loadJig(dir, { source: 'ai-draft' }), this.options.box);
     this.keep(draftId, 'test', { ...test, at: new Date().toISOString() });
     if (!test.ok) throw new DomainError('JIG_SELFTEST_FAILED');

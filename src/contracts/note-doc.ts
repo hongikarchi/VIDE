@@ -8,13 +8,39 @@ import * as Y from 'yjs';
  * `codeBlock`, `horizontalRule`, `hardBreak`) and text with its marks as formatting attributes.
  */
 export const NOTE_FIELD = 'default';
-export const NOTE_KINDS = ['note', 'discussion', 'journal'] as const;
+/**
+ * Kinds of a stored note. `meeting` (회의록, SPEC-10.9 1) is made by [새 회의록] and keeps its kind;
+ * `discussion` (협의 사항) stays a 노트 on screens.
+ */
+export const NOTE_KINDS = ['note', 'discussion', 'journal', 'meeting'] as const;
 export type NoteKind = (typeof NOTE_KINDS)[number];
 /**
- * Screens show one kind, 노트 (2026-10-06 사용자 결정 "노트로 통일"): a 협의 사항 row is a 노트;
- * only a journal, the dated note [퇴근하기] writes to, is told apart as '일지'.
+ * The 일정 row of a note list (SPEC-10.9 4): not a stored note — a month view of the project's
+ * 할 일·일정 items — so it is never a `NoteKind` the site accepts.
  */
-export const noteLabel = (kind: NoteKind) => (kind === 'journal' ? '일지' : '노트');
+export const SCHEDULE_KIND = 'schedule';
+export type NoteRowKind = NoteKind | typeof SCHEDULE_KIND;
+/**
+ * Screens show 노트 (2026-10-06 사용자 결정 "노트로 통일"): a 협의 사항 row is a 노트; a journal,
+ * the dated note [퇴근하기] writes to, is '일지', a meeting '회의록', the schedule view '일정'.
+ */
+export const noteLabel = (kind: NoteRowKind) =>
+  kind === 'journal'
+    ? '일지'
+    : kind === 'meeting'
+      ? '회의록'
+      : kind === SCHEDULE_KIND
+        ? '일정'
+        : '노트';
+/** The small kind mark of a list row (Design SCR-23): none for a plain note. */
+export const noteKindMark = (kind: NoteRowKind) =>
+  kind === 'journal'
+    ? '퇴근 기록'
+    : kind === 'meeting'
+      ? '회의록'
+      : kind === SCHEDULE_KIND
+        ? '일정'
+        : '';
 /** The title as shown: an empty title reads '제목 없음' (a journal's, its date title). */
 export function noteTitle(note: { title: string; kind: NoteKind; journalDate?: string | null }) {
   return (
@@ -197,6 +223,79 @@ export function actionItems(markdown: string): string[] {
     if (text && !items.includes(text)) items.push(text.slice(0, 500));
   }
   return items;
+}
+
+/** The four sections of a new meeting note (SPEC-10.9 1), H2 each. */
+export const MEETING_SECTIONS = ['날짜', '참석', '결정', '할 일'] as const;
+/** A new meeting note's first title: '10월 15일 회의'. */
+export function meetingTitle(date: string) {
+  const [, m, d] = date.split('-').map(Number);
+  return `${m}월 ${d}일 회의`;
+}
+/** The meeting template as Markdown (what `seedMeeting` puts in, as `noteMarkdown` reads it). */
+export const meetingMarkdown = (date: string) =>
+  `## 날짜
+
+${date}
+
+## 참석
+
+## 결정
+
+## 할 일
+
+- [ ] `.trimEnd();
+
+function paragraphOf(text: string) {
+  const paragraph = new Y.XmlElement('paragraph');
+  if (text) {
+    const run = new Y.XmlText();
+    run.insert(0, text);
+    paragraph.insert(0, [run]);
+  }
+  return paragraph;
+}
+/**
+ * Puts the meeting template (SPEC-10.9 1) into a new meeting note: H2 날짜 (with `date`), 참석, 결정,
+ * 할 일 (one empty check item). Only a document with nothing typed yet — empty, or the one empty
+ * paragraph the server makes — is filled; the client that made the note calls it once.
+ */
+export function seedMeeting(doc: Y.Doc, date: string, origin?: unknown) {
+  const fragment = doc.getXmlFragment(NOTE_FIELD);
+  const blank =
+    fragment.length === 0 ||
+    (fragment.length === 1 &&
+      fragment.get(0) instanceof Y.XmlElement &&
+      (fragment.get(0) as Y.XmlElement).nodeName === 'paragraph' &&
+      !textOf(fragment.get(0) as Y.XmlElement).trim());
+  if (!blank) return false;
+  doc.transact(() => {
+    if (fragment.length) fragment.delete(0, fragment.length);
+    const heading = (text: string) => {
+      const element = new Y.XmlElement('heading');
+      element.setAttribute('level', 2 as never);
+      const run = new Y.XmlText();
+      run.insert(0, text);
+      element.insert(0, [run]);
+      return element;
+    };
+    const task = new Y.XmlElement('taskList');
+    const item = new Y.XmlElement('taskItem');
+    item.setAttribute('checked', false as never);
+    item.insert(0, [paragraphOf('')]);
+    task.insert(0, [item]);
+    fragment.insert(0, [
+      heading('날짜'),
+      paragraphOf(date),
+      heading('참석'),
+      paragraphOf(''),
+      heading('결정'),
+      paragraphOf(''),
+      heading('할 일'),
+      task,
+    ]);
+  }, origin);
+  return true;
 }
 
 /** A journal title: '10월 6일 (화) 일지'. */

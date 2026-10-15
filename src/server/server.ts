@@ -222,6 +222,8 @@ import { zwcadXrefReader } from '../../hosts/zwcad/xref-dwg.ts';
 import { drawingLayerRoutes, drawingLayerStatuses } from './drawing-layer-routes.ts';
 import { DrawingLayerService } from './drawing-layers.ts';
 import { drawingBackflowRoutes, drawingBackflowStatuses } from './drawing-backflow-routes.ts';
+import { createProposalWiring } from './proposal-wiring.ts';
+import { pairStatuses, proposalStatuses, syncPairRoutes } from './sync-pair-routes.ts';
 import { DrawingBackflowService, type BackflowReader } from './drawing-backflow.ts';
 import { DrawingBackflowStore } from '../core/drawing-backflow.ts';
 import { OutputTokens } from '../core/drawing-output.ts';
@@ -238,7 +240,8 @@ import {
 import type { DwgReader } from '../knowledge/collect/dwg.ts';
 import { zwcadKnowledgeReader } from '../../hosts/zwcad/knowledge-dwg.ts';
 import { ProjectFolders } from '../core/project-folders.ts';
-import { Agenda, setAgendaActor } from '../core/agenda.ts';
+import { Agenda, onAgendaChange, setAgendaActor } from '../core/agenda.ts';
+import { folderCopyRoutes, folderCopyStatuses } from './folder-copy-routes.ts';
 import { agendaRoutes, agendaStatuses } from './agenda-routes.ts';
 import { FinishStore } from '../core/finish-store.ts';
 import { finishRoutes, finishStatuses } from './finish-routes.ts';
@@ -371,6 +374,7 @@ const statuses: Record<string, number> = {
   ...notesStatuses,
   ...collectStatuses,
   ...workspaceStatuses,
+  ...folderCopyStatuses,
   ...jigSubmitStatuses,
   ...finishStatuses,
   ...siteDataStatuses,
@@ -383,6 +387,8 @@ const statuses: Record<string, number> = {
   ...complianceStatuses,
   ...panelingStatuses,
   ...recordsStatuses,
+  ...pairStatuses,
+  ...proposalStatuses,
 };
 export async function startServer({
   filename,
@@ -623,7 +629,24 @@ export async function startServer({
             void workspaceOutputsFor(store).writeNote(projectId, note, markdown);
             recordSources.noteCopied(projectId, note, markdown);
           },
+          // 사이트에 못 보낸 [퇴근하기] 줄도 폴더의 일지 사본에 바로 (SPEC-10.5 4, T-356).
+          onJournalQueued: (projectId, date, text) =>
+            void workspaceOutputsFor(store).appendJournalLine(projectId, date, text),
         });
+  // 일정 사본 (SPEC-10.9 4·10.10, PLAN-54 T-356): 할 일·일정 항목이 바뀌면 1초 묶음 뒤 그달
+  // `<ops>/일정/<YYYY-MM>.md`를 다시 쓴다(작업 폴더가 없으면 아무것도 쓰지 않는다).
+  const scheduleTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const copySchedule = async (projectId: string) =>
+    workspaceOutputsFor(store).writeSchedule(projectId, agenda.list(projectId));
+  onAgendaChange(store, (projectId) => {
+    clearTimeout(scheduleTimers.get(projectId));
+    const timer = setTimeout(() => {
+      scheduleTimers.delete(projectId);
+      void copySchedule(projectId).catch(() => {});
+    }, 1000);
+    timer.unref?.();
+    scheduleTimers.set(projectId, timer);
+  });
   // The copies of every project's notes refresh every ten minutes (and whenever notes are shown).
   let notesRefreshed = 0;
   function notesTick() {
@@ -631,7 +654,14 @@ export async function startServer({
     notesRefreshed = Date.now();
     void (async () => {
       for (const project of listProjects()) {
-        await sharedNotes.list(project.id).catch(() => {});
+        // A list the site did not answer is tried again a minute later (not at every heartbeat,
+        // and not for the other projects now), so notes written on the site while this PC was
+        // away are copied soon after it is back (SPEC-10.10 2).
+        const listed = await sharedNotes.list(project.id).catch(() => null);
+        if (listed && !listed.online && listed.error === 'SITE_UNREACHABLE') {
+          notesRefreshed = Date.now() - 10 * 60_000 + 60_000;
+          break;
+        }
         // Other members' conversation records, copied for the AI (PLAN-36).
         await conversationMirror?.refresh(project.id).catch(() => {});
       }
@@ -792,6 +822,15 @@ export async function startServer({
     liveSync,
     diagnostics: { write: (event, fields) => diagnostics.write(event, fields) },
   };
+  // 갱신 제안 (PLAN-54 T-349): set once the backflow service exists; a linked file's new Sync
+  // (Live Sync applied, a full or manual Sync saved) is ARCH-01 `onDocumentSynced`.
+  let proposalWiring: ReturnType<typeof createProposalWiring> | undefined;
+  const onDocumentSynced = (event: {
+    projectId: string;
+    linkId?: string | null;
+    requestId?: string | null;
+    kind: 'live' | 'manual';
+  }) => proposalWiring?.watch.notifySynced(event);
   /** A Live Sync with its engine record (PLAN-27 0단계). */
   async function runLiveSync(projectId: string, input: unknown) {
     if (!liveSync) throw new DomainError('RESYNC_REQUIRED');
@@ -823,6 +862,14 @@ export async function startServer({
           ? { retry: synced.retry }
           : { resync: true }),
     });
+    if ('delta' in synced) {
+      const basisId = (input as { basisId?: unknown } | null)?.basisId;
+      onDocumentSynced({
+        projectId,
+        requestId: typeof basisId === 'string' ? basisId : null,
+        kind: 'live',
+      });
+    }
     return synced;
   }
   // Open documents of the connected hosts: the links list reads them (every open page polls it)
@@ -849,7 +896,12 @@ export async function startServer({
           links,
           projects: () => listProjects(),
           open: () => openDocuments(),
-          fullSync: (projectId, target) => runDocumentSync(syncContext, projectId, target),
+          fullSync: async (projectId, target) => {
+            const synced = await runDocumentSync(syncContext, projectId, target);
+            if (synced.result.state === 'succeeded')
+              onDocumentSynced({ projectId, linkId: target.linkId, kind: 'manual' });
+            return synced;
+          },
           isOwnedOpen: async (link) =>
             link.host === 'rhino'
               ? await sdk?.editors.has(link.instance)
@@ -1125,6 +1177,18 @@ export async function startServer({
         .filter((folder) => folder.kind === 'project')
         .map((folder) => folder.path),
     denied: (path) => deniedPath(path, fileContext),
+  });
+  // 동기화 쌍과 갱신 제안 (PLAN-54 T-349·T-351, SPEC-05.12): the cards over the pairs' Syncs.
+  proposalWiring = createProposalWiring({
+    dataDirectory: fileContext.dataDirectory ?? join(tmpdir(), 'vide-memory-data'),
+    folders,
+    isProject: (projectId) => store.listProjects().some((row) => row.id === projectId),
+    links,
+    workspace,
+    openDocuments: () => openDocuments(),
+    backflow: drawingBackflow,
+    record: (event) => recordSources.proposalAction(event),
+    log: (event, fields) => diagnostics.write(event, fields),
   });
   // 도곽 미리보기 (SPEC-14.15): sheets of a drawing that 도면 관계 read, and its preview.
   const drawingSheets = new DrawingSheetsService({
@@ -1505,6 +1569,21 @@ export async function startServer({
         })
       )
         return;
+      // 폴더 사본의 '폴더에서 바뀜'·[버리기] (SPEC-10.10 3·4, PLAN-54 T-356).
+      if (
+        await folderCopyRoutes(url, request.method, {
+          copies: workspaceOutputsFor(store),
+          project: (projectId) => store.project(projectId),
+          regenerate: async (projectId, key) => {
+            if (key.startsWith('schedule:')) await copySchedule(projectId);
+            else await sharedNotes?.list(projectId);
+          },
+          body: () => body(request),
+          send,
+          remote,
+        })
+      )
+        return;
       // 작업 폴더 (SPEC-01.13 7~10, ARCH-01 「작업 폴더(PLAN-52)」).
       if (
         await workspaceRoutes(url, request.method, {
@@ -1549,6 +1628,22 @@ export async function startServer({
           partsStatus: partsStatusOf({ store, workspace, records }),
           objectRecords: objectRecordsOf({ store, workspace, records }),
         })
+      )
+        return;
+      // 동기화 쌍과 갱신 제안 (PLAN-54 T-349·T-351): pairs, cards and [적용]·[무시]·[나중에].
+      if (
+        proposalWiring &&
+        (await syncPairRoutes(url, request.method, {
+          pairs: proposalWiring.pairs,
+          watch: proposalWiring.watch,
+          prepare: proposalWiring.prepare,
+          project: (projectId) => store.project(projectId),
+          body: () => body(request),
+          send,
+          noContent: () => deliver(204, 'text/plain; charset=utf-8', ''),
+          remote,
+          actor: () => remoteAccess.account()?.name,
+        }))
       )
         return;
       // 파일 지도 (PLAN-52 T-318): relations and events of the project's files, read only.
@@ -2318,6 +2413,13 @@ export async function startServer({
         );
         // The request without its display geometry or object rows: the window fetches the geometry
         // as binary (`GET …/requests/:r`), never the whole model as JSON (2026-10-02, T-123).
+        if (synced.state === 'succeeded')
+          onDocumentSynced({
+            projectId,
+            linkId: typeof synced.input.linkId === 'string' ? synced.input.linkId : null,
+            requestId: synced.id,
+            kind: 'manual',
+          });
         send(200, listed(workspace.summary(projectId, synced.id)));
         return;
       }
@@ -3862,6 +3964,7 @@ export async function startServer({
       await boardsClosed;
       await referenceBoards?.idle();
       // 기록 후보 (PLAN-53 T-322): queued hooks finish or are dropped before the store closes.
+      proposalWiring?.watch.stop();
       recordSources.stop();
       await recordSources.idle();
       clearInterval(transcriptSweep);

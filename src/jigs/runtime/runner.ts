@@ -290,6 +290,7 @@ export async function executeSteps(input: ExecutionInput): Promise<ExecutionRepo
   const stopped = new Set<string>(); // steps whose predecessors failed, blocked or wait
   let blocked = false;
   let superseded = false;
+  let specChecked = false;
   await runner.load(jig);
   const contextFor = (
     step: StepDecl,
@@ -399,11 +400,17 @@ export async function executeSteps(input: ExecutionInput): Promise<ExecutionRepo
       continue;
     }
 
-    // Before-run gates.
+    // Before-run gates. The first step that checks also warns once when the jig's spec (README)
+    // differs from jig.json (spec-match, SPEC-07.14: a warning in a working copy, never a block).
+    const specWarning = !specChecked && jig.spec?.state === 'mismatch';
+    specChecked = true;
     const beforeGates = runGates(
-      step.gates ?? [],
+      specWarning ? [{ use: 'spec-match' }, ...(step.gates ?? [])] : (step.gates ?? []),
       'before-run',
-      contextFor(step, stepInputs, { inputHash }),
+      contextFor(step, stepInputs, {
+        inputHash,
+        ...(specWarning ? { spec: jig.spec.differences } : {}),
+      }),
     );
     report.gates = beforeGates.results;
     if (beforeGates.blocked.length) {

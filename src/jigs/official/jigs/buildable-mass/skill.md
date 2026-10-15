@@ -3,6 +3,7 @@ name: 건축 가능 영역·매스
 intent_en: compute the buildable area and the maximum envelopes (extrusion, sky-exposure, height) of a site from its boundary and regulation values
 words: [건축 가능 영역, 가능 외피, 일조 사선, 최대 외피, 건축선, 이격, 규모검토]
 not_for: [법규 판단, 인허가 도서, 면적 산정, 계획 매스 설계]
+examples: [이 대지 건축 가능 영역 보여 줘, 일조 사선 외피 만들어 줘]
 tools: []
 limits: [규제 조건 값은 법규 결과나 사람이 넣음, 평지(바닥 z = 0), 일조 거리 정의는 사람이 정함]
 ---

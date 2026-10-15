@@ -72,6 +72,11 @@ interface Options {
    * project's work folder (PLAN-52 T-313, 운영 역할). Must not throw.
    */
   onCopy?: (projectId: string, note: SharedNote, markdown: string) => void;
+  /**
+   * A [퇴근하기] line kept here for the site (`queued`): the work folder's 일지 copy gets it at once
+   * (SPEC-10.5 4). Must not throw.
+   */
+  onJournalQueued?: (projectId: string, date: string, text: string) => void;
 }
 type StreamEvent =
   | { type: 'sync'; state: string; vector: string }
@@ -183,6 +188,14 @@ export class SharedNotes {
   private async mirror(projectId: string, notes: SharedNote[]) {
     const folder = this.folder(projectId);
     await mkdir(join(folder, '.yjs'), { recursive: true });
+    // A note gone from the site since the last list: its last copy goes on once more, marked
+    // removed — the work folder keeps it (SPEC-10.10 2); the PC copy below is dropped.
+    const listedIds = new Set(notes.map((note) => note.id));
+    for (const old of await this.index(projectId)) {
+      if (listedIds.has(old.id) || old.deleted) continue;
+      const last = await readFile(join(folder, fileOf(old)), 'utf8').catch(() => null);
+      if (last !== null) this.copied(projectId, { ...old, deleted: true }, last);
+    }
     const keep = new Set(['README.md', 'index.json', '.yjs']);
     for (const note of notes) {
       const file = fileOf(note);
@@ -592,6 +605,11 @@ export class SharedNotes {
         .parse(JSON.parse(await readFile(file, 'utf8').catch(() => '[]')));
       queue.push({ date, text });
       await this.write(file, JSON.stringify(queue.slice(-200)));
+      try {
+        this.options.onJournalQueued?.(projectId, date, text);
+      } catch {
+        /* the work-folder copy never fails the queue */
+      }
       return { state: 'queued' as const };
     }
   }

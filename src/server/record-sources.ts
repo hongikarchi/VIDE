@@ -4,12 +4,14 @@ import {
   candidateFromCheckout,
   candidateFromJigRun,
   candidateFromParamChange,
+  candidateFromProposal,
   candidateFromRequest,
   candidateFromSchemaConfirm,
   decisionSentences,
   ledgerDecisionText,
   localDateTime,
   paragraphCandidates,
+  type ProposalActionLike,
   type RecordCandidate,
   type RequestRowLike,
 } from '../core/record-candidates.ts';
@@ -97,6 +99,8 @@ export interface RecordSources {
   checkoutLog(event: string, fields: Record<string, unknown>): void;
   /** After `confirmWorkspaceSchema`: the folder roles a person confirmed (K). */
   schemaConfirmed(projectId: string, confirmed: { confirmedAt: string; paths: object }): void;
+  /** `ProposalWatch` `onProposalAction`: [적용]·[무시] of an update proposal card (D). */
+  proposalAction(event: ProposalActionLike & { projectId: string }): void;
   /** Resolves when the queued work has run (tests, shutdown). */
   idle(): Promise<void>;
   /** Shutdown: queued work that has not started is dropped; nothing is queued after this. */
@@ -307,7 +311,12 @@ export function attachRecordSources(options: RecordSourcesOptions): RecordSource
           return;
         const journal = note.kind === 'journal';
         const date = (journal && note.journalDate) || localDateTime(at)!.date;
-        const source = journal ? 'journal' : note.kind === 'discussion' ? 'meeting' : 'note';
+        // 회의록(meeting)과 예전 협의 사항(discussion)의 문단은 회의록 후보 (SPEC-10.9 3, SPEC-17.3).
+        const source = journal
+          ? 'journal'
+          : note.kind === 'discussion' || note.kind === 'meeting'
+            ? 'meeting'
+            : 'note';
         const candidates = paragraphCandidates(markdown, {
           source,
           date,
@@ -401,6 +410,13 @@ export function attachRecordSources(options: RecordSourcesOptions): RecordSource
           ...(options.roleLabels ? { labels: options.roleLabels } : {}),
         });
         if (candidate) put(projectId, candidate);
+      });
+    },
+    proposalAction(event) {
+      later('proposal', () => {
+        const candidate = candidateFromProposal(event);
+        if (candidate)
+          put(event.projectId, candidate, objectParts(event.projectId, event.objects ?? [], null));
       });
     },
     async idle() {

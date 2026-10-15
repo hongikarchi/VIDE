@@ -83,6 +83,7 @@ try {
     [0, 1, 2].flatMap((i) => [0, 1].map((j) => ({ key: `C${i}${j}`, at: [i * span, j * 6, 0] })));
   // Made now with the starting point's files: nothing written after it (the plan comes first).
   const createdAt = new Date().toISOString();
+  let specText = '';
   const draft = { id: 'draft-1', name: '격자 기둥 배치', version: '0.1.0', createdAt };
   let drafts = [];
   let state = { validate: null, test: null, preview: null };
@@ -92,6 +93,18 @@ try {
     manifest,
     files: files.map((path) => ({ path, updatedAt: createdAt })),
     skill: '# 격자 기둥 배치\n\n두 방향 경간으로 기둥을 둡니다.',
+    // The 명세 (PLAN-54 T-353): [명세 보기] reads it; it matches the jig here.
+    spec: {
+      text: specText,
+      updatedAt: createdAt,
+      state: 'ok',
+      missing: [],
+      differences: [],
+      purpose: '격자 기둥 배치',
+      editedBy: 'vide',
+      personAt: null,
+      history: '시작 양식에서 만든 명세 초안',
+    },
     conversationId: 'conv-make',
     ...state,
   });
@@ -102,7 +115,16 @@ try {
     calls.push(`${method} ${path || '/'}`);
     if (path === '' && method === 'GET') return route.fulfill({ json: { drafts } });
     if (path === '' && method === 'POST') {
-      assert.deepEqual(request.postDataJSON(), { name: '격자 기둥 배치', from: 'blank' });
+      const posted = request.postDataJSON();
+      assert.deepEqual(
+        { name: posted.name, from: posted.from },
+        { name: '격자 기둥 배치', from: 'blank' },
+      );
+      // [계획 받기] saves the form as the 명세 draft: the nine fixed sections (SPEC-07.16 0).
+      for (const mark of ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨'])
+        assert.match(posted.readme, new RegExp(`^## ${mark} `, 'm'));
+      assert.match(posted.readme, /\| X 경간 \| m \| 8 \|/);
+      specText = posted.readme;
       drafts = [draft];
       return route.fulfill({ status: 201, json: draft });
     }
@@ -342,6 +364,17 @@ try {
     'true',
   );
   await outline.getByRole('button', { name: '아이콘 바꾸기' }).click();
+
+  // [명세 보기]: the read-only spec in the conversation's place, and back (Design SCR-16).
+  await side.getByRole('button', { name: '명세 보기' }).click();
+  const specPanel = side.getByRole('region', { name: '명세' });
+  await specPanel.getByText('① 목적').waitFor();
+  assert.match(
+    await specPanel.locator('details[open] pre').first().textContent(),
+    /격자 기둥 배치/,
+  );
+  await specPanel.getByRole('button', { name: '대화로 돌아가기' }).click();
+  await specPanel.waitFor({ state: 'detached' });
 
   // Pinning waits for 점검 and 시험.
   const pin = side.getByRole('button', { name: '이 프로젝트의 jig로 고정' });

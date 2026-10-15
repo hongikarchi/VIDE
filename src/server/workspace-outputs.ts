@@ -1,4 +1,7 @@
 import { dayOf, jigFolderName, minuteOf, safeName } from '../core/workspace-paths.ts';
+import { scheduleMarkdown, scheduleMonths } from '../core/agenda-month.ts';
+import type { AgendaItem } from '../contracts/agenda.ts';
+import { journalTitle } from '../contracts/note-doc.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, open, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
@@ -38,7 +41,28 @@ export interface WorkspaceOutputsOptions {
   now?: () => Date;
   /** Failures of the fire-and-forget writes (the engine's diagnostics log). */
   log?: (event: string, fields: Record<string, unknown>) => void;
+  /**
+   * `<데이터>`: where `projects/<id>/folder-copies.json` (the hash of each Markdown copy last
+   * written, for '폴더에서 바뀜') is kept; absent, it is kept in memory only.
+   */
+  dataDirectory?: string;
 }
+
+/** One Markdown copy as last written (ARCH-01 「작업 폴더(PLAN-52)」 '폴더에서 바뀜' 판정). */
+export interface FolderCopyRecord {
+  path: string;
+  sha256: string;
+  writtenAt: string;
+}
+/** A copy's state for the notes screen (SPEC-10.10 3·4). */
+export interface FolderCopyState {
+  key: string;
+  path: string | null;
+  state: 'written' | 'changed-in-folder' | 'not-written';
+  writtenAt: string | null;
+}
+const FOLDER_COPIES = 'folder-copies.json';
+const sha256 = (data: string | Buffer) => createHash('sha256').update(data).digest('hex');
 
 /** One finished jig run (the step outputs it kept). */
 export interface JigRunCopy {
@@ -62,6 +86,8 @@ export interface NoteCopy {
   title: string;
   journalDate?: string | null;
   createdAt?: number | string;
+  /** Removed on the site: the copy stays, marked '사이트에서 지워짐' (SPEC-10.10 2). */
+  deleted?: boolean;
 }
 export interface SnapshotCopy {
   id: string;
@@ -122,6 +148,14 @@ export class WorkspaceOutputs {
   private readonly chains = new Map<string, Promise<unknown>>();
   /** The last run folder per instance, with the hash of its outputs. */
   private readonly runs = new Map<string, { dir: string; hash: string }>();
+  /** `folder-copies.json` per project (loaded on first use). */
+  private readonly ledgers = new Map<string, Record<string, FolderCopyRecord>>();
+  /** Copies that could not be written (권한·잠김·연결 끊김): project → key → path tried. */
+  private readonly failed = new Map<string, Map<string, string | null>>();
+  /** The last write asked for per copy (`project\0key`), run again by [버리기]. */
+  private readonly redo = new Map<string, () => Promise<unknown>>();
+  /** Copies [버리기] rewrites without the '폴더에서 바뀜' check. */
+  private readonly forced = new Set<string>();
   log: (event: string, fields: Record<string, unknown>) => void;
   constructor(options: WorkspaceOutputsOptions) {
     this.options = options;
@@ -212,7 +246,14 @@ export class WorkspaceOutputs {
    * copy. A copy of the same key under another name (the title changed) is removed once the new
    * one is written.
    */
-  private async placeFile(root: string, dir: string, base: string, ext: string, key: string) {
+  private async placeFile(
+    root: string,
+    dir: string,
+    base: string,
+    ext: string,
+    key: string,
+    aliases: string[] = [],
+  ) {
     await this.ensureDir(root, dir);
     let previous: string | null = null;
     for (const name of await readdir(dir).catch(() => [] as string[]))
@@ -222,8 +263,15 @@ export class WorkspaceOutputs {
       }
     for (let n = 1; ; n++) {
       const path = join(dir, candidate(base, n, ext));
-      if (!existsSync(path) || (await owned(path, key)))
-        return { path, stale: previous && previous !== path ? previous : null };
+      let owner: string | null = null;
+      if (existsSync(path))
+        for (const k of [key, ...aliases])
+          if (await owned(path, k)) {
+            owner = k;
+            break;
+          }
+      if (!existsSync(path) || owner)
+        return { path, owner, stale: previous && previous !== path ? previous : null };
     }
   }
   /** A folder for `key` in `parent` (`base`, `base-2`, …): its `marker` file holds the key. */
@@ -371,27 +419,109 @@ export class WorkspaceOutputs {
 
   // --- operations (notes) ----------------------------------------------------------------------
   /**
-   * A shared note's Markdown copy → `<ops>/일지/<날짜>.md` (journal) or `<ops>/회의록/<날짜>-<제목>.md`
-   * (other notes). The site is the source.
+   * A shared note's Markdown copy (SPEC-10.10 표) → `<ops>/일지/<날짜>.md` (journal) or
+   * `<ops>/회의록/<만든 날>-<제목>.md` (meeting). Other notes (`note`, `discussion`) get no folder
+   * copy. The site is the source; a note removed there keeps its copy, marked '사이트에서 지워짐'.
    */
   writeNote(projectId: string, note: NoteCopy, markdown: string): Promise<string | null> {
-    return this.queue(projectId, 'note', async () => {
+    const journal = note.kind === 'journal' && note.journalDate;
+    if (!journal && note.kind !== 'meeting') return Promise.resolve(null);
+    const key = `note:${note.id}`;
+    const run = () =>
+      this.queue(projectId, 'note', async () => {
+        const place = await this.roleFolder(projectId, 'ops');
+        if (!place) return null;
+        const created = note.createdAt !== undefined ? new Date(note.createdAt) : this.now();
+        const day = Number.isNaN(created.getTime()) ? dayOf(this.now()) : dayOf(created);
+        const dir = join(place.dir, journal ? '일지' : '회의록');
+        const base = journal
+          ? safeName(String(note.journalDate))
+          : `${day}-${safeName(note.title)}`;
+        return this.writeMarkdownIn(
+          projectId,
+          place.root,
+          dir,
+          base,
+          key,
+          '계정 사이트의 공유 노트',
+          markdown,
+          {
+            // A day's 일지 copy started by a waiting [퇴근하기] line is this note's from now on.
+            aliases: journal ? [`journal:${note.journalDate}`] : [],
+            mark: note.deleted
+              ? '> 사이트에서 지워짐 — 계정 사이트에서 지운 노트의 마지막 사본입니다.'
+              : undefined,
+          },
+        );
+      });
+    this.redo.set(`${projectId}\0${key}`, run);
+    return run();
+  }
+  /**
+   * A [퇴근하기] line waiting for the site (SPEC-10.5 3·4) → the day's 일지 copy at once. A copy
+   * changed in the folder is left as it is (SPEC-10.10 3).
+   */
+  appendJournalLine(projectId: string, date: string, line: string): Promise<string | null> {
+    return this.queue(projectId, 'journal-line', async () => {
       const place = await this.roleFolder(projectId, 'ops');
-      if (!place) return null;
-      const journal = note.kind === 'journal' && note.journalDate;
-      const created = note.createdAt !== undefined ? new Date(note.createdAt) : this.now();
-      const day = Number.isNaN(created.getTime()) ? dayOf(this.now()) : dayOf(created);
-      const dir = join(place.dir, journal ? '일지' : '회의록');
-      const base = journal ? safeName(String(note.journalDate)) : `${day}-${safeName(note.title)}`;
+      if (!place || !line.trim()) return null;
+      const dir = join(place.dir, '일지');
+      const text = `${line.trim()} (사이트에 아직 안 보냄)`;
+      const path = join(dir, `${safeName(date)}.md`);
+      const marked = existsSync(path) ? /vide-copy:([A-Za-z0-9:_-]+)/.exec(await head(path)) : null;
+      if (marked) {
+        const key = marked[1];
+        const ledger = await this.ledger(projectId);
+        if (await this.changedInFolder(ledger[key], path)) return null;
+        const next = (await readFile(path, 'utf8')).trimEnd() + '\n\n' + text + '\n';
+        await this.put(place.root, path, next);
+        ledger[key] = { path, sha256: sha256(next), writtenAt: this.now().toISOString() };
+        await this.saveLedger(projectId);
+        return path;
+      }
       return this.writeMarkdownIn(
+        projectId,
         place.root,
         dir,
-        base,
-        `note:${note.id}`,
-        '계정 사이트의 공유 노트',
-        markdown,
+        safeName(date),
+        `journal:${date}`,
+        '계정 사이트의 공유 노트(보내기 대기)',
+        `# ${journalTitle(date)}\n\n${text}`,
       );
     });
+  }
+  /**
+   * 일정 (SPEC-10.9 4, SPEC-10.10) → `<ops>/일정/<YYYY-MM>.md` for every month with dated items and
+   * every month written before (a month left empty says so). Unchanged months are not rewritten.
+   */
+  writeSchedule(projectId: string, items: readonly AgendaItem[]): Promise<string[] | null> {
+    const run = (only?: string): Promise<string[] | null> =>
+      this.queue(projectId, 'schedule', async () => {
+        const place = await this.roleFolder(projectId, 'ops');
+        if (!place) return null;
+        const ledger = await this.ledger(projectId);
+        const months = new Set(scheduleMonths(items));
+        for (const key of Object.keys(ledger))
+          if (key.startsWith('schedule:')) months.add(key.slice('schedule:'.length));
+        const written: string[] = [];
+        for (const month of [...months].sort()) {
+          if ((only && month !== only) || !/^\d{4}-\d{2}$/.test(month)) continue;
+          const key = `schedule:${month}`;
+          this.redo.set(`${projectId}\0${key}`, () => run(month));
+          const path = await this.writeMarkdownIn(
+            projectId,
+            place.root,
+            join(place.dir, '일정'),
+            month,
+            key,
+            'VIDE 할 일·일정',
+            scheduleMarkdown(items, month),
+          );
+          if (path) written.push(path);
+        }
+        return written;
+      });
+    return run();
   }
   /**
    * Any operations Markdown (`일지`, `회의록`, `할일` …) → `<ops>/<sub>/<name>.md`; `key` names the
@@ -406,6 +536,7 @@ export class WorkspaceOutputs {
       const place = await this.roleFolder(projectId, 'ops');
       if (!place) return null;
       return this.writeMarkdownIn(
+        projectId,
         place.root,
         join(place.dir, safeName(copy.sub, '기타')),
         safeName(copy.name),
@@ -415,18 +546,156 @@ export class WorkspaceOutputs {
       );
     });
   }
+  /**
+   * Writes a Markdown copy, unless the person changed it in the folder since VIDE last wrote it
+   * ('폴더에서 바뀜', SPEC-10.10 3): then nothing is written (null) until [버리기]. A copy that
+   * cannot be written is '폴더에 아직 안 씀' until a later write succeeds (SPEC-10.10 4).
+   */
   private async writeMarkdownIn(
+    projectId: string,
     root: string,
     dir: string,
     base: string,
     key: string,
     source: string,
     markdown: string,
-  ) {
-    const { path, stale } = await this.placeFile(root, dir, base, '.md', key);
-    await this.put(root, path, copyHeader(source, key) + '\n\n' + markdown.trimEnd() + '\n');
-    if (stale && (await owned(stale, key))) await rm(stale, { force: true });
-    return path;
+    extra: { aliases?: string[]; mark?: string } = {},
+  ): Promise<string | null> {
+    const id = `${projectId}\0${key}`;
+    let tried: string | null = null;
+    try {
+      const aliases = extra.aliases ?? [];
+      const { path, owner, stale } = await this.placeFile(root, dir, base, '.md', key, aliases);
+      tried = path;
+      const ledger = await this.ledger(projectId);
+      const before = ledger[owner ?? key] ?? ledger[key];
+      const forced = this.forced.delete(id);
+      if (!forced && (await this.changedInFolder(before, path))) {
+        this.failed.get(projectId)?.delete(key);
+        return null;
+      }
+      const text =
+        copyHeader(source, key) +
+        '\n' +
+        (extra.mark ? extra.mark + '\n' : '') +
+        '\n' +
+        markdown.trimEnd() +
+        '\n';
+      await this.put(root, path, text);
+      for (const alias of aliases) delete ledger[alias];
+      ledger[key] = { path, sha256: sha256(text), writtenAt: this.now().toISOString() };
+      // The copy under its old name (a renamed note) goes, unless the person changed it there.
+      if (stale && (await owned(stale, key)) && !(await this.changedInFolder(before, stale)))
+        await rm(stale, { force: true });
+      await this.saveLedger(projectId);
+      this.failed.get(projectId)?.delete(key);
+      return path;
+    } catch (error) {
+      let failed = this.failed.get(projectId);
+      if (!failed) this.failed.set(projectId, (failed = new Map()));
+      failed.set(key, tried);
+      throw error;
+    }
+  }
+
+  // --- 폴더에서 바뀜 ----------------------------------------------------------------------------
+  private ledgerFile(projectId: string) {
+    const data = this.options.dataDirectory;
+    return data && /^[A-Za-z0-9_-]{1,120}$/.test(projectId)
+      ? join(data, 'projects', projectId, FOLDER_COPIES)
+      : null;
+  }
+  private async ledger(projectId: string): Promise<Record<string, FolderCopyRecord>> {
+    let ledger = this.ledgers.get(projectId);
+    if (ledger) return ledger;
+    ledger = {};
+    const file = this.ledgerFile(projectId);
+    if (file)
+      try {
+        const value: unknown = JSON.parse(await readFile(file, 'utf8'));
+        if (value && typeof value === 'object' && !Array.isArray(value))
+          for (const [key, row] of Object.entries(value as Record<string, unknown>)) {
+            const r = row as Partial<FolderCopyRecord> | null;
+            if (r && typeof r.path === 'string' && typeof r.sha256 === 'string')
+              ledger[key] = {
+                path: r.path,
+                sha256: r.sha256,
+                writtenAt: String(r.writtenAt ?? ''),
+              };
+          }
+      } catch {
+        /* none yet, or unreadable: every copy is treated as never written here */
+      }
+    this.ledgers.set(projectId, ledger);
+    return ledger;
+  }
+  private async saveLedger(projectId: string) {
+    const file = this.ledgerFile(projectId);
+    const ledger = this.ledgers.get(projectId);
+    if (!file || !ledger) return;
+    await mkdir(join(file, '..'), { recursive: true });
+    const temp = `${file}.${randomUUID().slice(0, 8)}.tmp`;
+    await writeFile(temp, JSON.stringify(ledger, null, 1), 'utf8');
+    await rename(temp, file);
+  }
+  /** Whether the file VIDE last wrote at `path` differs now from what it wrote (a missing file does not). */
+  private async changedInFolder(record: FolderCopyRecord | undefined, path: string) {
+    if (!record || record.path !== path || !existsSync(path)) return false;
+    const now = await readFile(path).catch(() => null);
+    return now !== null && sha256(now) !== record.sha256;
+  }
+
+  /**
+   * The project's Markdown copies and their state (ARCH-01: `written`, `changed-in-folder`,
+   * `not-written`). `NO_WORKSPACE` when the project has no work folder here.
+   */
+  async folderCopies(projectId: string): Promise<FolderCopyState[]> {
+    if (!(await this.target(projectId))) throw new DomainError('NO_WORKSPACE');
+    await this.idle();
+    const ledger = await this.ledger(projectId);
+    const failed = this.failed.get(projectId) ?? new Map<string, string | null>();
+    const rows: FolderCopyState[] = [];
+    for (const [key, record] of Object.entries(ledger))
+      rows.push({
+        key,
+        path: record.path,
+        state: failed.has(key)
+          ? 'not-written'
+          : (await this.changedInFolder(record, record.path))
+            ? 'changed-in-folder'
+            : 'written',
+        writtenAt: record.writtenAt || null,
+      });
+    for (const [key, path] of failed)
+      if (!ledger[key]) rows.push({ key, path, state: 'not-written', writtenAt: null });
+    return rows.sort((a, b) => a.key.localeCompare(b.key));
+  }
+  /**
+   * [버리기] (SPEC-10.10 3): writes the copy `key` again from its source, over the person's change.
+   * The last write asked for in this run is used; after a restart `regenerate` makes the source
+   * write it again (the notes refresh, the 일정 items). `COPY_NOT_FOUND` for a key never written.
+   */
+  async discardFolderCopy(
+    projectId: string,
+    key: string,
+    regenerate?: (key: string) => Promise<unknown>,
+  ): Promise<FolderCopyState> {
+    if (!(await this.target(projectId))) throw new DomainError('NO_WORKSPACE');
+    const ledger = await this.ledger(projectId);
+    const id = `${projectId}\0${key}`;
+    const redo = this.redo.get(id);
+    if (!ledger[key] && !this.failed.get(projectId)?.has(key) && !redo)
+      throw new DomainError('COPY_NOT_FOUND');
+    this.forced.add(id);
+    try {
+      if (redo) await redo();
+      else await regenerate?.(key);
+      await this.idle();
+    } finally {
+      this.forced.delete(id);
+    }
+    const row = (await this.folderCopies(projectId)).find((copy) => copy.key === key);
+    return row ?? { key, path: null, state: 'not-written', writtenAt: null };
   }
 
   // --- 검토본 ----------------------------------------------------------------------------------
@@ -693,6 +962,7 @@ export function workspaceOutputsFor(store: Store): WorkspaceOutputs {
     outputs = new WorkspaceOutputs({
       folders: new ProjectFolders(store),
       isProject: (id) => store.listProjects().some((project) => project.id === id),
+      dataDirectory: store.dataDirectory(),
     });
     perStore.set(store, outputs);
   }

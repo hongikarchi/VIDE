@@ -429,3 +429,43 @@ export function candidateFromSchemaConfirm(event: SchemaConfirmLike): RecordCand
     attachments: {},
   };
 }
+
+// ---------------------------------------------------------------------------------------------
+// 갱신 제안 카드 (SPEC-05.12 7, SPEC-17.3 1 표의 갱신 제안 행, ARCH-01 '동기화 쌍과 갱신 제안')
+
+export interface ProposalActionLike {
+  action: 'apply' | 'dismiss';
+  proposalId: string;
+  pairId: string;
+  names: { model: string; drawing: string };
+  rows: readonly string[];
+  objects?: readonly string[];
+  applyId?: string;
+  at: string;
+}
+/** [적용]·[무시] of an update proposal → D (which pair, how many rows, applied or ignored). */
+export function candidateFromProposal(event: ProposalActionLike): RecordCandidate | null {
+  const when = localDateTime(event.at);
+  if (!when) return null;
+  const files = `${event.names.model} ↔ ${event.names.drawing}`;
+  const count = event.rows.length;
+  return {
+    type: 'D',
+    source: 'sync',
+    text: clip(
+      event.action === 'apply'
+        ? `갱신 제안 적용: ${files} · 도면을 모델에 맞춤 ${count}행`
+        : `갱신 제안 무시: ${files} · 어긋남 ${count}행을 그대로 둠`,
+    ),
+    date: when.date,
+    time: when.time,
+    sourceKey: `proposal:${event.proposalId}:${event.action}`,
+    attachments: {
+      pairId: event.pairId,
+      proposalId: event.proposalId,
+      rows: event.rows.slice(0, 5000),
+      ...(event.applyId ? { applyId: event.applyId } : {}),
+      ...(event.objects?.length ? { objects: event.objects.slice(0, 5000) } : {}),
+    },
+  };
+}
