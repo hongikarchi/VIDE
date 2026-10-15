@@ -2,10 +2,10 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 1.14
+version: 1.15
 updated: 2026-10-15
 owner: agent:claude
-related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, PLAN-45, SPEC-12, RESEARCH-10, RESEARCH-12, SPEC-13, PLAN-46, SPEC-15, PLAN-48, SPEC-16, PLAN-49]
+related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, PLAN-45, SPEC-12, RESEARCH-10, RESEARCH-12, SPEC-13, PLAN-46, SPEC-15, PLAN-48, SPEC-16, PLAN-49, PLAN-54]
 ---
 
 # jig 런타임과 저장 스키마 v5의 물리 계약
@@ -41,7 +41,8 @@ related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-
 
 ```text
 <jig>/
-├─ jig.json              정본. 이 파일만 권위가 있다
+├─ README.md             명세. jig의 정본(SPEC-07.2). 아래 파일은 명세에서 만든다
+├─ jig.json              설명서. VIDE가 화면·단계를 돌릴 때 읽는 유일한 실행 선언
 ├─ steps/                계산 단계 코드(TS 순수 함수). 묶은 결과는 dist/steps.mjs
 ├─ prompts/              AI 단계 지시문(.md)
 ├─ panel.json            선언형 화면
@@ -51,6 +52,8 @@ related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-
 ├─ assets/               정적 자료(단면표·부호 규칙 등). 출처·해시 기록
 └─ skill.md              AI 설명서
 ```
+
+`README.md`는 SPEC-07.2 명세 규칙 1의 고정 절을 그 순서대로 2단계 제목(`## `)으로 둔다. 제목 앞의 원문자(①~⑨)로 절을 찾고, 제목 문구는 바뀌어도 된다. 없거나 원문자 절이 빠지면 카탈로그·점검은 '명세 없음'으로 본다. 실행기는 `README.md`를 읽지 않는다(실행 권위는 `jig.json`).
 
 `views/`(격리 커스텀 뷰)는 RESEARCH-10 §16 B13 결정 전에는 두지 않는다.
 
@@ -335,6 +338,8 @@ export type Binding = `step.${string}` | `$${string}` | 'params' | `inputs.${str
 | `not_for` | 문자열 배열 | 쓰지 않는 경우. 판정에서 빼는 근거 |
 | `intent_en` | 문자열(600자) | Jev 판정용 영어 한 줄. 있으면 Jev는 이것을, 없으면 `description`을 읽는다 |
 | `tools`, `limits` | 배열 | 기존 그대로 |
+
+**명세에서 만드는 필드.** `words`·`not_for`·`examples`는 `README.md`의 ② 절(언제 쓰나 / 언제 아니다)에서 만든다(SPEC-07.2 명세 규칙 4). ② 절의 '언제 쓰나' 아래 목록 항목은 `examples`, 그 항목에서 뽑은 판정 낱말은 `words`, '언제 아니다' 아래 목록 항목은 `not_for`가 된다. 명세를 저장하면 엔진이 `skill.md` 앞머리의 이 세 필드만 다시 쓰고 나머지 필드·본문은 두지 않는다. 명세가 없으면 `skill.md`를 손으로 쓴 그대로 읽는다.
 
 배열은 한 줄 목록(`[a, b]`)과 블록 목록(`- a`)을, 긴 글은 블록 문자열(`|`·`>`)을 받는다. 형식이 맞지 않는 필드는 빼고 읽는다.
 
@@ -805,6 +810,7 @@ CREATE TABLE IF NOT EXISTS project_roots(projectId TEXT PRIMARY KEY REFERENCES p
 |---|---|---|
 | before-run | `inputs-present`, `units-si`, `stale-input`, `fact-valid` | block(`fact-valid`는 미확정 근거면 warn) |
 | before-run | `inputs-confirmed` | warn(만들기 전에는 block) |
+| 계산·고정·제출 | `spec-match` | warn(작업본 계산) · block(초안 고정·관리자 제출). `README.md`가 있는 jig만. 대조 항목: ③ 입력 역할 ↔ `inputs` 항목, ④ 설정값 이름·단위·기본값 ↔ `params`, ⑥ 결과 종류 ↔ 출력·만들기 선언, ⑦ 통과 조건의 수 ↔ 선언한 점검 수 |
 | before-run | `basis-required` | warn(근거가 '물어볼 것'인 설정값이 기본값 그대로임) |
 | after-run | `non-empty`, `no-nan`, `ids-stable`, `ring-orientation`, `polygon-valid` | block |
 | after-run | `inside-boundary`, `no-overlap`, `planar-curve` | block 또는 isolate(jig가 고름) |
