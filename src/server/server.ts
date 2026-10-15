@@ -203,11 +203,13 @@ import { collectRoutes, collectStatuses } from './collect-routes.ts';
 import { workspaceRoutes, workspaceStatuses } from './workspace-routes.ts';
 import { workspaceMapRoutes } from './workspace-map-routes.ts';
 import { recordsRoutes, recordsStatuses, requestUndone } from './records-routes.ts';
+import { addReviewRecord, reviewRecordInput } from './review-record.ts';
 import { attachRecordSources } from './record-sources.ts';
 import { recordsMirrorFor } from './records-mirror.ts';
 import { recordsImportOf } from './records-import.ts';
 import { ROLE_LABELS } from './workspace-schema.ts';
 import { objectRecordsOf } from './object-records.ts';
+import { recordsShare } from './records-share.ts';
 import { partsStatusOf } from './parts-status.ts';
 import { Records } from '../core/records.ts';
 import { workspaceOutputsFor } from './workspace-outputs.ts';
@@ -720,6 +722,8 @@ export async function startServer({
     remote: remoteAccess,
     agenda,
     mirror: conversationMirror,
+    // 거른 기록 on the site (PLAN-53 T-336): read without the undone check the site never shows.
+    records: (projectId) => recordsShare(new Records(store), projectId),
   });
   /**
    * Deletes a project on this PC, asked in the app or on the account site (SPEC-01.1): its rows,
@@ -2312,13 +2316,20 @@ export async function startServer({
         return;
       }
       if (offline && request.method === 'PUT') {
-        // `enabled`: saved models (PLAN-20); `summary`: 할 일 and history summary (PLAN-33).
-        const { enabled, summary } = z
-          .object({ enabled: z.boolean().optional(), summary: z.boolean().optional() })
+        // `enabled`: saved models (PLAN-20); `summary`: 할 일 and history summary (PLAN-33);
+        // `records`: 거른 기록 (PLAN-53 T-336, SPEC-17.7: another PC only looks).
+        const { enabled, summary, records } = z
+          .object({
+            enabled: z.boolean().optional(),
+            summary: z.boolean().optional(),
+            records: z.boolean().optional(),
+          })
           .strict()
           .parse(await body(request));
+        if (records !== undefined && remote) throw new DomainError('FORBIDDEN');
         if (enabled !== undefined) await offlineView.setEnabled(offline[1], enabled);
         if (summary !== undefined) await offlineView.setSummary(offline[1], summary);
+        if (records !== undefined) await offlineView.setRecords(offline[1], records);
         send(200, await offlineView.status(offline[1]));
         return;
       }
@@ -2513,6 +2524,8 @@ export async function startServer({
       if (review) {
         if (request.method === 'POST' && !review[2]) {
           const input = await body(request);
+          // 검토본과 함께 기록 (PLAN-53 T-335): checked (remote → FORBIDDEN) before the snapshot.
+          const withRecord = reviewRecordInput(input, remote);
           const created = reviews.create(
             review[1],
             input,
@@ -2520,7 +2533,21 @@ export async function startServer({
               lazyCandidate(workspace, review[1], z.string().parse(input.requestId)),
             ),
           );
-          send(201, created);
+          send(
+            201,
+            withRecord
+              ? {
+                  ...created,
+                  record: addReviewRecord(
+                    records,
+                    review[1],
+                    created,
+                    withRecord,
+                    remoteAccess.account()?.name ?? 'user',
+                  ),
+                }
+              : created,
+          );
           // 작업 폴더의 검토본 역할에 사본 (PLAN-52 T-313): the same page as [내려받기].
           try {
             const saved = reviews.get(review[1], created.id).payload;

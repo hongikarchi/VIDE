@@ -7,6 +7,12 @@ import { z } from 'zod';
  * the UI and the server; the schemas below check the server's inputs.
  */
 export const RECORD_TYPES = ['R', 'I', 'K', 'E', 'D', '?'] as const;
+/**
+ * The folder (under the work folder's ops folder) that keeps imported KakaoTalk chats and mail as
+ * they were (PLAN-53 T-331, SPEC-17.6): never read by the AI, never in git, never on the site. One
+ * name for the writer and every guard.
+ */
+export const RECORD_ORIGINALS = ['기록', '원문'] as const;
 export const recordTypeSchema = z.enum(RECORD_TYPES);
 export type RecordType = z.infer<typeof recordTypeSchema>;
 

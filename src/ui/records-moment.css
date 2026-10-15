@@ -1,0 +1,62 @@
+/* 기준 시점 글자 (Design SCR-46 구현 기준, PLAN-53 T-335): one grey line at the viewport's top left. */
+.records-moment-basis {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  pointer-events: auto;
+}
+.records-moment-basis button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-1);
+  font: inherit;
+  cursor: pointer;
+}
+.records-moment-basis button:hover {
+  text-decoration: underline;
+}
+.records-moment-basis button[hidden] {
+  display: none;
+}
+@media print {
+  .records-moment-basis {
+    display: none;
+  }
+}
+/* 검토본 저장의 '기록으로도 남기기' (Design SCR-46 구현 기준 「검토본 저장 대화상자」, T-335). */
+.review-save .review-record {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.review-save .review-record label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.review-save .review-record [role='radiogroup'] {
+  display: flex;
+  gap: 12px;
+}
+.review-save .review-record input[type='checkbox'],
+.review-save .review-record input[type='radio'] {
+  width: auto;
+  margin: 0;
+}
+.review-save .review-record input:not([type]) {
+  width: 100%;
+  max-width: 420px;
+}

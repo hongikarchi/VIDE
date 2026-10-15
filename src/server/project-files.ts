@@ -12,6 +12,7 @@ import {
   resolve,
   sep,
 } from 'node:path';
+import { RECORD_ORIGINALS } from '../contracts/records.ts';
 import { DomainError } from '../core/store.ts';
 import type { FolderKind, ProjectFolders } from '../core/project-folders.ts';
 
@@ -94,7 +95,8 @@ export function deniedPath(path: string, context: FileContext = {}) {
   const parts = resolve(path).split(/[\\/]+/);
   if (parts.some((part) => SECRET_SEGMENTS.has(part.toLowerCase()))) return true;
   // Imported KakaoTalk chats and mail (`<ops>/기록/원문/`, SPEC-17.6, PLAN-53 T-331).
-  if (parts.some((part, i) => part === '기록' && parts[i + 1] === '원문')) return true;
+  const [records, originals] = RECORD_ORIGINALS;
+  if (parts.some((part, i) => part === records && parts[i + 1] === originals)) return true;
   return secretName(basename(path));
 }
 

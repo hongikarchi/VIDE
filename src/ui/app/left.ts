@@ -250,6 +250,17 @@ export function renderLinkPanel() {
       }
       void pollOffline(api(`/projects/${projectId}/offline-view`, 'PUT', { summary }));
     },
+    onRecords: (records) => {
+      const projectId = currentProject().id;
+      if (linksState.offlineState?.projectId === projectId) {
+        linksState.offlineState = {
+          projectId,
+          status: { ...linksState.offlineState.status, records },
+        };
+        renderLinkPanel();
+      }
+      void pollOffline(api(`/projects/${projectId}/offline-view`, 'PUT', { records }));
+    },
     onInboxUse: useInboxItem,
     onInboxDismiss: dismissInboxItem,
   });

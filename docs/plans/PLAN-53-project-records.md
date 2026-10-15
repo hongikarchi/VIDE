@@ -2,7 +2,7 @@
 id: PLAN-53
 title: 프로젝트 기록 — 결정·근거·영향 모델과 타임라인 (T-320~T-339)
 status: draft
-version: 0.7
+version: 0.8
 updated: 2026-10-15
 owner: user
 related: [C-09, SPEC-03, SPEC-07, SPEC-08, SPEC-10, SPEC-17, ARCH-01, DESIGN, ADR-027, ADR-037, RESEARCH-17, FR-07, FR-09, FR-10, FR-12, FR-16, FR-18, PLAN-52]
@@ -160,45 +160,69 @@ SPEC-17이 의미를 소유한다. 아래는 이 계획이 구현할 범위의 �
 
 - **기준:** 참고 화면 ②(RESEARCH-17 §3.2), SPEC-17 부위 매핑, ARCH-01 §5 모델 저장(`lazy` 독자 규칙).
 - **변경:** `src/core/records-scene.ts` — 열린 연결의 최신 Sync(SPEC-07.5의 7 규칙)에서 부위 사전의 매핑으로 객체를 부위별로 묶는다. 매핑 안 된 객체는 '그 밖' 묶음으로 흐리게. 신설/기존 그룹 분리 오프셋. 좌표는 풀지 않고 표시 형상 id 목록만 다룬다(뷰포트가 그림).
+- **구현 계약:** ARCH-01 1.40 §5 「부위별 모델 묶음」 — 새 라우트 없이 클라이언트 순수 모듈 `src/core/records-scene.ts`가 뷰포트가 이미 그린 `objects[]`(`id`·`sourceId`·`documentKey`·`layerName`)만으로 `layerIndexOf`·`bundleParts`·`partLevels`·`objectLevels`·`separationVectors`를 계산한다. 레이어는 정확히 일치, 한 객체가 여러 부위면 모든 묶음(가장 밝은 단계), `jig-output`은 `unresolved`, 묶이지 않은 객체는 `unmapped`(그 밖). 단계 계수 on 1 · dim 0.25 · 그 밖 0.12. 분리는 `grp`별 x축 오프셋(모델 폭 × 1.2, 표시 전용). 시험에 객체 20,000·부위 30 측정(≤200 ms, T-337 4)을 더한다.
 - **검증:** `tests/core/records-scene.test.mjs` — 부위 15개·객체 500개 fixture에서 묶음 수·미매핑 수.
 - **완료:** 묶음 계산이 Sync 목록을 통째로 읽지 않는다(`lazy`).
+- **구현(2026-10-15):** `src/core/records-scene.ts` — `layerIndexOf`·`bundleParts`(정확한 레이어 경로·같은 연결의 `sourceId`, `jig-output`·표시 안 된 연결은 `unresolved`, 여러 부위면 모든 묶음, 그 밖 `unmapped`, `partsOf`)·`partLevels`·`objectLevels`(가장 밝은 단계)·`sceneGroups`·`separationVectors`·`sceneEpisodes`(장 → 이어진 기록). 입력은 뷰포트 `objects[]`의 `{id, sourceId, documentKey, layerName}`뿐이고 서버 라우트는 없다. 시험 `tests/core/records-scene.test.mjs` 6개 통과 — 부위 15·객체 500(연결 둘, 같은 레이어 이름·같은 id 충돌 없음) 묶음 177·그 밖 323, 결정성, 단계, 분리, 에피소드, 객체 20,000·부위 30 묶음 중앙값 약 10 ms(기준 200 ms).
 
 ### T-334 타임라인 보기(뷰포트 위)
 
 - **기준:** Design SCR(모델 위 타임라인), T-333, 참고 화면 ②.
 - **변경:** `src/ui/records-timeline.tsx` — 뷰포트 아래 가로 타임라인(행 = 부위, 기록 글리프, 연결선). 커서를 끌거나 재생하면 그 날짜까지의 기록이 있는 부위가 켜지고(불투명), 없는 부위는 흐리며, 커서 전후 60일 안의 기록은 라벨을 띄운다. 에피소드 칩(기록의 `ep`)을 누르면 그 체인의 부위만 켜지고 선이 이어진다. '신설/기존 분리' 토글, '전부 보기'. 인쇄 모드는 뷰포트만 전체 화면. 뷰포트 조작은 기존 three.js 카메라·선택 규칙을 그대로 쓰고 선택 → T-324의 '이 객체의 기록'으로 이어진다.
+- **구현 계약:** ARCH-01 1.40 §5 「뷰포트 표시 API」·「타임라인 띠」, Design 1.28 SCR-46 「구현 기준」. `viewport.ts`에 `fade`·`highlight`·`offset`·`fadeInfo`만 더하고, `src/ui/records-timeline.tsx`·`.css`는 `.workspace`에 덧붙인다(`Shell.tsx`·`style.css` 안 바꿈). 에피소드는 기록에 `ep` 필드가 없으므로 `chapter`(장)와 `recordChains`(이어진 기록)로 만든다 — 위 '기록의 `ep`'는 이 뜻으로 읽는다. [기록 탭에서 보기]는 `showRecords(projectId, {open})`. 시험의 모델은 합성 Sync(`browser-live-sync-layers.mjs` 방식)이며 커서 응답 ≤100 ms(`fadeInfo` 변화까지).
 - **검증:** `tests/integration/browser-records-timeline.mjs` — fixture 모델(합성 `.3dm` 스냅샷)에서 커서 이동마다 켜진 부위 수, 에피소드 선택, 분리 토글. 60 fps 요구는 두지 않되 커서 이동 응답 ≤100 ms.
 - **완료:** 사용자가 커서를 끌며 "이때 이 부위가 왜 이렇게 됐는지"를 기록에서 읽는다.
+- **구현(2026-10-15):** `src/ui/records-timeline.tsx`·`.css`(`app/boot.ts`가 모델 탭에 한 번 붙임, `Shell.tsx`·`style.css` 안 바꿈), `src/ui/viewport.ts` `fade`·`highlight`·`offset`·`fadeInfo`, `records-tab.tsx` `showRecords(projectId, {open})`, `app/viewport.ts` `openRecordRequest` export. T-335와는 수정 단계에서 `records-moment.ts`를 직접 불러 이었다: 놓은 커서·한 걸음·재생 멈춤·눈금 → `pickMoment(날짜)`, 접기·모델 탭 떠남·언마운트 → `pickMoment(null)`, 펼침 → 마지막 커서 날짜, [현재로] → 커서를 오늘로, 눈금은 `momentTicks()` 하나(띠의 자체 눈금 계산·기준 글자는 지움). `showLayers()`가 끝에 `linksState.bump()`를 불러 띠가 Live Sync 뒤에도 묶음을 다시 센다. [재생] 중에는 커서 날짜를 기억에 쓰지 않는다. 시험 `tests/integration/browser-records-timeline.mjs`(test:browser에 추가) 통과 — 합성 Sync 객체 64·부위 6·기록 40·마일스톤 2·검토본 2: 커서 날짜마다 켜진 부위 수와 흐린 객체 수, 커서 → `fade` 반영 중앙값 약 1 ms(객체 64; 20,000개 측정은 T-337), 에피소드(부위 3 켜짐·◀ ▶·Esc), [전부 보기], [분리](기존 16개 이동·복귀), 글리프 → 강조 8·카드 → 기록 탭 자세히, 객체 선택 → 부위 행, [접기]/[펼치기], 검토본 눈금 누름, 새로 읽어도 커서 날짜 유지, 금지어 0. 실제 프린터 출력과 사용자 동승은 아직.
 
 ### T-335 검토본과 시점 연결
 
 - **기준:** SPEC-03.6 검토본·비교, SPEC-17.
 - **변경:** 타임라인의 날짜에 검토본이 있으면 표식을 두고, 누르면 그 시점의 검토본을 뷰포트에 겹친다(기존 비교 화면 재사용). 검토본을 만들 때 선택적으로 기록(D 또는 E)을 함께 만든다.
-- **검증:** 검토본 3개 fixture에서 표식·전환·되돌아오기.
+- **구현 계약:** ARCH-01 1.40 §5 「시점 형상」·「검토본과 함께 기록」. 눈금은 기존 `GET /reviews`와 앱이 읽은 요청 목록의 문서 Sync, 형상은 '과거 Sync 보기'(`showRequest(id, {keepCamera: true})` + `layerOverride`)로 그 연결 자리에 대신 그린다(3D 겹침 없음 — SPEC-17 R-86). 커서를 놓거나 재생을 멈출 때만 바꾼다. `POST /reviews {record?: {type: D|E, text?}}` → `Records.add(..., {state: kept, source: manual, sourceKey: review:<reviewId>})`, 실패해도 검토본은 남고 응답 `record: {id}|{error}`. 출처 값은 SPEC-17 R-87 결정 전까지 `manual`.
+- **검증:** 검토본 3개 fixture에서 표식·전환·되돌아오기 — `tests/core/records-moments.test.mjs`(시점 계산), `tests/server/review-record.test.mjs`(검토본과 함께 기록·원격 `FORBIDDEN`), `tests/integration/browser-records-moment.mjs`(눈금 6·전환·[현재로]·띠로 구동·접기/펼치기·요청 기준 유지·저장 대화상자), `tests/integration/browser-records-timeline.mjs`(띠의 검토본 눈금 → 기준 글자).
+- **구현(2026-10-15):** 시점 계산은 순수 `src/core/records-moments.ts`(`buildMoments`·`momentTicks`·`pickMoments`·`basisText`; 정리된 Sync 제외, 연결 Sync가 아닌 검토본은 눈금만), 화면 연결은 `src/ui/records-moment.ts`(`momentTicks()`·`pickMoment(date|null)`·`clearMoment()`·`momentState()`·`setMomentToday()`·`onMomentsChange()`; 뷰포트 왼쪽 위 기준 글자와 [현재로], `records-moment.css`)이며 앱 시작 때 불러온다(`app/boot.ts`). `links-sync.ts`에 `showRequest(id, {keepCamera})`와 `clearLayerOverrides(linkIds)`를 더했다(이 모듈이 건 대체만 되돌리고 숨긴 연결은 건드리지 않음). 수정 단계: `showRequest`는 활성 레이어와 요청 기준(`displayedResult`)을 과거 Sync로 바꿔 커서를 놓기만 해도 AI 요청이 옛 형상을 기준으로 갔으므로, 보기 전용 대체(`setViewOnlyOverride`·`viewOnlyOverrides`, `applyActiveLayer`가 그 연결의 최신 Sync를 기준으로 둠)로 바꿨다(ARCH-01 R-92) — `showRequest`의 `keepCamera` 인자는 쓰는 곳이 없어 지웠다. 검토본과 함께 기록은 `src/server/review-record.ts`(`reviewRecordInput`·`addReviewRecord`)와 `server.ts` `POST …/reviews`, 저장 대화상자 체크·라디오·한 줄(`reviews.tsx`, 원격 숨김). 띠와의 연결은 수정 단계에서 했다(T-334 줄). 시험: `tests/core/records-moments.test.mjs`, `tests/server/review-record.test.mjs`, `tests/integration/browser-records-moment.mjs`(검토본 3개·동기화 3개 합성, `test:browser`에 추가) 통과.
 - **완료:** 시점 선택 → 그 시점 모델과 기록이 같이 보인다.
 
 ### T-336 공유 경계와 사이트
 
 - **기준:** ADR-037, SPEC-17 권한.
 - **변경:** 사이트(D1)에는 **거른 기록(kept)의 본문·유형·부위·날짜만** 올릴지 프로젝트 설정으로 정한다(기본 끔). 가져온 원문·후보·X 기록은 올리지 않는다. 올릴 때는 노트와 같은 경로(PLAN-36 패턴)를 쓴다. 이 티켓은 설정과 경계 검사까지이며 사이트 쪽 보기는 뒤로 미룬다.
+- **구현 계약:** ARCH-01 1.40 §5 「사이트 사본」. 위 '노트와 같은 경로(PLAN-36 패턴)' 대신 PLAN-33/35의 할 일 사본 방식으로 한다(SPEC-17 R-88). 설정 `offline-view.json` `projects[id].records`(기본 false), `PUT /api/v1/projects/:id/offline-view {records?}`(원격은 FORBIDDEN). 경계 지점 `src/server/records-share.ts` — kept·정정되지 않음·카카오톡·메일 출처와 그 원문 attachments 제외, 항목 `{id, date, type, text, parts(이름), chapter, updatedAt}`만. 전송 `PUT /api/hosts/device/projects/:id/records {items, first}`(500건·900 KB 묶음), 끄기·프로젝트 삭제는 `DELETE …/records`. D1 `0018-project-records.sql`(`project_records`, `project_summaries.records_at`). 사이트 보기는 뒤로. 사이트 시험은 새 `tests/sharing/records.mjs`를 `src/sharing/package.json` test 줄에 더한다.
 - **검증:** `tests/server/records-share.test.mjs` — 기본 끔, 켜도 원문·후보 미포함.
 - **완료:** 경계 검사 통과.
+- **구현(2026-10-15):** 계약대로 했다. PC 쪽은 `src/server/records-share.ts`(`shareable`·`recordsShare`·`recordBatches`), `src/server/offline-view.ts`(`setRecords`, `shareRecords`, 설정 키 `projects[id].records`, `summaries[id].records·recordsAt·recordsError`), `src/server/remote-access.ts`(`uploadRecords`·`deleteRecords`)이다. `src/server/server.ts`는 `OfflineView`에 `records`를 주입하고, `PUT …/offline-view {records}`를 원격 세션이 보내면 `FORBIDDEN`으로 막는다. 사이트 쪽은 `src/sharing/migrations/0018-project-records.sql`, `src/sharing/summary.ts`(`recordsDeviceRoute`, 문장 셋 이하의 `json_each` batch)이다. 화면은 연결 파일 칸의 '할 일·대화 기록' 스위치 아래에 '거른 기록을 사이트에 올리기'를 두고 Design SCR-46 「사이트 스위치」의 설명 한 줄과 실패 줄을 붙였다(`src/ui/links.tsx` `RecordsSwitch`, `src/ui/app/left.ts` `onRecords`). 계약에서 더 정한 것은 ARCH-01 「사이트 사본」에 적었다. ① 끄기·삭제 때 사이트가 확인하지 않은 DELETE는 `recordsRemovals`에 남겨 heartbeat마다 다시 보낸다(404는 지워진 것으로 본다). ② 켜는 순간의 `tick(true)`이 진행 중인 실행에 합쳐지면, 그 실행이 끝난 뒤 한 번 더 돈다. ③ 할 일 사본을 꺼도(`DELETE …/summary`) 기록과 `records_at`은 남는다. ④ 수정 단계: 강제 실행이 아니면 지문은 프로젝트마다 1분에 한 번만 계산한다(heartbeat 15초마다 남김 기록 전체를 읽지 않게). ⑤ 사이트 배포(D1 0018·Worker) 전에는 켠 프로젝트의 업로드가 실패해 연결 칸에 경고 한 줄 '사이트에 올리지 못했습니다 · 1분 뒤 다시'가 서고 1분마다 다시 보낸다(조용히 넘기지 않는다). 스위치 문구는 Design SCR-46 「사이트 스위치」대로 고쳤다. 원문 폴더 이름은 `src/contracts/records.ts` `RECORD_ORIGINALS` 하나를 쓰는 곳(쓰기·AI 파일 도구·git 제외·사이트 경계)이 공유한다. 시험: `tests/server/records-share.test.mjs` 6개 통과(경계·묶음 나누기·기본 끔·바뀔 때만 다시 보냄·뺀 기록 빠짐·`SITE_UNREACHABLE` 1분 대기·끄기와 삭제·HTTP 끝까지·원격 403), `tests/sharing/records.mjs` 통과(소유 PC만·묶음 바꿔치기·일곱 필드만·잘못된 항목 400·할 일과 분리·DELETE·cascade). `npm --prefix src/sharing test` 전체가 통과했다. 사이트에서 보는 화면은 만들지 않았다.
 
 ### T-337 성능·용량
 
 - **기준:** 기록 5,000건·부위 30개·객체 20,000개.
 - **변경:** 측정 뒤 필요한 것만(차트 가상 스크롤, 역색인 캐시). 추측 최적화는 하지 않는다(AI.md §8 「실행 우선」).
+- **구현 계약:** ARCH-01 1.40 §5 「성능 측정」 표 9항목(목록 API ≤500 ms, 차트·기록 탭·띠 첫 그리기 ≤2 s, 묶음 ≤200 ms, 커서 ≤100 ms, parts/status ≤500 ms, 객체의 기록 ≤500/100 ms, 사이트 지문 ≤50 ms). 중앙값(예열 1회 뒤 5회)을 VERIFY 웨이브 3에 적고, 기준을 넘은 항목만 고친다.
 - **완료:** 차트·타임라인 첫 그리기 ≤2 s, 커서 응답 ≤100 ms.
+- **측정(2026-10-15):** 합성 자료(기록 5,000건 중 요청을 가리키는 1,000건, 부위 30, 장 6, 문서 Sync 객체 20,000, 변경 목록이 있는 요청 2,000)로 쟀다. 값은 중앙값이다.
+  - 목록 API 무거르기 53 ms·`state=kept` 53 ms(≤500)
+  - 화면에서 부른 목록 API 63 ms
+  - 기록 탭 첫 목록 5,000행 195 ms(≤2 s)
+  - 차트 첫 그리기 492 ms(≤2 s)
+  - `parts/status` 1.3 ms(≤500)
+  - '이 객체의 기록' 처음 60 ms / 다시 43 ms(≤500/100)
+  - 사이트 지문 28 ms(≤50)
+  - 묶음 계산 객체 20,000 9.6 ms(≤200, T-333 시험)
+
+  - 띠 첫 그리기 5,000건(모델 탭 복귀) 158 ms(≤2 s), 커서 → `fade` 객체 20,000 57 ms(최대 84, ≤100), [전부 보기] → `fade` 84 ms(≤100) — 수정 단계에서 `browser-records-perf.mjs`에 합성 문서 Sync 객체 20,000을 더해 잼(같은 실행의 목록 API 340 ms·기록 탭 544 ms·차트 478 ms, 모델과 띠를 함께 그리는 상태)
+
+  모두 기준 안이라 **고친 코드는 없다.** `rowsOf` 전체 스캔, 기록 탭의 목록 2회 읽기·전체 그리기, 차트 가상 스크롤, `fade`의 청크 다시 짓기는 그대로 둔다. 시험: `tests/core/records-perf.test.mjs`(1·7·8), `tests/integration/browser-records-perf.mjs`(1·2·3·5·6, 새 브라우저 3회, `test:browser`에 등록), `tests/server/records-share.test.mjs`(9). 기록은 [VERIFY-2026-10-15-records-wave-3](../tdd/VERIFY-2026-10-15-records-wave-3.md)에 있다.
 
 ### T-338 사용자 동승 검수(실제 프로젝트)
 
 - **기준:** PRD C-09, 이 계획 전체.
 - **방법:** 사용자가 고른 실제 프로젝트(예: 나진상가·연무장길 11)의 기록을 **사용자가 직접** 가져오고(카카오톡·메일 내보내기, 회의록) 거르고 부위에 묶어 차트·타임라인을 본다. 15~30분, 에이전트는 화면을 조작하지 않으며 원문을 읽지 않는다. 판정은 사용자: "이 그림이 내가 아는 그 프로젝트의 결정 흐름과 같은가". 동승 중 관찰은 VERIFY에 남기고 원문·스크린샷의 대화 내용은 남기지 않는다.
+- **구현 계약:** 새 코드 없음. 사용자 동승 관찰을 VERIFY에 남기며 원문·대화 내용·스크린샷의 본문은 남기지 않는다.
 - **완료:** 사용자 판정 통과 또는 결함 목록.
 
 ### T-339 C-09 완료 판정
 
 - **방법:** 세 웨이브 VERIFY와 T-338 판정을 모아 PLAN.md §6.5와 PRD §4.4 C-09 상태를 갱신. 남은 결함은 새 티켓으로.
+- **구현 계약:** 새 코드 없음. 판정과 남은 결함(SPEC-17 R-86~R-88 결정 포함)을 PLAN.md §6.5와 PRD C-09에 반영한다.
 - **완료:** PRD C-09 "구현·검수 완료", 설치본에 포함.
 
 ## 실행 순서
@@ -231,6 +255,8 @@ fixture의 날짜·부위·문장은 모두 지어낸 값이다. 참고 화면�
 
 ## 현재 상태
 
+- 2026-10-15 밤 0.8(웨이브 3 구현·오프라인 검수): **T-333~T-336 구현, T-337 측정 완료(모두 기준 안, 고친 코드 없음)** — 부위별 묶음(`src/core/records-scene.ts`), 모델 위 타임라인 띠(`src/ui/records-timeline.tsx`, 뷰포트 `fade`·`highlight`·`offset`), 시점 형상(`src/core/records-moments.ts`·`src/ui/records-moment.ts`, 보기 전용 대체)과 검토본과 함께 기록(`src/server/review-record.ts`), 사이트 사본(`src/server/records-share.ts`·`offline-view.ts`·D1 0018·`src/sharing/summary.ts`). 수정 단계에서 띠와 시점 형상을 잇고, 시점 형상이 요청 기준을 과거 Sync로 바꾸던 문제를 고치고, 측정 5·6(객체 20,000)을 더했다. 검수: [VERIFY-2026-10-15-records-wave-3](../tdd/VERIFY-2026-10-15-records-wave-3.md). 남음: 사이트 배포(D1 0018·Worker, 사용자 T-357과 묶음 — 그 전에는 켠 프로젝트에 경고 한 줄), T-338 사용자 동승, T-339 판정, [분리] 중 공간 입력 좌표(P2), 사용자 결정 SPEC-17 R-86~R-89·ARCH-01 R-91·R-92·Design R-91·SPEC-03 R-23.
+- 2026-10-15 밤 0.8: 웨이브 3 착수(워크플로) — 구현 계약을 ARCH-01 1.40 §5 「프로젝트 기록」(부위별 묶음·뷰포트 표시 API·타임라인 띠·시점 형상·검토본과 함께 기록·사이트 사본·성능 측정 표)과 Design 1.28 SCR-46 「구현 기준」에 먼저 적고, T-333~T-339에 '구현 계약' 줄을 더했다. 정한 것: 묶음은 클라이언트 계산(새 라우트 없음), 에피소드는 장·이어진 기록, 시점 형상은 대체 표시, 사이트 사본은 할 일 사본 방식·D1 0018·카카오톡·메일 제외. 미결: SPEC-17 R-86(겹침 문구)·R-87(검토본 기록의 출처 값)·R-88(공유 경로 문구), ARCH-01 R-91.
 - 2026-10-15 밤 0.7: **T-327~T-331 구현, T-332 오프라인 검수** — 차트(`src/core/records-chart.ts`·`src/ui/records-chart.tsx`), 카카오톡·메일 가져오기(`src/core/import/`·`src/server/records-import.ts`·`src/ui/records-import.tsx`), 폴더 사본(`src/server/records-mirror.ts`·`src/ui/records-mirror-line.tsx`). 검수: [VERIFY-2026-10-15-records-wave-2](../tdd/VERIFY-2026-10-15-records-wave-2.md). 리뷰에서 나온 P0 2건을 고쳤다. 하나는 되들이기가 이 PC가 마지막으로 쓴 행과 비교해 사람이 바꾼 필드만 반영하게 한 것이고, 다른 하나는 거르지 않은 kakao·mail 후보를 사본에서 뺀 것이다(ARCH-01 1.39). 함께 고친 것: 가져오기 문구를 Design SCR-45에 맞춤, PC 카카오톡의 '삭제된 메시지입니다.' 제외, `browser-records-import.mjs`를 `test:browser`에 등록, `GET /records/mirror`는 기다리는 쓰기가 있을 때만 씀, `addMany` 직접 시험. 티켓 상태: T-327·T-328·T-329·T-330·T-331 구현 완료(오프라인), T-332 오프라인 부분 완료. 남은 결정: SPEC-17 R-82(작성자 거르기)·R-83(차트 읽기 전용 문구)·R-84(메시지 단위 문구)·R-85(일부 중복 건너뜀), ARCH-01 R-91(기록 DB의 AI 읽기에서 가져온 후보 빼기), 커서 뒤 35% 흐림을 Design에 둘지. 후속: `src/knowledge/collect/mail.ts`(SPEC-08.9 자료 수집)와 `src/core/import/mail.ts`의 MIME 읽기를 하나로 합치기(`readMail(buffer)`를 `parseMail(text)` 위 어댑터로; 합칠 때 ARCH-01의 'node 의존 없음'을 고침). 실제 대화·메일 파일, 실제 작업 폴더 화면, A3 실제 인쇄는 사용자 동승.
 - 2026-10-15 밤 0.6: 웨이브 2 착수(워크플로) — 구현 계약을 ARCH-01 1.38 §5 「프로젝트 기록」(가져오기·사본·차트)과 Design 1.27 SCR-45 「구현 기준」에 먼저 적고, T-327~T-331에 '구현 계약' 줄을 더했다. 미결: ARCH-01 R-91(가져온 후보의 AI 읽기 제외).
 - 2026-10-15 밤 0.5: **T-321~T-325 구현, T-326 오프라인 검수** — 저장·API·자동 후보·기록 탭·'이 객체의 기록'·부위 사전(각 티켓의 '구현' 줄). ARCH-01 1.35에 구현이 정한 물리 세부를 반영했다. 검수: [VERIFY-2026-10-15-records-wave-1](../tdd/VERIFY-2026-10-15-records-wave-1.md)(합성 요청 10·노트 5·설정값 3 → 후보 19건 중복 0, O/X·부위·객체→기록 통과). 남은 것: 설치본에서 기록 탭 15분 확인(사용자), 100건/10분 측정, SPEC-17 R-46~R-48 결정(폴더 역할 확정 출처 값, 동기화 K 후보 연결 조건, 열람자 역할), SPEC-17.3 표 행 7·8(갱신 제안 카드·자료 [기록으로 남기기])의 티켓 배정, 웨이브 2(T-327~).

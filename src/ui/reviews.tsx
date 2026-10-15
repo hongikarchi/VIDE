@@ -11,6 +11,7 @@ import { tableViewSchema } from '../contracts/quantities.ts';
 import { SharedFeedback } from './shared-feedback.tsx';
 import type { ReceivedFeedback } from '../contracts/shared-feedback.ts';
 import type { TableView } from '../contracts/quantities.ts';
+import { remoteSession } from './remote-panel.ts';
 
 const dialog = document.createElement('dialog');
 document.body.append(dialog);
@@ -102,10 +103,14 @@ function SaveReview({
   requestId: string;
   image: string;
   views: TableView[];
-  onSaved: (row: ReviewRow) => void;
+  onSaved: (row: ReviewRow, recordFailed: boolean) => void;
 }) {
   const [title, setTitle] = useState(''),
     [view, setView] = useState(''),
+    // 검토본과 함께 기록 (PLAN-53 T-335, SCR-46 구현 기준): off by default; hidden remotely.
+    [keep, setKeep] = useState(false),
+    [recordType, setRecordType] = useState<'D' | 'E'>('D'),
+    [recordText, setRecordText] = useState(''),
     [saving, setSaving] = useState(false),
     [status, setStatus] = useState('');
   const locked = useRef(false),
@@ -119,16 +124,20 @@ function SaveReview({
     busy = true;
     setSaving(true);
     try {
-      const row = reviewRowSchema.parse(
-        await api(`/projects/${projectId}/reviews`, 'POST', {
-          requestId,
-          title,
-          image,
-          query: views.find((item) => item.id === view)?.query || {},
-        }),
-      );
+      const record = keep && !remoteSession();
+      const reply = await api(`/projects/${projectId}/reviews`, 'POST', {
+        requestId,
+        title,
+        image,
+        query: views.find((item) => item.id === view)?.query || {},
+        ...(record
+          ? { record: { type: recordType, ...(recordText.trim() ? { text: recordText } : {}) } }
+          : {}),
+      });
+      const row = reviewRowSchema.parse(reply);
       if (row.requestId !== requestId) throw new Error('저장된 검토본의 기준이 일치하지 않습니다.');
-      onSaved(row);
+      const made = (reply as { record?: { id?: unknown } }).record;
+      onSaved(row, record && typeof made?.id !== 'string');
     } catch (error) {
       setStatus(errorText(error));
     } finally {
@@ -178,6 +187,50 @@ function SaveReview({
           검토본 저장
         </button>
       </div>
+      {remoteSession() ? null : (
+        <div className="review-record">
+          <label>
+            <input
+              type="checkbox"
+              checked={keep}
+              disabled={saving}
+              onChange={(event) => setKeep(event.target.checked)}
+            />
+            이 검토본을 기록으로도 남기기
+          </label>
+          {keep ? (
+            <>
+              <div role="radiogroup" aria-label="기록 유형">
+                {(
+                  [
+                    ['D', '결정'],
+                    ['E', '근거'],
+                  ] as const
+                ).map(([type, name]) => (
+                  <label key={type}>
+                    <input
+                      type="radio"
+                      name="review-record-type"
+                      checked={recordType === type}
+                      disabled={saving}
+                      onChange={() => setRecordType(type)}
+                    />
+                    {name}
+                  </label>
+                ))}
+              </div>
+              <input
+                aria-label="기록 내용"
+                placeholder="무엇을 정했나요? 비우면 검토본 이름"
+                maxLength={20000}
+                value={recordText}
+                disabled={saving}
+                onChange={(event) => setRecordText(event.target.value)}
+              />
+            </>
+          ) : null}
+        </div>
+      )}
       <p role="status">{status}</p>
     </>
   );
@@ -346,9 +399,13 @@ export function initializeReviews(
       <SaveReview
         key={current}
         {...{ projectId, requestId, image, views }}
-        onSaved={(row) => {
+        onSaved={(row, recordFailed) => {
           openReview(projectId, row);
-          notify('검토본을 저장했습니다. 산출물의 검토본에서 다시 열 수 있습니다.');
+          notify(
+            recordFailed
+              ? '검토본은 저장했고 기록은 남기지 못했습니다'
+              : '검토본을 저장했습니다. 산출물의 검토본에서 다시 열 수 있습니다.',
+          );
           void refresh().catch((error) =>
             notify('검토본은 저장됐지만 목록을 갱신하지 못했습니다: ' + errorText(error)),
           );

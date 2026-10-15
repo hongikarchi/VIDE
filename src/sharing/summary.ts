@@ -19,6 +19,11 @@ const HISTORY_ANSWER_MAX = 400;
 const HISTORY_FILES_MAX = 10;
 /** '작업 중' rows one PC sends for a project (PLAN-52 T-310). */
 const CHECKOUT_ITEMS_MAX = 200;
+/** 거른 기록 one upload carries (PLAN-53 T-336); the PC sends more in several. */
+const RECORD_ITEMS_MAX = 500;
+const RECORD_TEXT_MAX = 20_000;
+const RECORD_PARTS_MAX = 50;
+const RECORD_TYPES = ['R', 'I', 'K', 'E', 'D', '?'];
 // 'meeting' shows as '협의' and 'receipt' (접수) came with PLAN-39 (SPEC-01.14 1).
 const KINDS = ['task', 'meeting', 'receipt', 'deadline'] as const;
 type Kind = (typeof KINDS)[number];
@@ -572,18 +577,25 @@ export async function summaryDeviceRoute(
   }
   if (path[0] !== 'projects' || path.length !== 3) return undefined;
   if (path[2] === 'checkouts') return checkoutsDeviceRoute(request, db, row, path[1]);
-  if (!['agenda', 'history', 'summary'].includes(path[2])) return undefined;
+  if (!['agenda', 'history', 'summary', 'records'].includes(path[2])) return undefined;
   const project = path[1];
   if (!/^[A-Za-z0-9-]{8,64}$/.test(project)) invalid();
   await ownedByHost(db, row, project);
   const now = Date.now();
+  if (path[2] === 'records') return recordsDeviceRoute(request, db, project, now);
   if (path[2] === 'summary') {
     if (request.method !== 'DELETE') throw new HttpError(405, 'METHOD_NOT_ALLOWED');
     // The owner turned sharing off on the PC: the copy and the summary leave the site.
     await db.batch([
       db.prepare('DELETE FROM project_agenda WHERE project_id=?').bind(project),
       db.prepare('DELETE FROM project_history WHERE project_id=?').bind(project),
-      db.prepare('DELETE FROM project_summaries WHERE project_id=?').bind(project),
+      // 거른 기록 have their own switch (PLAN-53 T-336): their time stays with them.
+      db
+        .prepare('DELETE FROM project_summaries WHERE project_id=? AND records_at IS NULL')
+        .bind(project),
+      db
+        .prepare('UPDATE project_summaries SET agenda_at=NULL,history_at=NULL WHERE project_id=?')
+        .bind(project),
       db
         .prepare('DELETE FROM project_checkouts WHERE project_id=? AND pc_id=?')
         .bind(project, row.id),
@@ -715,6 +727,69 @@ export async function summaryDeviceRoute(
         ),
     ),
     upsert('history_at'),
+  ]);
+  return json({ stored: list.length });
+}
+
+/**
+ * 거른 기록 from the PC that runs the project (PLAN-53 T-336, SPEC-17.6): `PUT {items, first}`
+ * replaces this project's copy (`first`) or adds the next part of it; `DELETE` removes it. Only
+ * these fields are kept; anything else the PC sends is dropped. Three statements at most, so a
+ * large list stays within a Worker call's query limit.
+ */
+async function recordsDeviceRoute(request: Request, db: D1Database, project: string, now: number) {
+  if (request.method === 'DELETE') {
+    await db.batch([
+      db.prepare('DELETE FROM project_records WHERE project_id=?').bind(project),
+      db.prepare('UPDATE project_summaries SET records_at=NULL WHERE project_id=?').bind(project),
+    ]);
+    return json({ removed: true });
+  }
+  if (request.method !== 'PUT') throw new HttpError(405, 'METHOD_NOT_ALLOWED');
+  const input = await body(request, 1024 * 1024);
+  if (input.first !== undefined && typeof input.first !== 'boolean') invalid();
+  const list = items(input, RECORD_ITEMS_MAX).map((item) => {
+    const parts = item.parts ?? [];
+    const chapter = item.chapter ?? null;
+    if (
+      !isDate(item.date) ||
+      !RECORD_TYPES.includes(item.type as string) ||
+      typeof item.text !== 'string' ||
+      !item.text.trim() ||
+      !Array.isArray(parts) ||
+      parts.length > RECORD_PARTS_MAX ||
+      (chapter !== null && (typeof chapter !== 'string' || !chapter || chapter.length > 100))
+    )
+      invalid();
+    return {
+      id: itemId(item.id),
+      date: item.date as string,
+      type: item.type as string,
+      text: shortText(item.text, RECORD_TEXT_MAX),
+      parts: (parts as unknown[]).map((name) => shortText(name, 100)),
+      chapter: chapter as string | null,
+      updatedAt: shortText(item.updatedAt, 40),
+    };
+  });
+  await db.batch([
+    ...(input.first === true
+      ? [db.prepare('DELETE FROM project_records WHERE project_id=?').bind(project)]
+      : []),
+    db
+      .prepare(
+        `INSERT OR REPLACE INTO project_records(project_id,record_id,date,type,text,parts,chapter,updated_at)
+         SELECT ?1, json_extract(value,'$.id'), json_extract(value,'$.date'), json_extract(value,'$.type'),
+           json_extract(value,'$.text'), json(json_extract(value,'$.parts')),
+           json_extract(value,'$.chapter'), json_extract(value,'$.updatedAt')
+         FROM json_each(?2)`,
+      )
+      .bind(project, JSON.stringify(list)),
+    db
+      .prepare(
+        `INSERT INTO project_summaries(project_id,records_at) VALUES(?,?)
+         ON CONFLICT(project_id) DO UPDATE SET records_at=excluded.records_at`,
+      )
+      .bind(project, now),
   ]);
   return json({ stored: list.length });
 }

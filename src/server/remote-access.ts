@@ -719,6 +719,43 @@ export class RemoteAccess {
       return 'SUMMARY_UPLOAD_FAILED';
     }
   }
+  /**
+   * Replace the project's 거른 기록 on the account site (PLAN-53 T-336), part by part: the first
+   * part replaces what the site had. Returns an error code (`SITE_UNREACHABLE` when the site did
+   * not answer), or undefined when every part was stored.
+   */
+  async uploadRecords(projectId: string, batches: unknown[][]): Promise<string | undefined> {
+    await this.load();
+    if (!this.device) return 'ACCOUNT_UNLINKED';
+    for (const [index, items] of batches.entries()) {
+      let response: Response;
+      try {
+        response = await this.request(
+          `/api/hosts/device/projects/${encodeURIComponent(projectId)}/records`,
+          'PUT',
+          { items, first: index === 0 },
+        );
+      } catch {
+        return 'SITE_UNREACHABLE';
+      }
+      if (response.ok) continue;
+      if (response.status === 401) return 'ACCOUNT_UNLINKED';
+      const reply = (await response.json().catch(() => ({}))) as { error?: unknown };
+      return typeof reply.error === 'string' ? reply.error : 'SUMMARY_UPLOAD_FAILED';
+    }
+    return undefined;
+  }
+  /** Remove the project's 거른 기록 from the site (record sharing turned off, project deleted). */
+  async deleteRecords(projectId: string) {
+    await this.load();
+    if (!this.device) return false;
+    const response = await this.request(
+      `/api/hosts/device/projects/${encodeURIComponent(projectId)}/records`,
+      'DELETE',
+    ).catch(() => undefined);
+    // A project the site no longer has holds nothing there either.
+    return !!response && (response.ok || response.status === 404);
+  }
   /** Remove the project's 할 일 copy and history summary from the site (sharing turned off). */
   async deleteSummary(projectId: string) {
     await this.load();

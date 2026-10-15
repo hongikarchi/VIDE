@@ -452,7 +452,7 @@ function recordsTarget(): ObjectRecordsTarget | undefined {
   };
 }
 /** A record's request: its conversation tab chosen, its work card shown on the right. */
-function openRecordRequest(id: string) {
+export function openRecordRequest(id: string) {
   const entry = draftState.state.messages.find((m) => m.id === id);
   if (!entry) {
     message('이 기록의 요청을 이 프로젝트의 작업 이력에서 찾지 못했습니다.');

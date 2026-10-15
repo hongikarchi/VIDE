@@ -1,0 +1,364 @@
+/* 모델 위 타임라인 (PLAN-53 T-334, Design SCR-46 「구현 기준」): a 160px band between the 3D view and
+   the inspector of the model tab (one more grid row; style.css stays as it is), the glyphs of SCR-45,
+   one accent colour, soft backgrounds for picked rows (no coloured side bars). */
+.records-timeline {
+  display: none;
+}
+body[data-workspace='model'] .workspace:has(> .records-timeline:not([hidden])) {
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+}
+body[data-workspace='model'] .workspace > .records-timeline:not([hidden]) {
+  display: block;
+  position: relative;
+  grid-row: 4;
+  grid-column: -2;
+  min-width: 0;
+  z-index: 2;
+}
+body[data-workspace='model'] .workspace:has(> .records-timeline:not([hidden])) > #inspector {
+  grid-row: 5;
+}
+.records-timeline-band {
+  height: 160px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--fs-sm);
+  color: var(--text-1);
+  outline: none;
+}
+.records-timeline-band.records-timeline-folded {
+  height: 28px;
+}
+.records-timeline-head {
+  flex: none;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+.records-timeline-date {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--text-1);
+}
+.records-timeline-episodes {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.records-timeline-chip-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+.records-timeline-chip {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 1px 8px;
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+}
+.records-timeline-chip[aria-pressed='true'] {
+  background: var(--bg-selected);
+  color: var(--text-1);
+}
+.records-timeline-chip-clear {
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  padding: 0 4px;
+}
+.records-timeline-episode-list {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  z-index: 6;
+  width: 240px;
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-floating);
+  box-shadow: var(--shadow-float);
+}
+.records-timeline-episode-list button {
+  width: 100%;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-1);
+  text-align: left;
+  padding: 3px 6px;
+  font-size: var(--fs-sm);
+}
+.records-timeline-episode-list button > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.records-timeline-episode-list button:hover,
+.records-timeline-episode-list button[aria-selected='true'] {
+  background: var(--bg-hover);
+}
+.records-timeline-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  color: var(--text-3);
+}
+.records-timeline-note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.records-timeline-toggle {
+  color: var(--text-2);
+}
+.records-timeline-toggle[aria-pressed='true'] {
+  color: var(--text-1);
+  font-weight: 600;
+}
+.records-timeline-toggle[aria-disabled='true'] {
+  opacity: 0.45;
+}
+.records-timeline-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--text-2);
+  text-align: center;
+  padding: 0 16px;
+}
+.records-timeline-empty p {
+  margin: 0;
+}
+.records-timeline-plot {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.records-timeline-rows {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: flex;
+  align-items: flex-start;
+}
+.records-timeline-names {
+  position: relative;
+  flex: none;
+}
+.records-timeline-group {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  text-align: left;
+}
+.records-timeline-name {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 8px 0 18px;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.records-timeline-name-picked {
+  background: var(--bg-selected);
+  color: var(--text-1);
+}
+.records-timeline-svg,
+.records-timeline-axis-svg,
+.records-timeline-moments {
+  flex: none;
+  display: block;
+  overflow: visible;
+}
+.records-timeline-svg {
+  pointer-events: auto;
+}
+.records-timeline-milestone {
+  stroke: var(--text-3);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+.records-timeline-later {
+  opacity: 0.25;
+}
+.records-timeline-axis {
+  flex: none;
+  height: 20px;
+  display: flex;
+}
+.records-timeline-axis-track {
+  position: relative;
+  flex: none;
+  height: 20px;
+}
+.records-timeline-range {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 20px;
+  margin: 0;
+  opacity: 0;
+  cursor: ew-resize;
+}
+.records-timeline-axis-svg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.records-timeline-milestone-label {
+  font-size: var(--fs-xs);
+  fill: var(--text-2);
+}
+.records-timeline-moments {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+.records-timeline-moment {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.records-timeline-moment line {
+  stroke-width: 1;
+}
+.records-timeline-moment-review line {
+  stroke: var(--text-2);
+}
+.records-timeline-moment-sync line {
+  stroke: var(--text-3);
+}
+.records-timeline-tip {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  z-index: 6;
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-floating);
+  box-shadow: var(--shadow-float);
+  font-size: var(--fs-sm);
+  color: var(--text-1);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.records-timeline-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.records-timeline-cursor::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -3.5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.records-timeline-card {
+  position: absolute;
+  bottom: 100%;
+  z-index: 7;
+  width: 320px;
+  margin-bottom: 4px;
+  padding: 8px 10px;
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-floating);
+  box-shadow: var(--shadow-float);
+  font-size: var(--fs-sm);
+}
+.records-timeline-card p {
+  margin: 0 0 4px;
+}
+.records-timeline-card-head {
+  color: var(--text-2);
+}
+.records-timeline-card-date {
+  font-family: var(--font-mono);
+}
+.records-timeline-card-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--text-1);
+  white-space: pre-line;
+}
+.records-timeline-card-note {
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.records-timeline-card-actions {
+  display: flex;
+  gap: 10px;
+}
+.records-timeline-print {
+  display: none;
+}
+@media print {
+  body[data-timeline-print] > :not(.records-timeline-print) {
+    display: none !important;
+  }
+  body[data-timeline-print] .records-timeline-print {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .records-timeline-print img {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+  }
+  .records-timeline-print p {
+    margin: 0;
+    font-size: var(--fs-sm);
+    color: var(--text-1);
+  }
+}

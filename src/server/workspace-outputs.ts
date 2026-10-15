@@ -2,6 +2,7 @@ import { dayOf, jigFolderName, minuteOf, safeName } from '../core/workspace-path
 import { scheduleMarkdown, scheduleMonths } from '../core/agenda-month.ts';
 import type { AgendaItem } from '../contracts/agenda.ts';
 import { journalTitle } from '../contracts/note-doc.ts';
+import { RECORD_ORIGINALS } from '../contracts/records.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, open, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
@@ -540,7 +541,7 @@ export class WorkspaceOutputs {
     return this.queue(projectId, 'raw', async () => {
       const place = await this.roleFolder(projectId, 'ops');
       if (!place) return null;
-      const dir = join(place.dir, '기록', '원문');
+      const dir = join(place.dir, ...RECORD_ORIGINALS);
       await this.ensureDir(place.root, dir);
       const ignore = join(dir, '.gitignore');
       if (!existsSync(ignore)) await this.put(place.root, ignore, '*\n');

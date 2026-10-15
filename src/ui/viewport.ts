@@ -38,7 +38,7 @@ import {
   type StyleRun,
   type StyledGeometry,
 } from './cad-annotations.ts';
-import { TOKEN_FALLBACK } from './tokens.ts';
+import { TOKEN_FALLBACK, tokenColor } from './tokens.ts';
 import { createWalk } from './walk-controls.ts';
 
 type Camera = THREE.PerspectiveCamera | THREE.OrthographicCamera;
@@ -336,6 +336,13 @@ export function createViewport(
   let dirty = true;
   let selectedIds = new Set<string>();
   let tints: Map<string, string> | null = null;
+  // 모델 위 타임라인 (PLAN-53 T-334, ARCH-01 §5 「뷰포트 표시 API」): per-object fade factors (colour
+  // mixed toward the background, no transparency), the accent highlight (apart from the selection)
+  // and the display-only [분리] offsets. None of them touches the host's selection or display.
+  let fades: Map<string, number> | null = null;
+  let highlighted = new Set<string>();
+  const highlightColor = new THREE.Color(TOKEN_FALLBACK.accent);
+  const offsets = new Map<string, Triple>();
   let lineSignature = '';
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#f2f1ee');
@@ -564,6 +571,7 @@ export function createViewport(
         instance.userData.id = object.id;
         instance.userData.geometryHash = object.geometryHash;
         place(instance, object.placement);
+        shiftTo(instance);
         scene.add(instance);
         instance.visible = !hiddenIds.has(object.id);
         meshes.push(instance);
@@ -639,6 +647,7 @@ export function createViewport(
       // CAD objects carry styles/annotations outside the hash; they are always rebuilt.
       mesh.userData.geometryHash = mesh.userData.cad ? undefined : object.geometryHash;
       place(mesh, object.placement);
+      shiftTo(mesh);
       scene.add(mesh);
       mesh.visible = !hiddenIds.has(object.id);
       meshes.push(mesh);
@@ -695,6 +704,26 @@ export function createViewport(
       return new THREE.Color(darkBackground ? 0xffffff : 0x1f2421);
     if (source) return new THREE.Color(source);
     return new THREE.Color(object instanceof THREE.Mesh ? SURFACE : WIRE);
+  }
+  /** A fresh colour mixed toward the view's background by the object's fade (T-334). */
+  function faded(color: THREE.Color, id: string) {
+    const level = fades?.get(id);
+    if (level === undefined || level >= 1) return color;
+    return color.lerp(scene.background as THREE.Color, 1 - Math.max(0, level));
+  }
+  /** Moves an object to its [분리] offset (from wherever it was moved before); true when it moved. */
+  function shiftTo(object: RenderObject) {
+    const want = offsets.get(object.userData.id as string) ?? [0, 0, 0];
+    const had = (object.userData.shift as Triple | undefined) ?? [0, 0, 0];
+    const dx = want[0] - had[0],
+      dy = want[1] - had[1],
+      dz = want[2] - had[2];
+    if (!dx && !dy && !dz) return false;
+    if (object.matrixAutoUpdate) object.position.add(new THREE.Vector3(dx, dy, dz));
+    else object.matrix.premultiply(new THREE.Matrix4().makeTranslation(dx, dy, dz));
+    object.userData.shift = want[0] || want[1] || want[2] ? want : undefined;
+    object.updateMatrixWorld(true);
+    return true;
   }
   function releasePlot(object: RenderObject) {
     const runs = object.userData.plotRuns as THREE.Group | undefined;
@@ -780,12 +809,15 @@ export function createViewport(
       if (!part || !(child instanceof THREE.Mesh)) continue;
       const styled = child.userData.styled as StyledGeometry;
       const selectedColor = new THREE.Color(part === 'fill' ? SELECTED : SELECTED_WIRE);
+      const id = object.userData.id as string;
       paintVertices(child.geometry, styled, (style) =>
         selected
           ? selectedColor
           : display.plot
             ? new THREE.Color(stylePen(style, object).color)
-            : styleColor(style, object, part === 'fill' ? FILL : WIRE),
+            : highlighted.has(id)
+              ? highlightColor
+              : faded(styleColor(style, object, part === 'fill' ? FILL : WIRE), id),
       );
       if (part === 'fill') {
         const material = child.material as THREE.MeshBasicMaterial;
@@ -891,13 +923,17 @@ export function createViewport(
     if (runPlot) runPlot.visible = false;
     paintAnnotations(object, selected);
     const styled = object.userData.styled as StyledGeometry | undefined;
+    const id = object.userData.id as string;
+    const lit = !selected && highlighted.has(id);
     if (styled && object instanceof THREE.LineSegments) {
       object.material.visible = true;
-      if (selected) {
+      if (selected || lit) {
         object.material.vertexColors = false;
-        object.material.color.set(SELECTED_WIRE);
+        object.material.color.set(selected ? SELECTED_WIRE : highlightColor);
       } else {
-        paintVertices(object.geometry, styled, (style) => styleColor(style, object, WIRE));
+        paintVertices(object.geometry, styled, (style) =>
+          faded(styleColor(style, object, WIRE), id),
+        );
         object.material.vertexColors = true;
         object.material.color.set(0xffffff);
       }
@@ -907,7 +943,9 @@ export function createViewport(
     if (object instanceof THREE.Line) object.material.visible = true;
     const color = selected
       ? new THREE.Color(object instanceof THREE.Mesh ? SELECTED : SELECTED_WIRE)
-      : baseColor(object);
+      : lit
+        ? highlightColor.clone()
+        : faded(baseColor(object), id);
     object.material.color.copy(color);
     if (object instanceof THREE.Mesh) {
       const material = object.material;
@@ -927,7 +965,7 @@ export function createViewport(
           selected
             ? new THREE.Color(SELECTED_WIRE)
             : display.mode === 'shaded'
-              ? new THREE.Color(EDGE)
+              ? faded(new THREE.Color(EDGE), id)
               : color.clone().multiplyScalar(display.colorSource === 'default' ? 1 : 0.8),
         );
       } else if (existing) existing.visible = false;
@@ -2499,6 +2537,70 @@ export function createViewport(
       if (!tints) return;
       tints = null;
       applyDisplay();
+    },
+    /**
+     * 모델 위 타임라인 (T-334): each object's factor 0..1 (1 = as drawn), mixed toward the
+     * background; ids left out are drawn as they are; null clears every fade. Only the objects whose
+     * factor changed are repainted and only their chunks rebuilt.
+     */
+    fade(levels: Record<string, number> | null) {
+      const next = new Map<string, number>();
+      if (levels)
+        for (const id in levels) {
+          const level = levels[id]!;
+          if (level < 1) next.set(id, Math.max(0, level));
+        }
+      const changed: string[] = [];
+      for (const [id, level] of next) if (fades?.get(id) !== level) changed.push(id);
+      if (fades) for (const id of fades.keys()) if (!next.has(id)) changed.push(id);
+      fades = next.size ? next : null;
+      if (!changed.length) return;
+      for (const id of changed) {
+        const object = byId.get(id);
+        if (object) paint(object);
+      }
+      rebatchIds(changed);
+    },
+    /** Objects drawn in the accent colour, apart from the selection (the selection wins). */
+    highlight(ids: readonly string[] | null) {
+      const next = new Set(ids ?? []);
+      const changed = [
+        ...[...highlighted].filter((id) => !next.has(id)),
+        ...[...next].filter((id) => !highlighted.has(id)),
+      ];
+      highlighted = next;
+      if (next.size) highlightColor.set(tokenColor('accent'));
+      if (!changed.length) return;
+      for (const id of changed) {
+        const object = byId.get(id);
+        if (object) paint(object);
+      }
+      rebatchIds(changed);
+    },
+    /** [분리]: display-only moves per object id (world metres); null puts everything back. */
+    offset(vectors: Record<string, Triple> | null) {
+      const touched = new Set([...offsets.keys(), ...Object.keys(vectors ?? {})]);
+      offsets.clear();
+      for (const [id, vector] of Object.entries(vectors ?? {}))
+        if (vector[0] || vector[1] || vector[2]) offsets.set(id, vector);
+      let moved = false;
+      for (const id of touched) {
+        const object = byId.get(id);
+        if (object && shiftTo(object)) moved = true;
+      }
+      if (!moved) return;
+      walk.invalidate();
+      rebatchAll();
+    },
+    /** Test/diagnostic hook: objects drawn faded, highlighted and moved by [분리] now. */
+    fadeInfo() {
+      let faded = 0,
+        lit = 0,
+        moved = 0;
+      if (fades) for (const id of fades.keys()) if (byId.has(id)) faded++;
+      for (const id of highlighted) if (byId.has(id)) lit++;
+      for (const id of offsets.keys()) if (byId.has(id)) moved++;
+      return { faded, highlighted: lit, offset: moved };
     },
     /** Draw one overlay layer of display primitives over the model; null removes it. */
     overlay: setOverlay,

@@ -255,6 +255,8 @@ export function visibleLayers(): Layer[] {
 export function showRequest(id: string, restored = false) {
   const link = linksState.links.find((entry) => entry.id === linkOfRequest(id));
   if (link) {
+    // Opened on purpose: the file's place is no longer the timeline's view-only moment.
+    viewOnlyOverrides.delete(link.id);
     const entry = draftState.state.messages.find((item) => item.id === id);
     if (link.lastSync?.requestId === id || (restored && entry && ownerOf(entry.request) === link))
       layerOverride.delete(link.id);
@@ -267,6 +269,26 @@ export function showRequest(id: string, restored = false) {
     linksState.activeLayer = 'result:' + id;
   }
   linksState.fitNext = true;
+}
+/**
+ * Linked files drawn at a past Sync for viewing only (the records timeline's moment, PLAN-53
+ * T-335): linkId → that Sync. The composer's basis stays the file's latest Sync
+ * (`applyActiveLayer`), the active layer and a shown result are left as they are.
+ */
+export const viewOnlyOverrides = new Map<string, string>();
+/** Draw `requestId` in its file's place for viewing only (no redraw: the caller calls showLayers). */
+export function setViewOnlyOverride(linkId: string, requestId: string) {
+  layerOverride.set(linkId, requestId);
+  viewOnlyOverrides.set(linkId, requestId);
+}
+/** Linked files back to their latest Sync (the records timeline's [현재로], T-335): one redraw. */
+export function clearLayerOverrides(linkIds: Iterable<string>) {
+  let changed = false;
+  for (const id of linkIds) {
+    viewOnlyOverrides.delete(id);
+    changed = layerOverride.delete(id) || changed;
+  }
+  if (changed) showLayers();
 }
 /** The composer's target follows the active layer (SPEC-01.11 요청 대상). */
 export function applyActiveLayer() {
@@ -290,7 +312,12 @@ export function applyActiveLayer() {
     linksState.activeLayer = newest.at(-1)?.key;
   }
   const active = linksState.currentLayers.find((layer) => layer.key === linksState.activeLayer);
-  selectionState.displayedResult = active?.requestId;
+  // A timeline moment is seen, not worked on: requests keep the file's latest Sync as their basis.
+  const viewOnly =
+    active?.link && viewOnlyOverrides.get(active.link.id) === active.requestId
+      ? active.link.lastSync?.requestId
+      : undefined;
+  selectionState.displayedResult = viewOnly ?? active?.requestId;
   const result = draftState.state.messages.find(
     (entry) => entry.id === selectionState.displayedResult,
   )?.request.result;
@@ -792,6 +819,8 @@ export function showLayers() {
   applyActiveLayer();
   render();
   if (drawable.length) scheduleThumbnail();
+  // The shown objects changed (the records timeline re-bundles its parts, T-334).
+  linksState.bump();
 }
 
 export function initLinksSync1() {

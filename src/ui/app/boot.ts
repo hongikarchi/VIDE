@@ -77,8 +77,11 @@ import {
   initViewport3,
   initViewport4,
   initViewport5,
+  openRecordRequest,
 } from './viewport.ts';
 import { reviews, initGlue1, initGlue2, initGlue3, initGlue4 } from './glue.ts';
+// 시점 형상 (PLAN-53 T-335): loaded with the app; the records timeline drives it.
+import '../records-moment.ts';
 import { mountConversationScreens, poll, initThread1 } from './thread.ts';
 import { initShortcuts } from './shortcuts.ts';
 
@@ -409,8 +412,14 @@ export async function initializeWorkspace() {
     // The display waits for the links (renderMessages); read them now rather than at the next tick.
     void pollLinks();
     // The tab row and this project's last tab; host panels have neither (SCR-12).
-    if (!panelMode)
+    if (!panelMode) {
       initializeWorkspaces({ projectId: sessionState.project.id, mount: $('workspace-tabs') });
+      // 모델 위 타임라인 (PLAN-53 T-334, SCR-46): the band under the 3D view of the model tab.
+      const project = sessionState.project.id;
+      void import('../records-timeline.tsx').then((band) =>
+        band.mountRecordsTimeline(project, { openRequest: openRecordRequest }),
+      );
+    }
     void mountConversationScreens();
     for (const entry of draftState.state.messages)
       if (['queued', 'running'].includes(entry.request.state)) void poll(entry.id);

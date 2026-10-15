@@ -9,6 +9,7 @@ import { access, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { DomainError } from '../contracts/errors.ts';
+import { RECORD_ORIGINALS } from '../contracts/records.ts';
 import type { WorkspaceRole } from '../core/workspace-template.ts';
 import { repoNameOf, repoNamePattern, type GithubRepo } from './github-api.ts';
 
@@ -151,7 +152,7 @@ export function defaultGitignore(paths: Partial<Record<WorkspaceRole, string>>):
     ...folders,
     '',
     '# 가져온 카카오톡·메일 원문',
-    `${ops}/기록/원문/`,
+    `${ops}/${RECORD_ORIGINALS.join('/')}/`,
     '',
     ...BINARIES,
     '',

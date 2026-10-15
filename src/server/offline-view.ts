@@ -9,6 +9,7 @@ import { buildSnapshot, packSnapshot, type SyncResult } from './offline-snapshot
 import type { AgendaEdit, AgendaEditResult, QueuedRequest, RemoteAccess } from './remote-access.ts';
 import { agendaShare, applyAgendaEdit, historySummary } from './offline-summary.ts';
 import type { ConversationMirror } from './conversation-mirror.ts';
+import { recordBatches, type SharedRecord } from './records-share.ts';
 
 // Offline view and request queue (PLAN-20). Per project, the owner may let this PC keep a
 // view-only snapshot of each linked file on the account site, so the model can be looked at while
@@ -22,6 +23,10 @@ import type { ConversationMirror } from './conversation-mirror.ts';
 //
 // PLAN-36 (ADR-037 4): the same switch ("할 일·대화 기록을 사이트에 올리기") also sends the full text
 // of the project's hostless conversations (conversation-mirror.ts); turning it off removes them.
+//
+// PLAN-53 T-336 (SPEC-17.6): a separate switch, off unless the owner turns it on, copies the
+// project's 거른 기록 (records-share.ts decides which and what of them) to the site; turning it off
+// or deleting the project removes them there (retried until the site confirms).
 const MIN_INTERVAL_MS = 10 * 60_000;
 /** A failed summary upload is tried again after this; the history at most this often too. */
 const SUMMARY_RETRY_MS = 60_000;
@@ -31,7 +36,12 @@ const stateSchema = z.object({
     .record(
       z.string(),
       // `summary` (PLAN-33): 할 일 and history summary on the site; on unless turned off.
-      z.object({ enabled: z.boolean(), summary: z.boolean().optional() }),
+      // `records` (PLAN-53 T-336): 거른 기록 on the site; off unless turned on.
+      z.object({
+        enabled: z.boolean(),
+        summary: z.boolean().optional(),
+        records: z.boolean().optional(),
+      }),
     )
     .default({}),
   summaries: z
@@ -44,9 +54,15 @@ const stateSchema = z.object({
         checkouts: z.string().optional(),
         at: z.number().optional(),
         error: z.object({ code: z.string(), at: z.number() }).optional(),
+        /** 거른 기록 last sent: their fingerprint, when, and the last failure. */
+        records: z.string().optional(),
+        recordsAt: z.number().optional(),
+        recordsError: z.object({ code: z.string(), at: z.number() }).optional(),
       }),
     )
     .default({}),
+  /** Projects whose 거른 기록 are still to be removed from the site. */
+  recordsRemovals: z.array(z.string()).default([]),
   /** Site 할 일 edits done here, by edit id: the version done and the item an add made. */
   applied: z
     .record(
@@ -95,12 +111,15 @@ interface Options {
   remote: Pick<
     RemoteAccess,
     'uploadSnapshot' | 'deleteSnapshot' | 'uploadSummary' | 'deleteSummary' | 'hostId'
-  >;
+  > &
+    Partial<Pick<RemoteAccess, 'uploadRecords' | 'deleteRecords'>>;
   agenda?: Agenda;
   /** Conversation records on the site (PLAN-36); absent in tests that do not use them. */
   mirror?: ConversationMirror;
   /** This PC's open checkouts of a project as the site keeps them (PLAN-52 T-310). */
   checkouts?: (projectId: string) => unknown[];
+  /** The project's 거른 기록 for the site and their fingerprint (records-share.ts, PLAN-53). */
+  records?: (projectId: string) => { key: string; items: SharedRecord[] };
   now?: () => number;
 }
 
@@ -109,8 +128,11 @@ export class OfflineView {
   private loaded: Promise<void> | undefined;
   private busy: Promise<unknown> = Promise.resolve();
   private ticking: Promise<void> | undefined;
+  private again: Promise<void> | undefined;
   private closed = false;
   private historyChecked = new Map<string, number>();
+  /** When each project's 거른 기록 were last fingerprinted (at most once a minute unless forced). */
+  private recordsChecked = new Map<string, number>();
   private options: Options;
   private agenda: Agenda;
   constructor(options: Options) {
@@ -178,6 +200,9 @@ export class OfflineView {
       summary: this.summaryOn(projectId),
       summaryAt: shared?.at ? new Date(shared.at).toISOString() : null,
       summaryError: shared?.error?.code ?? null,
+      records: this.recordsOn(projectId),
+      recordsAt: shared?.recordsAt ? new Date(shared.recordsAt).toISOString() : null,
+      recordsError: shared?.recordsError?.code ?? null,
       conversations: (await this.options.mirror?.status(projectId)) ?? null,
       linked: !!this.options.remote.hostId,
       files: this.options.links
@@ -209,6 +234,9 @@ export class OfflineView {
   private summaryOn(projectId: string) {
     return this.state.projects[projectId]?.summary ?? true;
   }
+  private recordsOn(projectId: string) {
+    return this.state.projects[projectId]?.records ?? false;
+  }
 
   /** 할 일 and the history summary on the site for this project (PLAN-33); off removes them. */
   setSummary(projectId: string, on: boolean) {
@@ -216,18 +244,54 @@ export class OfflineView {
       await this.load();
       this.options.store.project(projectId);
       this.state.projects[projectId] = {
+        ...this.state.projects[projectId],
         enabled: this.state.projects[projectId]?.enabled ?? false,
         summary: on,
       };
       if (!on) {
         await this.options.remote.deleteSummary(projectId);
-        delete this.state.summaries[projectId];
+        // Only the 할 일·history part: the 거른 기록 have their own switch.
+        const shared = this.state.summaries[projectId];
+        if (shared?.records) {
+          const { records, recordsAt, recordsError } = shared;
+          this.state.summaries[projectId] = { records, recordsAt, recordsError };
+        } else delete this.state.summaries[projectId];
         // The conversation text leaves the site too (retried until the site confirms).
         await this.options.mirror?.remove(projectId);
       }
       await this.save();
       if (on) void this.tick(true);
     });
+  }
+
+  /** 거른 기록 on the site for this project (PLAN-53 T-336); off removes them there. */
+  setRecords(projectId: string, on: boolean) {
+    return this.serial(async () => {
+      await this.load();
+      this.options.store.project(projectId);
+      this.state.projects[projectId] = {
+        ...this.state.projects[projectId],
+        enabled: this.state.projects[projectId]?.enabled ?? false,
+        records: on,
+      };
+      const shared = this.state.summaries[projectId];
+      if (shared) {
+        delete shared.records;
+        delete shared.recordsAt;
+        delete shared.recordsError;
+      }
+      if (on)
+        this.state.recordsRemovals = this.state.recordsRemovals.filter((id) => id !== projectId);
+      else await this.removeRecords(projectId);
+      await this.save();
+      if (on) void this.tick(true);
+    });
+  }
+  /** Removes the project's 거른 기록 from the site, or keeps it to try again with the heartbeat. */
+  private async removeRecords(projectId: string) {
+    const removed = await this.options.remote.deleteRecords?.(projectId).catch(() => false);
+    const rest = this.state.recordsRemovals.filter((id) => id !== projectId);
+    this.state.recordsRemovals = removed ? rest : [...rest, projectId];
   }
 
   setEnabled(projectId: string, enabled: boolean) {
@@ -253,8 +317,11 @@ export class OfflineView {
   forget(projectId: string) {
     return this.serial(async () => {
       await this.load();
+      const records =
+        this.recordsOn(projectId) || this.state.summaries[projectId]?.records !== undefined;
       delete this.state.projects[projectId];
       delete this.state.summaries[projectId];
+      if (records) await this.removeRecords(projectId);
       // Its conversation text leaves the site too (retried with the heartbeat until it answers).
       await this.options.mirror?.remove(projectId).catch(() => undefined);
       for (const [linkId, uploaded] of Object.entries(this.state.uploaded))
@@ -274,6 +341,15 @@ export class OfflineView {
    */
   tick(force = false): Promise<void> {
     if (!this.options.remote.hostId || this.closed) return Promise.resolve();
+    // A switch just turned on runs again after the run in progress, which may have passed it.
+    if (force && this.ticking) {
+      return (this.again ??= this.ticking
+        .catch(() => undefined)
+        .then(() => {
+          this.again = undefined;
+          return this.tick(true);
+        }));
+    }
     return (this.ticking ??= this.run(force).finally(() => {
       this.ticking = undefined;
     }));
@@ -289,8 +365,15 @@ export class OfflineView {
     // 할 일 and history summaries first: small, and they do not depend on the snapshot switch.
     const mirror = this.options.mirror;
     if (mirror) await this.serial(() => mirror.pendingRemovals());
+    if (this.state.recordsRemovals.length)
+      await this.serial(async () => {
+        for (const projectId of [...this.state.recordsRemovals])
+          if (!this.recordsOn(projectId)) await this.removeRecords(projectId);
+        await this.save();
+      });
     for (const project of this.options.store.listProjects()) {
       if (this.closed) return;
+      if (this.recordsOn(project.id)) await this.serial(() => this.shareRecords(project.id, force));
       if (!this.summaryOn(project.id)) continue;
       await this.serial(() => this.share(project.id, force));
       // The hostless conversations' text (PLAN-36): what changed since the last upload.
@@ -406,6 +489,40 @@ export class OfflineView {
     else {
       delete shared.error;
       shared.at = this.now;
+    }
+    await this.save();
+  }
+
+  /**
+   * Sends the project's 거른 기록 when their fingerprint changed (PLAN-53 T-336): the whole list in
+   * parts, the first replacing what the site had, so a record dropped or corrected here leaves the
+   * site too. A failure (the site unreachable among them) is tried again a minute later, from the
+   * first part.
+   */
+  private async shareRecords(projectId: string, force: boolean) {
+    const build = this.options.records;
+    if (!build || !this.options.remote.uploadRecords || !this.recordsOn(projectId)) return;
+    const shared = (this.state.summaries[projectId] ??= {});
+    const failed = shared.recordsError;
+    if (!force && failed && this.now - failed.at < SUMMARY_RETRY_MS) return;
+    // The fingerprint reads every kept record: once a minute per project, like the history.
+    const checked = this.recordsChecked.get(projectId) ?? -Infinity;
+    if (!force && !failed && this.now - checked < SUMMARY_RETRY_MS) return;
+    this.recordsChecked.set(projectId, this.now);
+    let code: string | undefined, key: string | undefined;
+    try {
+      const share = build(projectId);
+      if (share.key === shared.records) return;
+      key = share.key;
+      code = await this.options.remote.uploadRecords(projectId, recordBatches(share.items));
+    } catch {
+      code = 'SUMMARY_BUILD_FAILED';
+    }
+    if (code) shared.recordsError = { code, at: this.now };
+    else {
+      delete shared.recordsError;
+      shared.records = key;
+      shared.recordsAt = this.now;
     }
     await this.save();
   }

@@ -77,6 +77,10 @@ export const offlineStatusSchema = z.object({
   summary: z.boolean().default(true),
   summaryAt: z.string().nullable().default(null),
   summaryError: z.string().nullable().default(null),
+  /** PLAN-53 T-336: 거른 기록 on the site (off unless turned on). */
+  records: z.boolean().default(false),
+  recordsAt: z.string().nullable().default(null),
+  recordsError: z.string().nullable().default(null),
   /** PLAN-36: the hostless conversations' text on the site (same switch). */
   conversations: z
     .object({ shared: z.number(), error: z.string().nullable() })
@@ -139,6 +143,7 @@ interface Props {
   offline?: OfflineStatus;
   onOffline: (enabled: boolean) => void;
   onSummary: (on: boolean) => void;
+  onRecords?: (on: boolean) => void;
   onInboxUse: (item: InboxItem) => void;
   onInboxDismiss: (item: InboxItem) => void;
 }
@@ -152,6 +157,7 @@ const OFFLINE_ERRORS: Record<string, string> = {
   SNAPSHOTS_DISABLED: '사이트에서 꺼짐',
   PROJECT_NOT_FOUND: '계정 목록에 없는 프로젝트',
   NOT_FOUND: '사이트 업데이트 전',
+  SITE_UNREACHABLE: '사이트에 연결되지 않음',
 };
 const size = (bytes: number) =>
   bytes < 1048576
@@ -266,6 +272,39 @@ function SummarySwitch(props: Props) {
   );
 }
 
+/**
+ * PLAN-53 T-336 (SPEC-17.6): the project's 거른 기록 (date, kind, text, part names, chapter) on the
+ * account site too. Off unless turned on; off removes them there. Candidates, dropped ones and
+ * imported KakaoTalk·mail originals stay on this PC.
+ */
+function RecordsSwitch(props: Props) {
+  const offline = props.offline;
+  if (!offline?.linked || !props.onRecords) return null;
+  return (
+    <label
+      className="link-offline"
+      title="켜면 거른 기록의 날짜·종류·본문·부위 이름·장을 계정 사이트에도 둡니다. 끄면 사이트의 사본을 지웁니다."
+    >
+      <input
+        type="checkbox"
+        checked={offline.records}
+        onChange={(event) => props.onRecords?.(event.target.checked)}
+      />
+      거른 기록을 사이트에 올리기
+      <small>카카오톡·메일에서 들인 기록과 아직 거르지 않은 것은 올리지 않습니다</small>
+      {offline.records && offline.recordsError ? (
+        // Design SCR-46 「사이트 스위치」: one warning line; the reason on hover.
+        <small
+          style={{ color: 'var(--warn)' }}
+          title={OFFLINE_ERRORS[offline.recordsError] ?? offline.recordsError}
+        >
+          사이트에 올리지 못했습니다 · 1분 뒤 다시
+        </small>
+      ) : null}
+    </label>
+  );
+}
+
 function Links(props: Props) {
   return (
     <>
@@ -273,6 +312,7 @@ function Links(props: Props) {
       <LinkList {...props} />
       <OfflineSwitch {...props} />
       <SummarySwitch {...props} />
+      <RecordsSwitch {...props} />
     </>
   );
 }

@@ -1229,7 +1229,7 @@ function RecordsTab({ projectId }: { projectId: string }) {
   const [parts, setParts] = useState<PartRow[]>([]);
   const [error, setError] = useState(false);
   const [cursor, setCursor] = useState(0);
-  const [openId, setOpenId] = useState<string | undefined>();
+  const [openId, setOpenId] = useState<string | undefined>(takePendingOpen);
   const [confirm, setConfirm] = useState<RecordState | undefined>();
   const [menu, setMenu] = useState(false);
   const [marks, setMarks] = useState<string | undefined>();
@@ -1286,6 +1286,8 @@ function RecordsTab({ projectId }: { projectId: string }) {
   // Shown again (the rail): read what changed meanwhile, keeping the place in the list.
   useEffect(() => {
     const again = () => {
+      const open = takePendingOpen();
+      if (open) setOpenId(open);
       void loadAll()
         .then(() => loadList(true))
         .catch(() => setError(true));
@@ -1736,9 +1738,20 @@ function RecordsTab({ projectId }: { projectId: string }) {
 const SHOWN = 'vide:records-shown';
 let root: Root | undefined;
 let shownFor: string | undefined;
+/** A record to open in 자세히 when the tab shows next ([기록 탭에서 보기], SCR-46). */
+let pendingOpen: string | undefined;
+function takePendingOpen() {
+  const id = pendingOpen;
+  pendingOpen = undefined;
+  return id;
+}
 
-/** Show the 기록 tab of a project (mounts once; later calls keep what is open). */
-export function showRecords(projectId: string) {
+/**
+ * Show the 기록 tab of a project (mounts once; later calls keep what is open). `open`: a record
+ * whose 자세히 column opens (the model timeline's card).
+ */
+export function showRecords(projectId: string, options: { open?: string } = {}) {
+  if (options.open) pendingOpen = options.open;
   const workspace = document.querySelector<HTMLElement>('.workspace');
   if (!workspace) return;
   if (!root) {
