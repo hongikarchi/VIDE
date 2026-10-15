@@ -81,3 +81,49 @@ test('a failed Sync stops answering the list from its status', async () => {
   await zwcad.list();
   assert.deepEqual(calls, ['attachedStatus', 'displayPage', 'attachedStatus']);
 });
+
+// T-301: a page the plugin ends early (its 15 s read budget) is continued from its `next`, and the
+// whole read of a drawing still has one limit.
+function paged(objectCount, perPage, onPage = () => {}) {
+  const calls = [];
+  const zwcad = new AttachedZwcadDocuments('unused');
+  zwcad.discover = async () => {};
+  zwcad.connections = new Map([[instance, {}]]);
+  zwcad.call = async (_target, method, params) => {
+    calls.push(method === 'displayPage' ? [params.offset, params.limit] : method);
+    if (method === 'attachedStatus') return { ...status(6), objectCount };
+    await onPage(params);
+    const next = Math.min(objectCount, params.offset + perPage);
+    return {
+      ...page(params),
+      total: objectCount,
+      next,
+      omitted: next - params.offset,
+      omittedTypes: { Hidden: next - params.offset },
+    };
+  };
+  return { zwcad, calls };
+}
+
+test('short pages (a slow page ended by the plugin) are read on from where they stopped', async () => {
+  const { zwcad, calls } = paged(250, 30);
+  const captured = await zwcad.capture(target);
+  assert.equal(captured.displayCoverage.total, 250);
+  assert.equal(captured.displayCoverage.omitted, 250);
+  const pages = calls.filter(Array.isArray);
+  assert.deepEqual(
+    pages.map(([offset]) => offset),
+    [0, 30, 60, 90, 120, 150, 180, 210, 240],
+  );
+  assert.deepEqual(pages.at(-1), [240, 10]);
+});
+
+test('a read of all pages past the Sync limit fails SYNC_TIMEOUT instead of running on', async () => {
+  const { zwcad, calls } = paged(500, 100, () => new Promise((resolve) => setTimeout(resolve, 15)));
+  zwcad.syncLimitMs = 20;
+  await assert.rejects(zwcad.capture(target), { code: 'SYNC_TIMEOUT' });
+  assert.ok(calls.filter(Array.isArray).length < 5, 'stopped before the last page');
+  // The list asks the plugin again once the failed Sync is over.
+  await zwcad.list();
+  assert.equal(calls.at(-1), 'attachedStatus');
+});

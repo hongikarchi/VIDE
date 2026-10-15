@@ -282,6 +282,12 @@ export function initGlue2() {
       get layers() {
         return syncLayerPaths();
       },
+      // Open linked files per host: the Sync jig's pickers default to theirs (SPEC-05.8, T-302).
+      openLinks: linksState.linksLoaded
+        ? linksState.links
+            .filter((link) => !linkClosed(link))
+            .map((link) => ({ id: link.id, host: link.host }))
+        : undefined,
       sources: linkedCandidates(draftState.state).map((entry) => ({
         id: entry.id,
         host: entry.request.result?.host === 'zwcad' ? 'zwcad' : 'rhino',

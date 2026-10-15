@@ -23,6 +23,12 @@ import { DraftCard, ImportJig, MakeCard, openDraft } from './make-tab.tsx';
 import type { Point3 } from './model.ts';
 import { openSkill } from './skill-start.ts';
 import { StructureJig } from './structure-jig.tsx';
+import {
+  CLOSED_SOURCE_NOTE,
+  noSyncYet,
+  syncPick,
+  type SyncPick,
+} from './jig-panel/role-sources.ts';
 import { SubmitJig } from './jig-submit.tsx';
 import type { OverlayItem } from './viewport.ts';
 import {
@@ -222,6 +228,8 @@ export interface JigContext {
   /** The project's name, for tab names such as '구조 · <project>'. */
   projectName?: string;
   sources: SyncSource[];
+  /** The open linked files (SPEC-07.5 7); omitted while the links are not read yet. */
+  openLinks?: { id: string; host: 'rhino' | 'zwcad' }[];
   /** Layer paths in the linked documents' Syncs: the output layers a new jig instance may use. */
   layers?: string[];
   /** Show one object of a Sync in the viewport (selected and framed). */
@@ -558,6 +566,9 @@ function tabContext(jig: OpenJig): JigContext {
     },
     get sources() {
       return now().sources;
+    },
+    get openLinks() {
+      return now().openLinks;
     },
     get layers() {
       return now().layers;
@@ -1301,11 +1312,76 @@ function NewInstance({
   );
 }
 
+/**
+ * One side's Sync picker (SPEC-05.8, T-302): open files' Syncs first, closed files' Syncs after a
+ * divider marked '(닫힘)'; nothing picked, with a note, while the open file has no Sync yet.
+ */
+function syncPicker(
+  side: 'Rhino' | 'ZWCAD',
+  pick: SyncPick<SyncSource>,
+  value: string,
+  onPick: (id: string) => void,
+) {
+  const none = !pick.open.length && !pick.closed.length;
+  const closedPicked = pick.closed.some((s) => s.id === value);
+  return (
+    <label>
+      {side} Sync
+      <select
+        aria-label={`${side} 동기화 기록`}
+        value={value}
+        onChange={(e) => onPick(e.target.value)}
+      >
+        {none ? <option value="">{side} 동기화 기록이 없습니다</option> : null}
+        {!none && !value ? (
+          <option value="" disabled>
+            Sync를 고르세요
+          </option>
+        ) : null}
+        {pick.open.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.label}
+          </option>
+        ))}
+        {pick.closed.length ? (
+          <optgroup label="닫힌 연결">
+            {pick.closed.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label} (닫힘)
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
+      </select>
+      {pick.missing && !value ? (
+        <small className="jig-sync-note" data-sync-missing={side}>
+          {noSyncYet(side === 'ZWCAD' ? 'CAD' : 'Rhino')}
+        </small>
+      ) : closedPicked ? (
+        <small className="jig-sync-note" data-sync-closed={side}>
+          {CLOSED_SOURCE_NOTE}
+        </small>
+      ) : null}
+    </label>
+  );
+}
+
 function SyncJig({ context }: { context: JigContext }) {
-  const rhinoSources = context.sources.filter((s) => s.host === 'rhino');
-  const cadSources = context.sources.filter((s) => s.host === 'zwcad');
-  const [rhino, setRhino] = useState(rhinoSources.at(-1)?.id ?? '');
-  const [cad, setCad] = useState(cadSources.at(-1)?.id ?? '');
+  // Open files' latest Syncs by default, closed ones listed apart (SPEC-05.8, T-302). A side the
+  // person has not picked follows the default as files open, close or get their first Sync.
+  const pickFor = (host: 'rhino' | 'zwcad') =>
+    syncPick(
+      context.sources.filter((s) => s.host === host),
+      context.openLinks?.filter((link) => link.host === host).map((link) => link.id),
+    );
+  const rhinoPick = pickFor('rhino');
+  const cadPick = pickFor('zwcad');
+  const [rhinoChoice, setRhino] = useState<string>();
+  const [cadChoice, setCad] = useState<string>();
+  const chosenOf = (pick: SyncPick<SyncSource>, choice: string | undefined) =>
+    choice && [...pick.open, ...pick.closed].some((s) => s.id === choice) ? choice : pick.selected;
+  const rhino = chosenOf(rhinoPick, rhinoChoice);
+  const cad = chosenOf(cadPick, cadChoice);
   const [tolerance, setTolerance] = useState(1);
   const [search, setSearch] = useState(100);
   /** Section height (m) for Rhino solids; empty = by storey levels or the height range. */
@@ -1610,36 +1686,8 @@ function SyncJig({ context }: { context: JigContext }) {
   return (
     <div className="jig-sync">
       <div className="jig-inputs">
-        <label>
-          Rhino Sync
-          <select
-            aria-label="Rhino 동기화 기록"
-            value={rhino}
-            onChange={(e) => setRhino(e.target.value)}
-          >
-            {!rhinoSources.length ? <option value="">Rhino 동기화 기록이 없습니다</option> : null}
-            {rhinoSources.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          ZWCAD Sync
-          <select
-            aria-label="ZWCAD 동기화 기록"
-            value={cad}
-            onChange={(e) => setCad(e.target.value)}
-          >
-            {!cadSources.length ? <option value="">ZWCAD 동기화 기록이 없습니다</option> : null}
-            {cadSources.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {syncPicker('Rhino', rhinoPick, rhino, setRhino)}
+        {syncPicker('ZWCAD', cadPick, cad, setCad)}
         <label>
           일치 허용 (mm)
           <input
@@ -1681,13 +1729,14 @@ function SyncJig({ context }: { context: JigContext }) {
           {busy ? '계산 중…' : '정렬·비교 실행'}
         </button>
       </div>
-      {/* One host linked (T-269): say which side is missing and where to link it. */}
-      {!cadSources.length ? (
+      {/* One host linked (T-269): say which side is missing and where to link it. An open file
+          still waiting for its first Sync is linked: its picker says so instead (T-302). */}
+      {!cadPick.open.length && !cadPick.closed.length && !cadPick.missing ? (
         <p role="status" className="sync-missing">
           도면(CAD)이 연결되지 않았습니다 — 연결 파일에서 CAD를 연결하세요.
         </p>
       ) : null}
-      {!rhinoSources.length ? (
+      {!rhinoPick.open.length && !rhinoPick.closed.length && !rhinoPick.missing ? (
         <p role="status" className="sync-missing">
           모델(Rhino)이 연결되지 않았습니다 — 연결 파일에서 Rhino를 연결하세요.
         </p>
@@ -2210,11 +2259,14 @@ export function refreshJigs() {
   const context = current();
   if (!context) return;
   // A file closing or opening changes where role inputs read from (SPEC-07.5 7).
-  const key = context.sources
-    .map(
-      (source) => `${source.id}|${source.label}|${source.latest ? 1 : 0}${source.closed ? 1 : 0}`,
-    )
-    .join('\n');
+  const key =
+    context.sources
+      .map(
+        (source) => `${source.id}|${source.label}|${source.latest ? 1 : 0}${source.closed ? 1 : 0}`,
+      )
+      .join('\n') +
+    // An open file appearing or closing changes the Sync jig's default pick (T-302).
+    `\n#${(context.openLinks ?? []).map((link) => link.id).join(',')}${context.openLinks ? '' : '?'}`;
   if (key === sourcesKey) return;
   sourcesKey = key;
   generation++;

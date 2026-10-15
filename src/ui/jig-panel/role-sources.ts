@@ -72,3 +72,49 @@ export function fromClosedLink(
   });
 }
 export const CLOSED_SOURCE_NOTE = '닫힌 연결 기준';
+
+/** What a Sync jig picker (Rhino Sync / ZWCAD Sync) lists and picks for one host (SPEC-05.8, T-302). */
+export interface SyncPick<T extends RoleSyncSource> {
+  /** Syncs of open files (and Syncs no file owns), newest first. */
+  open: T[];
+  /** Syncs of closed files, newest first: listed after a divider, marked '(닫힘)'. */
+  closed: T[];
+  /** The default pick: the newest open file's latest Sync; '' when an open file has none yet. */
+  selected: string;
+  /** An open file of this host has no Sync yet (and no other open file of it has one). */
+  missing: boolean;
+}
+
+/**
+ * The Sync jig's pick for one host. `sources` are that host's Syncs; `openLinks` the ids of that
+ * host's open linked files (undefined: not known, an older context). The open link's latest Sync
+ * is the default; a closed link's Sync only when no file of the host is open (SPEC-07.5 7).
+ */
+export function syncPick<T extends RoleSyncSource>(
+  sources: readonly T[],
+  openLinks?: readonly string[],
+): SyncPick<T> {
+  const ordered = [...sources]
+    .map((source, index) => ({ source, index }))
+    .sort((a, b) => newestFirst(a.source, b.source) || b.index - a.index)
+    .map(({ source }) => source);
+  const open = ordered.filter((source) => !source.closed);
+  const closed = ordered.filter((source) => source.closed);
+  const openLatest = open.filter(
+    (source) => source.linkId && source.latest && (!openLinks || openLinks.includes(source.linkId)),
+  );
+  const missing = !!openLinks?.length && !openLatest.length;
+  const selected = missing
+    ? ''
+    : ((
+        openLatest[0] ??
+        (sources.some((source) => source.linkId) ? undefined : open[0]) ??
+        closed.find((source) => source.latest) ??
+        closed[0] ??
+        open[0]
+      )?.id ?? '');
+  return { open, closed, selected, missing };
+}
+/** The note under a Sync jig picker whose host has an open file without a Sync yet. */
+export const noSyncYet = (host: 'Rhino' | 'CAD') =>
+  `이 ${host} 연결에는 아직 Sync가 없습니다 — 동기화를 기다리거나 닫힌 Sync를 고르세요`;

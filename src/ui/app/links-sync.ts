@@ -339,7 +339,9 @@ export function draftHolds(link: LinkRow) {
 export function syncNote(link: LinkRow): string | undefined {
   const sync = link.sync;
   if (!sync) return undefined;
+  if (sync.retry) return `다시 시도 중 (${sync.retry.attempt}/${sync.retry.of})`;
   if (sync.state === 'syncing') return '동기화 중';
+  if (sync.stopped) return '응답이 느려 자동 동기화 멈춤 · ⟳로 다시 시도';
   if (sync.state === 'held') return '자동 동기화 보류 · 이 파일 기준 작업 중';
   if (sync.state === 'waiting') return '변경 중 · 곧 다시 동기화';
   if (sync.state === 'failed') return errors[sync.code ?? ''] || '동기화 실패';

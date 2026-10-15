@@ -182,8 +182,19 @@ function backflowAnswer(result: unknown) {
   return result as Record<string, unknown>;
 }
 
+/**
+ * T-301: the engine's wait for one display call. The plugin answers a read that has started on
+ * ZWCAD's thread when it ends (at most 300 s) instead of HOST_BUSY at 60 s, and a page ends early
+ * after 15 s of reading (AttachedDocument.cs); this wait outlasts both.
+ */
+export const ZWCAD_READ_CALL_MS = 330_000;
+/** T-301: the absolute cap of one full read of a drawing (all pages); past it the Sync fails. */
+export const ZWCAD_SYNC_MS = 600_000;
+
 export class AttachedZwcadDocuments {
   private connections = new Map<string, Connection>();
+  /** The absolute cap of one Sync's page reads (tests shorten it). */
+  syncLimitMs = ZWCAD_SYNC_MS;
   /**
    * T-285: the status a running Sync of a drawing read at its start (HOST-ZWCAD §1.1). The list
    * answers from it while that Sync reads pages, instead of a status call (with its process owner
@@ -244,7 +255,7 @@ export class AttachedZwcadDocuments {
       { ...params, ...identity, token, method },
       {
         port: identity.port,
-        timeoutMs: 70000,
+        timeoutMs: ['displayPage', 'displayChanges'].includes(method) ? ZWCAD_READ_CALL_MS : 70000,
         maxResponseBytes: [
           'displayPage',
           'displayChanges',
@@ -431,7 +442,11 @@ export class AttachedZwcadDocuments {
     let offset = 0,
       displayed = 0,
       omitted = 0;
+    // A slow page no longer fails the Sync (it is waited for, or comes back short); the whole read
+    // still has one limit (T-301).
+    const deadline = Date.now() + this.syncLimitMs;
     do {
+      if (Date.now() > deadline) throw new DomainError('SYNC_TIMEOUT');
       const pages = await readDisplayPages(
         (start, count) =>
           this.call(

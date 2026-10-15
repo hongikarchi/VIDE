@@ -9,7 +9,9 @@ import {
   linkClosed,
   fromClosedLink,
   pickOrder,
+  noSyncYet,
   roleSyncs,
+  syncPick,
 } from '../../src/ui/jig-panel/role-sources.ts';
 import { viewCount } from '../../src/ui/request-route.ts';
 
@@ -126,4 +128,53 @@ test('an open Rhino link and a file entry: both are role sources, neither is mar
   const counted = viewCount(['a', 'b'], objects, openKeys);
   assert.equal(counted.count, 2);
   assert.doesNotMatch(counted.files, /닫힘/);
+});
+
+// T-302 (SPEC-05.8): the Sync jig's pickers follow the open link too.
+test('Sync jig picker: an open CAD link without a Sync picks nothing and lists the closed one', () => {
+  const cad = [
+    { id: 'r5-cad', linkId: 'L-r5', latest: true, closed: true, at: '2026-10-14T08:36:00Z' },
+  ];
+  const pick = syncPick(cad, ['L-open']);
+  assert.deepEqual(
+    { ...pick, closed: pick.closed.map((s) => s.id) },
+    { open: [], closed: ['r5-cad'], selected: '', missing: true },
+  );
+  assert.equal(
+    noSyncYet('CAD'),
+    '이 CAD 연결에는 아직 Sync가 없습니다 — 동기화를 기다리거나 닫힌 Sync를 고르세요',
+  );
+  // The open link's first Sync arrives: it becomes the default.
+  const next = syncPick(
+    [...cad, { id: 'new', linkId: 'L-open', latest: true, at: '2026-10-15T01:00:00Z' }],
+    ['L-open'],
+  );
+  assert.equal(next.selected, 'new');
+  assert.equal(next.missing, false);
+  assert.deepEqual(
+    next.closed.map((s) => s.id),
+    ['r5-cad'],
+  );
+});
+
+test('Sync jig picker: open latest first; closed only with no open file; old lists unchanged', () => {
+  assert.equal(syncPick(sources, ['L-open']).selected, 's-open');
+  assert.deepEqual(
+    syncPick(sources, ['L-open']).open.map((s) => s.id),
+    ['s-open', 's-open-old'],
+  );
+  // No file of this host open: the closed link's latest Sync, marked by the jig.
+  const none = syncPick(
+    sources.filter((s) => s.closed),
+    [],
+  );
+  assert.equal(none.selected, 's-closed');
+  assert.equal(none.missing, false);
+  // Links not read yet: the open-marked latest Sync.
+  assert.equal(syncPick(sources).selected, 's-open');
+  // A list without linked files (older context): the newest, as before.
+  assert.equal(syncPick([{ id: 'x' }, { id: 'y' }]).selected, 'y');
+  assert.equal(syncPick([], ['L']).selected, '');
+  assert.equal(syncPick([], ['L']).missing, true);
+  assert.equal(syncPick([]).missing, false);
 });

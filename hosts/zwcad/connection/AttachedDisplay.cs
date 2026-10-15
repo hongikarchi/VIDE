@@ -13,7 +13,7 @@ namespace Vide.Zwcad.Connection
     internal static class AttachedDisplay
     {
         private sealed class DisplayLimitException : System.Exception { }
-        internal sealed class Style
+        private sealed class Style
         {
             internal int Aci = 7;
             internal string Rgb;
@@ -29,8 +29,6 @@ namespace Vide.Zwcad.Connection
                 return fields;
             }
         }
-        /** Coordinate values one model space entity may send (larger: OversizedDisplay). */
-        private const int MaxValues = 2000000;
         private sealed class Display
         {
             internal readonly List<double[]> Lines = new List<double[]>();
@@ -38,13 +36,11 @@ namespace Vide.Zwcad.Connection
             internal readonly List<Dictionary<string, object>> Fills = new List<Dictionary<string, object>>();
             internal readonly List<Dictionary<string, object>> Texts = new List<Dictionary<string, object>>();
             internal int CoordinateCount;
-            /** Set while a block definition is recorded once (T-285): parts go there, not to the display. */
-            internal Recording Recording;
             private string lastKey;
             private void Count(int coordinates)
             {
                 CoordinateCount += coordinates;
-                if (CoordinateCount > MaxValues) throw new DisplayLimitException();
+                if (CoordinateCount > 2000000) throw new DisplayLimitException();
             }
             internal void AddLine(double[] line, Style style)
             {
@@ -75,7 +71,6 @@ namespace Vide.Zwcad.Connection
             internal LayerTable Layers;
             internal readonly Dictionary<string, LayerTableRecord> LayerCache = new Dictionary<string, LayerTableRecord>();
             internal Dictionary<string, int> Unsupported;
-            internal DefinitionCache Definitions;
             internal LayerTableRecord Layer(string name)
             {
                 LayerTableRecord record;
@@ -86,118 +81,6 @@ namespace Vide.Zwcad.Connection
                 return record;
             }
         }
-
-        /**
-         * T-285: a block definition's display parts, read once in definition space and placed per insert.
-         * Before, every insert of a large xref walked and tessellated the whole definition again (6.5 s
-         * per insert of the round 5 drawing). Parts keep the transform below the definition, so a
-         * replay with the insert's transform gives the same points as walking it (exactly for one
-         * nesting level; deeper levels may differ in the last bits of a double). The insert's own
-         * XCLIP is applied at replay; a definition holding a clipped or cyclic nested insert, or more
-         * than MaxDefinitionCost, is not recorded and is walked per insert as before.
-         */
-        internal sealed class DefinitionCache
-        {
-            /**
-             * Cost = the coordinate values the parts send unclipped (Display's count; about 8–10 B of
-             * memory each). One definition may hold 6M, the cache 12M (dropped after the full read).
-             */
-            internal const int MaxDefinitionCost = 6000000;
-            internal const long MaxCost = 12000000;
-            private readonly Dictionary<ObjectId, Dictionary<string, Recording>> items = new Dictionary<ObjectId, Dictionary<string, Recording>>();
-            private long cost;
-            internal static readonly Recording NotCached = new Recording();
-            internal bool TryGet(ObjectId id, string style, out Recording recording)
-            {
-                Dictionary<string, Recording> byStyle; recording = null;
-                return items.TryGetValue(id, out byStyle) && byStyle.TryGetValue(style, out recording);
-            }
-            internal void Put(ObjectId id, string style, Recording recording)
-            {
-                if (recording != NotCached) {
-                    if (cost + recording.Cost > MaxCost) return;
-                    cost += recording.Cost;
-                }
-                Dictionary<string, Recording> byStyle;
-                if (!items.TryGetValue(id, out byStyle)) items[id] = byStyle = new Dictionary<string, Recording>();
-                byStyle[style] = recording;
-            }
-        }
-        private sealed class NotCacheableException : System.Exception { }
-        /** One recorded definition: its parts and the unsupported children it reports per insert. */
-        internal sealed class Recording
-        {
-            internal readonly List<Part> Parts = new List<Part>();
-            internal readonly Dictionary<string, int> Unsupported = new Dictionary<string, int>();
-            internal int Cost;
-            /**
-             * Values left for the entity when this insert is unclipped (-1 when clipped): an unclipped
-             * replay sends every recorded value, so passing it is the walk's OversizedDisplay, found
-             * without recording (or walking) the rest of a huge definition.
-             */
-            internal int Budget = -1;
-            private Placement last;
-            private double[] lastMatrix;
-            private static readonly double[] identity = Matrix3d.Identity.ToArray();
-            internal void Add(Part part, int values)
-            {
-                Cost += values;
-                if (Budget >= 0 && Cost > Budget) throw new DisplayLimitException();
-                if (Cost > DefinitionCache.MaxDefinitionCost) throw new NotCacheableException();
-                Parts.Add(part);
-            }
-            /** Parts below the same nested insert share one transform (compared exactly, not within tolerance). */
-            internal Placement Place(Matrix3d transform)
-            {
-                var values = transform.ToArray();
-                if (last == null || !Same(values, lastMatrix)) {
-                    last = new Placement { Relative = transform, Identity = Same(values, identity) };
-                    lastMatrix = values;
-                }
-                return last;
-            }
-            private static bool Same(double[] a, double[] b)
-            {
-                for (int i = 0; i < a.Length; i++) if (a[i] != b[i]) return false;
-                return true;
-            }
-        }
-        internal sealed class Placement
-        {
-            internal Matrix3d Relative;
-            internal bool Identity;
-            internal int Stamp = -1;
-            internal Matrix3d Combined;
-            /** The insert's transform times this placement, computed once per replay. */
-            internal Matrix3d For(Matrix3d instance, int stamp)
-            {
-                if (Stamp != stamp) { Combined = Identity ? instance : instance * Relative; Stamp = stamp; }
-                return Combined;
-            }
-        }
-        /** A line (Points), a solid fill (Loops, hatch plane applied) or a text, in definition space. */
-        internal sealed class Part
-        {
-            internal string Type;
-            internal Style Style;
-            internal Placement Placement;
-            internal Point3d[] Points;
-            internal List<Point3d[]> Loops;
-            internal double MinX, MinY, MinZ, MaxX, MaxY, MaxZ;
-            internal string Text;
-            internal Point3d Position;
-            internal double Height, Rotation, WidthFactor;
-            internal int Ax, Ay;
-            internal void Bound(IEnumerable<Point3d> points)
-            {
-                MinX = MinY = MinZ = Double.MaxValue; MaxX = MaxY = MaxZ = Double.MinValue;
-                foreach (var p in points) {
-                    MinX = Math.Min(MinX, p.X); MinY = Math.Min(MinY, p.Y); MinZ = Math.Min(MinZ, p.Z);
-                    MaxX = Math.Max(MaxX, p.X); MaxY = Math.Max(MaxY, p.Y); MaxZ = Math.Max(MaxZ, p.Z);
-                }
-            }
-        }
-        private static int replayStamp;
 
         internal static double Scale(Database db)
         {
@@ -279,31 +162,33 @@ namespace Vide.Zwcad.Connection
             internal int Coordinates;
             internal int Entities;
         }
-        private static Context ContextOf(Transaction tx, Database db, DefinitionCache definitions) =>
-            new Context { Tx = tx, Scale = Scale(db), Layers = (LayerTable)tx.GetObject(db.LayerTableId, OpenMode.ForRead), Definitions = definitions ?? new DefinitionCache() };
+        private static Context ContextOf(Transaction tx, Database db) =>
+            new Context { Tx = tx, Scale = Scale(db), Layers = (LayerTable)tx.GetObject(db.LayerTableId, OpenMode.ForRead) };
 
         /**
          * A page of model space (or of the layout block `spaceId`: a paper space of the title block
          * preview, PLAN-47 T-235); `seen` receives every entity read (Live Sync's display state).
-         * `definitions`: block definitions already read (T-285), kept across the pages of one full
-         * read at one revision; without it the cache lasts one page.
+         * `budgetMs` (T-301): once this much time has gone, the page ends before the next entity, so a
+         * page of slow block references comes back short (its `next` says where the next page starts)
+         * instead of running past the caller's wait. At least one entity is read. 0 = no time limit.
          */
-        internal static object Page(Database db, int offset, int limit, long revision, out int next, out int total, Action<EntityRead> seen = null, ObjectId spaceId = default(ObjectId), PageTiming timing = null, DefinitionCache definitions = null)
+        internal static object Page(Database db, int offset, int limit, long revision, out int next, out int total, Action<EntityRead> seen = null, ObjectId spaceId = default(ObjectId), PageTiming timing = null, int budgetMs = 0)
         {
-            var pageClock = timing != null ? System.Diagnostics.Stopwatch.StartNew() : null;
+            var pageClock = timing != null || budgetMs > 0 ? System.Diagnostics.Stopwatch.StartNew() : null;
             using (var tx = db.TransactionManager.StartTransaction()) {
                 var table = (BlockTable)tx.GetObject(db.BlockTableId, OpenMode.ForRead);
                 var space = (BlockTableRecord)tx.GetObject(spaceId.IsNull ? table[BlockTableRecord.ModelSpace] : spaceId, OpenMode.ForRead);
                 var ids = space.Cast<ObjectId>().ToArray();
                 if (offset < 0 || offset > ids.Length || limit < 1 || limit > 250) throw new InvalidOperationException("INVALID_PAGE");
-                var context = ContextOf(tx, db, definitions);
+                var context = ContextOf(tx, db);
                 var objects = new List<object>(); var scene = new List<object>();
                 var omitted = new Dictionary<string, int>(); var warnings = new Dictionary<string, int>(); int displayed = 0, read = 0, pageCoordinates = 0;
                 foreach (var oid in ids.Skip(offset).Take(limit)) {
+                    if (read > 0 && budgetMs > 0 && pageClock.ElapsedMilliseconds >= budgetMs) break;
                     read++;
                     double entityStart = pageClock != null ? pageClock.Elapsed.TotalMilliseconds : 0;
                     var entity = Read(tx, oid, context);
-                    if (pageClock != null) {
+                    if (timing != null) {
                         double entityMs = pageClock.Elapsed.TotalMilliseconds - entityStart;
                         timing.Entities++;
                         if (entity != null) timing.Coordinates += entity.Coordinates;
@@ -319,7 +204,7 @@ namespace Vide.Zwcad.Connection
                     if (pageCoordinates > 2000000) break;
                 }
                 next = offset + read; total = ids.Length;
-                if (pageClock != null) timing.ReadMs = pageClock.Elapsed.TotalMilliseconds;
+                if (timing != null) timing.ReadMs = pageClock.Elapsed.TotalMilliseconds;
                 return new { ok = true, offset, total = ids.Length, next = offset + read, revision,
                     objects, scene, displayed, omitted = read - displayed, omittedTypes = omitted, displayWarnings = warnings };
             }
@@ -346,7 +231,7 @@ namespace Vide.Zwcad.Connection
                 }
                 var list = effective.Values.ToArray();
                 if (cursor < 0 || cursor > list.Length) throw new InvalidOperationException("INVALID_PAGE");
-                var context = ContextOf(tx, db, null);
+                var context = ContextOf(tx, db);
                 var objects = new List<object>(); var scene = new List<object>(); var removedHandles = new List<string>();
                 int consumed = 0, upserts = 0, pageCoordinates = 0;
                 foreach (var entry in list.Skip(cursor)) {
@@ -446,27 +331,16 @@ namespace Vide.Zwcad.Connection
             var style = Resolve(e, parent, context);
             var block = e as BlockReference;
             if (block != null) {
-                if (!parents.Add(block.BlockTableRecord)) {
-                    // A cycle depends on the inserts above the definition: not recorded (T-285).
-                    if (display.Recording != null) throw new NotCacheableException();
-                    Increment(context.Unsupported, "CyclicBlock"); return;
-                }
+                if (!parents.Add(block.BlockTableRecord)) { Increment(context.Unsupported, "CyclicBlock"); return; }
                 try {
                     var definition = (BlockTableRecord)tx.GetObject(block.BlockTableRecord, OpenMode.ForRead);
                     if (definition.IsFromExternalReference && !definition.IsResolved) { Increment(context.Unsupported, "UnloadedXref"); return; }
                     var nested = clips;
                     var clip = ClipPolygon(block, tx, transform, context.Scale);
-                    if (clip != null) {
-                        // A nested XCLIP is a world polygon of one insert: its definition is walked per insert.
-                        if (display.Recording != null) throw new NotCacheableException();
-                        nested = new List<Point2d[]>(clips) { clip };
-                    }
-                    var instance = transform * block.BlockTransform;
-                    var recorded = display.Recording == null ? Definition(block.BlockTableRecord, definition, style, context, nested.Count > 0, display) : null;
-                    if (recorded != null) Replay(recorded, instance, nested, context, display);
-                    else foreach (ObjectId child in definition) {
+                    if (clip != null) nested = new List<Point2d[]>(clips) { clip };
+                    foreach (ObjectId child in definition) {
                         var item = tx.GetObject(child, OpenMode.ForRead) as Entity;
-                        if (item != null && !(item is AttributeDefinition)) Collect(item, context, instance, style, parents, nested, display);
+                        if (item != null && !(item is AttributeDefinition)) Collect(item, context, transform * block.BlockTransform, style, parents, nested, display);
                     }
                     // Attribute references are stored in the owner space, outside the block transform.
                     foreach (ObjectId attributeId in block.AttributeCollection) {
@@ -516,98 +390,14 @@ namespace Vide.Zwcad.Connection
                     }
                     AddPolyline(points, transform, context.Scale, clips, style, display);
                     return;
-                } catch (DisplayLimitException) { throw; } catch (NotCacheableException) { throw; } catch (System.Exception) { Increment(context.Unsupported, e.GetType().Name); return; }
+                } catch (DisplayLimitException) { throw; } catch (System.Exception) { Increment(context.Unsupported, e.GetType().Name); return; }
             }
             // Dimensions and leaders expose their native generated graphics as temporary entities.
             if (e is Dimension || e is Leader || e is MLeader) { CollectExploded(e, context, transform, style, parents, clips, display); return; }
             Increment(context.Unsupported, e.GetType().Name);
         }
 
-        /**
-         * The recorded parts of a definition drawn with `style` (ByBlock colour, layer 0 follow the insert),
-         * recorded on first use; null when it cannot be recorded (then the caller walks it as before).
-         * A definition that shows nothing is recorded empty, so its later inserts cost nothing.
-         */
-        private static Recording Definition(ObjectId id, BlockTableRecord definition, Style style, Context context, bool clipped, Display display)
-        {
-            var cache = context.Definitions;
-            if (cache == null) return null;
-            string key = style.Key + "|" + style.LayerName;
-            Recording recording;
-            if (cache.TryGet(id, key, out recording)) return recording == DefinitionCache.NotCached ? null : recording;
-            recording = new Recording { Budget = clipped ? -1 : MaxValues - display.CoordinateCount };
-            var recorder = new Display { Recording = recording };
-            var saved = context.Unsupported;
-            context.Unsupported = recording.Unsupported;
-            try {
-                var parents = new HashSet<ObjectId> { id };
-                var none = new List<Point2d[]>();
-                foreach (ObjectId child in definition) {
-                    var item = context.Tx.GetObject(child, OpenMode.ForRead) as Entity;
-                    if (item != null && !(item is AttributeDefinition)) Collect(item, context, Matrix3d.Identity, style, parents, none, recorder);
-                }
-            } catch (NotCacheableException) {
-                cache.Put(id, key, DefinitionCache.NotCached);
-                return null;
-            } finally { context.Unsupported = saved; }
-            cache.Put(id, key, recording);
-            return recording;
-        }
-
-        /** Draws a recorded definition at one insert: the same calls a walk of it would make. */
-        private static void Replay(Recording recording, Matrix3d instance, List<Point2d[]> clips, Context context, Display display)
-        {
-            int stamp = ++replayStamp;
-            foreach (var item in recording.Unsupported) Increment(context.Unsupported, item.Key, item.Value);
-            foreach (var part in recording.Parts) {
-                var transform = part.Placement.For(instance, stamp);
-                if (part.Text != null) {
-                    AddText(part.Text, part.Position, part.Height, part.Rotation, part.WidthFactor, part.Ax, part.Ay, part.Style, transform, context.Scale, clips, display);
-                    continue;
-                }
-                // Outside an XCLIP boundary nothing of the part is drawn: skip the per-segment clipping.
-                if (clips.Count > 0 && Outside(part, transform, context.Scale, clips)) continue;
-                if (part.Points != null) {
-                    try { AddPolyline(part.Points, transform, context.Scale, clips, part.Style, display); }
-                    catch (InvalidOperationException) { Increment(context.Unsupported, part.Type); }
-                    continue;
-                }
-                var loops = new List<double[]>();
-                foreach (var loop in part.Loops) {
-                    var flat = new double[loop.Length * 3];
-                    for (int i = 0; i < loop.Length; i++) {
-                        var world = loop[i].TransformBy(transform);
-                        flat[i * 3] = world.X * context.Scale; flat[i * 3 + 1] = world.Y * context.Scale; flat[i * 3 + 2] = world.Z * context.Scale;
-                    }
-                    loops.Add(flat);
-                }
-                if (loops.Count > 0 && Inside(loops[0], clips)) display.AddFill(loops, part.Style);
-            }
-        }
-
-        /**
-         * The part's box, placed by `transform` and scaled, lies clearly outside one clip polygon's box,
-         * so no point of it is inside that polygon (a margin keeps borderline parts on the exact path).
-         */
-        private static bool Outside(Part part, Matrix3d transform, double scale, List<Point2d[]> clips)
-        {
-            double minX = Double.MaxValue, minY = Double.MaxValue, maxX = Double.MinValue, maxY = Double.MinValue;
-            for (int corner = 0; corner < 8; corner++) {
-                var p = new Point3d((corner & 1) == 0 ? part.MinX : part.MaxX, (corner & 2) == 0 ? part.MinY : part.MaxY, (corner & 4) == 0 ? part.MinZ : part.MaxZ).TransformBy(transform);
-                double x = p.X * scale, y = p.Y * scale;
-                if (Double.IsNaN(x) || Double.IsNaN(y) || Double.IsInfinity(x) || Double.IsInfinity(y)) return false;
-                minX = Math.Min(minX, x); maxX = Math.Max(maxX, x); minY = Math.Min(minY, y); maxY = Math.Max(maxY, y);
-            }
-            foreach (var clip in clips) {
-                double cminX = Double.MaxValue, cminY = Double.MaxValue, cmaxX = Double.MinValue, cmaxY = Double.MinValue;
-                foreach (var c in clip) { cminX = Math.Min(cminX, c.X); cmaxX = Math.Max(cmaxX, c.X); cminY = Math.Min(cminY, c.Y); cmaxY = Math.Max(cmaxY, c.Y); }
-                double margin = 1e-6 * Math.Max(1, Math.Max(cmaxX - cminX, cmaxY - cminY));
-                if (maxX < cminX - margin || minX > cmaxX + margin || maxY < cminY - margin || minY > cmaxY + margin) return true;
-            }
-            return false;
-        }
-
-        private static void CollectExploded(Entity e,Context context, Matrix3d transform, Style style, HashSet<ObjectId> parents,
+        private static void CollectExploded(Entity e, Context context, Matrix3d transform, Style style, HashSet<ObjectId> parents,
             List<Point2d[]> clips, Display display)
         {
             using (var parts = new DBObjectCollection()) {
@@ -616,7 +406,7 @@ namespace Vide.Zwcad.Connection
                     foreach (DBObject part in parts) {
                         using (part) { var item = part as Entity; if (item != null) CollectPart(item, context, transform, style, parents, clips, display); }
                     }
-                } catch (DisplayLimitException) { throw; } catch (NotCacheableException) { throw; } catch (System.Exception) { Increment(context.Unsupported, e.GetType().Name); }
+                } catch (DisplayLimitException) { throw; } catch (System.Exception) { Increment(context.Unsupported, e.GetType().Name); }
             }
         }
         // Exploded parts are not database-resident; resolve their style from the parent without a layer lookup by id.
@@ -634,7 +424,6 @@ namespace Vide.Zwcad.Connection
                 if (hatch.IsSolidFill || hatch.IsGradient) {
                     var plane = Matrix3d.PlaneToWorld(hatch.Normal);
                     var loops = new List<double[]>();
-                    List<Point3d[]> recordedLoops = null;
                     for (int i = 0; i < hatch.NumberOfLoops; i++) {
                         var loop = hatch.GetLoopAt(i);
                         var points = new List<Point2d>();
@@ -658,10 +447,6 @@ namespace Vide.Zwcad.Connection
                             }
                         }
                         if (points.Count < 3) continue;
-                        if (display.Recording != null) {
-                            (recordedLoops ?? (recordedLoops = new List<Point3d[]>())).Add(points.Select(p => new Point3d(p.X, p.Y, hatch.Elevation).TransformBy(plane)).ToArray());
-                            continue;
-                        }
                         var flat = new List<double>();
                         foreach (var p in points) {
                             var world = new Point3d(p.X, p.Y, hatch.Elevation).TransformBy(plane).TransformBy(transform);
@@ -669,29 +454,17 @@ namespace Vide.Zwcad.Connection
                         }
                         loops.Add(flat.ToArray());
                     }
-                    if (recordedLoops != null) {
-                        var part = new Part { Type = "Hatch", Style = style, Placement = display.Recording.Place(transform), Loops = recordedLoops };
-                        part.Bound(recordedLoops.SelectMany(l => l));
-                        display.Recording.Add(part, 3 * recordedLoops.Sum(l => l.Length));
-                        return;
-                    }
                     if (loops.Count > 0 && Inside(loops[0], clips)) display.AddFill(loops, style);
                     return;
                 }
                 if (hatch.NumberOfHatchLines > 20000) { Increment(context.Unsupported, "DenseHatch"); return; }
                 CollectExploded(hatch, context, transform, style, parents, clips, display);
-            } catch (DisplayLimitException) { throw; } catch (NotCacheableException) { throw; } catch (System.Exception) { Increment(context.Unsupported, "Hatch"); }
+            } catch (DisplayLimitException) { throw; } catch (System.Exception) { Increment(context.Unsupported, "Hatch"); }
         }
 
         private static void AddText(string value, Point3d position, double height, double rotation, double widthFactor, int ax, int ay,
             Style style, Matrix3d transform, double scale, List<Point2d[]> clips, Display display)
         {
-            if (display.Recording != null) {
-                if (height <= 0) return;
-                display.Recording.Add(new Part { Type = "Text", Style = style, Placement = display.Recording.Place(transform), Text = value, Position = position,
-                    Height = height, Rotation = rotation, WidthFactor = widthFactor, Ax = ax, Ay = ay }, 50);
-                return;
-            }
             var p = position.TransformBy(transform);
             var direction = new Vector3d(Math.Cos(rotation), Math.Sin(rotation), 0).TransformBy(transform);
             var up = new Vector3d(-Math.Sin(rotation), Math.Cos(rotation), 0).TransformBy(transform);
@@ -710,18 +483,8 @@ namespace Vide.Zwcad.Connection
             display.AddText(text, style);
         }
 
-        private static void AddPolyline(IList<Point3d> points, Matrix3d transform, double scale, List<Point2d[]> clips, Style style, Display display)
+        private static void AddPolyline(List<Point3d> points, Matrix3d transform, double scale, List<Point2d[]> clips, Style style, Display display)
         {
-            if (display.Recording != null) {
-                // Invalid coordinates stay the curve's own failure (counted as unsupported), as when walked.
-                foreach (var p in points)
-                    if (Double.IsNaN(p.X) || Double.IsNaN(p.Y) || Double.IsNaN(p.Z) || Double.IsInfinity(p.X) || Double.IsInfinity(p.Y) || Double.IsInfinity(p.Z))
-                        throw new InvalidOperationException("INVALID_GEOMETRY");
-                var part = new Part { Type = "Curve", Style = style, Placement = display.Recording.Place(transform), Points = points.ToArray() };
-                part.Bound(part.Points);
-                display.Recording.Add(part, part.Points.Length > 1 ? 6 * (part.Points.Length - 1) : 0);
-                return;
-            }
             var world = points.Select(p => { var q = p.TransformBy(transform); return new[] { q.X * scale, q.Y * scale, q.Z * scale }; }).ToList();
             foreach (var value in world.SelectMany(v => v))
                 if (Double.IsNaN(value) || Double.IsInfinity(value)) throw new InvalidOperationException("INVALID_GEOMETRY");

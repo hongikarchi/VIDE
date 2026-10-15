@@ -192,6 +192,7 @@ export const errors: Record<string, string> = {
     'Rhino 반영은 완료됐습니다. 동기화를 다시 실행하세요. 모델링을 다시 요청하지 않아도 됩니다.',
   APPLICATION_FAILED: '원본 반영에 실패했습니다. 후보와 적용 결과를 확인하세요.',
   HOST_BUSY: 'Rhino·ZWCAD 명령이 끝난 뒤 다시 동기화하세요.',
+  SYNC_TIMEOUT: '도면 읽기가 10분을 넘어 멈췄습니다. ⟳로 다시 동기화하세요.',
 
   UNSUPPORTED_DWG_EDIT:
     '이 DWG에서는 기존 독립 직선 경계의 이동·정점 수정만 가능합니다. 객체 추가·삭제 또는 관계가 있는 객체는 지원하지 않습니다.',

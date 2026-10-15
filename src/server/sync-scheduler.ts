@@ -9,6 +9,8 @@
 // page used before (PLAN-27 2단계). Held: work queued or running on the file's Syncs, a brief or
 // direct write on the document, or a page's draft lease (5 s). Moving documents (SOURCE_CHANGED,
 // host busy) are retried after 1, 2, 4, 8… s for up to 30 s, then wait for the next change or ⟳.
+// A slow host (HOST_BUSY after an attempt of 10 s or more, T-301) is tried again after 30, 60 and
+// 120 s, shown as '다시 시도 중 (n/3)', then waits the same way.
 import { randomUUID } from 'node:crypto';
 import { isFileLink, type DocumentLink, type DocumentLinks } from '../core/document-links.ts';
 import type { Workspace } from '../core/workspace.ts';
@@ -57,6 +59,8 @@ export interface SchedulerOptions {
   leaseMs?: number;
   /** How long a moving document is retried before waiting for the next change. */
   retryWindowMs?: number;
+  /** The waits before each retry of a slow host's HOST_BUSY (T-301). */
+  busyRetryMs?: readonly number[];
 }
 interface DocumentState {
   seen?: number;
@@ -69,9 +73,17 @@ interface DocumentState {
   retryAt?: number;
   /** The file's last successful Sync when the state was set (⟳ elsewhere resets a wait). */
   lastSync?: string;
+  /** Slow-host retries scheduled so far (T-301); the retry shown is this one. */
+  busyTries?: number;
+  /** The slow-host retries ran out: it waits for a change or ⟳. */
+  stopped?: boolean;
 }
 
 const RETRY = new Set([...LIVE_RETRY, 'HOST_BUSY']);
+/** T-301: waits before the retries of a slow host's HOST_BUSY. */
+export const BUSY_RETRY_MS = [30_000, 60_000, 120_000] as const;
+/** An attempt that ran this long before HOST_BUSY met a slow host, not a brief command. */
+export const SLOW_ATTEMPT_MS = 10_000;
 const errorCode = (error: unknown) =>
   error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
     ? error.code
@@ -183,8 +195,7 @@ export class SyncScheduler {
         this.key(projectId, { host, instance: target.instance, id: target.documentId, name: '' }),
       );
       if (!state || state.running) continue;
-      state.attempts = 0;
-      state.firstFailure = state.retryAt = undefined;
+      this.reset(state);
       state.lastSync = undefined;
       this.set(state, 'idle');
     }
@@ -193,9 +204,19 @@ export class SyncScheduler {
   status(projectId: string, document: ScheduledDocument | undefined) {
     if (!document) return undefined;
     const state = this.states.get(this.key(projectId, document));
-    return state
-      ? { state: state.state, ...(state.code ? { code: state.code } : {}), at: state.at }
-      : undefined;
+    if (!state) return undefined;
+    const tries = state.busyTries ?? 0,
+      of = (this.options.busyRetryMs ?? BUSY_RETRY_MS).length;
+    return {
+      state: state.state,
+      ...(state.code ? { code: state.code } : {}),
+      at: state.at,
+      // '다시 시도 중 (n/3)' while a slow-host retry waits or runs (T-301).
+      ...(tries > 0 && (state.state === 'syncing' || state.retryAt !== undefined)
+        ? { retry: { attempt: tries, of } }
+        : {}),
+      ...(state.stopped && state.state === 'waiting' ? { stopped: true } : {}),
+    };
   }
   /** One pass over every project's open linked files; a pass never overlaps the previous one. */
   tick(): Promise<void> {
@@ -263,8 +284,7 @@ export class SyncScheduler {
       state.state !== 'held'
     ) {
       this.set(state, 'idle');
-      state.attempts = 0;
-      state.firstFailure = state.retryAt = undefined;
+      this.reset(state);
     }
     const seen = state.seen;
     const first = !last && seen === undefined;
@@ -280,8 +300,7 @@ export class SyncScheduler {
     const retrying = state.retryAt !== undefined;
     if (changed && retrying) {
       // Changed again while retrying: count from 0 and Sync now.
-      state.attempts = 0;
-      state.firstFailure = state.retryAt = undefined;
+      this.reset(state);
     } else if (retrying && state.retryAt! > this.now()) return;
     if (!first && !changed && !reopened && !(retrying && state.retryAt! <= this.now())) {
       if (seen === undefined) state.seen = generation;
@@ -368,6 +387,13 @@ export class SyncScheduler {
     }
     return false;
   }
+  /** Ends every retry count of a file (a success, a change, a user's Sync). */
+  private reset(state: DocumentState) {
+    state.attempts = 0;
+    state.firstFailure = state.retryAt = undefined;
+    state.busyTries = undefined;
+    state.stopped = undefined;
+  }
   private set(state: DocumentState, value: SyncState, code?: string) {
     state.state = value;
     state.code = code;
@@ -384,6 +410,7 @@ export class SyncScheduler {
     const started = this.now();
     const generation = document.generation ?? 0;
     const target = { instance: document.instance, documentId: document.id };
+    state.stopped = undefined;
     this.set(state, 'syncing');
     let action: 'live' | 'full' = 'full';
     let code: string | undefined;
@@ -435,14 +462,49 @@ export class SyncScheduler {
     }
     const ms = this.now() - started;
     if (syncId) {
-      state.attempts = 0;
-      state.firstFailure = state.retryAt = undefined;
+      this.reset(state);
       state.lastSync = syncId;
       this.set(state, 'idle');
       this.options.log?.('sync-scheduler', { document: key, action, generation, ms });
       return;
     }
     state.lastSync = last?.id;
+    // A slow host (T-301): a few retries far apart, not 1, 2, 4… s inside a window the attempt
+    // itself already outlasted.
+    if (code === 'HOST_BUSY' && (ms >= SLOW_ATTEMPT_MS || (state.busyTries ?? 0) > 0)) {
+      const delays = this.options.busyRetryMs ?? BUSY_RETRY_MS;
+      const tries = state.busyTries ?? 0;
+      state.attempts = 0;
+      state.firstFailure = undefined;
+      if (tries < delays.length) {
+        state.busyTries = tries + 1;
+        state.retryAt = this.now() + delays[tries]!;
+        this.set(state, 'waiting', code);
+        this.options.log?.('sync-scheduler', {
+          document: key,
+          action: 'retry',
+          generation,
+          code,
+          delay: delays[tries],
+          attempt: tries + 1,
+          of: delays.length,
+          ms,
+        });
+      } else {
+        state.retryAt = state.busyTries = undefined;
+        state.stopped = true;
+        this.set(state, 'waiting', code);
+        this.options.log?.('sync-scheduler', {
+          document: key,
+          action: 'wait',
+          generation,
+          code,
+          attempts: tries,
+          ms,
+        });
+      }
+      return;
+    }
     if (code && RETRY.has(code)) {
       const now = this.now();
       state.firstFailure ??= now;

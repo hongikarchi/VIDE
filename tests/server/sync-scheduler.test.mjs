@@ -9,7 +9,7 @@ import { SyncScheduler } from '../../src/server/sync-scheduler.ts';
 import { captureInput } from '../../src/server/import-model.ts';
 
 const instance = '1:2:356ff01d-b586-460c-8e2b-8c9f3c083e96';
-function setup(t, { live } = {}) {
+function setup(t, { live, full } = {}) {
   const store = new Store(':memory:');
   t.after(() => store.close());
   const workspace = new Workspace(store);
@@ -31,6 +31,8 @@ function setup(t, { live } = {}) {
   let liveReply = (input) => ({ requestId: input.basisId });
   const fullSync = async (projectId, target) => {
     calls.push('full');
+    // A test's own outcome (T-301): it may advance the clock and throw a code.
+    if (full) await full({ advance: (ms) => (now += ms) });
     workspace.submit(projectId, captureInput(target));
     const result = workspace.update(projectId, target.id, 'succeeded', {
       hostExecuted: true,
@@ -200,6 +202,85 @@ test('a busy host is left alone; without Live Sync every change is a full Sync',
   s.document.hostBusy = false;
   await s.tick();
   assert.deepEqual(s.calls, ['full', 'full']);
+});
+
+test('a slow host (HOST_BUSY after a long attempt) is retried after 30, 60, 120 s, shown as n/3, then waits', async (t) => {
+  const log = [];
+  let busy = true;
+  const s = setup(t, {
+    live: false,
+    full: async ({ advance }) => {
+      if (!busy) return;
+      // Round 6: the first Sync of cad.dwg failed HOST_BUSY after 148.8 s.
+      advance(148_800);
+      throw Object.assign(new Error('HOST_BUSY'), { code: 'HOST_BUSY' });
+    },
+  });
+  s.scheduler.options.log = (event, data) => log.push({ event, ...data });
+  await s.tick();
+  assert.deepEqual(s.calls, ['full']);
+  assert.equal(s.status().state, 'waiting');
+  assert.deepEqual(s.status().retry, { attempt: 1, of: 3 });
+  // Not before 30 s; then the first retry, and the next waits 60 s, then 120 s.
+  for (const [wait, early, tries, shown] of [
+    [30_000, 29_000, 2, { attempt: 2, of: 3 }],
+    [60_000, 59_000, 3, { attempt: 3, of: 3 }],
+  ]) {
+    s.advance(early);
+    await s.tick();
+    assert.equal(s.calls.length, tries - 1, 'too early');
+    s.advance(wait - early);
+    await s.tick();
+    assert.equal(s.calls.length, tries);
+    assert.deepEqual(s.status().retry, shown);
+  }
+  s.advance(120_000);
+  await s.tick();
+  assert.equal(s.calls.length, 4, 'three retries after the first attempt');
+  // The retries ran out: no more attempts until a change or ⟳, and the row says it stopped.
+  assert.equal(s.status().state, 'waiting');
+  assert.equal(s.status().retry, undefined);
+  assert.equal(s.status().stopped, true);
+  s.advance(600_000);
+  await s.tick();
+  assert.equal(s.calls.length, 4);
+  assert.deepEqual(
+    log
+      .filter((entry) => entry.event === 'sync-scheduler')
+      .map((entry) => [entry.action, entry.attempt]),
+    [
+      ['retry', 1],
+      ['retry', 2],
+      ['retry', 3],
+      ['wait', undefined],
+    ],
+  );
+  // The next change Syncs again with fresh retries; a success ends the retry display.
+  busy = false;
+  s.document.generation = 1;
+  await s.tick();
+  assert.equal(s.calls.length, 5);
+  assert.equal(s.status().state, 'idle');
+  assert.equal(s.status().retry, undefined);
+  assert.equal(s.status().stopped, undefined);
+});
+
+test('a brief HOST_BUSY (a short attempt) keeps the 1, 2, 4… s retries', async (t) => {
+  let busy = true;
+  const s = setup(t, {
+    live: false,
+    full: async () => {
+      if (busy) throw Object.assign(new Error('HOST_BUSY'), { code: 'HOST_BUSY' });
+    },
+  });
+  await s.tick();
+  assert.equal(s.status().state, 'waiting');
+  assert.equal(s.status().retry, undefined);
+  busy = false;
+  s.advance(1000);
+  await s.tick();
+  assert.deepEqual(s.calls, ['full', 'full']);
+  assert.equal(s.status().state, 'idle');
 });
 
 test('a work copy VIDE opened gets its first Sync once; later changes wait for ⟳', async (t) => {

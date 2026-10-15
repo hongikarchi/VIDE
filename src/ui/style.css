@@ -3703,6 +3703,11 @@ body[data-workspace='context'] .workspace > .jig-dialog {
   width: 90px;
   padding: 5px;
 }
+/* Under a Sync jig picker: no Sync yet on the open file, or a closed file's Sync (T-302). */
+.jig-sync-note {
+  max-width: 320px;
+  font-size: 12px;
+}
 .jig-layer-pickers {
   display: flex;
   gap: 16px;

@@ -44,8 +44,23 @@ namespace Vide.Zwcad.Connection
         private long buildingRevision = -1; private int buildingNext;
         // The last display page's read timing (T-285), set on ZWCAD's thread and logged after its reply.
         private AttachedDisplay.PageTiming pageTiming;
-        // Block definitions read during the current full read (T-285), dropped when it ends or the revision moves.
-        private AttachedDisplay.DefinitionCache definitions; private long definitionsRevision = -1; private int definitionsNext;
+        /**
+         * T-301: a display page stops reading new entities after this long and comes back short (the
+         * engine asks for the rest as the next page), so one page of slow block references never runs
+         * into the call's wait. Round 5's slowest page read 37.8 s; its slowest entity 6.6 s.
+         */
+        private const int PageBudgetMs = 15000;
+        /** How long a call may wait for ZWCAD's idle turn before it is answered HOST_BUSY (not started). */
+        private const int QueueWaitMs = 60000;
+        /**
+         * A display read that has started on ZWCAD's thread cannot be stopped, so its caller waits for
+         * it instead of getting HOST_BUSY at 60 s while the read goes on (T-301). This is the absolute
+         * cap of one such call; the engine's own wait for these methods is longer (attached-documents.ts).
+         */
+        private const int StartedReadWaitMs = 300000;
+        /** How long an accepted connection may take to send its request (the engine checks the process owner first). */
+        private const int RequestWaitMs = 75000;
+        private sealed class Job { internal int State; } // 0 queued, 1 started, 2 abandoned before it started
         private static Shown ShownOf(AttachedDisplay.EntityRead read) =>
             new Shown { Omitted = read.Item == null ? read.Omitted : null, Warnings = read.Warnings };
 
@@ -150,19 +165,9 @@ namespace Vide.Zwcad.Connection
                 if (building != null && (buildingRevision != revision || offset != buildingNext)) building = null;
                 var record = building;
                 var timing = new AttachedDisplay.PageTiming(); pageTiming = timing;
-                // Pages of one read in order at one revision share the definitions read so far.
-                if (offset == 0 || definitions == null || definitionsRevision != revision || offset != definitionsNext) {
-                    definitions = new AttachedDisplay.DefinitionCache(); definitionsRevision = revision;
-                }
-                var cache = definitions;
                 using (Document.LockDocument(DocumentLockMode.Read, null, null, false)) {
-                    object result;
-                    try {
-                        result = AttachedDisplay.Page(Document.Database, offset, Convert.ToInt32(request["limit"]), revision, out next, out total,
-                            record == null ? null : (Action<AttachedDisplay.EntityRead>)(read => record[read.Handle] = ShownOf(read)), default(ObjectId), timing, cache);
-                    } catch { definitions = null; throw; }
-                    definitionsNext = next;
-                    if (next >= total) definitions = null;
+                    object result = AttachedDisplay.Page(Document.Database, offset, Convert.ToInt32(request["limit"]), revision, out next, out total,
+                        record == null ? null : (Action<AttachedDisplay.EntityRead>)(read => record[read.Handle] = ShownOf(read)), default(ObjectId), timing, PageBudgetMs);
                     if (record != null) {
                         buildingNext = next;
                         if (next >= total) { shown = record; building = null; }
@@ -329,15 +334,19 @@ namespace Vide.Zwcad.Connection
         {
             try {
                 using (client) {
-                    client.ReceiveTimeout = 10000; client.SendTimeout = 30000;
+                    // T-301: the engine opens the connection, then checks the process owner (0.5–1.8 s, longer
+                    // while its event loop stalls) before it sends. A 10 s wait here closed such callers and
+                    // answered them before they sent (HOST_INVALID_RESPONSE on /host/selection, round 6).
+                    client.ReceiveTimeout = RequestWaitMs; client.SendTimeout = 30000;
                     var stream = client.GetStream();
                     // Each call's method, time and sizes for the plugin log (T-126); never its content.
                     var clock = Stopwatch.StartNew();
-                    string method = "?"; long bytesIn = 0, bytesOut = 0;
+                    string method = "?"; long bytesIn = 0, bytesOut = 0; bool asked = false;
                     try {
                         int size = IPAddress.NetworkToHostOrder(BitConverter.ToInt32(Read(stream, 4), 0));
+                        asked = true;
                         if (size < 1 || size > 8 * 1024 * 1024) throw new InvalidOperationException("INVALID_REQUEST");
-                        bytesIn = size;
+                        bytesIn = size; client.ReceiveTimeout = 10000;
                         var envelope = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(Encoding.UTF8.GetString(Read(stream, size)));
                         var request = (Dictionary<string, object>)envelope["params"];
                         method = Value(request, "method") ?? "?";
@@ -352,8 +361,9 @@ namespace Vide.Zwcad.Connection
                         // T-285 stages of a display page: waiting for ZWCAD's idle turn, the read itself.
                         double queuedMs = clock.Elapsed.TotalMilliseconds, startedMs = -1, dispatchedMs = -1;
                         AttachedDisplay.PageTiming timing = null;
+                        var state = new Job();
                         pending.Enqueue(delegate {
-                            if (completion.Task.IsCompleted) return;
+                            if (System.Threading.Interlocked.CompareExchange(ref state.State, 1, 0) != 0) return;
                             try {
                                 startedMs = clock.Elapsed.TotalMilliseconds; pageTiming = null;
                                 var result = Dispatch(request);
@@ -369,7 +379,15 @@ namespace Vide.Zwcad.Connection
                                 else completion.TrySetResult(result);
                             } catch (System.Exception error) { completion.TrySetException(error); }
                         });
-                        if (!completion.Task.Wait(60000)) { completion.TrySetCanceled(); throw new InvalidOperationException("HOST_BUSY"); }
+                        if (!completion.Task.Wait(QueueWaitMs)) {
+                            // Not started yet: it never will (HOST_BUSY). A display read that has started runs
+                            // to its end on ZWCAD's thread anyway, so its caller gets that result (T-301).
+                            bool read = method == "displayPage" || method == "displayChanges";
+                            if (System.Threading.Interlocked.CompareExchange(ref state.State, 2, 0) == 0 || !read
+                                || !completion.Task.Wait(Math.Max(0, StartedReadWaitMs - (int)clock.ElapsedMilliseconds))) {
+                                completion.TrySetCanceled(); throw new InvalidOperationException("HOST_BUSY");
+                            }
+                        }
                         double serializeMs, writeMs;
                         bytesOut = Reply(stream, completion.Task.Result, out serializeMs, out writeMs);
                         PluginLog.Log.Call(method, clock.Elapsed.TotalMilliseconds, bytesIn, bytesOut);
@@ -380,7 +398,9 @@ namespace Vide.Zwcad.Connection
                         // A coded refusal is a short line; anything else keeps its type and stack.
                         bool coded = cause is InvalidOperationException && System.Text.RegularExpressions.Regex.IsMatch(code ?? "", "^[A-Z][A-Z0-9_]{1,63}$");
                         PluginLog.Log.Call(method, clock.Elapsed.TotalMilliseconds, bytesIn, bytesOut, coded ? code : cause.GetType().Name, coded ? null : cause);
-                        try { Reply(stream, new { ok = false, code, exceptionType = cause.GetType().FullName }); } catch (IOException) { }
+                        // No request read (the caller never sent, or went away): nobody waits for an answer, and
+                        // one written before the caller sends is an invalid response to it (T-301).
+                        if (asked) try { Reply(stream, new { ok = false, code, exceptionType = cause.GetType().FullName }); } catch (IOException) { }
                     }
                 }
             } catch (System.Exception) { /* A connection that fails before its request is read. */ }

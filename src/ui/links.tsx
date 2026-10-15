@@ -38,6 +38,10 @@ export const linkRowSchema = z.object({
       state: z.enum(['idle', 'syncing', 'held', 'waiting', 'failed']),
       code: z.string().optional(),
       at: z.string(),
+      /** A slow host's retry waiting or running (T-301): '다시 시도 중 (n/3)'. */
+      retry: z.object({ attempt: z.number(), of: z.number() }).optional(),
+      /** Those retries ran out: it waits for a change or ⟳. */
+      stopped: z.boolean().optional(),
     })
     .optional(),
   /** Shown as an xref of a root drawing (SPEC-01.11 11): row-major 4x4 into the root's metres. */

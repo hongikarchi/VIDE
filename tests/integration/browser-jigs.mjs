@@ -55,7 +55,7 @@ try {
     segments: [x0, y0, 0, x1, y1, 0],
     layer64: b64(i === 3 ? 'X-GRID' : 'S-BEAM'),
   }));
-  const insert = (id, host, result) =>
+  const insert = (id, host, result, input = {}) =>
     soleDb(app.store)
       .prepare('INSERT INTO workspace_requests VALUES(?,?,?,?,?,?)')
       .run(
@@ -72,6 +72,7 @@ try {
           effort: 'default',
           permission: 'review',
           host,
+          ...input,
         }),
         'succeeded',
         JSON.stringify({ hostExecuted: true, executionMode: 'sdk', host, ...result }),
@@ -703,6 +704,80 @@ try {
     await dialog.locator('[data-sync-empty="Rhino"]').textContent(),
     /객체 2개\(Brep 1 · Point 1\)에 선·폴리선이 없고, 단면 높이에 걸친 솔리드도 없습니다/,
   );
+  // T-302 (SPEC-05.8): a ZWCAD file is open but has no Sync yet; the last round's file is closed
+  // with a Sync. The ZWCAD picker picks nothing, says why, and lists the closed Sync as '(닫힘)'.
+  const linkedAt = new Date().toISOString();
+  const addLink = soleDb(app.store).prepare(
+    'INSERT INTO document_links VALUES(?,?,?,?,?,?,?,0,?,?)',
+  );
+  addLink.run('L-cad-closed', projectId, 'zwcad', 'r5-cad.dwg', null, 'old', 9, linkedAt, linkedAt);
+  addLink.run('L-cad-open', projectId, 'zwcad', 'r6-cad.dwg', null, 'now', 10, linkedAt, linkedAt);
+  insert(
+    'cad-closed-sync',
+    'zwcad',
+    {
+      scene: cadScene,
+      objects: cadScene.map((row) => ({
+        id: row.id,
+        name: row.nativeId,
+        kind: 'native',
+        nativeId: row.nativeId,
+      })),
+      sourceUnits: 'Millimeters',
+      sourceDocument: { name: 'r5-cad.dwg', capturedAt: 'test', instance: 'old', documentId: 9 },
+    },
+    { linkId: 'L-cad-closed' },
+  );
+  await page.route('**/api/v1/projects/*/links*', async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() !== 'GET' || !url.pathname.endsWith('/links'))
+      return route.continue();
+    const rows = await (await route.fetch()).json();
+    await route.fulfill({
+      json: rows.map((row) =>
+        row.id === 'L-cad-open'
+          ? {
+              ...row,
+              connection: {
+                instance: 'now',
+                documentId: 10,
+                live: false,
+                generation: 0,
+                objectCount: 0,
+                units: 'Millimeters',
+                modified: false,
+                hostBusy: false,
+              },
+            }
+          : { ...row, connection: null },
+      ),
+    });
+  });
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector('#project-picker')?.value);
+  await page.getByRole('button', { name: 'JIG', exact: true }).click();
+  await dialog
+    .locator('.jig-card[data-status="available"]', { hasText: '동기화 · 도면↔모델' })
+    .getByRole('button', { name: '열기', exact: true })
+    .click();
+  const cadPicker = dialog.getByLabel('ZWCAD 동기화 기록');
+  const missing = dialog.locator('[data-sync-missing="ZWCAD"]');
+  await missing.waitFor();
+  assert.equal(
+    await missing.textContent(),
+    '이 CAD 연결에는 아직 Sync가 없습니다 — 동기화를 기다리거나 닫힌 Sync를 고르세요',
+  );
+  assert.equal(await cadPicker.inputValue(), '');
+  assert.ok(await dialog.getByRole('button', { name: '정렬·비교 실행' }).isDisabled());
+  assert.equal(await dialog.locator('.sync-missing').count(), 0, 'the CAD file is linked');
+  const closedOption = cadPicker.locator('optgroup[label="닫힌 연결"] option');
+  assert.equal(await closedOption.count(), 1);
+  assert.match(await closedOption.textContent(), /^r5-cad\.dwg · .* \(닫힘\)$/);
+  // The person picks the closed Sync: it is used, and marked '닫힌 연결 기준'.
+  await cadPicker.selectOption('cad-closed-sync');
+  await dialog.locator('[data-sync-closed="ZWCAD"]', { hasText: '닫힌 연결 기준' }).waitFor();
+  assert.equal(await missing.count(), 0);
+  assert.equal(await dialog.getByRole('button', { name: '정렬·비교 실행' }).isDisabled(), false);
   assert.deepEqual(errors, []);
   console.log('JIG tab checks passed');
 } finally {
