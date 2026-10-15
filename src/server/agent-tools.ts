@@ -44,6 +44,16 @@ import { clawdeRefSchema, clawdeStageIdSchema } from '../contracts/clawde.ts';
 import { legalToolHandlers, type LegalToolSource } from './legal-tools.ts';
 import { resolveAgentToken } from '../ai/agent-relay.ts';
 import { Agenda, localDate } from '../core/agenda.ts';
+import { ProjectFolders } from '../core/project-folders.ts';
+import { WORKSPACE_ROLES } from '../core/workspace-template.ts';
+import {
+  namedBy,
+  saidNoPlace,
+  proposeSchema,
+  ROLE_LABELS,
+  setWorkspaceMemory,
+  type SchemaSources,
+} from './workspace-schema.ts';
 import {
   AGENDA_ATTENDEES_MAX,
   AGENDA_LOCATION_MAX,
@@ -571,6 +581,41 @@ const definitions = {
       })
       .strict(),
   },
+  // 연결 폴더의 역할 (SPEC-01.13 8, PLAN-52 T-309): read + guess, confirm (the person's answer only),
+  // and one remembered value changed from the person's words.
+  workspace_schema_propose: {
+    description:
+      'Read a connected project folder (e.g. the company server folder) two levels deep — folder names and file counts by extension only, no file contents — and guess a role per folder (도면, 모델, 자료, 레퍼런스, 보고서, 아카이브…). Leave folder out for the folder that waits for a proposal. Returns the guesses and, when there is something to propose, the question card: end the turn with status "question" and exactly this card in questions. The guesses are estimates: nothing is stored and nothing may rely on them until the person confirms on the card. Without a card it returns why (no access, empty, not reachable) — tell the person in plain words.',
+    schema: z
+      .object({ targetRef: scoped, folder: z.string().min(1).max(1000).optional() })
+      .strict(),
+  },
+  workspace_schema_confirm: {
+    description:
+      "Store the role paths a person confirmed on the folder role card. VIDE calls this itself from the person's answer; it is never given to the AI.",
+    schema: z
+      .object({
+        targetRef: scoped,
+        questionId: z.string().regex(/^[a-zA-Z0-9_-]{1,40}$/),
+        paths: z.partialRecord(z.enum(WORKSPACE_ROLES), z.string().min(1).max(200)),
+        targets: z
+          .partialRecord(z.enum(WORKSPACE_ROLES), z.string().min(1).max(200).nullable())
+          .optional(),
+      })
+      .strict(),
+  },
+  workspace_memory_set: {
+    description:
+      "Change one remembered value of the connected folder when the person's words say so: serverPath = where a role's files are on the server ('도면은 04 도면에 있어'), or target = where VIDE puts that kind back on the server ('앞으로 보고서는 05 보고서\\VIDE에'; null = no place, ask each time). Paths relative to the connected folder, written as the person wrote them; a path the person did not name is refused. Roles: ops, raw, rhino, cad, review, output, snapshots, references, tools, archive. Give exactly one of serverPath and target. Say the change in your reply.",
+    schema: z
+      .object({
+        targetRef: scoped,
+        role: z.enum(WORKSPACE_ROLES),
+        serverPath: z.string().min(1).max(300).optional(),
+        target: z.string().min(1).max(300).nullable().optional(),
+      })
+      .strict(),
+  },
   // The project's 할 일 (SPEC-01.14): read, and T1 writes recorded in the ledger with an undo.
   agenda_list: {
     description:
@@ -883,6 +928,8 @@ const projectScoped: ReadonlySet<string> = new Set([
   'agenda_list',
   'agenda_add',
   'agenda_set',
+  'workspace_schema_propose',
+  'workspace_memory_set',
 ]);
 /** The handlers of HOST_TURN_PROJECT_TOOLS a host turn spreads into its scope. */
 export type ProjectToolHandlers = Pick<Handlers, (typeof HOST_TURN_PROJECT_TOOLS)[number]>;
@@ -905,6 +952,7 @@ const writeTools = new Set<ToolName>([
   'jig_set',
   'jig_run',
   'jig_set_input',
+  'workspace_memory_set',
   ...GH_WRITE_TOOLS,
 ]);
 /**
@@ -942,6 +990,8 @@ export const PLAN_MODE_TOOLS: ReadonlySet<string> = new Set<ToolName>([
   'project_statement',
   'project_checks',
   'agenda_list',
+  // Reading a connected folder and asking with the role card stores nothing (SPEC-01.13 8).
+  'workspace_schema_propose',
   // The legal service reads (SPEC-13.9); they never change a document or the project.
   ...LEGAL_TOOLS,
 ]);
@@ -1362,6 +1412,12 @@ export interface ConversationToolSources {
   };
   /** The legal service (SPEC-13.9); legal_* exist only while it is connected and the project on. */
   legal?: LegalToolSource;
+  /**
+   * The project's folders and work folder manifest (SPEC-01.13 8, T-309): workspace_schema_propose
+   * and workspace_memory_set exist only with them. workspace_schema_confirm is never a handler: the
+   * question card's answer route stores the person's choice (conversations.ts).
+   */
+  workspaceFolders?: SchemaSources;
 }
 /**
  * A tool result's size (ADR-031 3): about what the stock MCP output keeps. A larger one is cut, not
@@ -1825,7 +1881,125 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
     Object.assign(handlers, factHandlers(sources));
   if (sources.draft) Object.assign(handlers, makeHandlers(sources));
   if (sources.legal) Object.assign(handlers, legalToolHandlers(projectId, sources.legal));
+  if (sources.workspaceFolders) Object.assign(handlers, workspaceSchemaHandlers(sources));
   return handlers;
+}
+/** Why a schema tool could not act, in words the AI passes on (no codes shown to the person). */
+const schemaRefusals: Record<string, string> = {
+  NO_WORKSPACE:
+    '이 프로젝트에는 작업 폴더가 없어 폴더 역할을 기억할 곳이 없습니다. 대시보드에서 [폴더로 만들기]로 작업 폴더를 먼저 만들어야 합니다.',
+  WORKSPACE_READ_ONLY:
+    '작업 폴더의 설정 파일이 규모검토 형식이라 VIDE가 고쳐 쓰지 않습니다. 대시보드에서 VIDE 형식으로 바꾼 뒤 기억할 수 있습니다.',
+  WORKSPACE_PROJECT_CONFLICT: '작업 폴더의 설정 파일이 다른 프로젝트를 가리켜 기억하지 않았습니다.',
+  WORKSPACE_CONFIG_INVALID: '작업 폴더의 설정 파일을 읽지 못했습니다.',
+  NOT_FOUND:
+    '연결된 프로젝트 폴더 가운데 읽을 폴더가 없습니다(작업 폴더 밖의 폴더를 대시보드에서 더해야 합니다).',
+  NO_SERVER_MEMORY:
+    '아직 기억한 연결 폴더가 없습니다. 먼저 폴더 역할을 제안하고 사람이 확정해야 합니다.',
+  OUTSIDE_WORKSPACE: '기억한 연결 폴더 밖의 경로입니다.',
+  INVALID_INPUT: '경로가 올바르지 않습니다(연결 폴더 기준의 상대 경로).',
+};
+const schemaRefusal = (error: unknown) => {
+  const code = error instanceof DomainError ? error.code : null;
+  if (!code || !schemaRefusals[code]) throw error;
+  return { ok: false, error: code, message: schemaRefusals[code] };
+};
+/** The blocked states of a proposal (Design SCR-36), as the AI says them. */
+const schemaBlocked: Record<string, string> = {
+  'no-access': '폴더를 읽을 권한이 없습니다 — 연결은 남기고 제안은 건너뜁니다.',
+  empty: '빈 폴더입니다 — 파일이 생기면 다시 제안할 수 있습니다.',
+  unreachable: '폴더에 지금 닿지 않습니다 — 마지막 기억은 그대로 둡니다.',
+};
+/** workspace_schema_propose and workspace_memory_set (SPEC-01.13 8, T-309). */
+function workspaceSchemaHandlers(sources: ConversationToolSources): Partial<Handlers> {
+  const { projectId, ledger, requestId } = sources;
+  const folders = sources.workspaceFolders!;
+  return {
+    workspace_schema_propose: async ({ folder }) => {
+      let made: Awaited<ReturnType<typeof proposeSchema>>;
+      try {
+        made = await proposeSchema(folders, projectId, { folder });
+      } catch (error) {
+        return schemaRefusal(error);
+      }
+      const { proposal, remembered } = made;
+      const rows = proposal.folders.map((row) => ({
+        path: row.path,
+        files: row.files,
+        byExtension: row.byExtension,
+        hasXref: row.hasXref,
+        guess: row.guess,
+        ...(row.candidates.length > 1 ? { candidates: row.candidates } : {}),
+        confidence: row.confidence,
+        reason: row.reason,
+      }));
+      const summary = {
+        root: proposal.root,
+        status: proposal.status,
+        folders: rows,
+        missing: proposal.missing,
+        conflicts: proposal.conflicts,
+        ...(proposal.shallow ? { shallow: true } : {}),
+        roles: ROLE_LABELS,
+        ...(remembered
+          ? { remembered: { paths: remembered.paths, targets: remembered.targets } }
+          : {}),
+      };
+      if (!made.card)
+        return bounded({
+          ...summary,
+          message:
+            schemaBlocked[proposal.status] ??
+            '역할을 정할 하위 폴더가 없습니다. 제안 카드는 만들지 않았습니다.',
+        });
+      // What the card asks: the answer route stores only what the person chose on this card.
+      ledger?.({
+        kind: 'result-ref',
+        body: made.record,
+        ...(requestId ? { requestId } : {}),
+      });
+      return bounded({
+        ...summary,
+        question: made.card,
+        next: 'End this turn with status "question" and exactly this card in questions. The guesses are not stored; VIDE stores only what the person confirms on the card. Do not say the roles are remembered.',
+      });
+    },
+    workspace_memory_set: async ({ role, serverPath, target }) => {
+      if ((serverPath === undefined) === (target === undefined))
+        throw new DomainError('INVALID_INPUT');
+      // Only a place the person named (as jig_set_input with layers): the AI's own pick is not stored.
+      const named = serverPath ?? target;
+      const words = sources.personWords?.() ?? [];
+      // Clearing a place the person confirmed also needs their words ('둘 곳 없음', '매번 물어').
+      if (named === null && !saidNoPlace(words))
+        return {
+          ok: false,
+          error: 'NOT_NAMED',
+          message: '사람이 둘 곳을 비우라고 말할 때만 지웁니다. 사람에게 물어보세요.',
+        };
+      if (typeof named === 'string' && !namedBy(words, named))
+        return {
+          ok: false,
+          error: 'NOT_NAMED',
+          message: '사람이 말한 경로만 기억합니다. 어디로 둘지 사람에게 물어보세요.',
+        };
+      let changed: Awaited<ReturnType<typeof setWorkspaceMemory>>;
+      try {
+        changed = await setWorkspaceMemory(folders, projectId, {
+          role,
+          ...(serverPath !== undefined ? { serverPath } : { target: target ?? null }),
+        });
+      } catch (error) {
+        return schemaRefusal(error);
+      }
+      ledger?.({
+        kind: 'result-ref',
+        body: { appAction: 'workspace-memory', by: 'ai', ...changed },
+        ...(requestId ? { requestId } : {}),
+      });
+      return { ok: true, ...changed };
+    },
+  };
 }
 
 /** What the AI sees of a 할 일. */
@@ -2072,6 +2246,10 @@ export function conversationSources(
     agenda: new Agenda(workspace.store),
     ledger,
     personWords: () => personWordsOf(workspace, conversation, requestId),
+    workspaceFolders: {
+      folders: new ProjectFolders(workspace.store),
+      isProject: (id) => workspace.store.listProjects().some((project) => project.id === id),
+    },
     ...(data ? { skills: () => skillCatalog(workspace, data, conversation.projectId) } : {}),
     ...(data ? { facts: factsOf(workspace, data, conversation.projectId) } : {}),
     ...(data && conversation.kind === 'jig-make' && conversation.draftId

@@ -1,0 +1,35 @@
+/* 요청 전 영향 미리보기 (PLAN-52 T-319, Design SCR-39): one quiet 12px line over the send button,
+   on the recessed background; never more than one line. */
+.route-card.impact-strip {
+  padding: 4px 10px;
+  background: var(--bg-recessed);
+  border-color: var(--border-subtle);
+}
+.impact-strip-line {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.route-card.impact-strip p {
+  margin: 0;
+}
+.impact-strip-files {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.impact-strip-line strong {
+  flex: none;
+  color: var(--text-1);
+}
+.impact-strip-map {
+  margin-left: auto;
+  flex: none;
+  font-size: 12px;
+}

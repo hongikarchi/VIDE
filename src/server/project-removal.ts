@@ -52,6 +52,19 @@ export class RemovedProjects {
     this.writing = next.catch(() => undefined);
     return next;
   }
+  /** An id made again on purpose (작업 폴더 열기, PLAN-52 T-308): listed and kept from now on. */
+  forget(id: string) {
+    if (!this.ids.delete(id)) return Promise.resolve();
+    const file = this.file;
+    if (!file) return Promise.resolve();
+    const body = JSON.stringify([...this.ids]);
+    const next = this.writing.then(async () => {
+      await writeFile(file + '.tmp', body);
+      await rename(file + '.tmp', file);
+    });
+    this.writing = next.catch(() => undefined);
+    return next;
+  }
   /** Every removed id (a site-deleted one keeps its rows until its running work ends). */
   list() {
     return [...this.ids];

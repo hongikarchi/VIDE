@@ -196,6 +196,11 @@ import { AttachmentStore } from './attachments.ts';
 import { attachmentPathRoutes } from './attachment-paths.ts';
 import { checkFolder, deniedPath, folderRoutes } from './project-files.ts';
 import { collectRoutes, collectStatuses } from './collect-routes.ts';
+import { workspaceRoutes, workspaceStatuses } from './workspace-routes.ts';
+import { workspaceMapRoutes } from './workspace-map-routes.ts';
+import { workspaceOutputsFor } from './workspace-outputs.ts';
+import { changesFromRequests, WorkspaceCheckouts, folderHolds } from './workspace-checkout.ts';
+import { Checkouts } from '../core/checkouts.ts';
 import { SiteDataSettings, siteDataRoutes, siteDataStatuses } from './site-data-routes.ts';
 import { siteModelRoutes } from './site-model-routes.ts';
 import { PublicDataKeyStore } from './public-data-keys.ts';
@@ -353,6 +358,7 @@ const statuses: Record<string, number> = {
   ...agendaStatuses,
   ...notesStatuses,
   ...collectStatuses,
+  ...workspaceStatuses,
   ...jigSubmitStatuses,
   ...finishStatuses,
   ...siteDataStatuses,
@@ -571,7 +577,14 @@ export async function startServer({
   const sharedNotes =
     filename === ':memory:'
       ? undefined
-      : new SharedNotes({ remote: remoteAccess, dataDirectory: dirname(filename), agenda });
+      : new SharedNotes({
+          remote: remoteAccess,
+          dataDirectory: dirname(filename),
+          agenda,
+          // 작업 폴더의 운영 역할에도 사본 (PLAN-52 T-313): 일지·회의록, 정본은 사이트.
+          onCopy: (projectId, note, markdown) =>
+            void workspaceOutputsFor(store).writeNote(projectId, note, markdown),
+        });
   // The copies of every project's notes refresh every ten minutes (and whenever notes are shown).
   let notesRefreshed = 0;
   function notesTick() {
@@ -596,8 +609,28 @@ export async function startServer({
           links,
           remote: remoteAccess,
         });
+  // 체크아웃·서버에 반영·도면 보호 (SPEC-01.13 9, PLAN-52 T-310~T-312).
+  const workspaceCheckouts = new WorkspaceCheckouts({
+    folders,
+    isProject: (projectId) => store.listProjects().some((row) => row.id === projectId),
+    checkouts: new Checkouts(store),
+    actor: () => remoteAccess.account()?.name,
+    site: async (projectId) => {
+      const response = await remoteAccess.deviceFetch(
+        `/projects/${encodeURIComponent(projectId)}/checkouts`,
+      );
+      if (!response?.ok) return null;
+      const reply = (await response.json()) as { items?: unknown };
+      return Array.isArray(reply.items) ? (reply.items as never[]) : null;
+    },
+    changes: (projectId, localPath, since) =>
+      changesFromRequests(links.list(projectId), workspace.list(projectId), localPath, since),
+    onChange: () => void offlineView.tick().catch(() => {}),
+    log: (event, fields) => workspaceOutputsFor(store).log?.(event, fields),
+  });
   // Offline view and site request inbox (PLAN-20).
   const offlineView = new OfflineView({
+    checkouts: (projectId) => workspaceCheckouts.siteItems(projectId),
     directory: filename === ':memory:' ? undefined : dirname(filename),
     store,
     workspace,
@@ -666,6 +699,12 @@ export async function startServer({
         directory: join(dirname(filename), 'zwcad-sdk-models'),
         tools: agentTools,
         origin: () => origin,
+        // 도면 보호 (T-312): the day's first AI edit of a drawing on the server keeps a copy first.
+        beforeEdit: async (path) => {
+          for (const project of store.listProjects())
+            if (folders.list(project.id).some((folder) => folderHolds(folder.path, path)))
+              await workspaceCheckouts.beforeDwgEdit(project.id, path);
+        },
       })
     : undefined;
   const applications = new Applications(store, workspace, {
@@ -791,6 +830,8 @@ export async function startServer({
   const diagnostics = new Diagnostics({
     directory: filename === ':memory:' ? undefined : dirname(filename),
   });
+  // Work-folder copies that failed (PLAN-52 T-313) go to the engine log.
+  workspaceOutputsFor(store).log = (event, fields) => diagnostics.write(event, fields);
   // The data folder's opening (ADR-032): the one-time split, or why the old single DB stays.
   if (storeEvent)
     diagnostics.write(
@@ -1400,6 +1441,43 @@ export async function startServer({
           context: fileContext,
           project: (projectId) => store.project(projectId),
           body: () => body(request),
+          send,
+        })
+      )
+        return;
+      // 작업 폴더 (SPEC-01.13 7~10, ARCH-01 「작업 폴더(PLAN-52)」).
+      if (
+        await workspaceRoutes(url, request.method, {
+          folders,
+          project: (projectId) => store.project(projectId),
+          isProject: (projectId) => store.listProjects().some((row) => row.id === projectId),
+          dataDirectory: fileContext.dataDirectory,
+          send,
+          setup: {
+            body: () => body(request),
+            remote,
+            context: fileContext,
+            projects: () => listProjects(),
+            // A project deleted here and opened again from its folder is no longer 'removed'.
+            ensureProject: async (id, name) => {
+              await removedProjects.forget(id);
+              store.ensureProject(id, name);
+            },
+            collect: (projectId) => collector.start(projectId),
+            announce: (row) => remoteAccess.pushProject(row),
+          },
+          checkout: { service: workspaceCheckouts, body: () => body(request), remote },
+        })
+      )
+        return;
+      // 파일 지도 (PLAN-52 T-318): relations and events of the project's files, read only.
+      if (
+        await workspaceMapRoutes(url, request.method, {
+          store,
+          folders,
+          project: (projectId) => store.project(projectId),
+          isProject: (projectId) => store.listProjects().some((row) => row.id === projectId),
+          dataDirectory: fileContext.dataDirectory,
           send,
         })
       )
@@ -2235,16 +2313,25 @@ export async function startServer({
       if (review) {
         if (request.method === 'POST' && !review[2]) {
           const input = await body(request);
-          send(
-            201,
-            reviews.create(
-              review[1],
-              input,
-              withApplications(
-                lazyCandidate(workspace, review[1], z.string().parse(input.requestId)),
-              ),
+          const created = reviews.create(
+            review[1],
+            input,
+            withApplications(
+              lazyCandidate(workspace, review[1], z.string().parse(input.requestId)),
             ),
           );
+          send(201, created);
+          // 작업 폴더의 검토본 역할에 사본 (PLAN-52 T-313): the same page as [내려받기].
+          try {
+            const saved = reviews.get(review[1], created.id).payload;
+            void workspaceOutputsFor(store).writeSnapshot(
+              review[1],
+              created,
+              renderReport(saved.project, saved.request, saved.image, saved),
+            );
+          } catch {
+            /* the copy never fails the snapshot */
+          }
           return;
         }
         if (request.method === 'GET' && !review[2]) {

@@ -102,6 +102,8 @@ interface Options {
   launch?: typeof launchZwcadWorker;
   executable?: string;
   plugin?: string;
+  /** Before an editing turn on the drawing open in ZWCAD (its path): the day's backup (T-312). */
+  beforeEdit?: (path: string) => Promise<unknown>;
 }
 export class ZwcadSdkExecution {
   private options: Options;
@@ -146,6 +148,12 @@ export class ZwcadSdkExecution {
     const attached = this.editors.attached;
     const direct = directMode(input);
     const write = direct.mode === 'auto';
+    // 도면 보호 (PLAN-52 T-312): a drawing kept on the server is copied once a day before AI edits.
+    if (write && this.options.beforeEdit) {
+      const listed = await attached.list().catch(() => []);
+      const drawingPath = listed.find((entry) => entry.instance === basis.instance)?.path;
+      if (drawingPath) await this.options.beforeEdit(drawingPath).catch(() => undefined);
+    }
     // Direct mode: one entry per execute that changed the drawing ([되돌리기] → undo(undoId)),
     // plus the held one of a tripped guard with its body (the card's [진행] re-runs only that).
     // Same record shape as the Rhino direct turn (direct-mode.ts ExecutionRecord).

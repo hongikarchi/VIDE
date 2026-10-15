@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { z } from 'zod';
 import { api, message, type Project } from './api';
 import { decodeSnapshot, type Snapshot } from '../../contracts/offline-snapshot';
-import { OfflineAgenda, OfflineHistory } from './offline-summary';
+import { OfflineAgenda, OfflineCheckouts, OfflineHistory } from './offline-summary';
 import { createWalk } from '../../ui/walk-controls';
 
 // PLAN-20, PLAN-33: a project while its work PC is off (SPEC-04.10). 할 일 (editable; the PC
@@ -639,6 +639,7 @@ export function OfflineProject({
             </div>
           ) : null}
         </section>
+        <OfflineCheckouts projectId={project.id} />
       </div>
       <aside className="offline-queue">
         <h2>작업 PC에 요청 남기기</h2>

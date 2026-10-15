@@ -40,6 +40,8 @@ const stateSchema = z.object({
       z.object({
         agenda: z.string().optional(),
         history: z.string().optional(),
+        /** This PC's open checkouts last sent ('작업 중', PLAN-52 T-310). */
+        checkouts: z.string().optional(),
         at: z.number().optional(),
         error: z.object({ code: z.string(), at: z.number() }).optional(),
       }),
@@ -97,6 +99,8 @@ interface Options {
   agenda?: Agenda;
   /** Conversation records on the site (PLAN-36); absent in tests that do not use them. */
   mirror?: ConversationMirror;
+  /** This PC's open checkouts of a project as the site keeps them (PLAN-52 T-310). */
+  checkouts?: (projectId: string) => unknown[];
   now?: () => number;
 }
 
@@ -378,6 +382,18 @@ export class OfflineView {
         if (history.key !== shared.history) {
           code = await this.options.remote.uploadSummary(projectId, 'history', history.items());
           if (!code) shared.history = history.key;
+          changed = true;
+        }
+      }
+      // '작업 중' (PLAN-52 T-310): this PC's open checkouts, when they changed (after the history,
+      // so a site without the part never holds the summary back).
+      const checkouts = this.options.checkouts;
+      if (!code && !agendaOnly && checkouts) {
+        const items = checkouts(projectId);
+        const key = JSON.stringify(items);
+        if (key !== (shared.checkouts ?? '[]')) {
+          code = await this.options.remote.uploadSummary(projectId, 'checkouts', items);
+          if (!code) shared.checkouts = key;
           changed = true;
         }
       }

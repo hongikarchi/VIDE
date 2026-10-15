@@ -1,0 +1,313 @@
+/* 파일 tab (PLAN-52 T-319, Design SCR-38): [목록] · [지도]; the map is rows × time with glyphs,
+   relation lines in one colour (--text-3), the chosen chain in --accent, the rest at 25%. Selected
+   rows and chips use a soft background only; no coloured side bars. */
+.files-workspace {
+  display: none;
+}
+body[data-workspace='files']
+  .workspace
+  > :not(.workspace-tabs):not(.files-workspace):not(.panel-resize-right) {
+  display: none !important;
+}
+body[data-workspace='files'] .files-workspace {
+  grid-row: 2 / -1;
+  grid-column: 1 / -1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elevated);
+}
+@media (min-width: 851px) {
+  body[data-workspace='files'] #left,
+  body[data-workspace='files'] #toggle-left,
+  body[data-workspace='files'] .panel-resize-left {
+    display: none;
+  }
+  body[data-workspace='files'] main {
+    grid-template-columns: minmax(260px, 1fr) var(--right-width, 370px);
+  }
+  body[data-workspace='files'].right-hidden main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.files-tab {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.files-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: var(--hairline) solid var(--line);
+}
+.files-views {
+  display: flex;
+  gap: 4px;
+}
+.files-view-chip {
+  border: var(--hairline) solid var(--border-subtle);
+  background: transparent;
+  border-radius: var(--radius-pill);
+  padding: 2px 12px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.files-view-chip[aria-selected='true'] {
+  background: var(--bg-selected);
+  color: var(--text-1);
+}
+.files-note,
+.files-count {
+  color: var(--muted);
+  font-size: 12px;
+}
+.files-empty {
+  margin: 24px 16px;
+  color: var(--muted);
+}
+.files-list {
+  overflow: auto;
+  padding: 8px 16px 24px;
+}
+.files-group h4,
+.files-group summary {
+  margin: 14px 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.files-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.files-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+}
+.files-row:hover,
+.files-row-focus {
+  background: var(--bg-selected);
+}
+.files-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.files-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+.files-map {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 8px 8px;
+}
+.files-map-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.files-basis select {
+  margin-left: 6px;
+}
+.files-legend {
+  position: relative;
+  z-index: 2;
+}
+.files-legend summary {
+  cursor: pointer;
+}
+.files-legend ul {
+  position: absolute;
+  right: 0;
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  list-style: none;
+  background: var(--bg-surface);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-float);
+  white-space: nowrap;
+}
+.files-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 18px;
+}
+.files-map-body {
+  position: relative;
+  display: flex;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.files-map-names {
+  flex: none;
+}
+.files-map-row-name {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px 0 0;
+  font-size: 12px;
+  color: var(--text-2);
+  box-sizing: border-box;
+}
+.files-fold {
+  font-size: 11px;
+}
+.files-map-svg {
+  flex: none;
+  overflow: visible;
+  /* style.css draws every svg as an 18px icon that takes no pointer; the map is not an icon. */
+  pointer-events: auto;
+}
+.files-tip {
+  position: absolute;
+  pointer-events: none;
+  padding: 3px 8px;
+  font-size: 12px;
+  background: var(--bg-surface);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-float);
+  white-space: nowrap;
+  z-index: 3;
+}
+.files-map-empty {
+  margin: 48px auto;
+  text-align: center;
+  color: var(--muted);
+}
+.files-map-empty p {
+  margin: 0 0 4px;
+}
+/* Chart parts (src/ui/chart/*). */
+.chart-row-rule {
+  stroke: var(--border-subtle);
+  stroke-width: 1;
+}
+.chart-glyph {
+  fill: var(--text-2);
+  stroke: var(--bg-elevated);
+  stroke-width: 1;
+}
+.chart-glyph-image rect {
+  fill: var(--bg-elevated);
+  stroke: var(--text-2);
+}
+.chart-glyph-image path {
+  stroke: var(--text-2);
+  stroke-width: 0.8;
+}
+.chart-hit {
+  fill: transparent;
+}
+.chart-item {
+  cursor: pointer;
+}
+.chart-item:focus,
+.chart-item:focus-visible {
+  outline: none;
+}
+.chart-item:focus-visible .chart-hit {
+  stroke: var(--accent);
+}
+.chart-item-chosen .chart-glyph {
+  fill: var(--accent);
+}
+.chart-label {
+  font-size: 11px;
+  fill: var(--text-2);
+}
+.chart-faded {
+  opacity: 0.25;
+}
+.chart-link {
+  stroke: var(--text-3);
+}
+.chart-link-faint {
+  opacity: 0.55;
+}
+.chart-link-on {
+  stroke: var(--accent);
+}
+.chart-link-dim {
+  opacity: 0.25;
+}
+.chart-link-later {
+  opacity: 0.15;
+}
+.chart-arrow {
+  fill: var(--text-3);
+}
+.chart-event {
+  stroke: var(--text-2);
+  stroke-width: 1.5;
+}
+.chart-event-later {
+  opacity: 0.2;
+}
+.chart-timeline {
+  display: flex;
+  align-items: flex-start;
+  border-top: var(--hairline) solid var(--line);
+  padding-top: 4px;
+}
+.chart-timeline-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chart-cursor-date {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.chart-timeline-axis {
+  position: relative;
+  flex: none;
+}
+.chart-timeline-axis svg {
+  display: block;
+}
+.chart-tick {
+  stroke: var(--text-3);
+}
+.chart-tick-label {
+  font-size: 10px;
+  fill: var(--text-3);
+}
+.chart-density {
+  fill: var(--text-3);
+  opacity: 0.6;
+}
+.chart-cursor-line {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.chart-cursor {
+  width: 100%;
+  margin: 0;
+}
+@media (max-width: 900px) {
+  .files-map-row-name {
+    font-size: 10px;
+  }
+}

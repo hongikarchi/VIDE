@@ -208,6 +208,12 @@ function fill(db, p, n) {
   );
   run('INSERT INTO compliance_roles_version VALUES(?,1)', p);
   run(
+    "INSERT INTO checkouts VALUES(?,'co-1','rhino','S:\\a.3dm','C:\\w\\a.3dm','pc','u',?,NULL,?,'h')",
+    p,
+    at,
+    at,
+  );
+  run(
     "INSERT INTO object_versions VALUES(?,?,'object','{}',?,3)",
     p,
     `v-${p}`,

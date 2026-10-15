@@ -279,6 +279,10 @@ export const agentToolNames = [
   'agenda_list',
   'agenda_add',
   'agenda_set',
+  // 연결 폴더의 역할 (SPEC-01.13 8, PLAN-52 T-309); confirm is the card answer's, never the AI's.
+  'workspace_schema_propose',
+  'workspace_schema_confirm',
+  'workspace_memory_set',
   // 법규 Q&A (SPEC-13.9, PLAN-46 T-223)
   'legal_ask',
   'legal_checklist',
@@ -314,6 +318,13 @@ export const agendaInstruction =
  */
 export const legalInstruction =
   " Building-law questions (건축법, 조례, 일조 사선, 주차, 용적률…): ask legal_ask (legal_checklist for a design stage's list, legal_article for an article's text, legal_answers for earlier answers) instead of answering from memory. VIDE shows each answer as a card above your reply with the service's verdict, articles and verified prose: do not restate or rewrite the card, never change its verdict (conditional and unknown stay so), cite answers as [L<n>] and only articles the tools returned in this turn; what you add is labelled AI 해석. You cannot send anything back to the service; you may suggest that the user send confirmed items with [cLAWde로 보내기] in the 법규 검토 panel.";
+/**
+ * The connected folder's roles (SPEC-01.13 8, T-309); added to the rules of a turn that has
+ * workspace_schema_propose. The guesses are estimates; only the person's card answer stores them.
+ */
+export const workspaceSchemaInstruction =
+  " Connected folders (SPEC-01.13 8): when the user asks for the roles of a connected project folder (for example right after they connect a company server folder), call workspace_schema_propose and end the turn with its card; never say a role is remembered until the person confirmed it on that card, and never rely on a guess for reading guidance or writing. VIDE stores the person's card answer itself; you have no confirm tool." +
+  " When the person later says where a kind of file is or should go ('앞으로 보고서는 05 보고서\\VIDE에'), call workspace_memory_set with exactly the path they wrote (when given) and say the change in one line; the connected folder's own names and structure are never changed.";
 /** Tools every instructed turn may get beside its own: the project's 할 일. */
 const TURN_EXTRA_TOOLS = new Set(['agenda_list', 'agenda_add', 'agenda_set']);
 const extraToolsInstruction = (connection: AgentConnection) =>
@@ -328,6 +339,7 @@ export function instructionFor(connection: AgentConnection, format: AgentFormat 
   return (
     own +
     (connection.tools.includes('agenda_list') ? agendaInstruction : '') +
+    (connection.tools.includes('workspace_schema_propose') ? workspaceSchemaInstruction : '') +
     (connection.tools.includes('legal_ask') ? legalInstruction : '')
   );
 }

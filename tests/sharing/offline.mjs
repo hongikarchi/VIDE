@@ -457,6 +457,32 @@ try {
   const stored = JSON.stringify((await d1.prepare('SELECT * FROM project_history').all()).results);
   for (const secret of ['secret-model', 'private.pdf', 'scene'])
     assert.ok(!stored.includes(secret));
+  // '작업 중' (PLAN-52 T-310): the PC replaces its own open checkouts; members see file names.
+  const checkoutItem = {
+    fileKey: '\\\\fileserver\\projects\\2601\\04 모델\\a-동.3dm',
+    role: 'rhino',
+    serverPath: '\\\\fileserver\\projects\\2601\\04 모델\\A-동.3dm',
+    userName: '홍길동',
+    checkedOutAt: '2026-10-15T01:20:00.000Z',
+  };
+  assert.equal(await pc.uploadSummary(project.id, 'checkouts', [checkoutItem]), undefined);
+  assert.equal(
+    await pc.uploadSummary(project.id, 'checkouts', [{ ...checkoutItem, role: 'raw' }]),
+    'INVALID_INPUT',
+  );
+  const deviceRows = await (await pc.deviceFetch(`/projects/${project.id}/checkouts`)).json();
+  assert.deepEqual(deviceRows.items, [{ ...checkoutItem, name: 'A-동.3dm', mine: true }]);
+  assert.deepEqual((await api('/checkouts', { cookie: alice.cookie })).value.items, [
+    {
+      name: 'A-동.3dm',
+      role: 'rhino',
+      userName: '홍길동',
+      checkedOutAt: checkoutItem.checkedOutAt,
+    },
+  ]);
+  assert.equal(await pc.uploadSummary(project.id, 'checkouts', []), undefined);
+  assert.deepEqual((await api('/checkouts', { cookie: alice.cookie })).value.items, []);
+  assert.equal(await pc.uploadSummary(project.id, 'checkouts', [checkoutItem]), undefined);
   // Every member (user decision 2026-10-06): a shared member reads and writes, another account 404.
   const malloryId = (
     await d1.prepare("SELECT id FROM user WHERE email='mallory@users.vide.invalid'").first()
@@ -467,6 +493,7 @@ try {
     .run();
   assert.equal((await api('/agenda', { cookie: eve.cookie })).status, 404);
   assert.equal((await api('/history', { cookie: eve.cookie })).status, 404);
+  assert.equal((await api('/checkouts', { cookie: eve.cookie })).status, 404);
   assert.equal(
     (await api('/agenda', { method: 'POST', cookie: eve.cookie, data: { text: 'x' } })).status,
     404,

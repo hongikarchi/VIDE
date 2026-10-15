@@ -21,6 +21,8 @@ import {
 } from '../store/layout.ts';
 import { removeProjectDrafts } from '../draft-storage.ts';
 import { renderProjectHeading } from '../project-heading.tsx';
+import { requestWorkspaceSetup } from '../workspace-setup.tsx';
+import { remoteSession } from '../remote-panel.ts';
 import { requestMessage } from '../workspace-data.ts';
 import { viewerState } from '../store/viewer.ts';
 import { linksState } from '../store/links.ts';
@@ -374,6 +376,13 @@ export function renderHeading() {
     create: createProject,
     rename: renameProject,
     remove: deleteProject,
+    // 작업 폴더 만들기·열기 (SCR-35): the panel lives in the dashboard's 프로젝트 폴더 section.
+    workspace: remoteSession()
+      ? undefined
+      : (mode) => {
+          setWorkspace('dashboard');
+          requestWorkspaceSetup(mode);
+        },
   });
 }
 

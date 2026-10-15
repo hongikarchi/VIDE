@@ -22,6 +22,8 @@ interface Props {
   rename: (name: string) => Promise<void>;
   /** Deletes the selected project and its data; called only after the inline confirmation. */
   remove: () => Promise<void>;
+  /** [폴더로 만들기]·[폴더 열기] (Design SCR-35): opens the dashboard's work folder panel. */
+  workspace?: (mode: 'create' | 'open') => void;
 }
 function ProjectHeading({
   projects,
@@ -31,6 +33,7 @@ function ProjectHeading({
   create,
   rename,
   remove,
+  workspace,
 }: Props) {
   const [editing, setEditing] = useState<'new' | 'rename' | 'delete' | null>(null),
     [value, setValue] = useState(''),
@@ -103,6 +106,30 @@ function ProjectHeading({
         <button type="button" onClick={() => setEditing(null)} title="취소 · Esc">
           ✕
         </button>
+        {editing === 'new' && workspace ? (
+          <>
+            <button
+              type="button"
+              className="link-button project-folder-start"
+              onClick={() => {
+                setEditing(null);
+                workspace('create');
+              }}
+            >
+              폴더로 만들기
+            </button>
+            <button
+              type="button"
+              className="link-button project-folder-start"
+              onClick={() => {
+                setEditing(null);
+                workspace('open');
+              }}
+            >
+              폴더 열기
+            </button>
+          </>
+        ) : null}
       </form>
     );
   return (

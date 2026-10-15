@@ -701,7 +701,7 @@ export class RemoteAccess {
    */
   async uploadSummary(
     projectId: string,
-    part: 'agenda' | 'history',
+    part: 'agenda' | 'history' | 'checkouts',
     items: unknown[],
   ): Promise<string | undefined> {
     await this.load();

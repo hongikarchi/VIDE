@@ -1,0 +1,107 @@
+/* 연결 폴더 스키마 제안 카드의 행 (Design SCR-36). Guess and choice differ by the chip's line
+   (dashed / solid) and the small '추정' only; no colour coding, no side bars. */
+.wschema-card {
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+.wschema-card > .qcard {
+  border: none;
+}
+.wschema {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 10px 8px;
+  min-width: 0;
+}
+.wschema-mono {
+  font-family: var(--font-mono);
+}
+.wschema-note,
+.wschema-reading {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.wschema-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wschema-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 2px;
+  min-width: 0;
+}
+.wschema-row[data-depth='2'] .wschema-name {
+  padding-left: 16px;
+}
+.wschema-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.wschema-chip {
+  font: inherit;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border: var(--hairline) dashed var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.wschema-chip[data-state='chosen'] {
+  border-style: solid;
+}
+.wschema-chip[data-state='conflict'] {
+  border-style: solid;
+  border-color: var(--warn);
+}
+.wschema-chip:disabled {
+  cursor: default;
+}
+.wschema-guess {
+  color: var(--muted);
+  font-size: 10px;
+}
+.wschema-select {
+  font: inherit;
+  font-size: 12px;
+  padding: 1px 4px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+}
+.wschema-reason {
+  grid-column: 1 / 3;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.wschema-row[data-depth='2'] .wschema-reason {
+  padding-left: 16px;
+}
+.wschema-blocked {
+  margin: 0;
+  color: var(--warn);
+  font-size: 12px;
+}
+.wschema-stored {
+  margin: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}

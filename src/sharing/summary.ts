@@ -1,6 +1,7 @@
 import { HttpError, body, json } from './http';
 import type { Env } from './auth';
 import type { HostRow } from './hosts';
+import { membership } from './projects';
 
 // PLAN-33: a project opens on the site while its work PC is off (SPEC-04.10). The PC keeps a copy
 // of the project's 할 일 here and a summary of its work history (ADR-035: request text, the
@@ -16,6 +17,8 @@ const HISTORY_ITEMS_MAX = 100;
 const HISTORY_BODY_MAX = 600;
 const HISTORY_ANSWER_MAX = 400;
 const HISTORY_FILES_MAX = 10;
+/** '작업 중' rows one PC sends for a project (PLAN-52 T-310). */
+const CHECKOUT_ITEMS_MAX = 200;
 // 'meeting' shows as '협의' and 'receipt' (접수) came with PLAN-39 (SPEC-01.14 1).
 const KINDS = ['task', 'meeting', 'receipt', 'deadline'] as const;
 type Kind = (typeof KINDS)[number];
@@ -321,6 +324,39 @@ async function pending(db: D1Database, project: string) {
   return rows.results.map(pendingOf);
 }
 
+interface CheckoutRow {
+  file_key: string;
+  role: string;
+  server_path: string;
+  pc_id: string;
+  user_name: string;
+  checked_out_at: string;
+}
+/** Open checkouts of a project; the PC (`pc`) also gets the key and path, the site page the name. */
+async function activeCheckouts(db: D1Database, project: string, pc: string | null, full: boolean) {
+  const rows = await db
+    .prepare(
+      `SELECT file_key,role,server_path,pc_id,user_name,checked_out_at FROM project_checkouts
+       WHERE project_id=? AND released_at IS NULL ORDER BY checked_out_at LIMIT 500`,
+    )
+    .bind(project)
+    .all<CheckoutRow>();
+  return rows.results.map((row) => {
+    const name = row.server_path.split(/[\\/]/).pop() || row.server_path;
+    return full
+      ? {
+          fileKey: row.file_key,
+          role: row.role,
+          serverPath: row.server_path,
+          name,
+          userName: row.user_name,
+          checkedOutAt: row.checked_out_at,
+          mine: row.pc_id === pc,
+        }
+      : { name, role: row.role, userName: row.user_name, checkedOutAt: row.checked_out_at };
+  });
+}
+
 /** Owner calls from the site: `…/agenda`, `…/agenda/:item`, `…/history`. */
 export async function summaryRoute(
   request: Request,
@@ -330,6 +366,11 @@ export async function summaryRoute(
   path: string[],
 ): Promise<Response> {
   const db = env.DB;
+  // '작업 중' (PLAN-52 T-310, Design SCR-37): who has which server file, read-only, file names only.
+  if (path[0] === 'checkouts' && path.length === 1) {
+    if (request.method !== 'GET') throw new HttpError(405, 'METHOD_NOT_ALLOWED');
+    return json({ items: await activeCheckouts(db, project, null, false) });
+  }
   if (path[0] === 'history' && path.length === 1 && request.method === 'GET') {
     const state = await summaryState(db, project);
     const rows = await db
@@ -530,6 +571,7 @@ export async function summaryDeviceRoute(
     return json({ confirmed: statements.length });
   }
   if (path[0] !== 'projects' || path.length !== 3) return undefined;
+  if (path[2] === 'checkouts') return checkoutsDeviceRoute(request, db, row, path[1]);
   if (!['agenda', 'history', 'summary'].includes(path[2])) return undefined;
   const project = path[1];
   if (!/^[A-Za-z0-9-]{8,64}$/.test(project)) invalid();
@@ -542,6 +584,9 @@ export async function summaryDeviceRoute(
       db.prepare('DELETE FROM project_agenda WHERE project_id=?').bind(project),
       db.prepare('DELETE FROM project_history WHERE project_id=?').bind(project),
       db.prepare('DELETE FROM project_summaries WHERE project_id=?').bind(project),
+      db
+        .prepare('DELETE FROM project_checkouts WHERE project_id=? AND pc_id=?')
+        .bind(project, row.id),
     ]);
     return json({ removed: true });
   }
@@ -670,6 +715,56 @@ export async function summaryDeviceRoute(
         ),
     ),
     upsert('history_at'),
+  ]);
+  return json({ stored: list.length });
+}
+
+/**
+ * '작업 중' from a member's PC (PLAN-52 T-310): `PUT` replaces this PC's open checkouts of the
+ * project (`{items: [{fileKey, role, serverPath, userName, checkedOutAt}]}`); `GET` lists every
+ * PC's open ones (with `mine`) so a PC warns before taking a file another has.
+ */
+async function checkoutsDeviceRoute(
+  request: Request,
+  db: D1Database,
+  row: HostRow,
+  project: string,
+): Promise<Response> {
+  if (!/^[A-Za-z0-9-]{8,64}$/.test(project)) invalid();
+  await membership(db, project, row.user_id);
+  if (request.method === 'GET')
+    return json({ items: await activeCheckouts(db, project, row.id, true) });
+  if (request.method !== 'PUT') throw new HttpError(405, 'METHOD_NOT_ALLOWED');
+  const list = items(await body(request, 256 * 1024), CHECKOUT_ITEMS_MAX).map((item) => {
+    if (item.role !== 'rhino' && item.role !== 'cad') invalid();
+    return {
+      fileKey: shortText(item.fileKey, 1024),
+      role: item.role as string,
+      serverPath: shortText(item.serverPath, 1024),
+      userName: shortText(item.userName, ACTOR_NAME_MAX),
+      checkedOutAt: shortText(item.checkedOutAt, 40),
+    };
+  });
+  await db.batch([
+    db
+      .prepare('DELETE FROM project_checkouts WHERE project_id=? AND pc_id=?')
+      .bind(project, row.id),
+    ...list.map((item) =>
+      db
+        .prepare(
+          `INSERT OR REPLACE INTO project_checkouts(project_id,file_key,role,server_path,pc_id,user_name,checked_out_at,released_at)
+           VALUES(?,?,?,?,?,?,?,NULL)`,
+        )
+        .bind(
+          project,
+          item.fileKey,
+          item.role,
+          item.serverPath,
+          row.id,
+          item.userName,
+          item.checkedOutAt,
+        ),
+    ),
   ]);
   return json({ stored: list.length });
 }

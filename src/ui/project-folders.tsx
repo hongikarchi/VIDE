@@ -7,13 +7,16 @@
 // 자료 정리 (knowledge-collect.tsx, SPEC-08.9) always shows (without a folder it says how to start);
 // with a project folder 도면 관계 (xref-tree.tsx,
 // SPEC-01.11 11) sit under the list, then 도곽 미리보기 (drawing-sheets.tsx, SPEC-14.15) once
-// 도면 관계 has read drawings.
+// 도면 관계 has read drawings. [폴더로 만들기]·[폴더 열기] (workspace-setup.tsx, SCR-35) sit under the
+// head.
 import { useEffect, useRef, useState } from 'react';
 import { api } from './gateway.ts';
 import { remoteSession } from './remote-panel.ts';
 import { KnowledgeCollect } from './knowledge-collect.tsx';
 import { XrefTree } from './xref-tree.tsx';
 import { DrawingSheets } from './drawing-sheets.tsx';
+import { WorkspaceSetup } from './workspace-setup.tsx';
+import { ServerFiles } from './workspace-checkout.tsx';
 
 interface Folder {
   path: string;
@@ -29,7 +32,7 @@ interface WebView {
 const webview = () => (window as unknown as { chrome?: { webview?: WebView } }).chrome?.webview;
 
 /** Whether the program window's shell answers `folder:pick` (its state says `folderPick`). */
-function useFolderPicker() {
+export function useFolderPicker() {
   const [picker, setPicker] = useState(false);
   useEffect(() => {
     const view = webview();
@@ -48,7 +51,7 @@ function useFolderPicker() {
  * The Windows folder picker of the program window (the Explorer-style dialog with 즐겨찾기): the
  * chosen path, null when cancelled, or the shell's message when no picker could open.
  */
-function pickFolder(): Promise<{ path: string | null; error?: string }> {
+export function pickFolder(): Promise<{ path: string | null; error?: string }> {
   const view = webview()!;
   const id = Math.random().toString(36).slice(2);
   return new Promise((resolve) => {
@@ -117,6 +120,19 @@ export function ProjectFolders({
         path: value,
       })) as { folders: Folder[] };
       setFolders(next.folders);
+      // A connected folder with no role memory yet: the AI proposes roles in the chat (T-309).
+      if (action === 'add')
+        void api(`/projects/${encodeURIComponent(projectId)}/workspace/schema-pending`)
+          .then((value) => {
+            const pending = value as { pending?: boolean; folder?: string };
+            if (pending.pending)
+              window.dispatchEvent(
+                new CustomEvent('vide:workspace-schema-propose', {
+                  detail: { projectId, folder: pending.folder },
+                }),
+              );
+          })
+          .catch(() => {});
       return true;
     } catch (error) {
       const code = (error as { code?: string }).code ?? '';
@@ -190,6 +206,8 @@ export function ProjectFolders({
           </button>
         )}
       </div>
+      {/* 작업 폴더 만들기·열기 (SCR-35, PLAN-52 T-308): hidden in a remote session. */}
+      <WorkspaceSetup onAddFolder={(value) => change('add', value)} />
       {typing ? (
         <form
           className="dash-folder-form"
@@ -247,6 +265,8 @@ export function ProjectFolders({
           <ul className="dash-folders" aria-label="프로젝트 폴더 목록">
             {own.map(row)}
           </ul>
+          {/* 서버 파일: 체크아웃·서버에 반영·작업 중 (SCR-37, PLAN-52 T-310~T-312). */}
+          <ServerFiles projectId={projectId} remote={!!remote} />
           <KnowledgeCollect projectId={projectId} />
           <XrefTree projectId={projectId} />
           <DrawingSheets projectId={projectId} />

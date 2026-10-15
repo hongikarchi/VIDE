@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 /** v5 and later cannot be opened by an older installation (UNSUPPORTED_SCHEMA); see ARCH-03 §10.1. */
-export const schemaVersion = 17;
+export const schemaVersion = 18;
 export const baselineSchema = `
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
@@ -230,6 +230,16 @@ const agendaAuthors = `ALTER TABLE agenda_items ADD COLUMN createdBy TEXT;
 ALTER TABLE agenda_items ADD COLUMN createdByName TEXT;
 ALTER TABLE agenda_items ADD COLUMN updatedBy TEXT;
 ALTER TABLE agenda_items ADD COLUMN updatedByName TEXT;`;
+// 체크아웃 기록 (SPEC-01.13 9, ARCH-01 「작업 폴더(PLAN-52)」, T-310~T-312): one row per local copy of a
+// server file taken by this PC — the role ('rhino'|'cad'), the server and local real paths, who and
+// where, when it was taken and released (NULL while 작업 중), and the server file's mtime and SHA-256
+// at checkout (the [서버에 반영] check compares them with the server file now).
+const checkouts = `CREATE TABLE IF NOT EXISTS checkouts(projectId TEXT NOT NULL REFERENCES projects(id),
+  id TEXT NOT NULL, role TEXT NOT NULL, server_path TEXT NOT NULL, local_path TEXT NOT NULL,
+  pc_id TEXT NOT NULL, user_id TEXT NOT NULL, checked_out_at TEXT NOT NULL, released_at TEXT,
+  server_mtime_at_checkout TEXT NOT NULL, server_hash_at_checkout TEXT NOT NULL,
+  PRIMARY KEY(projectId, id)) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS checkouts_server ON checkouts(projectId, server_path COLLATE NOCASE);`;
 export const migrations: Migration[] = [
   { version: 2, sql: baselineSchema },
   { version: 3, sql: hiddenRequests },
@@ -247,6 +257,7 @@ export const migrations: Migration[] = [
   { version: 15, sql: drawingLayers },
   { version: 16, sql: complianceRoles },
   { version: 17, sql: agendaAuthors },
+  { version: 18, sql: checkouts },
 ];
 
 /** Caller holds the exclusive controller lock. Never migrates user model files. */

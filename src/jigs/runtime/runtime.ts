@@ -71,6 +71,21 @@ export interface RuntimeOptions {
    * been produced; the step then works without it.
    */
   jigOutput?: (projectId: string, from: { jig: string; output: string }) => Promise<unknown>;
+  /**
+   * A run that kept its results (not preview/selftest/superseded): the engine copies them into the
+   * project's work folder (PLAN-52 T-313). Called after the rows are saved; must not throw.
+   */
+  onRun?: (event: JigRunEvent) => void;
+}
+/** What `onRun` receives: the instance and the outputs this run produced or reused. */
+export interface JigRunEvent {
+  projectId: string;
+  instanceId: string;
+  jigId: string;
+  title: string;
+  mode: RunMode;
+  status: JigInstanceRow['status'];
+  outputs: Record<string, unknown>;
 }
 
 /** One bake record's objects still made by the jig (for links from other features, T-220). */
@@ -261,6 +276,7 @@ export class JigRuntime {
   private readonly hooks: GateContext['hooks'];
   private readonly childOptions: ChildRunnerOptions;
   private readonly jigOutput: RuntimeOptions['jigOutput'];
+  private readonly onRun: RuntimeOptions['onRun'];
   private readonly runners = new Map<string, StepRunner>();
   private readonly generations = new Map<string, number>();
   private readonly graphs = new Map<string, StepGraph>();
@@ -272,6 +288,7 @@ export class JigRuntime {
     this.hooks = options.hooks;
     this.childOptions = options.child ?? {};
     this.jigOutput = options.jigOutput;
+    this.onRun = options.onRun;
   }
 
   // --- files ---------------------------------------------------------------------------------
@@ -1476,6 +1493,20 @@ export class JigRuntime {
         ? 'stale'
         : 'computed';
     this.save(instance, body, status);
+    if (this.onRun && input.mode !== 'selftest')
+      try {
+        this.onRun({
+          projectId,
+          instanceId,
+          jigId: instance.jigId,
+          title: instance.title,
+          mode: input.mode,
+          status,
+          outputs: report.outputs,
+        });
+      } catch {
+        /* the work-folder copy never fails a run */
+      }
     // A step asked to write overrides (e.g. 선정 단면 적용, SPEC-06.12): upsert them by id, which
     // makes every step stale, and compute once more so the screen shows the new model at once.
     // The confirmation that led here no longer matches, so the second run asks nothing again.

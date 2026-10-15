@@ -12,7 +12,15 @@ import { isJigIcon } from '../contracts/jig-icons.ts';
 import { createSlice } from './store/core.ts';
 import { applyScreenFold, commitNow } from './store/layout.ts';
 
-export type FixedWorkspace = 'dashboard' | 'model' | 'data' | 'notes' | 'jig' | 'make' | 'output';
+export type FixedWorkspace =
+  | 'dashboard'
+  | 'model'
+  | 'data'
+  | 'files'
+  | 'notes'
+  | 'jig'
+  | 'make'
+  | 'output';
 /** A sub-view of the 산출물 tab (src/ui/output-tab.tsx). */
 export type OutputView = 'sheet' | 'report' | 'review' | 'render';
 /**
@@ -53,6 +61,8 @@ const FIXED: {
 }[] = [
   { id: 'dashboard', label: '대시보드', ready: true },
   { id: 'data', label: '자료', ready: true },
+  // 파일 (PLAN-52 T-319, SCR-38): the work folder's files as a list or a map of their relations.
+  { id: 'files', label: '파일', ready: true },
   // 노트·일지 (SPEC-10, user request 2026-10-06): the members' shared notes from the account site.
   { id: 'notes', label: '노트·일지', ready: true },
   { id: 'model', label: '모델', ready: true },
@@ -148,6 +158,7 @@ function emit(closed?: ContextTab) {
     tabs.active === 'jig' ||
     tabs.active === 'output' ||
     tabs.active === 'data' ||
+    tabs.active === 'files' ||
     tabs.active === 'notes' ||
     tabs.active === 'make'
       ? tabs.active
@@ -166,6 +177,9 @@ function emit(closed?: ContextTab) {
   // The 자료 screen also loads when its tab is first shown (src/ui/facts-tab.tsx, PLAN-22 T-065).
   if (tabs.active === 'data' && projectId)
     void import('./facts-tab.tsx').then((screen) => screen.showFacts(projectId!));
+  // The 파일 screen (src/ui/files-tab.tsx, PLAN-52 T-319) loads when its tab is first shown.
+  if (tabs.active === 'files' && projectId)
+    void import('./files-tab.tsx').then((screen) => screen.showFiles(projectId!));
   // The 노트·일지 screen (src/ui/notes-tab.tsx, SPEC-10) loads its block editor when first shown.
   if (tabs.active === 'notes' && projectId)
     void import('./notes-tab.tsx').then((screen) => screen.showNotes(projectId!));

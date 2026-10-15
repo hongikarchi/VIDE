@@ -52,6 +52,7 @@ import { ConversationStore } from '../core/conversation-store.ts';
 import { isItemList } from '../core/model-store.ts';
 import { orderLayerPaths, type HostLayer } from '../core/layer-tree.ts';
 import { skillCatalog } from './skill-catalog.ts';
+import { copyProjectJig, workspaceOutputsFor } from './workspace-outputs.ts';
 import { diagnose, type DiagnoseInputs } from '../../extensions/jigs/s06-frame/steps/diagnose.ts';
 import { ROLE_KEYS } from '../../extensions/jigs/s06-frame/steps/labels.ts';
 import {
@@ -277,6 +278,9 @@ export function jigRuntimeFor(workspace: Workspace, dataDirectory: string): JigR
       registry,
       jigOutput: async (projectId, from) =>
         outputProviders.get(workspace)?.get(`${from.jig}#${from.output}`)?.(projectId, from),
+      // 작업 폴더의 jig 결과 사본 (PLAN-52 T-313): fire-and-forget, failures go to the log.
+      onRun: (event) =>
+        void workspaceOutputsFor(workspace.store).writeJigResult(event.projectId, event),
     });
     runtimes.set(workspace, runtime);
   }
@@ -356,6 +360,8 @@ export async function jigRoutes(
       pinned: store().pin(projectId, jig.id, jig.version),
       capabilities: jig.manifest.capabilities,
     });
+    if (jig.id.startsWith('project/'))
+      void copyProjectJig(workspaceOutputsFor(workspace.store), projectId, jig);
     return true;
   }
   // [삭제] on the jig list (T2 confirmed there): the jig leaves this project's list. The installed
@@ -1201,6 +1207,27 @@ async function instanceReport(
   };
   // A frame that says when it may be exported (SPEC-12.13 4) gives no page while it may not.
   const html = model.exportRefused?.length ? '' : renderJigReport(model, origin);
+  // 작업 폴더의 검토용 보고서 사본 (PLAN-52 T-313): next to the run's data. Waited for a moment
+  // so the answer can say where it went (the `vide export` CLI reuses that folder); a slow write
+  // finishes on its own.
+  const written = html
+    ? workspaceOutputsFor(workspace.store).writeJigReport(
+        projectId,
+        { jigId: view.jig.id, instanceId, title: view.title, outputs },
+        {
+          reportId,
+          title: frame.title === frame.id ? model.title : frame.title,
+          html,
+          single: reportFrames(jig).length === 1,
+        },
+      )
+    : null;
+  const copy = written
+    ? await Promise.race([
+        written,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000).unref?.()),
+      ])
+    : null;
   return {
     report: { ...frame, title: frame.title === frame.id ? model.title : frame.title },
     instance: { id: view.id, title: view.title, jig: view.jig },
@@ -1209,5 +1236,7 @@ async function instanceReport(
     model,
     /** The exported page: self-contained, no scripts. */
     html,
+    /** Where the 검토용 copy went in the work folder (absolute), or null (none, or still writing). */
+    copy,
   };
 }

@@ -478,6 +478,19 @@ export function showReferenceCard(options: ReferenceCardOptions) {
     routeRow: false,
   });
 }
+/**
+ * 요청 전 영향 미리보기 (PLAN-52 T-319, SCR-39): shown in the slot only when it is free or already
+ * holds the strip, so it never covers a proposal or a check.
+ */
+export function showImpactCard(content: Extract<RouteCardContent, { kind: 'impact' }>) {
+  const current = workState.routeCard.content;
+  if (current && current.kind !== 'impact') return;
+  setRouteCard({ content, hidden: false, routeRow: false, referenceCheck: false });
+}
+/** Takes the 영향 띠 away (other cards stay). */
+export function hideImpactCard() {
+  if (workState.routeCard.content?.kind === 'impact') hideRouteCard();
+}
 export function hideRouteCard() {
   setRouteCard({ content: null, hidden: true, routeRow: false, referenceCheck: false });
 }

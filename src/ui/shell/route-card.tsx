@@ -5,6 +5,7 @@ import { useStore } from '../store/core.ts';
 import { workState, type RouteCardContent } from '../store/work.ts';
 import type { ReferenceCardOptions } from '../reference-check.ts';
 import { PartBoundary } from './part-boundary.tsx';
+import '../impact-strip.css';
 
 function ReferenceCheckCard({ options }: { options: ReferenceCardOptions }) {
   const { found } = options;
@@ -116,6 +117,19 @@ function Content({ content }: { content: RouteCardContent }) {
       );
     case 'reference':
       return <ReferenceCheckCard options={content.options} />;
+    case 'impact':
+      return (
+        <p className="impact-strip-line">
+          <strong>영향받는 파일 {content.count}</strong>
+          <span className="impact-strip-files">
+            {content.parts.map((part) => ` · ${part}`).join('')}
+            {content.more ? ` … 외 ${content.more}` : ''}
+          </span>
+          <button type="button" className="link-button impact-strip-map" onClick={content.showMap}>
+            지도에서 보기
+          </button>
+        </p>
+      );
   }
 }
 
@@ -125,6 +139,7 @@ export function RouteCard() {
     'route-card',
     card.routeRow ? 'route-row' : '',
     card.referenceCheck ? 'reference-check' : '',
+    card.content?.kind === 'impact' ? 'impact-strip' : '',
   ]
     .filter(Boolean)
     .join(' ');

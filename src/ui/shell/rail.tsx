@@ -92,6 +92,15 @@ export const Rail = memo(function Rail() {
           onClick={() => openTarget('data')}
         />
         <button
+          id="rail-files"
+          data-workspace-target="files"
+          title="파일 · 작업 폴더의 파일과 서로의 관계"
+          aria-label="파일"
+          data-icon="folder-open"
+          aria-pressed={pressed('files')}
+          onClick={() => openTarget('files')}
+        />
+        <button
           id="rail-notes"
           data-workspace-target="notes"
           title="노트·일지 · 구성원이 함께 쓰는 노트"

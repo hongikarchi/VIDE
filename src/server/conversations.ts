@@ -45,6 +45,19 @@ import {
   type TurnQuestion,
 } from './turn-output.ts';
 import type { JigInputResult } from './jig-input.ts';
+import { ProjectFolders } from '../core/project-folders.ts';
+import { WORKSPACE_ROLES } from '../core/workspace-template.ts';
+import {
+  confirmWorkspaceSchema,
+  isSchemaQuestion,
+  memoryFromChoice,
+  schemaPending,
+  ROLE_LABELS,
+  SCHEMA_OPTIONS,
+  type SchemaOption,
+  type SchemaRecord,
+  type SchemaSources,
+} from './workspace-schema.ts';
 
 type Provider = 'claude-cli' | 'codex-cli';
 type Kind = (typeof conversationKinds)[number];
@@ -298,6 +311,10 @@ const answerInput = z
             questionId: questionKey,
             optionId: questionKey.optional(),
             text: z.string().trim().min(1).max(500).optional(),
+            /** A folder role card's rows the person set (SPEC-01.13 8): row path → role or none. */
+            roles: z
+              .record(z.string().min(1).max(300), z.enum(WORKSPACE_ROLES).nullable())
+              .optional(),
           })
           .strict()
           .refine((answer) => answer.optionId || answer.text),
@@ -326,6 +343,38 @@ const inputQuestionBody = z
     ),
   })
   .passthrough();
+/** A workspace_schema_propose card's record (agent-tools.ts, workspace-schema.ts). */
+const schemaQuestionBody = z
+  .object({
+    appAction: z.literal('workspace-schema'),
+    questionId: questionKey,
+    root: z.string().min(1),
+    workspaceRoot: z.string().min(1),
+    proposedAt: z.string(),
+    folders: z.array(
+      z
+        .object({
+          path: z.string().min(1),
+          depth: z.number(),
+          guess: z.enum(WORKSPACE_ROLES).nullable(),
+          candidates: z.array(z.enum(WORKSPACE_ROLES)),
+          reason: z.string(),
+        })
+        .passthrough(),
+    ),
+    missing: z.array(z.enum(WORKSPACE_ROLES)),
+    options: z.record(z.string(), z.object({ label: z.string() }).passthrough()),
+  })
+  .passthrough();
+/** A folder role card's answer, matched to its record (SPEC-01.13 8). */
+export interface SchemaAnswer {
+  questionId: string;
+  record: SchemaRecord;
+  option: SchemaOption;
+  roles?: Record<string, (typeof WORKSPACE_ROLES)[number] | null>;
+  /** Not stored: the card shown differs from the record, or a [권장값으로 진행] assumption. */
+  hold?: 'mismatch' | 'recommended';
+}
 /** The question and answer IDs in the ledger (SPEC-02.19 6: a decided thing is not asked again). */
 function askedQuestions(items: LedgerItem[]) {
   const ids = new Set<string>();
@@ -1328,6 +1377,7 @@ export class ConversationService {
       }
     if (!open.size) throw new DomainError('NOT_FOUND');
     const answers: TurnAnswer[] = [];
+    const roles = new Map<string, Record<string, (typeof WORKSPACE_ROLES)[number] | null>>();
     for (const given of input.answers) {
       const question = open.get(given.questionId);
       if (!question || answers.some((a) => a.question.id === question.id))
@@ -1337,7 +1387,9 @@ export class ConversationService {
         : undefined;
       if ((given.optionId && !option) || (given.text && !question.allowFree))
         throw new DomainError('INVALID_INPUT');
+      if (given.roles && !isSchemaQuestion(question.id)) throw new DomainError('INVALID_INPUT');
       answers.push({ question, option, text: given.text, recommended: false });
+      if (given.roles) roles.set(question.id, given.roles);
     }
     if (input.recommended)
       for (const question of open.values())
@@ -1358,6 +1410,7 @@ export class ConversationService {
           title: answer.question.title,
           ...(answer.option ? { optionId: answer.option.id, label: answer.option.label } : {}),
           ...(answer.text ? { text: answer.text } : {}),
+          ...(roles.has(answer.question.id) ? { roles: roles.get(answer.question.id) } : {}),
           by: answer.recommended ? 'recommended' : 'user',
         },
       }),
@@ -1369,6 +1422,95 @@ export class ConversationService {
       items,
       askedIn: input.requestId,
       inputs: this.inputQuestions(conversationId, answers),
+      schemas: this.schemaQuestions(conversationId, answers, roles),
+    };
+  }
+  /**
+   * The answers to folder role cards (workspace_schema_propose, SPEC-01.13 8), matched to the card
+   * VIDE recorded. `hold` keeps an answer from the memory: a card that differs from the record
+   * (`mismatch`) or a [권장값으로 진행] assumption (`recommended`) — only a person's choice stores.
+   */
+  private schemaQuestions(
+    conversationId: string,
+    answers: readonly TurnAnswer[],
+    roles: ReadonlyMap<string, Record<string, (typeof WORKSPACE_ROLES)[number] | null>>,
+  ): SchemaAnswer[] {
+    const asked = new Map<string, SchemaRecord>();
+    for (const item of this.store.ledger(conversationId, { current: true })) {
+      const body = schemaQuestionBody.safeParse(item.body);
+      if (item.kind === 'result-ref' && body.success)
+        asked.set(body.data.questionId, body.data as unknown as SchemaRecord);
+    }
+    return answers.flatMap(({ question, option, recommended }) => {
+      const record = asked.get(question.id);
+      if (!record || !option || !Object.hasOwn(SCHEMA_OPTIONS, option.id)) return [];
+      const same =
+        question.options.length === Object.keys(record.options).length &&
+        question.options.every(
+          (shown) => record.options[shown.id as SchemaOption]?.label === shown.label,
+        );
+      const hold = !same
+        ? ('mismatch' as const)
+        : recommended
+          ? ('recommended' as const)
+          : undefined;
+      const given = roles.get(question.id);
+      return [
+        {
+          questionId: question.id,
+          record,
+          option: option.id as SchemaOption,
+          ...(given ? { roles: given } : {}),
+          ...(hold ? { hold } : {}),
+        },
+      ];
+    });
+  }
+  /** The project's folders, for the folder role memory (SPEC-01.13 8). */
+  schemaSources(): SchemaSources {
+    return {
+      folders: new ProjectFolders(this.db),
+      isProject: (id) => this.db.listProjects().some((project) => project.id === id),
+    };
+  }
+  /**
+   * The rows of a folder role card (Design SCR-36), as recorded when the AI made it, and what the
+   * person chose on it once answered. NOT_FOUND for another card.
+   */
+  schemaCard(projectId: string, conversationId: string, questionId: string) {
+    this.store.get(projectId, conversationId);
+    let record: SchemaRecord | undefined;
+    let answer: { optionId?: string; roles?: unknown; by?: string } | undefined;
+    let stored: { text?: string; ok?: boolean } | undefined;
+    for (const item of this.store.ledger(conversationId, { current: true })) {
+      const body = item.body as Record<string, unknown> | null;
+      if (item.kind === 'result-ref') {
+        const parsed = schemaQuestionBody.safeParse(body);
+        if (parsed.success && parsed.data.questionId === questionId)
+          record = parsed.data as unknown as SchemaRecord;
+        if (body?.appAction === 'workspace-schema-confirm' && body.questionId === questionId)
+          stored = { text: String(body.summary ?? ''), ok: true };
+      }
+      if (item.kind === 'answer' && body?.questionId === questionId) answer = body as typeof answer;
+    }
+    if (!record) throw new DomainError('NOT_FOUND');
+    return {
+      questionId,
+      root: record.root,
+      proposedAt: record.proposedAt,
+      folders: record.folders,
+      missing: record.missing,
+      roles: ROLE_LABELS,
+      ...(answer
+        ? {
+            answer: {
+              option: answer.optionId ?? null,
+              roles: answer.roles ?? null,
+              by: answer.by ?? 'user',
+            },
+          }
+        : {}),
+      ...(stored ? { stored } : {}),
     };
   }
   /**
@@ -1572,6 +1714,62 @@ export interface ConversationRouteContext {
   ) => Promise<JigInputResult>;
 }
 
+/** Why a folder role answer was not stored, in the person's words (Design SCR-36). */
+const schemaRefusals: Record<string, string> = {
+  NO_WORKSPACE: '작업 폴더가 없어 기억할 곳이 없습니다',
+  WORKSPACE_READ_ONLY: '작업 폴더의 설정 파일이 규모검토 형식이라 고쳐 쓰지 않습니다',
+  WORKSPACE_PROJECT_CONFLICT: '작업 폴더가 다른 프로젝트의 것입니다',
+  WORKSPACE_CONFIG_INVALID: '작업 폴더의 설정 파일을 읽지 못했습니다',
+  NOT_FOUND: '그 폴더가 더는 프로젝트 폴더가 아닙니다',
+  INVALID_INPUT: '고른 값이 카드와 맞지 않습니다',
+};
+/**
+ * Stores a folder role card's answer (`workspace_schema_confirm`, SPEC-01.13 8): only the person's
+ * own choice on the recorded card; [나중에] stores nothing. Null when there is nothing to report.
+ */
+async function applySchemaAnswer(
+  service: ConversationService,
+  projectId: string,
+  asked: SchemaAnswer,
+  remote: boolean | undefined,
+): Promise<(Omit<AppliedAnswer, 'questionId'> & { paths?: Record<string, string> }) | null> {
+  if (asked.option === 'later') return null;
+  if (asked.hold)
+    return {
+      ok: false,
+      held: asked.hold,
+      text:
+        asked.hold === 'mismatch'
+          ? '카드가 달라 기억하지 않음'
+          : '권장값은 가정이라 기억하지 않음 — 카드에서 직접 고르세요',
+    };
+  // The folder list and the manifest change only on this PC (SPEC-01.13 1).
+  if (remote) return { ok: false, text: '원격 세션에서는 기억하지 않습니다' };
+  try {
+    const chosen = memoryFromChoice(asked.record, { option: asked.option, roles: asked.roles });
+    if (!chosen) return null;
+    const done = await confirmWorkspaceSchema(service.schemaSources(), projectId, {
+      root: asked.record.root,
+      paths: chosen.paths,
+      proposedAt: asked.record.proposedAt,
+    });
+    const notes = [
+      ...(chosen.skipped.length ? [`고르지 않은 ${chosen.skipped.length}곳은 기억하지 않음`] : []),
+      ...(chosen.extra.length ? [`같은 역할의 다른 ${chosen.extra.length}곳은 역할 없이 둠`] : []),
+    ];
+    const missing = asked.record.missing
+      .filter((role) => !chosen.paths[role])
+      .map((role) => `${ROLE_LABELS[role]}=반영할 때 묻기`);
+    return {
+      ok: true,
+      text: [done.summary, ...missing].join(' · ') + (notes.length ? ` (${notes.join(', ')})` : ''),
+      paths: chosen.paths as Record<string, string>,
+    };
+  } catch (error) {
+    const code = error instanceof DomainError ? error.code : '';
+    return { ok: false, text: schemaRefusals[code] ?? '기억하지 못했습니다' };
+  }
+}
 /** Why an input card's answer was not set on the role (SPEC-07.18 9.4). */
 function heldText(held: NonNullable<AppliedAnswer['held']>, layers: readonly string[]) {
   const named = layers.join(', ');
@@ -1601,6 +1799,24 @@ export async function conversationRoutes(
       if (remote) throw new DomainError('FORBIDDEN');
       send(200, service.saveLimits(await body(request)));
     } else return false;
+    return true;
+  }
+  // Whether a connected folder waits for a role proposal (T-309): the dashboard asks after a folder
+  // is added and, when one waits, sends the request that makes the AI propose.
+  const pending = /^\/api\/v1\/projects\/([^/]+)\/workspace\/schema-pending$/.exec(url.pathname);
+  if (pending) {
+    if (request.method !== 'GET') return false;
+    send(200, await schemaPending(service.schemaSources(), pending[1]));
+    return true;
+  }
+  // A folder role card's rows (Design SCR-36): the card itself carries only its three answers.
+  const schemaCard =
+    /^\/api\/v1\/projects\/([^/]+)\/conversations\/([^/]+)\/workspace-schema\/([a-zA-Z0-9_-]{1,40})$/.exec(
+      url.pathname,
+    );
+  if (schemaCard) {
+    if (request.method !== 'GET') return false;
+    send(200, service.schemaCard(schemaCard[1], schemaCard[2], schemaCard[3]));
     return true;
   }
   const route =
@@ -1740,6 +1956,37 @@ export async function conversationRoutes(
           });
       }
     if (applied.length) answered.body = formatAnswers(answered.answers, applied);
+    // A folder role card's answer is the person's confirmation (SPEC-01.13 8): stored now, from
+    // the recorded rows only; the answer turn reports it. workspace_schema_confirm is this path.
+    const remembered: AppliedAnswer[] = [];
+    for (const asked of answered.schemas) {
+      const text = await applySchemaAnswer(service, projectId, asked, remote);
+      if (!text) continue;
+      remembered.push({ questionId: asked.questionId, ...text });
+      if (text.ok)
+        service.addLedger(projectId, conversationId, {
+          kind: 'result-ref',
+          requestId: next,
+          body: {
+            appAction: 'workspace-schema-confirm',
+            by: 'user',
+            via: 'question-card',
+            questionId: asked.questionId,
+            root: asked.record.root,
+            paths: text.paths,
+            summary: text.text,
+          },
+        });
+    }
+    if (remembered.length)
+      answered.body = [
+        answered.body,
+        ...remembered.map((r) =>
+          r.ok
+            ? `${r.text}. 사람이 확정한 값만 기억했습니다. 기억한 내용을 한 줄로 알리세요.`
+            : `폴더 역할을 기억하지 않았습니다: ${r.text}. 확정되지 않은 추정에 기대지 마세요.`,
+        ),
+      ].join('\n');
     try {
       // `permission: 'review'` (Plan) is the fallback; submit sets the asked turn's mode.
       const created = await submit(
@@ -1760,6 +2007,16 @@ export async function conversationRoutes(
       send(201, {
         request: created,
         answers: answered.items,
+        ...(remembered.length
+          ? {
+              remembered: remembered.map(({ questionId, ok, text, held }) => ({
+                questionId,
+                ok,
+                text,
+                ...(held ? { held } : {}),
+              })),
+            }
+          : {}),
         ...(applied.length
           ? {
               applied: applied.map(({ questionId, ok, text, held, result }) => ({

@@ -67,6 +67,7 @@ export const projectTables: Record<string, string> = {
   compliance_roles: 'projectId=?',
   compliance_proposals: 'projectId=?',
   compliance_roles_version: 'projectId=?',
+  checkouts: 'projectId=?',
   drawing_backflow_baselines: 'projectId=?',
   object_versions: 'projectId=?',
   sync_manifests: 'projectId=?',

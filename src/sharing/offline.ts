@@ -181,7 +181,7 @@ export async function offlineRoute(
   // SPEC-04.10 6); another account gets PROJECT_NOT_FOUND (404) from the membership check.
   await membership(db, project, actor.id);
   // 할 일 and the work history summary (PLAN-33), under the same member rule.
-  if (path[0] === 'agenda' || path[0] === 'history')
+  if (path[0] === 'agenda' || path[0] === 'history' || path[0] === 'checkouts')
     return summaryRoute(request, env, actor, project, path);
   if (path[0] === 'snapshots') {
     if (path.length === 1 && request.method === 'GET') {

@@ -1,0 +1,117 @@
+/* 작업 폴더 만들기·열기 (Design SCR-35): a panel in the 프로젝트 폴더 section. Blocked states are
+   one warning line; no colored side bars. */
+.ws-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.ws-setup-actions {
+  display: flex;
+  gap: 12px;
+}
+.ws-setup-reason {
+  margin: 0;
+  font-size: 12px;
+  color: var(--warn);
+}
+.ws-setup-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+.ws-setup-panel h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.ws-setup-panel p {
+  margin: 0;
+  font-size: 12px;
+}
+.ws-setup-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  font: 12px var(--font-mono);
+  color: var(--text-2);
+}
+.ws-setup-note,
+.ws-tree-use {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.ws-setup-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.ws-setup-name input {
+  flex: 1;
+  min-width: 0;
+}
+.ws-tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: var(--hairline) solid var(--border-subtle);
+}
+.ws-tree li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 4px 0 4px 12px;
+  border-bottom: var(--hairline) solid var(--border-subtle);
+}
+.ws-tree-fixed .ws-tree-files {
+  font: 12px var(--font-mono);
+  color: var(--text-3);
+}
+.ws-tree-name {
+  width: 11em;
+  padding: 2px 6px;
+  font: 12px var(--font-mono);
+}
+.ws-tree-warn {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: var(--warn);
+}
+.ws-setup-git {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 2px 6px;
+  font-size: 12px;
+}
+.ws-setup-git > input {
+  margin: 0;
+}
+.ws-setup-git > .ws-tree-use {
+  grid-column: 2;
+}
+.ws-setup-git[data-disabled] > span:first-of-type {
+  color: var(--text-3);
+}
+.ws-setup-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ws-progress {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

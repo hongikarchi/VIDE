@@ -28,6 +28,7 @@ const { stdout: tracked } = await exec('git', ['ls-files', '-z'], {
 });
 await copyPackageSources(root, join(directory, 'app'), tracked.split('\0').filter(Boolean), [
   'src/ai',
+  'src/cli',
   'src/core',
   'src/server',
   'src/ui',
@@ -41,6 +42,13 @@ await copyPackageSources(root, join(directory, 'app'), tracked.split('\0').filte
 await cp(join(root, 'dist', 'ui'), join(directory, 'app', 'dist', 'ui'), { recursive: true });
 await mkdir(join(directory, 'app', 'src', 'desktop'), { recursive: true });
 await copyFile(join(source, 'backup.mjs'), join(directory, 'app', 'src', 'desktop', 'backup.mjs'));
+// The terminal entry point (PLAN-52 T-315): app\bin\vide.cmd runs app\src\cli\vide.ts with the
+// bundled runtime\node.exe. Copied by name: `bin` folders are refused as package sources.
+// Release sources come from the Git index only: an uncommitted shim is not shipped.
+if (!tracked.split('\0').includes('src/cli/vide.cmd'))
+  throw new Error('src/cli/vide.cmd is not tracked by Git');
+await mkdir(join(directory, 'app', 'bin'), { recursive: true });
+await copyFile(join(root, 'src', 'cli', 'vide.cmd'), join(directory, 'app', 'bin', 'vide.cmd'));
 
 await exec(
   'dotnet',

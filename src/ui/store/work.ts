@@ -56,7 +56,18 @@ export type RouteCardContent =
       progress: (() => void) | undefined;
       toChat: () => void;
     }
-  | { kind: 'reference'; options: ReferenceCardOptions };
+  | { kind: 'reference'; options: ReferenceCardOptions }
+  /**
+   * 요청 전 영향 미리보기 (PLAN-52 T-319, Design SCR-39): the files a request would touch, one line
+   * over the send button; it never blocks sending and goes when the request is sent.
+   */
+  | {
+      kind: 'impact';
+      count: number;
+      parts: string[];
+      more: number;
+      showMap: () => void;
+    };
 /**
  * The proposal slot. The two classes are kept as the old code added and removed them (a jig start
  * row adds `route-row`, the reference check adds `reference-check` and removes `route-row`, hiding

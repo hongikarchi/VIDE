@@ -13,6 +13,7 @@ import { DRAFT_LIMITS, DRAFT_TEMPLATES, JigDrafts, failureReason } from '../jigs
 import { JigInvalidError } from '../jigs/runtime/loader.ts';
 import type { ConversationService } from './conversations.ts';
 import { jigRuntimeFor } from './jig-routes.ts';
+import { copyProjectJig, workspaceOutputsFor } from './workspace-outputs.ts';
 
 export interface MakeRouteContext {
   workspace: Workspace;
@@ -170,7 +171,14 @@ export async function makeRoutes(
     const input = pinInput.parse(await body(request));
     if (!input.confirm) throw new DomainError('CONFIRMATION_REQUIRED');
     try {
-      send(200, await drafts.pin(projectId, draftId, input));
+      const pinned = await drafts.pin(projectId, draftId, input);
+      send(200, pinned);
+      // 작업 폴더의 도구 역할에 설명서·구성 사본 (PLAN-52 T-313, SPEC-07.3).
+      void copyProjectJig(workspaceOutputsFor(workspace.store), projectId, {
+        id: pinned.id,
+        version: pinned.version,
+        dir: pinned.path,
+      });
     } catch (error) {
       if (error instanceof JigInvalidError) {
         send(422, { code: 'JIG_INVALID', issues: error.issues });

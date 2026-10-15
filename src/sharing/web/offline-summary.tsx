@@ -324,3 +324,45 @@ export function OfflineHistory({
     </section>
   );
 }
+
+const checkoutsSchema = z.object({
+  items: z.array(
+    z.object({
+      name: z.string(),
+      role: z.string(),
+      userName: z.string(),
+      checkedOutAt: z.string(),
+    }),
+  ),
+});
+/**
+ * '작업 중' (PLAN-52 T-310, Design SCR-37): who has which server file checked out on their PC,
+ * read-only. Nothing is shown while nobody has one.
+ */
+export function OfflineCheckouts({ projectId }: { projectId: string }) {
+  const [items, setItems] = useState<z.infer<typeof checkoutsSchema>['items']>([]);
+  useEffect(() => {
+    void api(`/projects/${projectId}/checkouts`)
+      .then((value) => setItems(checkoutsSchema.parse(value).items))
+      .catch(() => setItems([]));
+  }, [projectId]);
+  if (!items.length) return null;
+  return (
+    <section className="offline-section offline-checkouts" aria-label="작업 중">
+      <div className="offline-section-head">
+        <h2>작업 중</h2>
+        <small className="muted">보기 전용</small>
+      </div>
+      <ul className="offline-history-list">
+        {items.map((item) => (
+          <li key={`${item.name}-${item.userName}-${item.checkedOutAt}`}>
+            <strong>{item.name}</strong>
+            <small className="muted">
+              {item.role === 'cad' ? '도면' : '모델'} · {item.userName} · {when(item.checkedOutAt)}
+            </small>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}

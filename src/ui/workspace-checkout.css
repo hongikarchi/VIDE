@@ -1,0 +1,161 @@
+/* 체크아웃 · 서버에 반영 · 작업 중 (Design SCR-37). Server and local rows are joined by one thin
+   line (--border), the 작업 중 badge is a soft background; no colored side bars. */
+.wsco {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.wsco-role h5 {
+  margin: 4px 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+.wsco-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wsco-file {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.wsco-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'name state' 'time state';
+  column-gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+.wsco-row > .wsco-name {
+  grid-area: name;
+}
+.wsco-row > .wsco-muted {
+  grid-area: time;
+}
+.wsco-row > .wsco-state {
+  grid-area: state;
+}
+.wsco-local {
+  margin-left: 8px;
+  padding-left: 10px;
+  border-left: var(--hairline) solid var(--border);
+}
+.wsco-name,
+.wsco-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wsco-muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+.wsco-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.wsco-badge {
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: var(--radius-md);
+  background: var(--bg-recessed);
+  white-space: nowrap;
+}
+.wsco-warn {
+  margin: 0;
+  color: var(--warn);
+  font-size: 12px;
+}
+.wsco-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.wsco-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.wsco-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--bg-recessed) 60%, transparent);
+  z-index: 50;
+}
+.wsco-dialog {
+  width: min(520px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-float);
+}
+.wsco-dialog h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.wsco-dialog p {
+  margin: 0;
+}
+.wsco-summary {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wsco-target {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.wsco-keep {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+.wsco-failure {
+  padding: 8px 10px;
+  border: var(--hairline) solid var(--warn-muted);
+  border-radius: var(--radius-md);
+  background: var(--warn-subtle);
+  font-size: 12px;
+}
+.wsco-failure p:first-child {
+  color: var(--warn);
+}
+.wsco-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

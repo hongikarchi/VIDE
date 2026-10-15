@@ -54,6 +54,7 @@ import {
 } from '../skill-start.ts';
 import { activeWorkspace, setWorkspace } from '../workspaces.ts';
 import { hostlessFromScreen } from '../screen-hostless.ts';
+import { clearImpactPreview, updateImpactPreview } from './impact-preview.ts';
 import {
   referenceIntent,
   pathCandidates,
@@ -850,6 +851,7 @@ export async function submitRequest(
       draftState.state.coordinateBasis = undefined;
       setBody('');
     } else clearStoredDraft(draftKey(projectId, sentDraft));
+    clearImpactPreview();
     if (selectionState.selectedResult === undefined)
       selectionState.selectedResult = selectionState.displayedResult ?? null;
     workState.foregroundRequest = {
@@ -1228,6 +1230,24 @@ export function initComposer5() {
     render();
     $('body').focus();
   };
+  // A connected folder with no role memory (SPEC-01.13 8, T-309): ask the AI for the role card
+  // through the normal request path, only when the message box is empty and nothing runs.
+  window.addEventListener('vide:workspace-schema-propose', (event) => {
+    const detail = (event as CustomEvent<{ projectId?: string; folder?: string }>).detail ?? {};
+    if (
+      sessionState.busy ||
+      !sessionState.project ||
+      sessionState.project.id !== detail.projectId ||
+      draftState.state.body.trim() ||
+      draftState.state.linkedTargets
+    )
+      return;
+    const body = `연결한 폴더의 역할을 제안해 주세요${detail.folder ? ` · ${detail.folder}` : ''}`;
+    draftState.state.body = body;
+    setBody(body);
+    render();
+    void submitRequest(undefined, draftState.mode, { hostUse: 'none' });
+  });
   window.addEventListener('vide-accounts-changed', () => {
     const current = ++sessionState.catalogGeneration;
     void (async () => {
@@ -1379,6 +1399,8 @@ export function paintContext() {
   }
   draftState.view.context = items;
   paintComposer();
+  // 요청 전 영향 미리보기 (PLAN-52 T-319): the files the draft's target is tied to.
+  updateImpactPreview();
 }
 /** render(): the model menu, the effort slider and the attach/queue buttons. */
 export function paintSettings() {

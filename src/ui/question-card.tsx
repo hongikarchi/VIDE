@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { z } from 'zod';
 import './question-card.css';
+import {
+  isSchemaCard,
+  unsettled,
+  WorkspaceSchemaRows,
+  type SchemaCardData,
+  type SchemaRoles,
+} from './workspace-schema-card.tsx';
 
 // 질문 카드 (Design SCR-15, SPEC-02.19 6, PLAN-24 T-062): the cards of a conversation turn that
 // ended with questions (`result.turnOutput`, src/server/turn-output.ts). Head '질문 i/n' with what
@@ -147,6 +154,11 @@ export function QuestionCards({ api, options }: QuestionCardsProps) {
   /** What VIDE set from the answers itself (input roles, T-293). */
   const [applied, setApplied] = useState<string[]>([]);
   const [anyApplied, setAnyApplied] = useState(false);
+  /** Folder role cards (SCR-36): the rows the person set, and the rows as recorded. */
+  const [schemaRoles, setSchemaRoles] = useState<Record<string, SchemaRoles>>({});
+  const [schemaData, setSchemaData] = useState<Record<string, SchemaCardData>>({});
+  /** What VIDE remembered from a folder role card ('폴더 역할 기억 · 도면=05 도면 …'). */
+  const [remembered, setRemembered] = useState<string[]>([]);
   if (!parsed.success || parsed.data.status !== 'question' || !parsed.data.questions.length)
     return null;
   const questions = parsed.data.questions;
@@ -164,10 +176,13 @@ export function QuestionCards({ api, options }: QuestionCardsProps) {
             const choice = choices[q.id] ?? {};
             const optionId = choice.optionId ?? q.options.find((option) => option.recommended)?.id;
             const text = choice.text?.trim();
+            const roles =
+              isSchemaCard(q.id) && optionId !== 'later' ? schemaRoles[q.id] : undefined;
             return {
               questionId: q.id,
               ...(optionId ? { optionId } : {}),
               ...(text ? { text } : {}),
+              ...(roles && Object.keys(roles).length ? { roles } : {}),
             };
           });
       if (options.answerPath) {
@@ -191,8 +206,12 @@ export function QuestionCards({ api, options }: QuestionCardsProps) {
       )) as {
         request?: { id: string };
         applied?: { ok: boolean; text: string; held?: string; instanceId?: string | null }[];
+        remembered?: { ok: boolean; text: string; held?: string }[];
       };
       setSent(true);
+      setRemembered(
+        (result?.remembered ?? []).map((r) => (r.ok ? r.text : `기억하지 않음: ${r.text}`)),
+      );
       const applied = result?.applied ?? [];
       // A held answer (proposal, plan, other card) says why in its own words (SPEC-07.18 9.4).
       if (applied.length)
@@ -209,19 +228,53 @@ export function QuestionCards({ api, options }: QuestionCardsProps) {
       setBusy(false);
     }
   };
+  const optionOf = (q: TurnQuestion) =>
+    choices[q.id]?.optionId ?? q.options.find((option) => option.recommended)?.id;
+  // [이대로 기억] waits while a row has two guessed roles (Design SCR-36).
+  const waiting = questions.some(
+    (q) =>
+      isSchemaCard(q.id) &&
+      optionOf(q) !== 'later' &&
+      unsettled(schemaData[q.id], schemaRoles[q.id] ?? {}) > 0,
+  );
   return (
     <div className="qcards">
-      {questions.map((question, index) => (
-        <Card
-          key={question.id}
-          question={question}
-          index={index}
-          count={questions.length}
-          choice={choices[question.id] ?? {}}
-          choose={(choice) => setChoices((all) => ({ ...all, [question.id]: choice }))}
-          disabled={busy || done}
-        />
-      ))}
+      {questions.map((question, index) =>
+        isSchemaCard(question.id) ? (
+          <div key={question.id} className="wschema-card">
+            <Card
+              question={question}
+              index={index}
+              count={questions.length}
+              choice={choices[question.id] ?? {}}
+              choose={(choice) => setChoices((all) => ({ ...all, [question.id]: choice }))}
+              disabled={busy || done}
+            />
+            <WorkspaceSchemaRows
+              api={api}
+              projectId={options.projectId}
+              conversationId={options.conversationId}
+              questionId={question.id}
+              editing={!done && optionOf(question) === 'edit'}
+              roles={schemaRoles[question.id] ?? {}}
+              setRoles={(roles) => setSchemaRoles((all) => ({ ...all, [question.id]: roles }))}
+              disabled={busy || done}
+              onData={(data) => setSchemaData((all) => ({ ...all, [question.id]: data }))}
+            />
+          </div>
+        ) : (
+          <Card
+            key={question.id}
+            question={question}
+            index={index}
+            count={questions.length}
+            choice={choices[question.id] ?? {}}
+            choose={(choice) => setChoices((all) => ({ ...all, [question.id]: choice }))}
+            disabled={busy || done}
+          />
+        ),
+      )}
+      {done && remembered.length ? <p className="qcard-note">{remembered.join(' · ')}</p> : null}
       {done ? (
         <p className="qcard-note">
           {applied.length && anyApplied
@@ -244,7 +297,8 @@ export function QuestionCards({ api, options }: QuestionCardsProps) {
           <button
             type="button"
             className="qcard-primary"
-            disabled={busy}
+            disabled={busy || waiting}
+            title={waiting ? '두 역할이 추정된 폴더의 역할을 먼저 고르세요' : undefined}
             onClick={() => send(false)}
           >
             이 답으로 진행

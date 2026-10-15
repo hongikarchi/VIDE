@@ -11,3 +11,6 @@
 *.3dm binary
 *.dwg binary
 *.rvt binary
+
+# Windows batch files need CRLF for cmd.exe
+*.cmd text eol=crlf

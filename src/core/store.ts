@@ -422,6 +422,7 @@ export class Store {
         'DELETE FROM compliance_roles WHERE projectId=?',
         'DELETE FROM compliance_proposals WHERE projectId=?',
         'DELETE FROM compliance_roles_version WHERE projectId=?',
+        'DELETE FROM checkouts WHERE projectId=?',
         'DELETE FROM drawing_backflow_baselines WHERE projectId=?',
         'DELETE FROM review_notes WHERE projectId=?',
         'DELETE FROM review_snapshots WHERE projectId=?',

@@ -189,7 +189,7 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
     if (
       path[1] === 'projects' &&
       path[2] &&
-      ['snapshots', 'queue', 'agenda', 'history'].includes(path[3])
+      ['snapshots', 'queue', 'agenda', 'history', 'checkouts'].includes(path[3])
     )
       return await offlineRoute(request, env, actor, path[2], path.slice(3));
     if (path[1] === 'projects') return await projectRoute(request, env, actor, path.slice(2));

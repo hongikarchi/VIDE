@@ -67,6 +67,11 @@ interface Options {
   agenda: AgendaPort;
   WebSocket?: typeof WebSocket;
   today?: () => string;
+  /**
+   * Each note copy written here (Markdown with its header): the engine also writes it into the
+   * project's work folder (PLAN-52 T-313, 운영 역할). Must not throw.
+   */
+  onCopy?: (projectId: string, note: SharedNote, markdown: string) => void;
 }
 type StreamEvent =
   | { type: 'sync'; state: string; vector: string }
@@ -187,8 +192,11 @@ export class SharedNotes {
         replica.title = note.title;
         continue; // An open note writes its own (newer) copy.
       }
-      if (note.snapshot !== undefined)
-        await this.write(join(folder, file), this.markdownFile(note, note.snapshot));
+      if (note.snapshot !== undefined) {
+        const markdown = this.markdownFile(note, note.snapshot);
+        await this.write(join(folder, file), markdown);
+        if (!note.deleted) this.copied(projectId, note, markdown);
+      }
     }
     const sorted = [...notes].sort((a, b) => b.updatedAt - a.updatedAt);
     await this.write(
@@ -417,13 +425,19 @@ export class SharedNotes {
       updatedBy: null,
       revision: 0,
     };
-    await this.write(
-      join(folder, fileOf(note)),
-      this.markdownFile(
-        { ...note, updatedAt: Date.now(), updatedByName: null },
-        noteMarkdown(replica.doc),
-      ),
+    const markdown = this.markdownFile(
+      { ...note, updatedAt: Date.now(), updatedByName: null },
+      noteMarkdown(replica.doc),
     );
+    await this.write(join(folder, fileOf(note)), markdown);
+    this.copied(replica.projectId, note, markdown);
+  }
+  private copied(projectId: string, note: SharedNote, markdown: string) {
+    try {
+      this.options.onCopy?.(projectId, note, markdown);
+    } catch {
+      /* the work-folder copy never fails the notes copy */
+    }
   }
   /** Saves every open replica now (state and Markdown). */
   async flushLocal() {
