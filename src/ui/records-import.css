@@ -1,0 +1,9 @@
+/* 가져온 후보의 1차 거르기 표시 (PLAN-53 T-329·T-330, Design SCR-45): small quiet words after the text. */
+.records-hints {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 8px;
+  font-size: 10px;
+  color: var(--text-3);
+  white-space: nowrap;
+}

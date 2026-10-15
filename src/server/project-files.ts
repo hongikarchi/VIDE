@@ -93,6 +93,8 @@ export function deniedPath(path: string, context: FileContext = {}) {
   if (folders.some((folder) => inside(folder, path))) return true;
   const parts = resolve(path).split(/[\\/]+/);
   if (parts.some((part) => SECRET_SEGMENTS.has(part.toLowerCase()))) return true;
+  // Imported KakaoTalk chats and mail (`<ops>/기록/원문/`, SPEC-17.6, PLAN-53 T-331).
+  if (parts.some((part, i) => part === '기록' && parts[i + 1] === '원문')) return true;
   return secretName(basename(path));
 }
 

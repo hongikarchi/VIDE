@@ -274,3 +274,42 @@ test('removing a part keeps its records; milestones; projects are isolated', (t)
   const own = add(records, b, '다른 프로젝트 기록');
   assert.throws(() => records.link(a, rec.id, own.id), { code: 'RECORD_NOT_FOUND' });
 });
+
+test('addMany: a missing follows refuses the batch; a key twice in one batch is skipped; held keys past 500', (t) => {
+  const { store, records, a } = setup();
+  t.after(() => store.close());
+  const before = records.list(a).records.length;
+  assert.throws(
+    () =>
+      records.addMany(
+        a,
+        [
+          { input: { text: '먼저 들어갈 줄' }, sourceKey: 'kakao:h:1' },
+          { input: { text: '없는 기록을 잇는 줄', follows: ['no-such-record'] } },
+        ],
+        { by: '홍길동' },
+      ),
+    { code: 'RECORD_NOT_FOUND' },
+  );
+  assert.equal(records.list(a).records.length, before, 'nothing of the batch stays');
+  const once = records.addMany(
+    a,
+    [
+      { input: { text: '첫 줄' }, sourceKey: 'kakao:h:2' },
+      { input: { text: '같은 줄 다시' }, sourceKey: 'kakao:h:2' },
+    ],
+    { by: '홍길동', state: 'candidate', source: 'kakao' },
+  );
+  assert.equal(once.added.length, 1);
+  assert.deepEqual(once.skipped, [{ sourceKey: 'kakao:h:2', existingId: once.added[0] }]);
+  const items = Array.from({ length: 600 }, (_, i) => ({
+    input: { text: `줄 ${i}` },
+    sourceKey: `kakao:big:${i}`,
+  }));
+  const many = records.addMany(a, items, { by: '홍길동', state: 'candidate', source: 'kakao' });
+  assert.equal(many.added.length, 600);
+  const held = records.heldSourceKeys(a, [...items.map((item) => item.sourceKey), 'kakao:none']);
+  assert.equal(held.size, 600);
+  assert.equal(held.get('kakao:big:599'), many.added[599]);
+  assert.equal(held.has('kakao:none'), false);
+});

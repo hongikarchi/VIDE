@@ -204,6 +204,8 @@ import { workspaceRoutes, workspaceStatuses } from './workspace-routes.ts';
 import { workspaceMapRoutes } from './workspace-map-routes.ts';
 import { recordsRoutes, recordsStatuses, requestUndone } from './records-routes.ts';
 import { attachRecordSources } from './record-sources.ts';
+import { recordsMirrorFor } from './records-mirror.ts';
+import { recordsImportOf } from './records-import.ts';
 import { ROLE_LABELS } from './workspace-schema.ts';
 import { objectRecordsOf } from './object-records.ts';
 import { partsStatusOf } from './parts-status.ts';
@@ -462,6 +464,11 @@ export async function startServer({
     roleLabels: ROLE_LABELS,
     log: (event, fields) => diagnostics.write(event, fields),
   });
+  // 기록의 작업 폴더 사본 (PLAN-53 T-331): every records write → 5 s later `<ops>/기록/`; once at start.
+  const recordsMirror = recordsMirrorFor(store, {
+    log: (event, fields) => diagnostics.write(event, fields),
+  });
+  for (const project of listProjects()) recordsMirror.schedule(project.id);
   onJigActivity(workspace, {
     onRun: (event) => recordSources.jigRun(event),
     onParamsChanged: (event) => recordSources.paramsChanged(event),
@@ -1576,6 +1583,8 @@ export async function startServer({
           project: (projectId) => store.project(projectId),
           regenerate: async (projectId, key) => {
             if (key.startsWith('schedule:')) await copySchedule(projectId);
+            else if (key.startsWith('records:'))
+              await recordsMirror.flush(projectId, { fresh: true });
             else await sharedNotes?.list(projectId);
           },
           body: () => body(request),
@@ -1627,6 +1636,12 @@ export async function startServer({
           actor: () => remoteAccess.account()?.name,
           partsStatus: partsStatusOf({ store, workspace, records }),
           objectRecords: objectRecordsOf({ store, workspace, records }),
+          mirror: recordsMirror,
+          importFile: recordsImportOf({
+            records,
+            writeRawCopy: (projectId, name, text) =>
+              workspaceOutputsFor(store).writeRawCopy(projectId, name, text),
+          }),
         })
       )
         return;
@@ -3967,6 +3982,8 @@ export async function startServer({
       proposalWiring?.watch.stop();
       recordSources.stop();
       await recordSources.idle();
+      recordsMirror.stop();
+      await recordsMirror.idle();
       clearInterval(transcriptSweep);
       await Promise.allSettled([...importRecoveries.values()]);
       try {

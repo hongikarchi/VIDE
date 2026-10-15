@@ -2,7 +2,7 @@
 id: PLAN-53
 title: 프로젝트 기록 — 결정·근거·영향 모델과 타임라인 (T-320~T-339)
 status: draft
-version: 0.5
+version: 0.7
 updated: 2026-10-15
 owner: user
 related: [C-09, SPEC-03, SPEC-07, SPEC-08, SPEC-10, SPEC-17, ARCH-01, DESIGN, ADR-027, ADR-037, RESEARCH-17, FR-07, FR-09, FR-10, FR-12, FR-16, FR-18, PLAN-52]
@@ -109,6 +109,8 @@ SPEC-17이 의미를 소유한다. 아래는 이 계획이 구현할 범위의 �
 - **변경:** `src/core/records-chart.ts` — 행 모드(부위 / 유형 다섯 / 장), 기록의 x(날짜)·y(행), 라벨 차선 배치(행 위아래 차선, 겹침 회피), 체인(뿌리별 도달 집합, 같은 스타일/체인별 점선/체인별 작은 차트), 알려짐 선(기존 부위의 `seen` 날짜 전 점선·후 실선), 밀도 띠(장별 하루 기록 수), 마일스톤·월 격자. 순수 함수이며 DOM을 모른다.
 - **검증:** `tests/core/records-chart.test.mjs` — 80건 fixture(참고 화면 ③의 DATA 모양을 합성 값으로)에서 체인 수·뿌리·라벨 겹침 0, 세 행 모드의 y 배치.
 - **완료:** 같은 입력에서 같은 배치(결정적).
+- **구현 계약:** [ARCH-01 §5 「프로젝트 기록」](../architecture/ARCH-01-system.md)의 '차트' 항목(새 라우트 없음, 상태 칩이 기본값이면 `kept`만, 체인은 목록 행의 `follows`로 클라이언트에서 계산)과 Design SCR-45 「구현 기준」(라벨 차선 위→아래 순, 폭은 한글 11px·그 밖 6.5px, 번호는 날짜·시각 순 1부터). 모듈은 `src/core/records-chart.ts`(순수). 참고 화면 ③의 정의는 RESEARCH-17 §2 표 행 ③이다(위 '§3.3'은 잘못된 참조).
+- **구현(2026-10-15):** `src/core/records-chart.ts` — `buildRecordsChart`(행 셋·항목·`follows` 선·체인·알려짐 선·장별 하루 건수·월 격자·번호 색인)와 `layoutRecordsChart`(위1→아래1→위2→아래2 차선, 자리가 없으면 번호), `recordChains`·`chainMembers`·`labelsOverlap`. `tests/core/records-chart.test.mjs` 6건 통과(80건 합성 fixture: 체인 6·뿌리, 세 행 모드 y, 라벨 겹침 0, 결정성). '작은 차트'는 계약대로 뺐다.
 
 ### T-328 차트 화면(기록 탭 '차트' 보기)
 
@@ -116,6 +118,8 @@ SPEC-17이 의미를 소유한다. 아래는 이 계획이 구현할 범위의 �
 - **변경:** `src/ui/records-chart.tsx` — SVG. 레일 스위치: 행(부위/유형/장), 기록 유형 다섯 토글(건수 표시), 관계(연결선·알려짐 선), 체인(동일/스타일별/작은 차트), 주석(본문·번호+색인·주요 에피소드만·신설/기존 묶기·부위 역할·장 표시·마일스톤). 기록 글리프: R 사각·I 삼각·K 겹원·E 마름모·D 채운 원. 기록 위에 올리면 설명 풍선, 누르면 그 체인만 진하게. 인쇄 보기(`#print`)는 넓은 판·굵은 라벨·색인 4단. 라벨 모드에서 번호+아래 색인 표(번호·날짜·부위·유형·본문).
 - **검증:** `tests/integration/browser-records-chart.mjs` — 80건 fixture 렌더, 토글마다 DOM 글리프 수 일치, 체인 강조, 인쇄 보기 스냅샷 크기. 색은 Design.md 토큰만(강조색 하나).
 - **완료:** 실제 프로젝트 기록 200건이 한 화면에 읽힌다(사용자 판단, 웨이브 3 동승).
+- **구현 계약:** Design SCR-45 「구현 기준」(레일 스위치 유형·선·주석 세 묶음, 글리프 치수·빈 모양, 자세히 칸 재사용, 인쇄 판 A3 가로·색인 4단). 쓰기는 기존 `POST /records/:r/state`·`PATCH /records/:r {parts}`·`POST|DELETE /records/:r/links`만 쓴다. '작은 차트' 체인 보기는 이번 웨이브에서 뺀다. 위 '#print'는 화면 경로가 아니라 인쇄용 판 복제(`finish-jig.tsx`의 인쇄 방식)다.
+- **구현(2026-10-15):** `src/ui/records-chart.tsx`·`records-chart.css`, `src/ui/records-tab.tsx`의 [차트] 자리에 마운트하고 자세히 칸을 차트에서도 연다. `tests/integration/browser-records-chart.mjs` 통과 — 80건(남김 73) 렌더, 유형 토글마다 글리프 수 일치, 체인 강조(5개·선 4개), 후보 빈 모양, 세 행 모드, 화면 라벨 겹침 0, 인쇄 판(색인 4단·73행), 내부 낱말 없음, 1,000건 첫 그리기 약 120~140 ms(≤1,000 ms 단언). 미구현은 Design SCR-45 '구현(2026-10-15)' 줄. 완료 조건(실제 200건 판단)은 웨이브 3 동승.
 
 ### T-329 가져오기 — 카카오톡
 
@@ -123,6 +127,8 @@ SPEC-17이 의미를 소유한다. 아래는 이 계획이 구현할 범위의 �
 - **변경:** `src/core/import/kakao.ts` — 카카오톡 PC/모바일 내보내기 `.txt`(두 가지 날짜 줄 형식) 파싱 → `{date, time, who, text}` → 후보 기록(source `kakao`, 유형 미정). 파일은 작업 폴더 `<ops>/기록/원문/`에 복사하고 attachments에 파일·줄 번호. 같은 파일·같은 줄은 두 번 넣지 않는다. 1차 거르기 도우미: 질문문·결정 어휘·부위 사전 단어가 있는 줄을 앞에 보인다(자동 O/X는 하지 않음).
 - **검증:** `tests/core/import-kakao.test.mjs` — 합성 대화 300줄(두 형식, 멀티라인 메시지, 사진/파일 줄, 날짜 구분 줄) 파싱 수와 중복 거부. 저장소에 실제 대화 없음(검사 `tools/checks`에 단어 목록 추가하지 않음 — 리뷰로 확인).
 - **완료:** 합성 파일 가져오기 → 거르기 화면에 후보 표시.
+- **구현 계약:** [ARCH-01 §5 「프로젝트 기록」](../architecture/ARCH-01-system.md)의 '가져오기' 항목 — `POST /records/import-file {kind, name, text}`(20 MB·20,000건을 넘으면 `INPUT_TOO_LARGE`, 전부 중복이면 `RECORD_SOURCE_DUPLICATE` 409 `{existingId}`), 응답 `{added, skipped, total, recordIds[], copied, path?}`, `sourceKey` `kakao:<h16>:<line>`, `by`=세션 계정·`state=candidate`·`type=?`, `Records.addMany`, 원문 `<ops>/기록/원문/`(`writeRawCopy`, 같은 이름이면 `(2)`). 1차 거르기 도우미는 저장하지 않고 `src/core/record-triage.ts`로 화면이 정렬한다. 화면은 Design SCR-45 「가져오기와 사본 줄」.
+- **구현(2026-10-15):** 파서 `src/core/import/kakao.ts`(PC 날짜 줄 + `[이름] [오후 3:12]`, 모바일 `2026년 10월 15일 …, 이름 : 내용`·`2026. 10. 15. …`, 이어지는 줄·`(사진)`·`(파일) 이름`·`(이모티콘)`, 시스템 줄 건너뜀), 후보 `src/core/import/candidates.ts`, 라우트 본체 `src/server/records-import.ts`(`recordsImportOf`, `records-routes.ts`의 `importFile` 의존성, `server.ts` 한 곳 등록), `Records.addMany`·`Records.heldSourceKeys`(전부 중복 판정을 원문 복사 전에 한 번의 질의로), `WorkspaceOutputs.writeRawCopy`(`원문/.gitignore` 포함), 거르기 도우미 `src/core/record-triage.ts`(`record-candidates.ts`의 결정·질문 어휘를 옮김), 화면 `src/ui/records-import.tsx`(.css)·`records-api.ts` `importRecordFile`·`records-tab.tsx`의 [가져오기]·'이미 들인 파일입니다.' [처음 기록 보기]·도우미 정렬과 '질문'·'결정'·'부위: …'. 검증: `tests/core/import-kakao.test.mjs`(PC 300줄 이상·모바일 두 형식), `tests/server/records-import.test.mjs`(추가·전부 중복 409·일부 중복 skipped·원문 복사와 ' (2)'·작업 폴더 없음·원격·상한·HTTP), `tests/integration/browser-records-import.mjs`(합성 카카오톡·mbox 가져오기 → 후보 표시, 다시 들이기). 합성 fixture `tests/fixtures/records-import/index.mjs`. 실제 대화 파일 확인은 남음.
 
 ### T-330 가져오기 — 메일
 
@@ -130,6 +136,8 @@ SPEC-17이 의미를 소유한다. 아래는 이 계획이 구현할 범위의 �
 - **변경:** `src/core/import/mail.ts` — `.eml`·`.mbox` 파싱(제목·보낸이·날짜·본문, HTML은 글만, 인용문 접기, 첨부 이름만). 메일 한 통 = 후보 하나(본문 첫 문단), 펼치면 전체. 스레드는 `follows`로 잇지 않고 attachments에 `In-Reply-To`만 둔다(연결은 사람이).
 - **검증:** `tests/core/import-mail.test.mjs` — 합성 eml 20통(멀티파트·한글 인코딩·인용 포함) 파싱, mbox 분리.
 - **완료:** 합성 mbox 가져오기 → 후보.
+- **구현 계약:** T-329와 같은 라우트(`kind=mail`). `sourceKey`는 `mail:<Message-ID>`, Message-ID가 없으면 `mail:<h16>:<n>`. `attachments.mail {from, subject, inReplyTo?}`를 contracts의 strict 스키마에 더한다. 본문은 제목 + 첫 문단(2,000자). 위 '펼치면 전체'는 원문 파일(`attachments.file`의 줄)로 대신한다.
+- **구현(2026-10-15):** `src/core/import/mail.ts` `parseMail(text, name, now?)` — 머리 접기 해제·인코딩 단어, base64·quoted-printable, charset은 `TextDecoder`(cp949·ks_c_5601-1987은 euc-kr로), 모르는 charset은 '(글자 깨짐)', multipart는 text/plain 우선·없으면 html 글만, 인용(`>`·'On … wrote:'·'-----Original Message-----'·'보낸 사람:'·'…님이 작성:')과 `-- ` 서명 제거, 첨부는 이름만(`attachmentsNames`, 저장하지 않음), mbox는 `From ` 줄로 나눔. `Date` 머리가 없거나 읽지 못하면 가져온 날·시각 없음(`time: null`). 검증: `tests/core/import-mail.test.mjs`(합성 eml 20통·mbox·euc-kr·인코딩 단어). 실제 메일 내보내기 파일 확인은 남음.
 
 ### T-331 기록 사본과 작업 폴더
 
@@ -137,11 +145,14 @@ SPEC-17이 의미를 소유한다. 아래는 이 계획이 구현할 범위의 �
 - **변경:** `<ops>/기록/YYYY-MM.jsonl`·`README.md` 쓰기(기록 상태 변경 뒤 5초 안), 폴더 사본이 바뀐 것을 발견하면 가져오기 카드. 원문(`<ops>/기록/원문/`)은 사이트 업로드·진단 묶음·AI 문맥에서 제외.
 - **검증:** `tests/server/records-mirror.test.mjs` — 쓰기·다시 읽기 왕복, 원문 폴더가 진단 묶음에 없음.
 - **완료:** 폴더만 복제해 다른 PC에서 열면 기록이 그대로 보인다.
+- **구현 계약:** [ARCH-01 §5 「프로젝트 기록」](../architecture/ARCH-01-system.md)의 '사본 쓰기와 되들이기' 항목 — `onRecordsChanged` → `src/server/records-mirror.ts`의 5,000 ms 디바운스, 원장 키 `records:YYYY-MM`·`records:readme`(`folder-copies.json` 공유), JSONL 첫 줄은 `vide-copy:records:YYYY-MM` 표식 객체, README는 파일 전체가 VIDE 소유, `GET /records/mirror`·`POST /records/mirror/import`(줄 단위 반영)·`POST /records/mirror/rewrite`, 원문 제외 지점(진단 묶음·`deniedPath`·`workFolderRule`·`defaultGitignore`). 들이기는 SPEC-17.6의 '사본이 달라졌어요'를 따른다(노트 사본을 들이지 않는 SPEC-10.10 3과 다름). 기록 DB의 AI 읽기로 가져온 후보가 보이는 문제는 ARCH-01 R-91.
+- **구현(2026-10-15):** `src/core/records.ts` `onRecordsChanged`(모든 쓰기 뒤 알림) → `src/server/records-mirror.ts` `RecordsMirror`·`recordsMirrorFor`(5,000 ms 디바운스, 바뀐 달만, `status`·`importFolder`·`rewrite`), `src/server/workspace-outputs.ts` `writeCopyIn`(확장자 일반화·`adopt`)·`writeRecordsCopy`·`writeRecordsReadme`·`copyKeys`·`copyPath`·`force`·`unforce`·`recordsCopyMarker`, `src/server/records-routes.ts` `records/mirror[/import|rewrite]`·`NO_WORKSPACE` 404, `server.ts`(시작 때 예약·[버리기]의 `records:` 분기·종료 때 `stop`/`idle`), 원문 제외 `diagnostic-bundle.ts` `forbiddenEntry`·`project-files.ts` `deniedPath`·`agent-connection.ts` `workFolderRule`(원문 폴더와 kakao·mail 기록 행 — R-91 (a))·`workspace-git.ts` `defaultGitignore`, 화면 `src/ui/records-mirror-line.tsx`(.css; 머리 끝 회색 줄 '폴더에 씀 · …/'·'폴더에 아직 안 씀', 작업 폴더 없으면 없음, 바뀌면 상자와 [폴더 내용 들이기]·[VIDE 기록으로 다시 쓰기])와 `records-api.ts` `mirrorState`·`importMirror`·`rewriteMirror`. 시험 `tests/server/records-mirror.test.mjs`(9건: 알림, 왕복, 디바운스 1회, 바뀜 보존·줄 단위 들이기·skipped, 다시 쓰기, 다른 PC 폴더, 작업 폴더 없음, 원격 GET만, AI 지시문)와 `project-files`·`diagnostics-lines`·`workspace-files` 시험 확장. 계약과 달라진 점은 ARCH-01 '구현에서 정한 것'. 대시보드의 사본 카드는 없어 연결하지 않았다. 남은 것: 실제 작업 폴더에서 화면 확인(T-332).
 
 ### T-332 웨이브 2 검수
 
 - **방법:** 합성 카카오톡·메일을 가져와 거르고 부위에 묶은 뒤 차트 세 행 모드·인쇄 보기를 확인. 성능: 기록 1,000건에서 차트 첫 그리기 ≤1 s.
 - **완료:** VERIFY 기록. P0 0건.
+- **검수(2026-10-15, 오프라인):** [VERIFY-2026-10-15-records-wave-2](../tdd/VERIFY-2026-10-15-records-wave-2.md) — 단계 13개 중 12 통과·1 부분(가져오기 → 거르기 → 부위 → 차트를 한 번에 잇는 흐름은 단계별 시험만), 1,000건 첫 그리기 180 ms. 검수 중 찾은 P0 2건(사본 되들이기가 VIDE의 나중 변경을 되돌림, 거르지 않은 kakao·mail 후보가 폴더 사본에 쓰임)은 고쳤다. 남은 것: 실제 파일·실제 작업 폴더·실제 인쇄(사용자 동승).
 
 ## 웨이브 3 — 모델 위 타임라인과 검토본 연결 (T-333~T-339)
 
@@ -220,6 +231,8 @@ fixture의 날짜·부위·문장은 모두 지어낸 값이다. 참고 화면�
 
 ## 현재 상태
 
+- 2026-10-15 밤 0.7: **T-327~T-331 구현, T-332 오프라인 검수** — 차트(`src/core/records-chart.ts`·`src/ui/records-chart.tsx`), 카카오톡·메일 가져오기(`src/core/import/`·`src/server/records-import.ts`·`src/ui/records-import.tsx`), 폴더 사본(`src/server/records-mirror.ts`·`src/ui/records-mirror-line.tsx`). 검수: [VERIFY-2026-10-15-records-wave-2](../tdd/VERIFY-2026-10-15-records-wave-2.md). 리뷰에서 나온 P0 2건을 고쳤다. 하나는 되들이기가 이 PC가 마지막으로 쓴 행과 비교해 사람이 바꾼 필드만 반영하게 한 것이고, 다른 하나는 거르지 않은 kakao·mail 후보를 사본에서 뺀 것이다(ARCH-01 1.39). 함께 고친 것: 가져오기 문구를 Design SCR-45에 맞춤, PC 카카오톡의 '삭제된 메시지입니다.' 제외, `browser-records-import.mjs`를 `test:browser`에 등록, `GET /records/mirror`는 기다리는 쓰기가 있을 때만 씀, `addMany` 직접 시험. 티켓 상태: T-327·T-328·T-329·T-330·T-331 구현 완료(오프라인), T-332 오프라인 부분 완료. 남은 결정: SPEC-17 R-82(작성자 거르기)·R-83(차트 읽기 전용 문구)·R-84(메시지 단위 문구)·R-85(일부 중복 건너뜀), ARCH-01 R-91(기록 DB의 AI 읽기에서 가져온 후보 빼기), 커서 뒤 35% 흐림을 Design에 둘지. 후속: `src/knowledge/collect/mail.ts`(SPEC-08.9 자료 수집)와 `src/core/import/mail.ts`의 MIME 읽기를 하나로 합치기(`readMail(buffer)`를 `parseMail(text)` 위 어댑터로; 합칠 때 ARCH-01의 'node 의존 없음'을 고침). 실제 대화·메일 파일, 실제 작업 폴더 화면, A3 실제 인쇄는 사용자 동승.
+- 2026-10-15 밤 0.6: 웨이브 2 착수(워크플로) — 구현 계약을 ARCH-01 1.38 §5 「프로젝트 기록」(가져오기·사본·차트)과 Design 1.27 SCR-45 「구현 기준」에 먼저 적고, T-327~T-331에 '구현 계약' 줄을 더했다. 미결: ARCH-01 R-91(가져온 후보의 AI 읽기 제외).
 - 2026-10-15 밤 0.5: **T-321~T-325 구현, T-326 오프라인 검수** — 저장·API·자동 후보·기록 탭·'이 객체의 기록'·부위 사전(각 티켓의 '구현' 줄). ARCH-01 1.35에 구현이 정한 물리 세부를 반영했다. 검수: [VERIFY-2026-10-15-records-wave-1](../tdd/VERIFY-2026-10-15-records-wave-1.md)(합성 요청 10·노트 5·설정값 3 → 후보 19건 중복 0, O/X·부위·객체→기록 통과). 남은 것: 설치본에서 기록 탭 15분 확인(사용자), 100건/10분 측정, SPEC-17 R-46~R-48 결정(폴더 역할 확정 출처 값, 동기화 K 후보 연결 조건, 열람자 역할), SPEC-17.3 표 행 7·8(갱신 제안 카드·자료 [기록으로 남기기])의 티켓 배정, 웨이브 2(T-327~).
 - 2026-10-15: 계획만. 사용자 결정(1차 범위 = 3D 타임라인까지, 세 웨이브로 출하) 반영. SPEC-17·Design SCR·PRD C-09 번호는 미작성. 코드 변경 없음.
 - 2026-10-15 저녁 0.4: **T-320 완료** — SPEC-17 0.2(자료 확정의 [기록으로 남기기] E 후보 행 추가), Design 1.23(SCR-44·45·46, §07 용어 행 '기록·후보·남김·뺌·부위·이어진 기록·마일스톤'), ARCH-01 1.34 §5 「프로젝트 기록(PLAN-53, SPEC-17)」(표 다섯·sourceKey·attachments·라우트·코드·후보 진입점·사본·D1 0018)과 §1.3 API 행, SPEC-03 0.7(3.8·3.9 역참조), SPEC-08 0.8(8.5 경계 항목). 남은 결정은 아래 「결정이 필요한 질문」과 SPEC-17의 사용자 검토(`review`). 다음: T-321 → T-322·T-325 → T-323 → T-324 → T-326(웨이브 1 워크플로).

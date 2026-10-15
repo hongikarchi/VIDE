@@ -88,6 +88,8 @@ test('the default .gitignore follows the role paths', () => {
     assert.ok(lines.includes(line), line);
   for (const line of ['/02 자료/', '/06_산출물/보고/', '/10_아카이브/', '*.3dm', '*.dwg', '~$*'])
     assert.ok(lines.includes(line), line);
+  // Imported KakaoTalk chats and mail never reach a remote (PLAN-53 T-331).
+  assert.ok(defaultGitignore({ ops: '01_운영' }).split('\n').includes('/01_운영/기록/원문/'));
   for (const line of ['/05_검토/', '/03_모델/', '*.json', '*.md', '*.html'])
     assert.ok(!lines.includes(line), line);
   // A role at the root itself is never ignored whole.

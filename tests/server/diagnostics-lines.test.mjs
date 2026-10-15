@@ -13,7 +13,7 @@ import { startServer } from '../../src/server/server.ts';
 import { AgentTools } from '../../src/server/agent-tools.ts';
 import { runDocumentSync } from '../../src/server/document-sync.ts';
 import { SyncCoalescer } from '../../src/server/sync-coalesce.ts';
-import { writeDiagnosticBundle } from '../../src/server/diagnostic-bundle.ts';
+import { forbiddenEntry, writeDiagnosticBundle } from '../../src/server/diagnostic-bundle.ts';
 import { Store } from '../../src/core/store.ts';
 import { Workspace } from '../../src/core/workspace.ts';
 import { scrub, setDiagnosticSink, withTrace } from '../../src/core/breadcrumbs.ts';
@@ -293,6 +293,12 @@ test('a bundle zip holds the dated logs and a readable about.json', async (t) =>
   await writeFile(join(directory, 'logs', 'engine-2026-01-01.jsonl'), 'old\n');
   await writeFile(join(directory, 'launch.json'), '{"url":"secret"}');
   await writeFile(join(directory, 'desktop.json'), '{"UpdateSource":"C:\\\\Users\\\\kim\\\\x"}');
+  // Imported chats in a work folder under the data folder never reach a bundle (PLAN-53 T-331).
+  await mkdir(join(directory, '01_운영', '기록', '원문'), { recursive: true });
+  await writeFile(join(directory, '01_운영', '기록', '원문', '대화.txt'), '가짜 대화\n');
+  assert.equal(forbiddenEntry('logs/x.log', join(directory, '01_운영', '기록', '원문', 'a')), true);
+  assert.equal(forbiddenEntry('기록/원문/a.txt'), true);
+  assert.equal(forbiddenEntry('logs/x.log', join(directory, 'logs', 'x.log')), false);
   const bundle = await writeDiagnosticBundle({ directory, now: at });
   assert.deepEqual(bundle.files.sort(), [
     'about.json',

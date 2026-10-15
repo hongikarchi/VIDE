@@ -145,6 +145,35 @@ export const addMilestone = async (projectId: string, input: { label: string; da
 export const removeMilestone = (projectId: string, id: string) =>
   api(`${base(projectId)}/milestones/${encodeURIComponent(id)}`, 'DELETE');
 
+// ---- 작업 폴더 사본 (PLAN-53 T-331, ARCH-01 '사본 쓰기와 되들이기') ----
+
+/** `path` is the work-folder-relative `<ops>/기록`; absent when the project has no work folder. */
+export interface RecordsMirrorState {
+  written: boolean;
+  path?: string;
+  changed: boolean;
+  lastWrittenAt?: string;
+}
+export interface RecordsMirrorImport {
+  changed: number;
+  added: number;
+  skipped: { file: string; line: number; reason: string }[];
+}
+/** The copy's state, or undefined when it cannot be read (the tab then shows nothing). */
+export async function mirrorState(projectId: string): Promise<RecordsMirrorState | undefined> {
+  try {
+    return (await api(`${base(projectId)}/records/mirror`, 'GET', undefined, {
+      quiet: ['NOT_FOUND', 'PROJECT_GONE', 'REQUEST_FAILED', 'INVALID_RESPONSE'],
+    })) as RecordsMirrorState;
+  } catch {
+    return undefined;
+  }
+}
+export const importMirror = (projectId: string) =>
+  api(`${base(projectId)}/records/mirror/import`, 'POST', {}) as Promise<RecordsMirrorImport>;
+export const rewriteMirror = (projectId: string) =>
+  api(`${base(projectId)}/records/mirror/rewrite`, 'POST', {}) as Promise<{ written: boolean }>;
+
 // ---- Linked files and their layers (for a part's mapping) ----
 
 export interface LinkSummary {
@@ -235,4 +264,58 @@ export const REFUSAL: Record<string, string> = {
     '붙인 표시의 수가 지금 보이는 기록 수와 다릅니다. 같은 거르기에서 불러오세요.',
   RECORD_SUPERSEDED: '이미 정정된 기록입니다. 정정한 새 기록을 고치세요.',
   RECORD_SOURCE_DUPLICATE: '같은 출처의 기록이 이미 있습니다.',
+};
+
+// ---- 카카오톡·메일 가져오기 (PLAN-53 T-329·T-330, ARCH-01 '가져오기') ----
+
+export type ImportKind = 'kakao' | 'mail';
+export interface ImportResult {
+  added: number;
+  skipped: number;
+  total: number;
+  recordIds: string[];
+  copied: boolean;
+  path?: string;
+}
+/** The kind of a chosen file: `.eml`·`.mbox` are mail, `.txt` 카카오톡; anything else none. */
+export function importKindOf(name: string): ImportKind | undefined {
+  if (/\.(eml|mbox)$/i.test(name)) return 'mail';
+  if (/\.txt$/i.test(name)) return 'kakao';
+  return undefined;
+}
+/**
+ * Sends a chosen file's text (`File.text()`, UTF-8) to `POST …/records/import-file`. A file whose
+ * every line is in already answers `{duplicate: existingId}`; other refusals throw with their code.
+ */
+export async function importRecordFile(
+  projectId: string,
+  kind: ImportKind,
+  name: string,
+  text: string,
+): Promise<ImportResult | { duplicate: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`api/v1${base(projectId)}/records/import-file`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind, name, text }),
+    });
+  } catch {
+    throw Object.assign(new Error(errors.NETWORK_UNAVAILABLE ?? '연결되지 않았습니다.'), {
+      code: 'NETWORK_UNAVAILABLE',
+    });
+  }
+  const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (response.ok) return json as unknown as ImportResult;
+  const code = typeof json.code === 'string' ? json.code : 'REQUEST_FAILED';
+  if (code === 'RECORD_SOURCE_DUPLICATE' && typeof json.existingId === 'string')
+    return { duplicate: json.existingId };
+  throw Object.assign(new Error(IMPORT_REFUSAL[code] ?? errors[code] ?? '가져오지 못했습니다.'), {
+    code,
+  });
+}
+const IMPORT_REFUSAL: Record<string, string> = {
+  INPUT_TOO_LARGE: '파일이 너무 큽니다(20 MB까지).',
+  INVALID_INPUT: '카카오톡 대화(.txt)나 메일(.eml·.mbox)만 들일 수 있습니다.',
+  FORBIDDEN: '원격 화면에서는 가져올 수 없습니다.',
 };

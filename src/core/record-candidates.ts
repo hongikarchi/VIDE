@@ -4,6 +4,7 @@ import {
   type RecordAttachments,
   type RecordSource,
 } from '../contracts/records.ts';
+import { DECIDED, UNDECIDED } from './record-triage.ts';
 
 /**
  * 자동 후보의 규칙 (SPEC-17.3 1, PLAN-53 T-322, ARCH-01 §5 「프로젝트 기록」): what VIDE activity
@@ -123,19 +124,7 @@ export function candidateFromRequest(row: RequestRowLike): RecordCandidate | nul
 // ---------------------------------------------------------------------------------------------
 // Decision sentences in a conversation
 
-/** Words that say a matter was settled (the user's own sentence). */
-const DECIDED =
-  /결정|확정|(?:으?로|걸로|것으로)\s*(?:가자|갑시다|가요|간다|하자|합시다|하기로|해요|한다|정(?:하|했|함|합|해|한|할))/;
-/** Words that say it was not (yet): open, pending, conditional or asked. */
-const UNDECIDED = [
-  /[?？]/,
-  /(?:갈|할|될|정할|둘)까/,
-  /결정\s*(?:을|이|은)?\s*(?:못|안\s|안$|하지|되지|해야|할지|하면|하기\s*전|전에|전|보류|미뤄|미루)/,
-  /확정\s*(?:을|이|은)?\s*(?:못|안\s|안$|아직|하지|되지|해야|할지|하면|전에|전|보류|미뤄|미루|안\s*됐|안됐)/,
-  /아직[^.!]*(?:결정|확정)|(?:결정|확정)[^.!]*아직/,
-  /미정|보류|미결/,
-  /(?:결정|확정)(?:은|이)?\s*(?:나중|다음)/,
-];
+// DECIDED and UNDECIDED: shared with the 1차 거르기 도우미 (src/core/record-triage.ts).
 const sentencesOf = (text: string) =>
   text
     .split(/\n+|(?<=[.!?。？！])\s+/)

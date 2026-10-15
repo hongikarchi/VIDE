@@ -80,6 +80,15 @@ export const recordAttachmentsSchema = z
       })
       .optional(),
     objects: z.array(z.string().min(1).max(200)).max(5000).optional(),
+    /** A mail import's header (T-330): who, subject, the mail it answers (no angle brackets). */
+    mail: z
+      .object({
+        from: z.string().min(1).max(500),
+        subject: z.string().min(1).max(500),
+        inReplyTo: z.string().min(1).max(500).optional(),
+      })
+      .strict()
+      .optional(),
     /** 갱신 제안 (SPEC-05.12 7, ARCH-01 '동기화 쌍과 갱신 제안'): the pair, the card, its rows. */
     pairId: z.string().min(1).max(200).optional(),
     proposalId: z.string().min(1).max(200).optional(),

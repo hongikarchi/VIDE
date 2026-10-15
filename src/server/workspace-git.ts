@@ -141,12 +141,17 @@ export function defaultGitignore(paths: Partial<Record<WorkspaceRole, string>>):
   const folders = UNTRACKED_ROLES.map((role) => paths[role])
     .filter((path): path is string => !!path && path !== '.' && path !== './')
     .map((path) => `/${gitPath(path)}/`);
+  // Imported KakaoTalk chats and mail (`<ops>/기록/원문/`, SPEC-17.6, PLAN-53 T-331).
+  const ops = paths.ops && paths.ops !== '.' && paths.ops !== './' ? `/${gitPath(paths.ops)}` : '';
   return [
     '# VIDE 작업 폴더 — 설정·분석 JSON·md·HTML만 기록합니다(모델·도면·원본·산출물·보관 제외).',
     '# 이 파일은 사람이 고쳐도 됩니다. VIDE는 처음 만들 때만 씁니다.',
     '',
     '# 원본·산출물·보관 폴더',
     ...folders,
+    '',
+    '# 가져온 카카오톡·메일 원문',
+    `${ops}/기록/원문/`,
     '',
     ...BINARIES,
     '',

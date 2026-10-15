@@ -5,7 +5,7 @@ import { journalTitle } from '../contracts/note-doc.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, open, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { DomainError } from '../core/store.ts';
 import type { Store } from '../core/store.ts';
 import { ProjectFolders, type ProjectFolder } from '../core/project-folders.ts';
@@ -106,6 +106,9 @@ const HEAD_BYTES = 4096;
 // Folder and file names: one rule with the `vide` CLI (src/core/workspace-paths.ts).
 export { dayOf, jigFolderName, minuteOf, safeName } from '../core/workspace-paths.ts';
 
+/** The first line of a month's records copy (an object, so every line of the JSONL stays JSON). */
+export const recordsCopyMarker = (month: string) =>
+  JSON.stringify({ vide: `VIDE 사본 · 정본은 VIDE 기록 · ${MARK}records:${month}` });
 /** The one-line marker of a copy in Markdown or HTML. */
 export const copyHeader = (source: string, key: string) =>
   `<!-- VIDE 사본 · 정본은 ${source} · 직접 고쳐도 반영되지 않고 VIDE가 다시 쓴다 · ${MARK}${key} -->`;
@@ -156,6 +159,8 @@ export class WorkspaceOutputs {
   private readonly redo = new Map<string, () => Promise<unknown>>();
   /** Copies [버리기] rewrites without the '폴더에서 바뀜' check. */
   private readonly forced = new Set<string>();
+  /** The rows last written per records month (`project\0month`), without a data folder. */
+  private readonly bases = new Map<string, string>();
   log: (event: string, fields: Record<string, unknown>) => void;
   constructor(options: WorkspaceOutputsOptions) {
     this.options = options;
@@ -524,6 +529,35 @@ export class WorkspaceOutputs {
     return run();
   }
   /**
+   * An imported 카카오톡·메일 file as it was (PLAN-53 T-329·T-330) → `<ops>/기록/원문/<name>`, with
+   * no marker line (record line numbers point into it). A file of that name with the same text is
+   * used as it is; another text takes `<name> (2).<ext>`, `(3)` … (a person's file is never
+   * overwritten). The first write also puts `원문/.gitignore` (`*`): the originals never reach
+   * the work folder's GitHub. Null when the project has no work folder or the write failed
+   * (logged); `path` is relative to the work folder, with `/`.
+   */
+  writeRawCopy(projectId: string, name: string, text: string): Promise<{ path: string } | null> {
+    return this.queue(projectId, 'raw', async () => {
+      const place = await this.roleFolder(projectId, 'ops');
+      if (!place) return null;
+      const dir = join(place.dir, '기록', '원문');
+      await this.ensureDir(place.root, dir);
+      const ignore = join(dir, '.gitignore');
+      if (!existsSync(ignore)) await this.put(place.root, ignore, '*\n');
+      const dot = name.lastIndexOf('.');
+      const ext = dot > 0 ? name.slice(dot).toLowerCase() : '';
+      const base = safeName(dot > 0 ? name.slice(0, dot) : name, '원문');
+      for (let n = 1; ; n++) {
+        const path = join(dir, `${base}${n === 1 ? '' : ` (${n})`}${ext}`);
+        this.check(place.root, path);
+        if (existsSync(path)) {
+          if ((await readFile(path, 'utf8').catch(() => null)) !== text) continue;
+        } else await this.put(place.root, path, text);
+        return { path: relative(place.root, path).replaceAll('\\', '/') };
+      }
+    });
+  }
+  /**
    * Any operations Markdown (`일지`, `회의록`, `할일` …) → `<ops>/<sub>/<name>.md`; `key` names the
    * item so a later copy of it replaces this one.
    */
@@ -551,7 +585,7 @@ export class WorkspaceOutputs {
    * ('폴더에서 바뀜', SPEC-10.10 3): then nothing is written (null) until [버리기]. A copy that
    * cannot be written is '폴더에 아직 안 씀' until a later write succeeds (SPEC-10.10 4).
    */
-  private async writeMarkdownIn(
+  private writeMarkdownIn(
     projectId: string,
     root: string,
     dir: string,
@@ -561,11 +595,36 @@ export class WorkspaceOutputs {
     markdown: string,
     extra: { aliases?: string[]; mark?: string } = {},
   ): Promise<string | null> {
+    const text =
+      copyHeader(source, key) +
+      '\n' +
+      (extra.mark ? extra.mark + '\n' : '') +
+      '\n' +
+      markdown.trimEnd() +
+      '\n';
+    return this.writeCopyIn(projectId, root, dir, base, '.md', key, text, extra);
+  }
+  /**
+   * `writeMarkdownIn` for any text whose marker the caller put in (`ext` `.md`, `.jsonl` …).
+   * `adopt`: a copy of `key` already in the folder that this PC never wrote (no ledger row — e.g.
+   * the folder came from another PC) and that differs is not overwritten but kept as
+   * '폴더에서 바뀜', so its lines can be taken in first (기록 사본, PLAN-53 T-331).
+   */
+  private async writeCopyIn(
+    projectId: string,
+    root: string,
+    dir: string,
+    base: string,
+    ext: string,
+    key: string,
+    text: string,
+    extra: { aliases?: string[]; adopt?: boolean } = {},
+  ): Promise<string | null> {
     const id = `${projectId}\0${key}`;
     let tried: string | null = null;
     try {
       const aliases = extra.aliases ?? [];
-      const { path, owner, stale } = await this.placeFile(root, dir, base, '.md', key, aliases);
+      const { path, owner, stale } = await this.placeFile(root, dir, base, ext, key, aliases);
       tried = path;
       const ledger = await this.ledger(projectId);
       const before = ledger[owner ?? key] ?? ledger[key];
@@ -574,13 +633,15 @@ export class WorkspaceOutputs {
         this.failed.get(projectId)?.delete(key);
         return null;
       }
-      const text =
-        copyHeader(source, key) +
-        '\n' +
-        (extra.mark ? extra.mark + '\n' : '') +
-        '\n' +
-        markdown.trimEnd() +
-        '\n';
+      if (!forced && extra.adopt && !before && owner) {
+        const there = await readFile(path, 'utf8').catch(() => null);
+        if (there !== null && there !== text) {
+          ledger[key] = { path, sha256: '', writtenAt: '' };
+          await this.saveLedger(projectId);
+          this.failed.get(projectId)?.delete(key);
+          return null;
+        }
+      }
       await this.put(root, path, text);
       for (const alias of aliases) delete ledger[alias];
       ledger[key] = { path, sha256: sha256(text), writtenAt: this.now().toISOString() };
@@ -596,6 +657,96 @@ export class WorkspaceOutputs {
       failed.set(key, tried);
       throw error;
     }
+  }
+
+  // --- 기록 사본 (PLAN-53 T-331, ARCH-01 §5 「프로젝트 기록」 '사본 쓰기와 되들이기') -----------
+  /**
+   * One month of records → `<ops>/기록/<YYYY-MM>.jsonl`; `jsonl` is the rows (the marker line is
+   * put first here). A copy the person changed is left as it is (null), as for the notes.
+   */
+  writeRecordsCopy(projectId: string, month: string, jsonl: string): Promise<string | null> {
+    if (!/^\d{4}-\d{2}$/.test(month)) return Promise.resolve(null);
+    const key = `records:${month}`;
+    return this.queue(projectId, 'records', async () => {
+      const place = await this.roleFolder(projectId, 'ops');
+      if (!place) return null;
+      const text = recordsCopyMarker(month) + '\n' + jsonl;
+      const path = await this.writeCopyIn(
+        projectId,
+        place.root,
+        join(place.dir, '기록'),
+        month,
+        '.jsonl',
+        key,
+        text,
+        { adopt: true },
+      );
+      if (path) await this.saveRecordsCopyBase(projectId, month, jsonl);
+      return path;
+    });
+  }
+  /**
+   * The rows this PC last wrote to the month copy (no marker line), or null (never written here —
+   * e.g. a folder from another PC). [폴더 내용 들이기] compares a line with it so only what the
+   * person changed in the file is taken in (a line left alone never undoes a later VIDE change).
+   */
+  async recordsCopyBase(projectId: string, month: string): Promise<string | null> {
+    const file = this.recordsBaseFile(projectId, month);
+    if (!file) return this.bases.get(`${projectId}\0${month}`) ?? null;
+    return readFile(file, 'utf8').catch(() => null);
+  }
+  private recordsBaseFile(projectId: string, month: string) {
+    const data = this.options.dataDirectory;
+    return data && /^[A-Za-z0-9_-]{1,120}$/.test(projectId) && /^\d{4}-\d{2}$/.test(month)
+      ? join(data, 'projects', projectId, 'records-copies', `${month}.jsonl`)
+      : null;
+  }
+  private async saveRecordsCopyBase(projectId: string, month: string, jsonl: string) {
+    const file = this.recordsBaseFile(projectId, month);
+    if (!file) {
+      this.bases.set(`${projectId}\0${month}`, jsonl);
+      return;
+    }
+    await mkdir(join(file, '..'), { recursive: true });
+    const temp = `${file}.${randomUUID().slice(0, 8)}.tmp`;
+    await writeFile(temp, jsonl, 'utf8');
+    await rename(temp, file);
+  }
+  /** `<ops>/기록/README.md` — the whole file is VIDE's (부위 사전·마일스톤·장). */
+  writeRecordsReadme(projectId: string, markdown: string): Promise<string | null> {
+    return this.queue(projectId, 'records', async () => {
+      const place = await this.roleFolder(projectId, 'ops');
+      if (!place) return null;
+      return this.writeMarkdownIn(
+        projectId,
+        place.root,
+        join(place.dir, '기록'),
+        'README',
+        'records:readme',
+        'VIDE 기록',
+        markdown,
+      );
+    });
+  }
+  /** The ledger and failed keys starting with `prefix` (written, changed or not written). */
+  async copyKeys(projectId: string, prefix: string): Promise<string[]> {
+    const ledger = await this.ledger(projectId);
+    const keys = new Set(Object.keys(ledger).filter((key) => key.startsWith(prefix)));
+    for (const key of this.failed.get(projectId)?.keys() ?? [])
+      if (key.startsWith(prefix)) keys.add(key);
+    return [...keys].sort();
+  }
+  /** Where the copy `key` was last written (absolute), if this PC wrote or adopted it. */
+  async copyPath(projectId: string, key: string): Promise<string | null> {
+    return (await this.ledger(projectId))[key]?.path ?? null;
+  }
+  /** The next write of each key goes over the person's change (기록 [다시 쓰기]·들이기 뒤). */
+  force(projectId: string, keys: string[]) {
+    for (const key of keys) this.forced.add(`${projectId}\0${key}`);
+  }
+  /** Drops what `force` left unused (a key that had nothing to write). */
+  unforce(projectId: string, keys: string[]) {
+    for (const key of keys) this.forced.delete(`${projectId}\0${key}`);
   }
 
   // --- 폴더에서 바뀜 ----------------------------------------------------------------------------

@@ -81,6 +81,23 @@ const json = <T>(value: unknown, fallback: T): T => {
     return fallback;
   }
 };
+const changeListeners = new WeakMap<object, Set<(projectId: string) => void>>();
+/**
+ * Calls `listener` after any successful write (records, links, states, 부위 사전, milestones)
+ * through any `Records` of `source` — the routes, the AI tool and the automatic candidates share
+ * the store. The work-folder copy (PLAN-53 T-331, `src/server/records-mirror.ts`) listens here.
+ * Listener errors are swallowed. Returns the unsubscribe.
+ */
+export function onRecordsChanged(
+  source: DatabaseSync | Store,
+  listener: (projectId: string) => void,
+): () => void {
+  let set = changeListeners.get(source);
+  if (!set) changeListeners.set(source, (set = new Set()));
+  set.add(listener);
+  return () => void set.delete(listener);
+}
+
 const MARK_OF: Record<RecordState, string> = { kept: 'o', dropped: 'x', candidate: '.' };
 const STATE_OF: Record<string, RecordState> = { o: 'kept', x: 'dropped', '.': 'candidate' };
 
@@ -113,6 +130,16 @@ export class Records {
   }
   private stamp() {
     return this.now().toISOString();
+  }
+  /** Tells the change listeners (never throws), then gives `value` back. */
+  private changed<T>(projectId: string, value: T): T {
+    for (const listener of changeListeners.get(this.source) ?? [])
+      try {
+        listener(projectId);
+      } catch {
+        /* a listener never fails the write */
+      }
+    return value;
   }
 
   // ---- Reading ----
@@ -310,7 +337,7 @@ export class Records {
     const now = this.now();
     const at = now.toISOString();
     const id = randomUUID();
-    return this.tx(projectId, (db) => {
+    const row = this.tx(projectId, (db) => {
       if (sourceKey) {
         const held = db
           .prepare('SELECT id FROM records WHERE projectId=? AND sourceKey=?')
@@ -345,12 +372,99 @@ export class Records {
       for (const to of data.follows ?? []) link.run(projectId, id, to);
       return this.get(projectId, id);
     });
+    return this.changed(projectId, row);
+  }
+
+  /**
+   * Many new records in one transaction (가져오기, PLAN-53 T-329·T-330): the rules of `add`, but
+   * no row is read back (`add` in a loop reads every link per record). A `sourceKey` already held
+   * — before or earlier in the batch — is skipped with its `existingId`. Any invalid input refuses
+   * the whole batch (INVALID_INPUT).
+   */
+  addMany(
+    projectId: string,
+    items: readonly { input: unknown; sourceKey?: string }[],
+    options: Omit<RecordAddOptions, 'sourceKey'>,
+  ): { added: string[]; skipped: { sourceKey: string; existingId: string }[] } {
+    const ai = options.by === AI_AUTHOR;
+    const state = options.state ?? (ai ? 'candidate' : 'kept');
+    if (!RECORD_STATES.includes(state)) invalid();
+    if (ai && state !== 'candidate') throw new DomainError('RECORD_AI_FORBIDDEN');
+    const source = options.source ?? 'manual';
+    if (!RECORD_SOURCES.includes(source)) invalid();
+    if (!options.by.trim()) invalid();
+    const inputs = items.map((item) => ({
+      data: parse(recordInputSchema, item.input),
+      sourceKey: item.sourceKey?.trim() || null,
+    }));
+    const now = this.now();
+    const at = now.toISOString();
+    const result = this.tx(projectId, (db) => {
+      const added: string[] = [];
+      const skipped: { sourceKey: string; existingId: string }[] = [];
+      const held = db.prepare('SELECT id FROM records WHERE projectId=? AND sourceKey=?');
+      const insert = db.prepare(
+        `INSERT INTO records(projectId, id, date, time, source, type, text, state, by, chapter,
+          attachments, sourceKey, supersededBy, createdAt, updatedAt, updatedBy)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,NULL)`,
+      );
+      const link = db.prepare('INSERT OR IGNORE INTO record_links VALUES(?,?,?)');
+      for (const { data, sourceKey } of inputs) {
+        if (sourceKey) {
+          const existing = held.get(projectId, sourceKey);
+          if (existing) {
+            skipped.push({ sourceKey, existingId: String(existing.id) });
+            continue;
+          }
+        }
+        for (const to of data.follows ?? [])
+          if (!this.exists(db, projectId, to)) throw new DomainError('RECORD_NOT_FOUND');
+        const id = randomUUID();
+        insert.run(
+          projectId,
+          id,
+          data.date ?? localDay(now),
+          data.time ?? null,
+          source,
+          data.type ?? '?',
+          data.text,
+          state,
+          options.by,
+          data.chapter ?? null,
+          JSON.stringify(data.attachments ?? {}),
+          sourceKey,
+          at,
+          at,
+        );
+        if (data.parts?.length) this.setParts(db, projectId, id, data.parts);
+        for (const to of data.follows ?? []) link.run(projectId, id, to);
+        added.push(id);
+      }
+      return { added, skipped };
+    });
+    return result.added.length ? this.changed(projectId, result) : result;
+  }
+  /** Which of `keys` are held, and by which record (one query per 500 keys). */
+  heldSourceKeys(projectId: string, keys: readonly string[]): Map<string, string> {
+    const db = this.of(projectId);
+    const held = new Map<string, string>();
+    const unique = [...new Set(keys.filter(Boolean))];
+    for (let i = 0; i < unique.length; i += 500) {
+      const chunk = unique.slice(i, i + 500);
+      const rows = db
+        .prepare(
+          `SELECT sourceKey, id FROM records WHERE projectId=? AND sourceKey IN (${chunk.map(() => '?').join(',')})`,
+        )
+        .all(projectId, ...chunk) as { sourceKey: string; id: string }[];
+      for (const row of rows) held.set(String(row.sourceKey), String(row.id));
+    }
+    return held;
   }
 
   /** Text, type, parts, chapter, date, time; keeps who and when. The AI may not change a kept text. */
   patch(projectId: string, id: string, input: unknown, by: string): RecordRow {
     const data = parse(recordPatchSchema, input);
-    return this.tx(projectId, (db) => {
+    const row = this.tx(projectId, (db) => {
       const row = this.raw(projectId, id);
       if (!row) throw new DomainError('RECORD_NOT_FOUND');
       if (row.supersededBy !== null && row.supersededBy !== undefined)
@@ -374,6 +488,7 @@ export class Records {
       if (data.parts) this.setParts(db, projectId, id, data.parts);
       return this.get(projectId, id);
     });
+    return this.changed(projectId, row);
   }
 
   /**
@@ -383,7 +498,7 @@ export class Records {
   correct(projectId: string, id: string, input: unknown, by: string): RecordRow {
     const data = parse(recordCorrectSchema, input);
     if (by === AI_AUTHOR) throw new DomainError('RECORD_AI_FORBIDDEN');
-    return this.tx(projectId, () => {
+    const row = this.tx(projectId, () => {
       const old = this.get(projectId, id);
       if (old.supersededBy) throw new DomainError('RECORD_SUPERSEDED');
       const now = this.now();
@@ -407,6 +522,7 @@ export class Records {
       db.prepare('INSERT OR IGNORE INTO record_links VALUES(?,?,?)').run(projectId, id, created.id);
       return this.get(projectId, created.id);
     });
+    return this.changed(projectId, row);
   }
 
   /** O · X · 지움 (back to candidate). The AI may only leave a record a candidate. */
@@ -418,7 +534,7 @@ export class Records {
   setStates(projectId: string, ids: string[], state: RecordState, by: string): number {
     if (!RECORD_STATES.includes(state)) invalid();
     if (by === AI_AUTHOR && state !== 'candidate') throw new DomainError('RECORD_AI_FORBIDDEN');
-    return this.tx(projectId, (db) => {
+    const changed = this.tx(projectId, (db) => {
       const update = db.prepare(
         'UPDATE records SET state=?, updatedAt=?, updatedBy=? WHERE projectId=? AND id=? AND state<>?',
       );
@@ -430,11 +546,12 @@ export class Records {
       }
       return changed;
     });
+    return changed ? this.changed(projectId, changed) : changed;
   }
 
   /** `from` led to `to`. Refused when `to` already reaches `from` (or they are the same). */
   link(projectId: string, from: string, to: string): RecordRow {
-    return this.tx(projectId, (db) => {
+    const row = this.tx(projectId, (db) => {
       if (!this.exists(db, projectId, from) || !this.exists(db, projectId, to))
         throw new DomainError('RECORD_NOT_FOUND');
       if (from === to || this.reaches(db, projectId, to, from))
@@ -442,9 +559,10 @@ export class Records {
       db.prepare('INSERT OR IGNORE INTO record_links VALUES(?,?,?)').run(projectId, from, to);
       return this.get(projectId, from);
     });
+    return this.changed(projectId, row);
   }
   unlink(projectId: string, from: string, to: string): RecordRow {
-    return this.tx(projectId, (db) => {
+    const row = this.tx(projectId, (db) => {
       if (!this.exists(db, projectId, from)) throw new DomainError('RECORD_NOT_FOUND');
       db.prepare('DELETE FROM record_links WHERE projectId=? AND fromId=? AND toId=?').run(
         projectId,
@@ -453,6 +571,7 @@ export class Records {
       );
       return this.get(projectId, from);
     });
+    return this.changed(projectId, row);
   }
   private reaches(db: DatabaseSync, projectId: string, start: string, goal: string) {
     const row = db
@@ -584,7 +703,7 @@ export class Records {
         at,
         at,
       );
-    return this.part(projectId, id);
+    return this.changed(projectId, this.part(projectId, id));
   }
   /** Changes the given fields only. */
   setPart(projectId: string, id: string, input: unknown): PartRow {
@@ -616,16 +735,17 @@ export class Records {
         projectId,
         id,
       );
-    return this.part(projectId, id);
+    return this.changed(projectId, this.part(projectId, id));
   }
   /** The part goes; its records stay, only unattached from it. */
   removePart(projectId: string, id: string): { id: string } {
-    return this.tx(projectId, (db) => {
+    const removed = this.tx(projectId, (db) => {
       this.part(projectId, id);
       db.prepare('DELETE FROM record_parts WHERE projectId=? AND partId=?').run(projectId, id);
       db.prepare('DELETE FROM parts WHERE projectId=? AND id=?').run(projectId, id);
       return { id };
     });
+    return this.changed(projectId, removed);
   }
 
   // ---- 마일스톤 ----
@@ -642,13 +762,13 @@ export class Records {
     this.of(projectId)
       .prepare('INSERT INTO milestones VALUES(?,?,?,?)')
       .run(projectId, row.id, row.label, row.date);
-    return row;
+    return this.changed(projectId, row);
   }
   removeMilestone(projectId: string, id: string): { id: string } {
     const result = this.of(projectId)
       .prepare('DELETE FROM milestones WHERE projectId=? AND id=?')
       .run(projectId, id);
     if (!Number(result.changes)) throw new DomainError('MILESTONE_NOT_FOUND');
-    return { id };
+    return this.changed(projectId, { id });
   }
 }

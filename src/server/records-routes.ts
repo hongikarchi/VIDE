@@ -35,6 +35,9 @@ export const recordsStatuses: Record<string, number> = {
   RECORD_SUPERSEDED: 409,
   RECORD_MARKS_MISMATCH: 409,
   RECORD_AI_FORBIDDEN: 403,
+  INPUT_TOO_LARGE: 413,
+  // 기록 사본 (T-331): the same value as `workspace-routes.ts`.
+  NO_WORKSPACE: 404,
 };
 
 export interface RecordsRouteDeps {
@@ -53,6 +56,14 @@ export interface RecordsRouteDeps {
   partsStatus?: (projectId: string) => Promise<unknown>;
   /** `GET …/objects/:o/records?linkId=` → `{records, via}` (T-324). */
   objectRecords?: (projectId: string, objectId: string, linkId?: string) => Promise<unknown>;
+  /** `POST …/records/import-file {kind, name, text}` (T-329·T-330, `records-import.ts`). */
+  importFile?: (projectId: string, input: unknown, by: string) => Promise<unknown>;
+  /** `…/records/mirror[/import|rewrite]` — the work-folder copy (T-331, `records-mirror.ts`). */
+  mirror?: {
+    status(projectId: string, options?: { flush?: boolean }): Promise<unknown>;
+    importFolder(projectId: string, by: string): Promise<unknown>;
+    rewrite(projectId: string): Promise<unknown>;
+  };
 }
 
 /**
@@ -190,6 +201,22 @@ export async function recordsRoutes(
           }),
         });
       } else throw new DomainError('NOT_FOUND');
+      return true;
+    }
+    if (rest.length === 1 && id === 'import-file' && method === 'POST') {
+      if (!deps.importFile) throw new DomainError('NOT_FOUND');
+      send(200, await deps.importFile(projectId, await deps.body(), by()));
+      return true;
+    }
+    // 작업 폴더 사본 (T-331): before the `:r` paths. A remote session only reads the state.
+    if (id === 'mirror' && deps.mirror && rest.length <= 2) {
+      if (rest.length === 1 && method === 'GET')
+        send(200, await deps.mirror.status(projectId, { flush: !deps.remote }));
+      else if (sub === 'import' && method === 'POST')
+        send(200, await deps.mirror.importFolder(projectId, by()));
+      else if (sub === 'rewrite' && method === 'POST')
+        send(200, await deps.mirror.rewrite(projectId));
+      else throw new DomainError('NOT_FOUND');
       return true;
     }
     if (rest.length === 1 && id === 'state' && method === 'POST') {

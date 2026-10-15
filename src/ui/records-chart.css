@@ -1,0 +1,305 @@
+/* 부위×시간 차트 (PLAN-53 T-328, Design SCR-45 「구현 기준」): one accent colour for the glyphs
+   (shape = type, filled = 남김, hollow = 후보), thin text-3 lines, the switch box floating at the
+   top right, the index in two columns (four in print). No coloured side bars. */
+.records-chart {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  padding: 0 8px 8px;
+}
+.records-chart-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 6px;
+}
+.records-chart-modes {
+  display: flex;
+  gap: 4px;
+}
+.records-chart-modes .records-view-chip[aria-pressed='true'] {
+  background: var(--bg-selected);
+  color: var(--text-1);
+}
+.records-chart-switches {
+  position: relative;
+  font-size: var(--fs-sm);
+}
+.records-chart-switches > summary {
+  cursor: pointer;
+  color: var(--text-2);
+  list-style: none;
+}
+.records-chart-switches > summary::-webkit-details-marker {
+  display: none;
+}
+.records-chart-switch-box {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 5;
+  width: 240px;
+  padding: 8px 10px;
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-floating);
+  box-shadow: var(--shadow-float);
+}
+.records-chart-switch-box fieldset {
+  border: 0;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.records-chart-switch-box legend,
+.records-chart-sub {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  padding: 0;
+  margin-bottom: 2px;
+}
+.records-chart-sub {
+  margin-top: 4px;
+}
+.records-chart-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-1);
+}
+.records-chart-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  color: var(--text-3);
+}
+.records-chart-legend {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0 0;
+  border-top: var(--hairline) solid var(--line);
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.records-chart-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.records-chart-sheet {
+  flex: none;
+}
+.records-chart-print-legend {
+  display: none;
+}
+.records-chart-body {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+}
+.records-chart-names {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-1);
+}
+.records-chart-row-name {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-right: 8px;
+  overflow: hidden;
+  border-top: var(--hairline) solid transparent;
+}
+.records-chart-row-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.records-chart-group,
+.records-chart-role {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.records-chart-svg {
+  flex: none;
+  display: block;
+  overflow: visible;
+  /* style.css draws every svg as an icon that takes no pointer; the chart is not an icon. */
+  pointer-events: auto;
+}
+.records-glyph,
+.records-glyph circle {
+  fill: var(--accent);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.records-glyph .records-glyph-outer {
+  fill: var(--bg-surface);
+}
+.records-glyph-hollow,
+.records-glyph-hollow circle {
+  fill: var(--bg-surface);
+}
+.records-glyph-root,
+.records-glyph-root circle {
+  stroke-width: 2.5;
+}
+.records-glyph-unknown {
+  fill: var(--bg-surface);
+}
+.records-chart-hover {
+  fill: var(--bg-hover);
+}
+.records-chart-later {
+  opacity: 0.35;
+}
+.records-chart-number {
+  font-family: var(--font-mono);
+}
+.records-chart-month {
+  stroke: var(--border-subtle);
+  stroke-width: 1;
+}
+.records-chart-milestone line {
+  stroke: var(--text-3);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.records-chart-milestone text {
+  font-size: 10px;
+  fill: var(--text-2);
+}
+.records-chart-known line {
+  stroke: var(--text-3);
+  stroke-width: 1;
+}
+.records-chart-known-before {
+  stroke-dasharray: 3 3;
+}
+.records-chart-tip {
+  position: absolute;
+  z-index: 4;
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-floating);
+  box-shadow: var(--shadow-float);
+  font-size: var(--fs-sm);
+  color: var(--text-1);
+  pointer-events: none;
+}
+.records-chart-tip-head {
+  color: var(--text-2);
+}
+.records-chart-tip-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.records-chart-index {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  columns: 2;
+  column-gap: 24px;
+  font-size: var(--fs-sm);
+}
+.records-chart-index li {
+  break-inside: avoid;
+}
+.records-chart-index button {
+  display: grid;
+  grid-template-columns: 28px 40px minmax(0, 88px) 30px minmax(0, 1fr);
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 1px 4px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  color: var(--text-1);
+  font: inherit;
+}
+.records-chart-index button:hover {
+  background: var(--bg-hover);
+}
+.records-chart-index button > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.records-chart-index-number,
+.records-chart-index-date {
+  font-family: var(--font-mono);
+  color: var(--text-2);
+}
+.records-chart-print-only {
+  display: none;
+}
+
+/* Print: only the copied sheet (records-chart.tsx printSheet), A3 landscape, nothing faded. */
+@page records-a3 {
+  size: A3 landscape;
+  margin: 8mm;
+}
+.records-print-root {
+  display: none;
+}
+@media print {
+  body[data-records-print] > :not(.records-print-root) {
+    display: none !important;
+  }
+  body[data-records-print] > .records-print-root {
+    display: block;
+    page: records-a3;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .records-print-root .records-chart-print-legend {
+    display: block;
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .records-print-root .records-chart-svg {
+    width: calc(100% - 180px) !important;
+    height: auto !important;
+  }
+  .records-print-root .records-chart-row-label {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .records-print-root .chart-label {
+    font-size: 12px;
+  }
+  .records-print-root .records-chart-milestone text {
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .records-print-root .chart-faded,
+  .records-print-root .chart-link-dim,
+  .records-print-root .records-chart-later {
+    opacity: 1;
+  }
+  .records-print-root .records-chart-hover {
+    display: none;
+  }
+  .records-print-root .records-chart-index {
+    columns: 4;
+    padding-left: 0;
+    font-size: 9pt;
+  }
+  .records-print-root .records-chart-print-only {
+    display: list-item;
+  }
+}

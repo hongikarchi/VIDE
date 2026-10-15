@@ -48,6 +48,16 @@ import {
   type RecordType,
 } from './records-api.ts';
 import { remoteSession } from './remote-panel.ts';
+import {
+  HintWords,
+  ImportButton,
+  importNotice,
+  rowHints,
+  triageApplies,
+  triageOrder,
+} from './records-import.tsx';
+import { RecordsChart } from './records-chart.tsx';
+import { MirrorChanged, MirrorLine, useRecordsMirror } from './records-mirror-line.tsx';
 import { setWorkspace } from './workspaces.ts';
 import './records-tab.css';
 
@@ -302,6 +312,7 @@ function Row({
   correctedOn,
   onPick,
   rowRef,
+  partNames,
 }: {
   row: RecordRow;
   current: boolean;
@@ -310,6 +321,8 @@ function Row({
   correctedOn: string | undefined;
   onPick: () => void;
   rowRef: ((element: HTMLLIElement | null) => void) | undefined;
+  /** 부위 사전 names, for an imported candidate's hint words. */
+  partNames?: readonly string[];
 }) {
   const suggested = row.by === 'ai' && row.state !== 'kept';
   return (
@@ -331,7 +344,10 @@ function Row({
       <span className="records-type" title={TYPE_HINT[row.type]}>
         {row.type}
       </span>
-      <span className="records-text">{row.text}</span>
+      <span className="records-text">
+        {row.text}
+        <HintWords hints={rowHints(row, partNames ?? [])} />
+      </span>
       <span className="records-parts">
         {row.parts.length ? (
           row.parts.map((id) => (
@@ -1219,6 +1235,9 @@ function RecordsTab({ projectId }: { projectId: string }) {
   const [marks, setMarks] = useState<string | undefined>();
   const [pasting, setPasting] = useState<string | undefined>();
   const [notice, setNotice] = useState<string | undefined>();
+  /** A file already in: its first record, for [처음 기록 보기]. */
+  const [duplicate, setDuplicate] = useState<string | undefined>();
+  const mirror = useRecordsMirror(projectId);
   const current = useRef<HTMLLIElement | null>(null);
 
   const loadAll = useCallback(async () => {
@@ -1241,7 +1260,8 @@ function RecordsTab({ projectId }: { projectId: string }) {
         setRows(answer.records);
         if (!keep) {
           const first = answer.records.findIndex((row) => row.state === 'candidate');
-          setCursor(Math.max(0, first));
+          // Ordered by the hints: the candidates come first.
+          setCursor(triageApplies(filters) ? 0 : Math.max(0, first));
         }
       } catch {
         setError(true);
@@ -1286,7 +1306,11 @@ function RecordsTab({ projectId }: { projectId: string }) {
     setRows((list) => (list ? swap(list) : list));
     setAll((list) => swap(list));
   }, []);
-  const visible = rows ?? [];
+  const partNames = useMemo(() => parts.map((part) => part.name), [parts]);
+  const visible = useMemo(
+    () => triageOrder(rows ?? [], filters, partNames),
+    [rows, filters, partNames],
+  );
   const opened = openId
     ? (byId.get(openId) ?? visible.find((row) => row.id === openId))
     : undefined;
@@ -1482,9 +1506,37 @@ function RecordsTab({ projectId }: { projectId: string }) {
               </button>
             </>
           ) : null}
-          <button type="button" className="link-button" onClick={() => void reload()}>
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => {
+              void reload();
+              void mirror.reload();
+            }}
+          >
             다시 읽기
           </button>
+          {remote ? null : (
+            <ImportButton
+              projectId={projectId}
+              onDone={(kind, result) => {
+                setDuplicate(undefined);
+                setNotice(importNotice(result));
+                chooseView('list');
+                setFilters({ state: ['candidate'], source: [kind] });
+                void loadAll().catch(() => setError(true));
+              }}
+              onDuplicate={(existingId) => {
+                setNotice(undefined);
+                setDuplicate(existingId);
+                void loadAll().catch(() => setError(true));
+              }}
+              onError={(text) => {
+                setDuplicate(undefined);
+                setNotice(text);
+              }}
+            />
+          )}
           <div className="records-menu">
             <button
               type="button"
@@ -1533,7 +1585,17 @@ function RecordsTab({ projectId }: { projectId: string }) {
               </div>
             ) : null}
           </div>
+          <MirrorLine mirror={mirror} />
         </div>
+        <MirrorChanged
+          projectId={projectId}
+          mirror={mirror}
+          remote={remote}
+          onDone={(text) => {
+            setNotice(text);
+            void reload();
+          }}
+        />
         {confirm ? (
           <div className="records-confirm" role="group" aria-label="모두 바꾸기 확인">
             <span>
@@ -1582,10 +1644,34 @@ function RecordsTab({ projectId }: { projectId: string }) {
             {notice}
           </p>
         ) : null}
-        {view === 'chart' ? (
-          <p className="records-empty">
-            차트는 다음 업데이트에서 열립니다. 지금은 [목록]에서 거르세요.
+        {duplicate ? (
+          <p className="records-notice" role="status">
+            이미 들인 파일입니다.{' '}
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                setOpenId(duplicate);
+                setDuplicate(undefined);
+              }}
+            >
+              처음 기록 보기
+            </button>
           </p>
+        ) : null}
+        {view === 'chart' && !error ? (
+          <RecordsChart
+            projectId={projectId}
+            rows={rows}
+            parts={parts}
+            keptOnly={
+              filters.state?.length === DEFAULT_STATES.length &&
+              DEFAULT_STATES.every((state) => filters.state?.includes(state))
+            }
+            openId={openId}
+            onOpen={setOpenId}
+            onList={() => chooseView('list')}
+          />
         ) : error ? (
           <p className="records-empty">기록을 읽지 못했습니다. [다시 읽기]로 다시 시도하세요.</p>
         ) : !rows ? (
@@ -1609,6 +1695,7 @@ function RecordsTab({ projectId }: { projectId: string }) {
                   current={on}
                   open={openId === row.id}
                   partName={partName}
+                  partNames={partNames}
                   correctedOn={corrected ? shortDate(corrected.date) : undefined}
                   rowRef={
                     on
@@ -1627,7 +1714,7 @@ function RecordsTab({ projectId }: { projectId: string }) {
           </ul>
         )}
       </div>
-      {opened && view === 'list' ? (
+      {opened ? (
         <Detail
           projectId={projectId}
           row={opened}

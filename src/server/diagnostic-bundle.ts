@@ -37,6 +37,13 @@ const SETTINGS = [
 /** Never in a bundle, whatever else changes (checked again on every entry). */
 const FORBIDDEN =
   /(^|[\\/])(launch\.json|local-session\.key|remote-host\.json|typesafe\.env|public-data\.env|[^\\/]*\.sqlite[^\\/]*|cli-profiles|secrets|service-settings\.json)([\\/]|$)/i;
+/** Raw imported conversations and mail (`<ops>/기록/원문/`, PLAN-53 T-331): never, by any path. */
+const FORBIDDEN_PATH = /(^|[\\/])기록[\\/]원문([\\/]|$)/;
+/** Whether a bundle entry (its name in the zip, and the file it reads) is never allowed. */
+export const forbiddenEntry = (name: string, file?: string) =>
+  FORBIDDEN.test(name) ||
+  FORBIDDEN_PATH.test(name) ||
+  (file !== undefined && (FORBIDDEN.test(basename(file)) || FORBIDDEN_PATH.test(file)));
 const KEEP_BUNDLES = 3;
 
 export interface DumpInfo {
@@ -128,7 +135,7 @@ export async function writeDiagnosticBundle(options: BundleOptions) {
     { name: 'settings.json', data: Buffer.from(JSON.stringify(settings, null, 2)) },
   );
   for (const entry of entries)
-    if (FORBIDDEN.test(entry.name) || (entry.file && FORBIDDEN.test(basename(entry.file))))
+    if (forbiddenEntry(entry.name, entry.file))
       throw Object.assign(new Error('BUNDLE_FORBIDDEN_FILE'), { code: 'BUNDLE_FORBIDDEN_FILE' });
   const output = options.output ?? join(options.directory, 'diagnostics');
   await mkdir(output, { recursive: true });

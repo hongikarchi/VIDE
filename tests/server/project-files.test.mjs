@@ -82,9 +82,18 @@ test('a project folder is an existing folder that is not a drive root, VIDE data
     join(project, '.env.local'),
     join(project, 'server.pem'),
     join(project, '.git-credentials'),
+    // Imported KakaoTalk chats and mail (PLAN-53 T-331): the folder and anything in it.
+    join(project, '01_운영', '기록', '원문'),
+    join(project, '01_운영', '기록', '원문', '대화.txt'),
   ])
     assert.equal(deniedPath(path, context), true, path);
-  for (const path of [join(project, 'notes.txt'), join(project, 'id_rsa.pub'), join(root, 'env')])
+  for (const path of [
+    join(project, 'notes.txt'),
+    join(project, 'id_rsa.pub'),
+    join(root, 'env'),
+    join(project, '01_운영', '기록', '2026-10.jsonl'),
+    join(project, '원문', '기록', 'x.txt'),
+  ])
     assert.equal(deniedPath(path, context), false, path);
   // The store keeps one row per path; a project row wins over a read row.
   const folders = db(t);
