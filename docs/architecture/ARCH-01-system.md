@@ -2,10 +2,10 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 1.29
-updated: 2026-10-14
+version: 1.30
+updated: 2026-10-15
 owner: agent:codex
-related: [PLAN-47, SPEC-14, ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35, PLAN-36, ADR-039, PLAN-38, PLAN-39, PLAN-42, ADR-040, ADR-041, PLAN-43, SPEC-13, PLAN-46]
+related: [PLAN-52, ADR-042, PLAN-47, SPEC-14, ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35, PLAN-36, ADR-039, PLAN-38, PLAN-39, PLAN-42, ADR-040, ADR-041, PLAN-43, SPEC-13, PLAN-46]
 ---
 
 # VIDE 기술 구조와 구현 계약
@@ -890,7 +890,8 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 | PC `<데이터>/shared-layer/` | 공유받은 프로젝트 목록 사본(`projects.json`), 프로젝트별 자료 묶음 판·검토 보낼 상자(`<id>.json`) | 사본·대기열 | 「팀 공유 프로젝트 층」 |
 | PC `<데이터>/models/`·`cad-models/`·`sdk-models/`·`zwcad-sdk-models/` | 작업 사본·가져오기 사본·호스트 실행본 | 원본(사이트에 올리지 않음) | §4 |
 | PC `<데이터>/attachments/`·`reference-boards/`·`outputs/`·`structure/` | 첨부·참고 이미지 보드·산출물·구조 jig 설정 | 원본(올리지 않음) | §3, SPEC-09 |
-| PC 사용자 폴더 | 프로젝트 폴더·원본 도면·자료 원본 | 사용자 원본. VIDE는 경로만 기록 | SPEC-01.13, SPEC-08.4 |
+| PC 로컬 작업 폴더(매니페스트 있는 프로젝트 폴더) | `project.config.json`·`README.md`·`AGENTS.md`, 역할 폴더의 jig 결과(데이터·검토용 보고서)·보고서·일지·회의록·검토본·프로젝트 jig 설명서, 체크아웃한 3dm 사본, 아카이브(`서버반영/`·`서버백업/`) | 매니페스트와 역할 경로는 원본(재현의 기준). 산출물·일지·검토본·jig 설명서는 DB·사이트 원본의 **사람이 읽는 사본**이며 VIDE가 쓴다. 체크아웃 사본은 작업 중 원본(서버에 반영하기 전까지). 작업 폴더가 없는 프로젝트는 `<데이터>/outputs/` 등에 지금처럼 둔다 | 「작업 폴더(PLAN-52)」, SPEC-01.13의 7~9 |
+| PC·서버 연결 폴더(회사 서버 등 구조가 있는 폴더) | 원본 도면·모델·자료 원본 | 사용자·회사 원본. VIDE는 읽고 경로와 확정된 역할 기억만 저장한다. 서버에 쓰는 것은 사람이 누른 [서버에 반영]뿐이고, 도면 역할의 AI 편집(서버 직접 모드)은 요청 되돌리기와 하루 백업 아래에서만 한다. 구조를 만들거나 바꾸지 않는다 | SPEC-01.13의 1·8·9, SPEC-08.4 |
 | PC 설정·키 | `remote-host.json`(PC 호스트 키), `local-session.key`, `typesafe.env`(Jev 키), `public-data.env`(공공 자료 키), `*-settings.json`(질문·웹·경로·사용량·`site-data-settings.json` 공공 자료 전송 고지), `cli-profiles/`, `desktop.json`, `offline-view.json`, `conversation-mirror.json`(올린 대화 기록 지문), `removed-projects.json`, `launch.json` | PC 전용(올리지 않음) | 「PC 프로그램」 |
 | PC 기록 | `logs/`(진단 기록), `crashdumps/`, 오류·성능 보고 보낼 상자 | PC 전용. 보고는 동의한 요약만 사이트로(ADR-036) | 「진단 기록」·「오류·성능 보고」 |
 | PC 창·도구 | `webview/`·`webview-zwcad/`(WebView2 저장소), `plugins/`, `bin/`, `tools/` | PC 전용 | 「PC 프로그램」 |
@@ -908,6 +909,22 @@ R2 조건부 쓰기/체크섬은 [공식 Workers API](https://developers.cloudfl
 | Cloudflare 터널 | 원격 세션의 요청·응답이 지나감(저장 안 함) | — | 「계정 웹사이트와 작업 PC」 |
 | 외부 AI(Anthropic·OpenAI, 사용자 구독 CLI) | 요청 글, 첨부·참고 이미지, 프로젝트 AI 지시, 모델 문맥·도구 결과, 자료 도구가 돌려준 진술 | 공급자 정책에 따름(VIDE가 지우지 못함) | §2, FR-18 |
 | 외부 Jev(Typesafe) | 경로 판정·이전 대화 선별을 위한 요청 글과 이전 요청 제목 | 공급자 정책에 따름 | 「PC 프로그램」 |
+
+### 작업 폴더(PLAN-52)
+
+[ADR-042](../decisions/ADR-042-workspace-folders.md)와 SPEC-01.13의 7~10의 물리 계약이다. 의미(역할·확정·실패)는 SPEC이, 아래 형식은 이 절이 소유한다.
+
+- **매니페스트 `project.config.json`(작업 폴더 루트, UTF-8 JSON).** 두 스키마를 읽고 하나를 쓴다.
+  - `architecture-workspace/1`(규모검토 폴더, 읽기만): `schema`, `project_id`, `title`, `paths{engine, project_data, raw, rhino, rcp, analysis, law_review, site_modeling, references, presentation, output, archive}`, `authority{…}`, `git{mode, root, branch, remote}`. 역할 대응은 `raw→raw`, `rhino→rhino`, `analysis→review`, `output→output`, `references→references`, `archive→archive`이고 `project_data`·`law_review`·`site_modeling`은 `review` 아래의 하위 경로로, `engine`·`rcp`·`presentation`은 역할 없는 참고 경로로 읽는다. 이 스키마의 파일은 고쳐 쓰지 않는다(VIDE 값은 `vide-workspace/1`로 옆에 두지 않고 같은 파일을 승격할 때만 쓴다 — 승격은 사람이 [VIDE 형식으로 바꾸기]를 눌렀을 때).
+  - `vide-workspace/1`(읽기·쓰기): `schema`, `project_id`(규모검토 호환용 문자열), `title`, `paths{ops, raw, rhino, cad, review, output, snapshots, references, tools, archive}`(역할 키 → 루트 기준 상대 경로, 없는 키는 역할 없음), `server{root, paths{<역할 키>: 서버 기준 상대 경로}, targets{<역할 키>: 반영 위치 상대 경로|null}, checkout{rhino: "local", cad: "server"|"local"}, proposedAt, confirmedBy, confirmedAt}`(**기억**: `paths`·`targets`는 사람이 확정한 값만, 추정은 저장하지 않음; `root`는 1의 실제 경로 규칙대로 UNC면 UNC), `template{name, version}`, `authority{…}`(규모검토 키를 그대로 보존), `git{mode: "project-local"|"none", root, branch, remote}`, `vide{projectId(UUID), createdBy, createdAt, updatedAt}`. 모르는 키는 보존한다. 파일이 깨졌거나 `schema`를 모르면 `WORKSPACE_CONFIG_INVALID`, `vide.projectId`가 이 PC의 다른 프로젝트와 충돌하면 `WORKSPACE_PROJECT_CONFLICT`로 열지 않는다.
+- **템플릿 `<데이터>/workspace-template.json`:** `{ name, version, folders{ops:"01_운영", raw:"02_자료", rhino:"03_모델", cad:"04_도면", review:"05_검토", output:"06_산출물", snapshots:"07_검토본", references:"08_레퍼런스", tools:"09_도구", archive:"10_아카이브"}, readme, agents }`. 없으면 이 기본값으로 만든다. 이름만 바꿀 수 있고 역할 키는 고정이다. 이미 만든 프로젝트는 매니페스트의 `paths`가 정본이라 템플릿 변경의 영향을 받지 않는다.
+- **`AGENTS.md`·`README.md`의 VIDE 소유 구간:** `<!-- vide:start -->` … `<!-- vide:end -->` 사이만 VIDE가 다시 쓴다(프로젝트 이름, 역할 경로 표, 정본 규칙 한 줄, 서버 기억 요약, CLI 사용법). 표식 밖은 보존하고, 표식이 없으면 파일 끝에 구간을 더한다.
+- **산출물 경로:** jig 결과 `<review>/<jigId>/<YYYY-MM-DD-HHmm>-<instanceId 앞 8자리>/`(`data.json`, `report.html`, 파트 파일), 보고서 내보내기 `<output>/<YYYY-MM-DD>-<제목>.html|csv`, 일지 `<ops>/일지/<YYYY-MM-DD>.md`, 회의록 `<ops>/회의록/<YYYY-MM-DD>-<제목>.md`, 할 일 내보내기 `<ops>/할일/<YYYY-MM-DD>.md`, 검토본 `<snapshots>/<YYYY-MM-DD-HHmm>-<reviewId 앞 8자리>/`, 프로젝트 jig `<tools>/<jigId>/README.md`·`jig.json`. 이름이 겹치면 `-2`, `-3`을 붙인다. 쓰기는 모두 작업 폴더 루트의 실제 경로 아래로만 하며(SPEC-01.13의 6 해석), 밖이면 `OUTSIDE_WORKSPACE`다.
+- **체크아웃 기록:** `project.sqlite` 표 `checkouts(id, role, server_path, local_path, pc_id, user_id, checked_out_at, released_at, server_mtime_at_checkout, server_hash_at_checkout)`. 사이트 D1 표 `project_checkouts(project_id, file_key, role, server_path, pc_id, user_name, checked_out_at, released_at)` — 마이그레이션 **0016**(0015 `agenda-authors` 다음), PC가 자기 행만 올리고 지우는 PLAN-35의 할 일 복사 방식과 같다. '작업 중' 표시는 두 표의 `released_at IS NULL` 행이다.
+- **아카이브 경로:** [서버에 반영] 전 복사 `<archive>/서버반영/<YYYY-MM-DD-HHmm>/<서버 상대 경로>`, 도면 서버 직접 모드의 하루 첫 편집 전 복사 `<archive>/서버백업/<YYYY-MM-DD>/<서버 상대 경로>`. 반영 요약의 비교는 `server_hash_at_checkout`과 지금 서버 파일의 해시(SHA-256)로 한다. 실패 코드: `SERVER_FILE_LOCKED`, `SERVER_ACCESS_DENIED`, `SERVER_CHANGED_SINCE_CHECKOUT`, `SERVER_UNREACHABLE`.
+- **구조 읽기와 제안:** 읽기 도구 `workspace_schema_propose`는 연결 폴더 루트의 두 단계만 훑어 `{ folders: [{path, files, byExtension, hasXref, guess: 역할 키|null, reason}], missing: [역할 키] }`를 돌려주고 파일 내용은 열지 않는다. 확정 도구 `workspace_schema_confirm({paths, targets})`는 사람이 카드에서 누른 값만 받아 `server`에 쓰며 AI의 자동 호출 목록에 넣지 않는다. 제안 카드는 SPEC-02.19의 6 질문 카드 형식에 행 편집이 더해진 것이다.
+- **CLI 진입점:** 설치본 `bin/vide.cmd`(Node 실행본 포함)가 현재 폴더에서 위로 매니페스트를 찾고, `<데이터>/launch.json`의 URL 조각(세션 토큰)으로 `POST /api/v1/session`(Origin은 엔진 주소)을 거쳐 `GET /projects/:id/jigs`, `POST /projects/:id/jigs/:jigId/run`, `GET /projects/:id/workspace/paths`, `POST /projects/:id/jigs/:jigId/export`만 부른다. 엔진은 CLI 호출임을 `X-VIDE-Client: cli`로 받아 쓰기 경로를 그 프로젝트의 작업 폴더 안으로 제한하고, 사람 단계가 필요한 jig 실행은 `HUMAN_STEP_REQUIRED`로 멈춘다. 거절 코드는 SPEC-01.13의 10과 같다.
+- **파일 지도 읽기 API:** `GET /projects/:id/workspace/map` → `{ nodes: [{id, path, role, host, origin: "local"|"server", checkout}], links: [{from, to, kind: "xref"|"sync-pair"|"jig-io"|"data-report"|"checkout"|"reference"|"mention"}], events: [{at, kind: "sync"|"checkout"|"release"|"jig-run"|"request-change"|"server-updated", nodeIds, ref}] }`. 수집은 연결 파일 기록·Sync 기록·jig 인스턴스·실행 기록·체크아웃 표를 읽기만 하고, 새로 저장하는 것은 사건 색인(`workspace_events`)뿐이다. 실제 파일은 열지 않는다.
 
 ### 팀 공유 프로젝트 층(ADR-037, SPEC-04.11, PLAN-35)
 
