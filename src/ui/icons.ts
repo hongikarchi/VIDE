@@ -2,6 +2,7 @@
 // draws an icon and paintIcons() for the static `data-icon` buttons of the shell.
 import {
   ArrowUp,
+  BookOpen,
   Box,
   ChevronRight,
   Cuboid,
@@ -81,6 +82,8 @@ const icons: Record<string, IconNode> = {
   refresh: RefreshCw,
   x: X,
   'folder-open': FolderOpen,
+  // The rail's 기록 (PLAN-53 T-323).
+  records: BookOpen,
   search: Search,
   // The rail's 만들기 and 산출물 destinations.
   make: Hammer,

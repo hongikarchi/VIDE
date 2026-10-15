@@ -27,7 +27,7 @@ import { AccountButton } from './account-button.tsx';
 
 /**
  * 대시보드 · 자료 · 노트·일지 · JIG (the list) · 산출물 open their screens once a project is open. Order (user
- * 2026-10-06): 홈 · 대시보드 · 자료 · 노트·일지 · 모델 · 이력 · JIG · 산출물.
+ * 2026-10-06): 홈 · 대시보드 · 자료 · 파일 · 기록 · 노트·일지 · 모델 · 이력 · JIG · 산출물.
  */
 function openTarget(target: string) {
   if (sessionState.project) setWorkspace(target);
@@ -99,6 +99,15 @@ export const Rail = memo(function Rail() {
           data-icon="folder-open"
           aria-pressed={pressed('files')}
           onClick={() => openTarget('files')}
+        />
+        <button
+          id="rail-records"
+          data-workspace-target="records"
+          title="기록 · 요구·의도·근거·결정을 날짜와 부위 위에"
+          aria-label="기록"
+          data-icon="records"
+          aria-pressed={pressed('records')}
+          onClick={() => openTarget('records')}
         />
         <button
           id="rail-notes"

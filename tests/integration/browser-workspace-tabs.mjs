@@ -122,7 +122,7 @@ try {
       .locator('.rail [data-workspace-target]')
       .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label'))),
     // 만들기 is part of JIG (PLAN-26 T-099): the list's last card; browser-make.mjs checks it.
-    ['대시보드', '자료', '파일', '노트·일지', '모델', '작업 이력', 'JIG', '산출물'],
+    ['대시보드', '자료', '파일', '기록', '노트·일지', '모델', '작업 이력', 'JIG', '산출물'],
   );
   assert.deepEqual(await pressed(), ['model']);
   const tabs = page.getByRole('tablist', { name: '작업공간' });
@@ -462,6 +462,7 @@ try {
     '대시보드',
     '자료',
     '파일',
+    '기록',
     '노트·일지',
     '모델',
     'JIG',

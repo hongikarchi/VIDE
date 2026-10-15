@@ -115,7 +115,10 @@ function FileList({
       .sort((a, b) => a.name.localeCompare(b.name)),
   })).filter((group) => group.nodes.length);
   const focused = useRef<HTMLLIElement | null>(null);
-  useEffect(() => focused.current?.scrollIntoView({ block: 'nearest' }), [focus]);
+  // Braced: a scroll method that returns a value would be taken for the effect's cleanup.
+  useEffect(() => {
+    focused.current?.scrollIntoView({ block: 'nearest' });
+  }, [focus]);
   if (!map.nodes.length)
     return (
       <p className="files-empty">

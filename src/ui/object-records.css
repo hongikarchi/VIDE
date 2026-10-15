@@ -1,0 +1,100 @@
+/* '이 객체의 기록' under the inspector (PLAN-53 T-324, Design SCR-44 행 규칙). Tokens only; no side bars. */
+.object-records {
+  margin-top: var(--s3);
+  border-top: var(--hairline) solid var(--border-subtle);
+  padding-top: var(--s2);
+}
+.object-records-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  color: var(--text-1);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.object-records-head::before {
+  content: '▾';
+  color: var(--text-3);
+  font-weight: 400;
+}
+.object-records-head[aria-expanded='false']::before {
+  content: '▸';
+}
+.object-records-count {
+  color: var(--text-3);
+  font-weight: 400;
+}
+.object-records-note {
+  margin: var(--s1) 0;
+  color: var(--text-3);
+  font-weight: 400;
+}
+.object-records-list {
+  list-style: none;
+  margin: var(--s1) 0 0;
+  padding: 0;
+}
+.object-records-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  padding: 3px var(--s1);
+  color: var(--text-2);
+  font: inherit;
+  text-align: left;
+}
+button.object-records-row {
+  cursor: pointer;
+}
+button.object-records-row:hover,
+button.object-records-row:focus-visible {
+  background: var(--bg-hover);
+}
+.object-records-date {
+  flex: none;
+  font-family: var(--font-mono);
+  color: var(--text-3);
+}
+.object-records-type {
+  flex: none;
+  width: 1.4em;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-1);
+  text-decoration: none;
+}
+.object-records-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-1);
+}
+.object-records-chip {
+  flex: none;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 0 6px;
+  color: var(--text-2);
+}
+.object-records-hint {
+  flex: none;
+  color: var(--text-3);
+}
+.object-records-candidate .object-records-type {
+  outline: var(--hairline) dashed var(--text-3);
+  border-radius: var(--radius-sm);
+}

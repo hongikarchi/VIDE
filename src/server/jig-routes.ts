@@ -278,6 +278,12 @@ export function provideJigOutput(
   if (!providers) outputProviders.set(workspace, (providers = new Map()));
   providers.set(`${from.jig}#${from.output}`, provider);
 }
+/** Other listeners of the engine's jig runs and setting changes (PLAN-53 T-322 기록 후보). */
+type JigActivity = Pick<RuntimeOptions, 'onRun' | 'onParamsChanged'>;
+const activityListeners = new WeakMap<Workspace, JigActivity>();
+export function onJigActivity(workspace: Workspace, listener: JigActivity) {
+  activityListeners.set(workspace, listener);
+}
 export function jigRuntimeFor(workspace: Workspace, dataDirectory: string): JigRuntime {
   let runtime = runtimes.get(workspace);
   if (!runtime) {
@@ -295,8 +301,11 @@ export function jigRuntimeFor(workspace: Workspace, dataDirectory: string): JigR
       jigOutput: async (projectId, from) =>
         outputProviders.get(workspace)?.get(`${from.jig}#${from.output}`)?.(projectId, from),
       // 작업 폴더의 jig 결과 사본 (PLAN-52 T-313): fire-and-forget, failures go to the log.
-      onRun: (event) =>
-        void workspaceOutputsFor(workspace.store).writeJigResult(event.projectId, event),
+      onRun: (event) => {
+        void workspaceOutputsFor(workspace.store).writeJigResult(event.projectId, event);
+        activityListeners.get(workspace)?.onRun?.(event);
+      },
+      onParamsChanged: (event) => activityListeners.get(workspace)?.onParamsChanged?.(event),
     });
     runtimes.set(workspace, runtime);
   }

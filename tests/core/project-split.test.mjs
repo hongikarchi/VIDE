@@ -214,6 +214,21 @@ function fill(db, p, n) {
     at,
   );
   run(
+    "INSERT INTO records VALUES(?,'rec-1','2026-10-02',NULL,'manual','D','결정','kept','user',NULL,'{}',NULL,NULL,?,?,NULL)",
+    p,
+    at,
+    at,
+  );
+  run("INSERT INTO record_parts VALUES(?,'rec-1','part-1')", p);
+  run("INSERT INTO record_links VALUES(?,'rec-1','rec-2')", p);
+  run(
+    "INSERT INTO parts VALUES(?,'part-1','기존 벽',NULL,NULL,NULL,NULL,'[]',NULL,?,?)",
+    p,
+    at,
+    at,
+  );
+  run("INSERT INTO milestones VALUES(?,'ms-1','착공','2026-11-01')", p);
+  run(
     "INSERT INTO object_versions VALUES(?,?,'object','{}',?,3)",
     p,
     `v-${p}`,

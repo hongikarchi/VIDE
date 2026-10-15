@@ -17,6 +17,7 @@ export type FixedWorkspace =
   | 'model'
   | 'data'
   | 'files'
+  | 'records'
   | 'notes'
   | 'jig'
   | 'make'
@@ -63,6 +64,8 @@ const FIXED: {
   { id: 'data', label: '자료', ready: true },
   // 파일 (PLAN-52 T-319, SCR-38): the work folder's files as a list or a map of their relations.
   { id: 'files', label: '파일', ready: true },
+  // 기록 (PLAN-53 T-323, SCR-44): the project's records — 후보 to sort, 남김 and 뺌.
+  { id: 'records', label: '기록', ready: true },
   // 노트·일지 (SPEC-10, user request 2026-10-06): the members' shared notes from the account site.
   { id: 'notes', label: '노트·일지', ready: true },
   { id: 'model', label: '모델', ready: true },
@@ -159,6 +162,7 @@ function emit(closed?: ContextTab) {
     tabs.active === 'output' ||
     tabs.active === 'data' ||
     tabs.active === 'files' ||
+    tabs.active === 'records' ||
     tabs.active === 'notes' ||
     tabs.active === 'make'
       ? tabs.active
@@ -180,6 +184,9 @@ function emit(closed?: ContextTab) {
   // The 파일 screen (src/ui/files-tab.tsx, PLAN-52 T-319) loads when its tab is first shown.
   if (tabs.active === 'files' && projectId)
     void import('./files-tab.tsx').then((screen) => screen.showFiles(projectId!));
+  // The 기록 screen (src/ui/records-tab.tsx, PLAN-53 T-323) loads when its tab is first shown.
+  if (tabs.active === 'records' && projectId)
+    void import('./records-tab.tsx').then((screen) => screen.showRecords(projectId!));
   // The 노트·일지 screen (src/ui/notes-tab.tsx, SPEC-10) loads its block editor when first shown.
   if (tabs.active === 'notes' && projectId)
     void import('./notes-tab.tsx').then((screen) => screen.showNotes(projectId!));

@@ -33,6 +33,10 @@ import { render, renderMessages } from './render.ts';
 import { message } from './status.ts';
 import { pinComposer } from './composer.ts';
 import { initSection } from './section.ts';
+import { focusWork, currentConversation } from './thread.ts';
+import { workState } from '../store/work.ts';
+import { linkClosed } from '../jig-panel/role-sources.ts';
+import type { ObjectRecordsTarget } from '../object-records.tsx';
 
 /** Rhino-style selection: replace by default, Shift adds, Ctrl removes. */
 export function applySelection(ids: string[], mode: SelectMode) {
@@ -420,10 +424,45 @@ export function paintInspector() {
       },
     },
   );
+  const records = view.content.empty ? undefined : recordsTarget();
   viewerState.selectionTitle = view.title;
-  viewerState.inspector = view;
+  viewerState.inspector = records ? { ...view, content: { ...view.content, records } } : view;
   viewerState.bump();
   return active;
+}
+/**
+ * '이 객체의 기록' (PLAN-53 T-324): the first picked object's own id and linked file. The inspector
+ * shows only beside the 3D view (the model and jig tabs), so the section does too.
+ */
+function recordsTarget(): ObjectRecordsTarget | undefined {
+  const projectId = sessionState.project?.id;
+  const ids = selectionState.selectedIds;
+  const first = objectById(ids[0] ?? draftState.state.selected);
+  if (!projectId || !first) return undefined;
+  const key = first.documentKey;
+  const linkId = typeof key === 'string' && !key.startsWith('result:') ? key : undefined;
+  const link = linkId ? linksState.links.find((entry) => entry.id === linkId) : undefined;
+  return {
+    projectId,
+    objectId: sourceIdOf(first),
+    linkId,
+    count: Math.max(1, ids.length),
+    closed: link ? linkClosed(link) : false,
+    openRequest: openRecordRequest,
+  };
+}
+/** A record's request: its conversation tab chosen, its work card shown on the right. */
+function openRecordRequest(id: string) {
+  const entry = draftState.state.messages.find((m) => m.id === id);
+  if (!entry) {
+    message('이 기록의 요청을 이 프로젝트의 작업 이력에서 찾지 못했습니다.');
+    return;
+  }
+  const conversation = (entry.request.input as { conversationId?: unknown } | undefined)
+    ?.conversationId;
+  if (typeof conversation === 'string' && conversation !== currentConversation())
+    workState.conversationChips?.select(conversation);
+  focusWork(id);
 }
 export type ActiveRequest = ReturnType<typeof paintInspector>;
 /** render(): after the inspector, the multi-selection title and the empty-view state. */

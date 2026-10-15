@@ -540,3 +540,39 @@ test('schema 17 adds the 할 일 author columns; earlier rows keep none (SPEC-01
   }
   assert.match(readdirSync(file + '.backups')[0], /^schema-16-/);
 });
+
+test('schema 19 adds the project records tables; one candidate per source key (SPEC-17)', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'vide-schema18-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const file = join(root, 'vide.sqlite');
+  const db = new DatabaseSync(file);
+  db.exec(
+    'CREATE TABLE schema_version(version INTEGER NOT NULL); INSERT INTO schema_version VALUES(18);' +
+      migrations
+        .filter((step) => step.version <= 18)
+        .map((step) => step.sql)
+        .join('\n'),
+  );
+  db.exec("INSERT INTO projects VALUES('p','existing')");
+  db.close();
+  const store = new Store(file);
+  try {
+    assert.equal(schemaVersion, 19);
+    assert.equal(
+      store.app.prepare('SELECT version FROM schema_version').get().version,
+      schemaVersion,
+    );
+    const insert = store.app.prepare(
+      "INSERT INTO records VALUES('p',?,'2026-10-15',NULL,'request','D','x','candidate','ai',NULL,'{}',?,NULL,'t','t',NULL)",
+    );
+    insert.run('a', 'request:r1');
+    insert.run('b', null);
+    insert.run('c', null);
+    assert.throws(() => insert.run('d', 'request:r1'), /UNIQUE/);
+    for (const table of ['record_parts', 'record_links', 'parts', 'milestones'])
+      assert.equal(store.app.prepare(`SELECT count(*) AS n FROM ${table}`).get().n, 0, table);
+  } finally {
+    store.close();
+  }
+  assert.match(readdirSync(file + '.backups')[0], /^schema-18-/);
+});

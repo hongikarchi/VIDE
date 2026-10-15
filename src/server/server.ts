@@ -24,6 +24,7 @@ import {
   jigRoutes,
   jigRuntimeFor,
   jigStatuses,
+  onJigActivity,
   provideJigOutput,
 } from './jig-routes.ts';
 import { siteModelSource } from './legal-model-source.ts';
@@ -201,6 +202,12 @@ import { checkFolder, deniedPath, folderRoutes } from './project-files.ts';
 import { collectRoutes, collectStatuses } from './collect-routes.ts';
 import { workspaceRoutes, workspaceStatuses } from './workspace-routes.ts';
 import { workspaceMapRoutes } from './workspace-map-routes.ts';
+import { recordsRoutes, recordsStatuses, requestUndone } from './records-routes.ts';
+import { attachRecordSources } from './record-sources.ts';
+import { ROLE_LABELS } from './workspace-schema.ts';
+import { objectRecordsOf } from './object-records.ts';
+import { partsStatusOf } from './parts-status.ts';
+import { Records } from '../core/records.ts';
 import { workspaceOutputsFor } from './workspace-outputs.ts';
 import { changesFromRequests, WorkspaceCheckouts, folderHolds } from './workspace-checkout.ts';
 import { Checkouts } from '../core/checkouts.ts';
@@ -375,6 +382,7 @@ const statuses: Record<string, number> = {
   ...legalStatuses,
   ...complianceStatuses,
   ...panelingStatuses,
+  ...recordsStatuses,
 };
 export async function startServer({
   filename,
@@ -430,12 +438,28 @@ export async function startServer({
     links = new DocumentLinks(store),
     tableViews = new TableViews(store),
     agenda = new Agenda(store),
+    // 프로젝트 기록 (PLAN-53 T-321): `undone` is read from the pointed request's executions.
+    records = new Records(store, { undoneResolver: requestUndone(store) }),
     finish = new FinishStore(store),
     structures = new StructureStore(
       filename === ':memory:' ? null : join(dirname(filename), 'structure'),
     ),
     reviews = new Reviews(store),
     reviewNotes = new ReviewNotes(store, reviews);
+  // 기록 자동 후보 (PLAN-53 T-322): the hooks below also feed it; queued, never in the request time.
+  const recordSources = attachRecordSources({
+    records,
+    conversations: {
+      ledger: (conversationId, options) => conversations.store.ledger(conversationId, options),
+    },
+    checkouts: new Checkouts(store),
+    roleLabels: ROLE_LABELS,
+    log: (event, fields) => diagnostics.write(event, fields),
+  });
+  onJigActivity(workspace, {
+    onRun: (event) => recordSources.jigRun(event),
+    onParamsChanged: (event) => recordSources.paramsChanged(event),
+  });
   const sharedFeedback = new SharedFeedback(store, workspace);
   host ??= new RhinoWorkspace(join(dirname(filename), 'models'));
   const hosts = {
@@ -595,8 +619,10 @@ export async function startServer({
           dataDirectory: dirname(filename),
           agenda,
           // 작업 폴더의 운영 역할에도 사본 (PLAN-52 T-313): 일지·회의록, 정본은 사이트.
-          onCopy: (projectId, note, markdown) =>
-            void workspaceOutputsFor(store).writeNote(projectId, note, markdown),
+          onCopy: (projectId, note, markdown) => {
+            void workspaceOutputsFor(store).writeNote(projectId, note, markdown);
+            recordSources.noteCopied(projectId, note, markdown);
+          },
         });
   // The copies of every project's notes refresh every ten minutes (and whenever notes are shown).
   let notesRefreshed = 0;
@@ -638,8 +664,14 @@ export async function startServer({
     },
     changes: (projectId, localPath, since) =>
       changesFromRequests(links.list(projectId), workspace.list(projectId), localPath, since),
-    onChange: () => void offlineView.tick().catch(() => {}),
-    log: (event, fields) => workspaceOutputsFor(store).log?.(event, fields),
+    onChange: (projectId) => {
+      void offlineView.tick().catch(() => {});
+      recordSources.checkoutsChanged(projectId);
+    },
+    log: (event, fields) => {
+      workspaceOutputsFor(store).log?.(event, fields);
+      recordSources.checkoutLog(event, fields);
+    },
   });
   // Offline view and site request inbox (PLAN-20).
   const offlineView = new OfflineView({
@@ -881,6 +913,8 @@ export async function startServer({
     diagnostics,
     // A reference board's data and output shape for its turns (SPEC-09.4, T-090).
     reference: (request) => referenceBoards?.turnItem(request),
+    onSchemaConfirmed: (projectId, confirmed) =>
+      recordSources.schemaConfirmed(projectId, confirmed),
   });
   // The per-project addendum of the AI instruction bundle (PLAN-24 지침 묶음).
   const projectInstructions = new ProjectInstructionStore(
@@ -950,7 +984,10 @@ export async function startServer({
     folders,
     fileContext,
     // A reference turn's end makes the board's next 판 and starts its image job (T-090).
-    onFinished: (row) => referenceBoards?.afterTurn(row),
+    onFinished: (row) => {
+      recordSources.requestFinished(row);
+      return referenceBoards?.afterTurn(row);
+    },
     // 법규 Q&A in conversations (SPEC-13.9, T-223): the legal tools and the citation gate.
     legal,
   });
@@ -1247,6 +1284,16 @@ export async function startServer({
         !(
           request.method === 'DELETE' &&
           /^\/api\/v1\/projects\/[^/]+(\/jig-drafts\/[^/]+|\/jigs\/[^/]+\/pin)?$/.test(url.pathname)
+        ) &&
+        // 프로젝트 기록 (ARCH-01 §5, T-321): editing a record, taking a link off, removing a part or
+        // a milestone.
+        !(
+          (request.method === 'PATCH' &&
+            /^\/api\/v1\/projects\/[^/]+\/records\/[^/]+$/.test(url.pathname)) ||
+          (request.method === 'DELETE' &&
+            /^\/api\/v1\/projects\/[^/]+\/(records\/[^/]+\/links\/[^/]+|parts\/[^/]+|milestones\/[^/]+)$/.test(
+              url.pathname,
+            ))
         )
       ) {
         send(405, { code: 'METHOD_NOT_ALLOWED', requestId });
@@ -1489,6 +1536,21 @@ export async function startServer({
         })
       )
         return;
+      // 프로젝트 기록 (PLAN-53 T-321, SPEC-17): records, parts and milestones; remote reads only.
+      if (
+        await recordsRoutes(url, request.method, {
+          records,
+          project: (projectId) => store.project(projectId),
+          body: () => body(request),
+          send,
+          deliver,
+          remote,
+          actor: () => remoteAccess.account()?.name,
+          partsStatus: partsStatusOf({ store, workspace, records }),
+          objectRecords: objectRecordsOf({ store, workspace, records }),
+        })
+      )
+        return;
       // 파일 지도 (PLAN-52 T-318): relations and events of the project's files, read only.
       if (
         await workspaceMapRoutes(url, request.method, {
@@ -1607,10 +1669,12 @@ export async function startServer({
           body: () => body(request),
           send,
           // [퇴근하기] → today's 일지 on the site, queued on this PC when the site is unreachable.
-          dayEnded: (projectId, entry) =>
+          dayEnded: (projectId, entry) => {
             void sharedNotes
               ?.appendJournal(projectId, `퇴근 기록 · ${entry.text}`, entry.date)
-              .catch(() => {}),
+              .catch(() => {});
+            recordSources.dayEnded(projectId, entry);
+          },
           ledger: {
             item: (projectId, conversationId, ledgerId) => {
               conversations.store.get(projectId, conversationId);
@@ -3797,6 +3861,9 @@ export async function startServer({
       await execution.close();
       await boardsClosed;
       await referenceBoards?.idle();
+      // 기록 후보 (PLAN-53 T-322): queued hooks finish or are dropped before the store closes.
+      recordSources.stop();
+      await recordSources.idle();
       clearInterval(transcriptSweep);
       await Promise.allSettled([...importRecoveries.values()]);
       try {

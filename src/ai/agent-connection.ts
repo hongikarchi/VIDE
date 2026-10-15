@@ -279,6 +279,8 @@ export const agentToolNames = [
   'agenda_list',
   'agenda_add',
   'agenda_set',
+  // 프로젝트 기록 후보 (SPEC-17.7, PLAN-53 T-322): candidates only, people sort them.
+  'record_add',
   // 연결 폴더의 역할 (SPEC-01.13 8, PLAN-52 T-309); confirm is the card answer's, never the AI's.
   'workspace_schema_propose',
   'workspace_schema_confirm',

@@ -44,6 +44,8 @@ import { clawdeRefSchema, clawdeStageIdSchema } from '../contracts/clawde.ts';
 import { legalToolHandlers, type LegalToolSource } from './legal-tools.ts';
 import { resolveAgentToken } from '../ai/agent-relay.ts';
 import { Agenda, localDate } from '../core/agenda.ts';
+import { AI_AUTHOR, Records } from '../core/records.ts';
+import { recordDateSchema, recordTextSchema } from '../contracts/records.ts';
 import { ProjectFolders } from '../core/project-folders.ts';
 import { WORKSPACE_ROLES } from '../core/workspace-template.ts';
 import {
@@ -476,11 +478,11 @@ const definitions = {
   },
   ui_go: {
     description:
-      "Switch the user's screen: stage 'model' (3D), 'jig' (the open jig's tab, or the JIG list), 'report' (the 보고서 view of the 산출물 tab), 'data' (project records) or 'make'. view 'plan' or '3d' sets the 3D projection. Only the screen changes.",
+      "Switch the user's screen: stage 'model' (3D), 'jig' (the open jig's tab, or the JIG list), 'report' (the 보고서 view of the 산출물 tab), 'data' (project facts), 'records' (the 기록 tab: dated requirements, intents, evidence and decisions to sort) or 'make'. view 'plan' or '3d' sets the 3D projection. Only the screen changes.",
     schema: z
       .object({
         targetRef: scoped,
-        stage: z.enum(['model', 'jig', 'report', 'data', 'make']),
+        stage: z.enum(['model', 'jig', 'report', 'data', 'records', 'make']),
         view: z.enum(['3d', 'plan']).optional(),
       })
       .strict(),
@@ -613,6 +615,20 @@ const definitions = {
         role: z.enum(WORKSPACE_ROLES),
         serverPath: z.string().min(1).max(300).optional(),
         target: z.string().min(1).max(300).nullable().optional(),
+      })
+      .strict(),
+  },
+  // 프로젝트 기록 (SPEC-17.7, PLAN-53 T-322): the AI makes candidates only; people sort them.
+  record_add: {
+    description:
+      "Leave a 기록 candidate when the user asks to keep something on the project record ('이거 기록으로 남겨 줘', '결정 사항으로 적어 둬'). text: one plain Korean sentence of what was required, intended, known, checked or decided. type: R (요구: law, client, neighbours, brief asked for it), I (의도: the designer wanted it), K (앎: what was known about a part — no drawing, opened, measured), E (근거: measured, checked, calculated), D (결정: a part's role, spec or shape changed); leave it out when unsure. date 'YYYY-MM-DD' only when the words give one (default today). parts: names or ids of the project's 부위 when the words name them. It stays a candidate until a person sorts it in the 기록 tab; you cannot keep or drop records. Tell the user it waits in the 기록 tab.",
+    schema: z
+      .object({
+        targetRef: scoped,
+        date: recordDateSchema.optional(),
+        type: z.enum(['R', 'I', 'K', 'E', 'D']).optional(),
+        text: recordTextSchema,
+        parts: z.array(z.string().min(1).max(200)).max(20).optional(),
       })
       .strict(),
   },
@@ -928,6 +944,7 @@ const projectScoped: ReadonlySet<string> = new Set([
   'agenda_list',
   'agenda_add',
   'agenda_set',
+  'record_add',
   'workspace_schema_propose',
   'workspace_memory_set',
 ]);
@@ -953,6 +970,7 @@ const writeTools = new Set<ToolName>([
   'jig_run',
   'jig_set_input',
   'workspace_memory_set',
+  'record_add',
   ...GH_WRITE_TOOLS,
 ]);
 /**
@@ -1403,6 +1421,8 @@ export interface ConversationToolSources {
   };
   /** The project's 할 일 (SPEC-01.14); agenda_add/agenda_set exist only with a ledger (their undo). */
   agenda?: Agenda;
+  /** 프로젝트 기록 (SPEC-17.7); record_add exists only with it. */
+  records?: Pick<Records, 'add' | 'parts'>;
   /** The project's crawler DB and review layer (SPEC-08); project_* exist only with one. */
   facts?: {
     file: string;
@@ -1877,6 +1897,8 @@ export function conversationHandlers(sources: ConversationToolSources): Handlers
   }
   if (sources.agenda)
     Object.assign(handlers, agendaHandlers({ ...sources, agenda: sources.agenda }));
+  if (sources.records)
+    Object.assign(handlers, recordHandlers({ ...sources, records: sources.records }));
   if (sources.facts && existsSync(sources.facts.file))
     Object.assign(handlers, factHandlers(sources));
   if (sources.draft) Object.assign(handlers, makeHandlers(sources));
@@ -2018,6 +2040,78 @@ const agendaRow = (item: AgendaItem) => ({
   // Who wrote it (SPEC-01.14 12): the account name only, so the AI can say whose item it is.
   ...(item.createdBy ? { author: item.createdBy.name } : {}),
 });
+/**
+ * record_add (SPEC-17.7, ARCH-01 §5 「프로젝트 기록」): a `candidate` record by 'ai' from source
+ * 'chat', keyed `chat:<conversationId>:<requestId>:<n>`; part names resolve to the 부위 사전's ids.
+ * There is no AI path that keeps or drops a record.
+ */
+export function recordHandlers({
+  projectId,
+  conversationId,
+  requestId,
+  records,
+}: Pick<ConversationToolSources, 'projectId' | 'conversationId' | 'requestId'> & {
+  records: Pick<Records, 'add' | 'parts'>;
+}): Handlers {
+  const turn = requestId ?? `turn-${Date.now().toString(36)}`;
+  let count = 0;
+  return {
+    record_add: ({ date, type, text, parts }) => {
+      const known = parts?.length ? records.parts(projectId) : [];
+      const ids: string[] = [];
+      const unknown: string[] = [];
+      for (const given of parts ?? []) {
+        const name = given.trim().toLowerCase();
+        const part =
+          known.find((row) => row.id === given) ??
+          known.find((row) => row.name.trim().toLowerCase() === name);
+        if (part) ids.push(part.id);
+        else unknown.push(given);
+      }
+      for (;;) {
+        count += 1;
+        try {
+          const record = records.add(
+            projectId,
+            {
+              text,
+              ...(date ? { date } : {}),
+              ...(type ? { type } : {}),
+              ...(ids.length ? { parts: [...new Set(ids)] } : {}),
+              ...(requestId ? { attachments: { requestId } } : {}),
+            },
+            {
+              by: AI_AUTHOR,
+              state: 'candidate',
+              source: 'chat',
+              sourceKey: `chat:${conversationId}:${turn}:${count}`,
+            },
+          );
+          return {
+            added: {
+              id: record.id,
+              date: record.date,
+              type: record.type,
+              text: record.text,
+              parts: record.parts,
+              state: record.state,
+            },
+            ...(unknown.length ? { unknownParts: unknown } : {}),
+            next: '거르기는 기록 탭에서',
+          };
+        } catch (error) {
+          if (
+            error instanceof DomainError &&
+            error.code === 'RECORD_SOURCE_DUPLICATE' &&
+            count < 1000
+          )
+            continue;
+          throw error;
+        }
+      }
+    },
+  };
+}
 /**
  * agenda_list, and agenda_add/agenda_set as T1 writes (SPEC-01.14 6, SPEC-02.19 7): applied at once
  * and recorded as one ledger item `{appAction:'agenda', changes}` that [되돌리기] takes back
@@ -2244,6 +2338,7 @@ export function conversationSources(
         includeHidden: false,
       }),
     agenda: new Agenda(workspace.store),
+    records: new Records(workspace.store),
     ledger,
     personWords: () => personWordsOf(workspace, conversation, requestId),
     workspaceFolders: {

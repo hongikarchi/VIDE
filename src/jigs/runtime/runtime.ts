@@ -14,7 +14,13 @@ import { gunzip, gunzipSync, gzip, gzipSync } from 'node:zlib';
 import { DomainError } from '../../contracts/errors.ts';
 import { isNewerVersion } from '../../contracts/jig-version.ts';
 import { layerRootProblem } from '../../contracts/layer-path.ts';
-import type { JigInstanceRow, JigRead, JigStore, StepStatus } from '../../core/jig-store.ts';
+import type {
+  JigInstanceRow,
+  JigRead,
+  JigStore,
+  ParamLogEntry,
+  StepStatus,
+} from '../../core/jig-store.ts';
 import { ChildRunner, type ChildRunnerOptions } from './child-runner.ts';
 import { ComputeBoxRunner } from './compute-box.ts';
 import type { GateContext, GateResult } from './gates.ts';
@@ -76,6 +82,22 @@ export interface RuntimeOptions {
    * project's work folder (PLAN-52 T-313). Called after the rows are saved; must not throw.
    */
   onRun?: (event: JigRunEvent) => void;
+  /**
+   * A setting change was logged (`setParams`, SPEC-07.6 누가·왜): the engine makes record candidates
+   * from it (PLAN-53 T-322). Called after the log rows are saved; must not throw.
+   */
+  onParamsChanged?: (event: JigParamsEvent) => void;
+}
+/** What `onParamsChanged` receives: the instance and the logged entries of one `setParams`. */
+export interface JigParamsEvent {
+  projectId: string;
+  instanceId: string;
+  jigId: string;
+  title: string;
+  by: string;
+  reason: string | null;
+  requestId: string | null;
+  entries: ParamLogEntry[];
 }
 /** What `onRun` receives: the instance and the outputs this run produced or reused. */
 export interface JigRunEvent {
@@ -277,6 +299,7 @@ export class JigRuntime {
   private readonly childOptions: ChildRunnerOptions;
   private readonly jigOutput: RuntimeOptions['jigOutput'];
   private readonly onRun: RuntimeOptions['onRun'];
+  private readonly onParamsChanged: RuntimeOptions['onParamsChanged'];
   private readonly runners = new Map<string, StepRunner>();
   private readonly generations = new Map<string, number>();
   private readonly graphs = new Map<string, StepGraph>();
@@ -289,6 +312,7 @@ export class JigRuntime {
     this.childOptions = options.child ?? {};
     this.jigOutput = options.jigOutput;
     this.onRun = options.onRun;
+    this.onParamsChanged = options.onParamsChanged;
   }
 
   // --- files ---------------------------------------------------------------------------------
@@ -564,22 +588,37 @@ export class JigRuntime {
       entry.new = { ...restore, value: entry.new.value, at: entry.new.at };
       next[entry.key] = entry.new;
     }
-    const seqs = entries.map(
-      (entry) =>
-        this.store.appendParam(instanceId, {
-          key: entry.key,
-          old: entry.old,
-          new: entry.new,
-          by: input.by,
-          reason: input.reason ?? null,
-          requestId: input.requestId ?? null,
-        }).seq,
+    const logged = entries.map((entry) =>
+      this.store.appendParam(instanceId, {
+        key: entry.key,
+        old: entry.old,
+        new: entry.new,
+        by: input.by,
+        reason: input.reason ?? null,
+        requestId: input.requestId ?? null,
+      }),
     );
+    const seqs = logged.map((entry) => entry.seq);
     const affected = this.graphOf(jig).affectedByParams(keys);
     this.markStale(jig, instanceId, affected);
     body.params = next;
     this.bump(instanceId);
     this.save(instance, body, instance.status === 'new' ? 'new' : 'stale');
+    if (this.onParamsChanged && logged.length)
+      try {
+        this.onParamsChanged({
+          projectId,
+          instanceId,
+          jigId: instance.jigId,
+          title: instance.title,
+          by: input.by,
+          reason: input.reason ?? null,
+          requestId: input.requestId ?? null,
+          entries: logged,
+        });
+      } catch {
+        /* a record candidate never fails a setting change */
+      }
     return { seqs, affected, changed: keys, instance: await this.view(projectId, instanceId) };
   }
   private hasRun(instanceId: string, stepId: string) {

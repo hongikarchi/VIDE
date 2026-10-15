@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
+import { ObjectRecords, type ObjectRecordsTarget } from './object-records.tsx';
 
 type Row = readonly [string, string | number | undefined];
 interface Link {
@@ -18,6 +19,8 @@ export interface InspectorContentProps {
   links?: Link[];
   quantities?: () => void;
   attributes?: Attributes;
+  /** '이 객체의 기록' (PLAN-53 T-324): shown under the tab's content when an object is picked. */
+  records?: ObjectRecordsTarget;
 }
 function PropertyGrid({ rows }: { rows: Row[] }) {
   return (
@@ -37,8 +40,10 @@ export function InspectorContent({
   links,
   quantities,
   attributes,
+  records,
 }: InspectorContentProps) {
   if (empty) return <>객체를 선택하세요.</>;
+  const recordsPart = records ? <ObjectRecords target={records} /> : null;
   if (links)
     return (
       <>
@@ -54,6 +59,7 @@ export function InspectorContent({
         ) : (
           <p>연결된 이전 후보나 객체 입력이 없습니다.</p>
         )}
+        {recordsPart}
       </>
     );
   return (
@@ -70,6 +76,7 @@ export function InspectorContent({
           ) : null}
         </>
       ) : null}
+      {recordsPart}
     </>
   );
 }

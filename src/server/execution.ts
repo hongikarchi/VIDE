@@ -22,6 +22,7 @@ import { factCitations, jigCheck } from './jig-gates.ts';
 import {
   HOST_TURN_PROJECT_TOOLS,
   agendaHandlers,
+  recordHandlers,
   conversationHandlers,
   conversationSources,
   type AgentTools,
@@ -41,6 +42,7 @@ import {
 import type { ProjectFolders } from '../core/project-folders.ts';
 import type { GrasshopperMethod } from '../../hosts/rhino/editor-channel.ts';
 import { Agenda } from '../core/agenda.ts';
+import { Records } from '../core/records.ts';
 import { activityLog, type ActivityEntry } from './activity.ts';
 import { readableAttachments, type AttachmentStore } from './attachments.ts';
 import type { Workspace } from '../core/workspace.ts';
@@ -575,7 +577,18 @@ export class Execution {
       });
       // Plan reads only (PLAN_MODE_TOOLS).
       if (requestMode(input) === 'plan') handlers.agenda_list = agenda.agenda_list;
-      else Object.assign(handlers, agenda);
+      else
+        Object.assign(
+          handlers,
+          agenda,
+          // 기록 후보 (SPEC-17.7): "기록으로 남겨 줘" in a modeling turn too.
+          recordHandlers({
+            projectId,
+            conversationId,
+            requestId,
+            records: new Records(this.workspace.store),
+          }),
+        );
     }
     const names = Object.keys(handlers);
     if (!names.length) return agent;

@@ -332,6 +332,19 @@ Object.assign(errors, {
 
 Object.assign(errors, { APP_STOPPING: 'VIDE가 종료 중이라 새 작업을 시작할 수 없습니다.' });
 
+// 프로젝트 기록 (SPEC-17.7, ARCH-01 §5, PLAN-53 T-321).
+Object.assign(errors, {
+  RECORD_NOT_FOUND: '기록을 찾을 수 없습니다. 목록을 새로고침하세요.',
+  PART_NOT_FOUND: '부위를 찾을 수 없습니다. 부위 목록을 새로고침하세요.',
+  MILESTONE_NOT_FOUND: '마일스톤을 찾을 수 없습니다. 목록을 새로고침하세요.',
+  RECORD_LINK_CYCLE: '앞뒤가 서로를 가리키게 됩니다. 한쪽 연결을 지우고 다시 시도하세요.',
+  RECORD_SOURCE_DUPLICATE: '같은 출처의 기록이 이미 있습니다. 먼저 들인 기록을 확인하세요.',
+  RECORD_SUPERSEDED: '이미 정정된 기록입니다. 정정한 새 기록을 고치세요.',
+  RECORD_MARKS_MISMATCH:
+    '표시 글자 수와 기록 수가 달라 들이지 않았습니다. 같은 목록에서 내보낸 표시인지 확인하세요.',
+  RECORD_AI_FORBIDDEN: 'AI는 기록을 제안만 할 수 있습니다. 남김·뺌과 본문 고치기는 사람이 합니다.',
+});
+
 // The user's own GitHub·Cloudflare accounts (SPEC-05.11, PLAN-54 T-344).
 Object.assign(errors, {
   ACCOUNT_NOT_CONNECTED: '연결된 계정이 없습니다. 설정 → 외부 서비스에서 연결하세요.',

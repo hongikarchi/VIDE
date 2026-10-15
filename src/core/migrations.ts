@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 /** v5 and later cannot be opened by an older installation (UNSUPPORTED_SCHEMA); see ARCH-03 §10.1. */
-export const schemaVersion = 18;
+export const schemaVersion = 19;
 export const baselineSchema = `
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
@@ -240,6 +240,29 @@ const checkouts = `CREATE TABLE IF NOT EXISTS checkouts(projectId TEXT NOT NULL 
   server_mtime_at_checkout TEXT NOT NULL, server_hash_at_checkout TEXT NOT NULL,
   PRIMARY KEY(projectId, id)) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS checkouts_server ON checkouts(projectId, server_path COLLATE NOCASE);`;
+// 프로젝트 기록 (SPEC-17, ARCH-01 §5 「프로젝트 기록(PLAN-53, SPEC-17)」, T-321): records (one dated
+// sentence each; `sourceKey` keeps one candidate per source), the parts they are about, the
+// follows links (fromId led to toId), the project's 부위 사전 and milestones. Chains are computed
+// on read; `undone` is read from the pointed request, never stored.
+const records = `CREATE TABLE IF NOT EXISTS records(projectId TEXT NOT NULL REFERENCES projects(id),
+  id TEXT NOT NULL, date TEXT NOT NULL, time TEXT, source TEXT NOT NULL, type TEXT NOT NULL
+  CHECK(type IN ('R','I','K','E','D','?')), text TEXT NOT NULL,
+  state TEXT NOT NULL CHECK(state IN ('candidate','kept','dropped')), by TEXT NOT NULL, chapter TEXT,
+  attachments TEXT NOT NULL, sourceKey TEXT, supersededBy TEXT, createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL, updatedBy TEXT, PRIMARY KEY(projectId, id)) WITHOUT ROWID;
+CREATE UNIQUE INDEX IF NOT EXISTS records_source_key ON records(projectId, sourceKey)
+  WHERE sourceKey IS NOT NULL;
+CREATE INDEX IF NOT EXISTS records_date ON records(projectId, date, time, createdAt);
+CREATE TABLE IF NOT EXISTS record_parts(projectId TEXT NOT NULL REFERENCES projects(id),
+  recordId TEXT NOT NULL, partId TEXT NOT NULL, PRIMARY KEY(projectId, recordId, partId)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS record_links(projectId TEXT NOT NULL REFERENCES projects(id),
+  fromId TEXT NOT NULL, toId TEXT NOT NULL, PRIMARY KEY(projectId, fromId, toId)) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS record_links_to ON record_links(projectId, toId);
+CREATE TABLE IF NOT EXISTS parts(projectId TEXT NOT NULL REFERENCES projects(id), id TEXT NOT NULL,
+  name TEXT NOT NULL, grp TEXT, roleFrom TEXT, roleTo TEXT, chapter TEXT, mapping TEXT NOT NULL,
+  seenAt TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, PRIMARY KEY(projectId, id)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS milestones(projectId TEXT NOT NULL REFERENCES projects(id),
+  id TEXT NOT NULL, label TEXT NOT NULL, date TEXT NOT NULL, PRIMARY KEY(projectId, id)) WITHOUT ROWID;`;
 export const migrations: Migration[] = [
   { version: 2, sql: baselineSchema },
   { version: 3, sql: hiddenRequests },
@@ -258,6 +281,7 @@ export const migrations: Migration[] = [
   { version: 16, sql: complianceRoles },
   { version: 17, sql: agendaAuthors },
   { version: 18, sql: checkouts },
+  { version: 19, sql: records },
 ];
 
 /** Caller holds the exclusive controller lock. Never migrates user model files. */

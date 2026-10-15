@@ -262,6 +262,11 @@ interface Options {
   settingsFile?: string | null;
   /** The reference board's item and output of a turn (SPEC-09, T-090); none for most turns. */
   reference?: (request: StoredWork) => ReferenceTurn | undefined;
+  /** A person confirmed folder roles on the card (PLAN-53 T-322: a record candidate). No throw. */
+  onSchemaConfirmed?: (
+    projectId: string,
+    confirmed: { confirmedAt: string; paths: Record<string, string> },
+  ) => void;
 }
 
 const id = z.string().regex(/^[a-zA-Z0-9-]{1,100}$/);
@@ -1467,6 +1472,13 @@ export class ConversationService {
     });
   }
   /** The project's folders, for the folder role memory (SPEC-01.13 8). */
+  /** Passes a confirmed folder role choice on (`onSchemaConfirmed`). */
+  schemaConfirmed(
+    projectId: string,
+    confirmed: { confirmedAt: string; paths: Record<string, string> },
+  ) {
+    this.options.onSchemaConfirmed?.(projectId, confirmed);
+  }
   schemaSources(): SchemaSources {
     return {
       folders: new ProjectFolders(this.db),
@@ -1753,6 +1765,14 @@ async function applySchemaAnswer(
       paths: chosen.paths,
       proposedAt: asked.record.proposedAt,
     });
+    try {
+      service.schemaConfirmed(projectId, {
+        confirmedAt: done.server.confirmedAt ?? new Date().toISOString(),
+        paths: chosen.paths as Record<string, string>,
+      });
+    } catch {
+      /* a record candidate never fails the answer */
+    }
     const notes = [
       ...(chosen.skipped.length ? [`고르지 않은 ${chosen.skipped.length}곳은 기억하지 않음`] : []),
       ...(chosen.extra.length ? [`같은 역할의 다른 ${chosen.extra.length}곳은 역할 없이 둠`] : []),
