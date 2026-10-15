@@ -2,7 +2,7 @@
 id: PLAN-53
 title: 프로젝트 기록 — 결정·근거·영향 모델과 타임라인 (T-320~T-339)
 status: draft
-version: 0.3
+version: 0.4
 updated: 2026-10-15
 owner: user
 related: [C-09, SPEC-03, SPEC-07, SPEC-08, SPEC-10, SPEC-17, ARCH-01, DESIGN, ADR-027, ADR-037, RESEARCH-17, FR-07, FR-09, FR-10, FR-12, FR-16, FR-18, PLAN-52]
@@ -53,7 +53,7 @@ SPEC-17이 의미를 소유한다. 아래는 이 계획이 구현할 범위의 �
 ### T-321 저장과 API
 
 - **기준:** SPEC-17, ARCH-01 §5(T-320 보완분).
-- **변경:** `src/core/records.ts`(모델·체인 계산·검증), `src/server/records-routes.ts`(목록·검색·만들기·고치기·상태 바꾸기·연결 추가/삭제·부위 사전·마일스톤), `project.sqlite` 마이그레이션. 기록 본문 검색은 `knowledge.sqlite`가 아니라 `records` 표의 FTS로 한다(기록은 자료가 아니라 판단이므로 SPEC-08 자료 검색과 섞지 않음).
+- **변경:** `src/core/records.ts`(모델·체인 계산·검증), `src/server/records-routes.ts`(목록·검색·만들기·고치기·상태 바꾸기·연결 추가/삭제·부위 사전·마일스톤), `project.sqlite` 마이그레이션. 기록 본문 검색은 `knowledge.sqlite`와 섞지 않고 `records` 표에서 한다(기록은 자료가 아니라 판단). 1차는 `text LIKE`이며 FTS 색인은 T-337의 측정 뒤에만 더한다(ARCH-01 §5 「프로젝트 기록」).
 - **검증:** `tests/core/records.test.mjs` — 체인 계산(뿌리·도달·순환 거부), 상태 전이, 부위 매핑 끊김 표시. `tests/server/records-routes.test.mjs` — 프로젝트 격리, 권한(읽기 전용 구성원은 상태 변경 불가), 같은 원문 중복 거부.
 - **완료:** API로 기록 50건을 넣고 읽고 체인을 받는다.
 
@@ -215,6 +215,7 @@ fixture의 날짜·부위·문장은 모두 지어낸 값이다. 참고 화면�
 ## 현재 상태
 
 - 2026-10-15: 계획만. 사용자 결정(1차 범위 = 3D 타임라인까지, 세 웨이브로 출하) 반영. SPEC-17·Design SCR·PRD C-09 번호는 미작성. 코드 변경 없음.
+- 2026-10-15 저녁 0.4: **T-320 완료** — SPEC-17 0.2(자료 확정의 [기록으로 남기기] E 후보 행 추가), Design 1.23(SCR-44·45·46, §07 용어 행 '기록·후보·남김·뺌·부위·이어진 기록·마일스톤'), ARCH-01 1.34 §5 「프로젝트 기록(PLAN-53, SPEC-17)」(표 다섯·sourceKey·attachments·라우트·코드·후보 진입점·사본·D1 0018)과 §1.3 API 행, SPEC-03 0.7(3.8·3.9 역참조), SPEC-08 0.8(8.5 경계 항목). 남은 결정은 아래 「결정이 필요한 질문」과 SPEC-17의 사용자 검토(`review`). 다음: T-321 → T-322·T-325 → T-323 → T-324 → T-326(웨이브 1 워크플로).
 - 2026-10-15 오후 0.3: [SPEC-17](../specs/SPEC-17-project-records.md) 0.1(review) 신설 — 유형 R 요구·I 의도·K 앎·E 근거·D 결정, 후보→O/X 확정, 정정은 덧붙임(append-only), 차트·타임라인 기본은 남긴 기록만, 팀 공유 기본 끔. 기록 사본은 PLAN-52 역할 목록을 늘리지 않고 `ops` 역할의 `기록/` 하위에 둔다. 남은 선행: Design SCR(기록 탭·차트·타임라인), ARCH-01 표·API, SPEC-03.8/3.9·SPEC-08.5 역참조(T-320). 코드 변경 없음.
 
 ## 결정이 필요한 질문

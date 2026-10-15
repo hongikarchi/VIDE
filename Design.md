@@ -2,7 +2,7 @@
 id: DESIGN
 title: VIDE 시각·상호작용 기준
 status: review
-version: 1.22
+version: 1.23
 updated: 2026-10-15
 owner: user
 related: [FR-02, FR-03, FR-13, FR-16, FR-19, FR-22, FR-23, FR-24, FR-25, AC-19, AC-22, AC-25, AC-33, AC-34, AC-35, AC-38, AC-39, AC-40, AC-41, AC-42, AC-43, AC-44, AC-45, AC-46, AC-47, AC-48, OQ-04, OQ-18, ADR-003, ADR-004, ADR-009, ADR-010, ADR-019, ADR-020, ADR-021, ADR-022, ADR-025, ADR-026, ADR-027, ADR-030, ADR-036, ADR-034, ADR-037, ADR-039, PLAN-39, PLAN-42, ADR-041, PLAN-43, SPEC-11, SPEC-13, SPEC-12, PLAN-45, SPEC-14, PLAN-47, SPEC-15, PLAN-48, SPEC-16, PLAN-49, SCR-34, PLAN-51, ADR-042, PLAN-52, SCR-35, SCR-36, SCR-37, SCR-38, SCR-39, PLAN-54, ADR-043, SPEC-05, SCR-40, SCR-41, SCR-42, SCR-43, PLAN-53, SPEC-17, SCR-44, SCR-45, SCR-46]
@@ -327,6 +327,7 @@ Rhino의 VIDE 도킹 패널과 ZWCAD 팔레트의 구성은 SCR-12(§09)가 정�
 | 작업 중(누가 어느 파일을 가져가 있는지) | checkout holder, owner |
 | 폴더 역할 · 역할 제안 · 역할 기억(연결 폴더 안의 어느 폴더가 도면·모델·자료인지) | 스키마, 매핑, mapping, schema |
 | 파일 지도 · 이어진 파일 · 영향받는 파일 | 그래프, 노드, 엣지, dependency |
+| 기록 · 후보(아직 안 본 기록) · 남김(O) · 뺌(X) · 부위 · 이어진 기록(한 결정의 이야기는 '체인') · 마일스톤 | record, candidate, kept, dropped, part, chain, link, 이벤트, 타임스탬프 |
 
 2026-10-14 추가(PLAN-51 T-276): 검증 루프 페르소나가 공통으로 모른 화면 말을 위 표의 아래 행으로 바꾼다. 문구만 바꾸고 배치·코드 이름·경로·로그 필드는 그대로 둔다. jig는 위 행대로 화면 말로 남기되, JIG 목록 머리에 ‘JIG · 도구’로 한 번 부제를 붙인다. 이 문서의 다른 절이 예로 인용한 옛 화면 말(AI WORK 머리, Sync 3:19 등)은 이 표를 따른다.
 

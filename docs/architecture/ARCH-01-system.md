@@ -2,10 +2,10 @@
 id: ARCH-01
 title: VIDE 기술 구조와 구현 계약
 status: review
-version: 1.33
+version: 1.34
 updated: 2026-10-15
 owner: agent:codex
-related: [PLAN-52, ADR-042, ADR-043, PLAN-54, PLAN-47, SPEC-14, ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35, PLAN-36, ADR-039, PLAN-38, PLAN-39, PLAN-42, ADR-040, ADR-041, PLAN-43, SPEC-13, PLAN-46]
+related: [PLAN-53, SPEC-17, PLAN-52, ADR-042, ADR-043, PLAN-54, PLAN-47, SPEC-14, ADR-033, PLAN-29, PLAN-31, ADR-032, SPEC-00, SPEC-02, SPEC-03, SPEC-04, SPEC-09, PLAN, PLAN-20, PLAN-24, ADR-014, ADR-015, ADR-016, ADR-017, ADR-021, ADR-022, ADR-025, ADR-027, ADR-028, ADR-029, ADR-030, PLAN-25, PLAN-26, PLAN-27, PLAN-28, ARCH-03, PLAN-30, ADR-035, PLAN-33, ADR-036, PLAN-34, ADR-034, PLAN-32, SPEC-10, ADR-037, PLAN-35, PLAN-36, ADR-039, PLAN-38, PLAN-39, PLAN-42, ADR-040, ADR-041, PLAN-43, SPEC-13, PLAN-46]
 ---
 
 # VIDE 기술 구조와 구현 계약
@@ -217,6 +217,7 @@ T-002의 첫 HTTP 구현은 프로젝트 목록·생성과 입력 목록·생성
 | 사본 적용(jig·가져오기 내부 사본) | `…/applications[/:a[/reconcile]]` | ADR-022로 AI 편집에는 쓰지 않음 |
 | 대화 | `…/conversations[/:c[/close\|reopen\|ledger\|handoff\|account\|answer\|renew\|bind\|unbind]]` | ARCH-03 §10. `account`·계정 인계는 PLAN-25 2단계에서 빼는 중 |
 | jig·만들기·자료 | `…/jigs…`, `…/jig-instances…`, `…/jig-reports`, `…/jig-drafts…`, `…/skills`, `…/facts…`, `…/jigs/knowledge…`, `…/jigs/structure…`, `…/jigs/sync` | ARCH-03 §7, ARCH-02 |
+| 프로젝트 기록(SPEC-17) | `…/records[/:r[/state\|links\|correct]]`, `…/records/state`, `…/records/chains`, `…/records/export`, `…/records/import`, `…/parts[/:id]`, `…/parts/status`, `…/milestones[/:id]`, `…/objects/:o/records` | §5 「프로젝트 기록(PLAN-53)」. 원격 세션은 읽기만 |
 | 경로 판정·검토·공유 | `…/route`, `…/route/revert`, `…/reviews…`, `…/review-comparison`, `…/comparison`, `…/table-views…`, `…/shared-feedback`, `…/offline-view…`, `…/extensions/:e/run` | §6 |
 
 그 밖의 전역 경로: `/api/v1/session`·`hello`·`shutdown`·`remote`·`host…`(문서·선택·핀)·`models`·`providers`·`settings/ai|routing|conversations`·`connectors…`·`extensions`·`jigs…`·`accounts`·`accounts/usage`·`accounts/usage-settings`(계정은 읽기 전용, §7). 이전 계획의 `scopes`·`connections/:c/sync`·`tasks/:t/runs`·`runs/:r/interventions|stop`·`candidates/:c/apply`·`commands/:c/reconcile`·`queries`·`checkpoints`·로컬 `publications`는 만들지 않았다. 웹 검토 서버의 의견 접수는 §6이 소유한다. 장시간 요청은 접수 응답과 완료 결과를 나누고, 멱등·기대 버전 검사는 각 경로가 한다.
@@ -645,7 +646,7 @@ Rhino 편집 적용은 그룹 표의 ID·이름·인덱스·사용자 문자열�
 
 Git에서 스냅샷·부모 참조·변경되지 않은 자료 재사용을 차용하되 Git CLI나 전체 객체 내용 주소 저장소를 첫 구현의 선행 조건으로 만들지 않는다. 기존 SQLite·작업 기록·파일 보관을 확장한다. 기록·캐시·체크포인트 생성에 LLM을 호출하지 않는다. [Git 스냅샷 원리](https://git-scm.com/book/en/v2/Getting-Started-What-is-Git%3F).
 
-현재 DB는 §7의 schema 11과 순차 마이그레이션(`src/core/migrations.ts`: 2 기본 표, 3 숨긴 요청, 4 연결 파일 `document_links`, 5 대화·jig 표 — ARCH-03 §10, 6 프로젝트 폴더 `project_folders` — §3 「프로젝트 폴더와 파일 읽기 도구」, 7 할 일 `agenda_items`, 8 할 일 종류 `agenda_items.kind` — §3 「대시보드의 할 일」, 9 객체 판·Sync 목록 — 아래 「Sync 표시 형상의 객체 단위 저장(T-083)」, 10 하루 기록 `day_log` — §3 「대시보드의 할 일」, 11 `agenda_items` 다시 만들기(접수 종류, 끝 날짜·끝 시각·위치·참석자) — 같은 절; 12~16은 마감 일람표·법규·도면 반영·도면 레이어·법규 역할, 17 할 일 작성자 `agenda_items.createdBy…` — §3 「대시보드의 할 일」)을 사용하며 캐시/체크포인트 테이블은 미구현이다. schema 9의 표는 만들어지지만 요청 결과의 쓰기·읽기를 그 표로 옮기는 연결은 PLAN-27 1단계의 남은 순서다. schema 3은 대화 목록에서 지운 요청을 `hidden_requests(projectId, requestId, hiddenAt)`로 기록한다. 요청 기록·결과·연결은 지우지 않으며, 요청 목록 조회와 AI 대화 문맥에서만 제외한다. 확장은 단일 제어 잠금→백업→버전별 마이그레이션 트랜잭션→무결성/기존 자료 대조를 따른다. 실패 시 신규 쓰기를 열지 않고 원본/백업과 진단을 보존한다. 새 DB뿐 아니라 기존 프로젝트·파일 참조 승계와 중간 종료를 시험한다.
+현재 DB는 §7의 schema 11과 순차 마이그레이션(`src/core/migrations.ts`: 2 기본 표, 3 숨긴 요청, 4 연결 파일 `document_links`, 5 대화·jig 표 — ARCH-03 §10, 6 프로젝트 폴더 `project_folders` — §3 「프로젝트 폴더와 파일 읽기 도구」, 7 할 일 `agenda_items`, 8 할 일 종류 `agenda_items.kind` — §3 「대시보드의 할 일」, 9 객체 판·Sync 목록 — 아래 「Sync 표시 형상의 객체 단위 저장(T-083)」, 10 하루 기록 `day_log` — §3 「대시보드의 할 일」, 11 `agenda_items` 다시 만들기(접수 종류, 끝 날짜·끝 시각·위치·참석자) — 같은 절; 12~16은 마감 일람표·법규·도면 반영·도면 레이어·법규 역할, 17 할 일 작성자 `agenda_items.createdBy…` — §3 「대시보드의 할 일」, 18 체크아웃 `checkouts` — §6 「작업 폴더(PLAN-52)」, 19 프로젝트 기록 `records`·`record_parts`·`record_links`·`parts`·`milestones` — 아래 「프로젝트 기록(PLAN-53)」)을 사용하며 캐시/체크포인트 테이블은 미구현이다. schema 9의 표는 만들어지지만 요청 결과의 쓰기·읽기를 그 표로 옮기는 연결은 PLAN-27 1단계의 남은 순서다. schema 3은 대화 목록에서 지운 요청을 `hidden_requests(projectId, requestId, hiddenAt)`로 기록한다. 요청 기록·결과·연결은 지우지 않으며, 요청 목록 조회와 AI 대화 문맥에서만 제외한다. 확장은 단일 제어 잠금→백업→버전별 마이그레이션 트랜잭션→무결성/기존 자료 대조를 따른다. 실패 시 신규 쓰기를 열지 않고 원본/백업과 진단을 보존한다. 새 DB뿐 아니라 기존 프로젝트·파일 참조 승계와 중간 종료를 시험한다.
 
 현재 전체 문서 지문과 호스트별 객체 제한은 이벤트 추적으로 자동 대체되지 않는다. 애드인의 이벤트 구독이 누락되었거나 연속성이 끊기면 캐시를 신뢰하지 않고 문서 재조회·강한 비교를 수행한다. 이벤트와 지문이 충돌하면 오래된 이벤트 기록을 우선하지 않는다. 자체 SDK 객체 상한의 실측 지원 여부는 호스트 지원표와 L5 검수로 확인한다.
 
@@ -780,6 +781,35 @@ Rhino 편집 창의 표시 페이지(`displayPage`, 첫 Sync·전체 다시 읽�
 - **상한:** 페이지 예산(12 MiB)과 한 객체가 그보다 크면 경계 상자(`oversized`)로 보내는 규칙(ADR-031 7)은 그대로이며, 예산은 바이너리 크기로 센다.
 - **실측(합성 1만 개, 상자 메시 6천·원기둥 메시 2천·곡선 2천, `tests/server/binary-pages.test.mjs`):** 페이지 26.3 MB → 16.5 MB, 엔진 읽기 약 490~590 ms → 약 180~310 ms, 객체별 저장 인코딩 약 90 ms → 약 45 ms, 읽은 모델이 차지하는 메모리 약 44 MB → 약 18~22 MB. 객체 줄·ID·해시 같은 JSON 부분이 남아 크기는 약 37 % 준다(좌표만은 약 1/3).
 
+
+### 프로젝트 기록(PLAN-53, SPEC-17)
+
+[SPEC-17](../specs/SPEC-17-project-records.md)의 물리 계약이다. 의미(유형·후보·거르기·권한·실패)는 SPEC-17이, 화면은 Design SCR-44~46이, 구현 순서는 [PLAN-53](../plans/PLAN-53-project-records.md)이 소유한다. 기록은 요청·객체·노트·검토본을 **가리키기만** 하며 그 행을 바꾸거나 지우지 않는다.
+
+- **표(`project.sqlite` 마이그레이션 19, 모두 `projectId` 첫 열·`WITHOUT ROWID`, ADR-032의 프로젝트 표 분류와 삭제 목록에 포함):**
+  - `records(projectId, id, date 'YYYY-MM-DD', time 'HH:MM'|NULL, source, type 'R'|'I'|'K'|'E'|'D'|'?', text, state 'candidate'|'kept'|'dropped', by 'ai'|계정 표시 이름, chapter|NULL, attachments JSON, sourceKey|NULL, supersededBy|NULL, createdAt, updatedAt, updatedBy|NULL, PRIMARY KEY(projectId, id))` + 부분 고유 색인 `(projectId, sourceKey) WHERE sourceKey IS NOT NULL`(같은 출처에서 후보 두 번 금지 — `RECORD_SOURCE_DUPLICATE`). `source` 값은 SPEC-17.2의 목록 그대로다.
+  - `record_parts(projectId, recordId, partId, PRIMARY KEY(projectId, recordId, partId))`.
+  - `record_links(projectId, fromId, toId, PRIMARY KEY(projectId, fromId, toId))` — `fromId`가 `toId`를 **불러왔다**(SPEC-17.2 `follows`). 넣기 전에 `toId`에서 `fromId`로 가는 경로가 있으면 `RECORD_LINK_CYCLE`. 체인은 들어오는 선이 없는 뿌리부터의 방향 도달 집합이며 읽을 때 계산한다(표 없음).
+  - `parts(projectId, id, name, grp|NULL, roleFrom|NULL, roleTo|NULL, chapter|NULL, mapping JSON, seenAt|NULL, createdAt, updatedAt, PRIMARY KEY(projectId, id))`. `mapping`은 `[{kind:'layer', linkId, layer} | {kind:'objects', linkId, ids[]} | {kind:'jig-output', instanceId, outputId}]`. '끊김'은 저장하지 않고 `GET …/parts/status`가 열린 연결의 최신 Sync 레이어 목록(`ModelView.layerCounts`)과 대조해 `{partId, broken:[mapping index]}`로 돌려준다. `seenAt`은 기존 부위를 처음 열어 본 날(첫 K 기록)로 사람이 고칠 수 있다.
+  - `milestones(projectId, id, label, date, PRIMARY KEY(projectId, id))`.
+  - 본문 검색은 1차로 `text LIKE`이며 FTS 색인은 기록 1,000건 이상의 측정(PLAN-53 T-337) 뒤에만 더한다. `knowledge.sqlite`에는 아무것도 두지 않는다.
+- **`sourceKey` 형식(중복 금지의 단위):** `request:<requestId>` · `chat:<conversationId>:<ledgerItemId|turnId>` · `note:<noteId>:<문단 해시 8자>` · `journal:<YYYY-MM-DD>:<문단 해시 8자>` · `jig-param:<instanceId>:<seq>` · `jig-result:<instanceId>:<runAt>` · `sync:<requestId>` · `checkout:<checkoutId>` · `release:<checkoutId>` · `schema:<confirmedAt>` · `kakao:<파일 SHA-256 앞 16자>:<줄>` · `mail:<Message-ID>`. 사람이 적은 기록(`manual`)은 `sourceKey`가 없다.
+- **`attachments` JSON:** `{requestId?, reviewId?, note?: {id, kind, paragraph?}, jig?: {instanceId, seq?, runAt?}, checkoutId?, file?: {path(작업 폴더 상대), line?}, objects?: string[]}`. 되돌림 여부(`undone`)는 저장하지 않고 `requestId`의 실행 기록(`executions[].state`가 모두 `undone`)에서 읽을 때 계산한다. 가리키는 Sync의 형상이 보존 규칙(`ModelStore.retain`)으로 정리됐으면 기록은 남고 형상만 '없음'이다.
+- **기록 행(API 응답):** `{id, date, time, source, type, text, state, by, chapter, parts[], follows[], followedBy[], attachments, sourceKey?, supersededBy?, undone, createdAt, updatedAt, updatedBy?}`.
+- **라우트(`/api/v1/projects/:p/…`, 원격 세션은 GET만·쓰기는 `FORBIDDEN`):**
+  - `GET /records?state=&type=&source=&part=&chapter=&from=&to=&q=&limit=&offset=` → `{records[], total, counts: {state, type, source, chapter}}`(기본 정렬 `date, time, createdAt` 오름차순; `counts`는 거르기 전 전체 기준). `GET /records/:r`.
+  - `POST /records {date, time?, type, text, parts?, follows?, chapter?, attachments?}` — 사람의 기록, `state='kept'`, `by`는 세션 계정 표시 이름(없으면 `user`). AI 도구 `record_add {date?, type?, text, parts?}`는 같은 모듈을 `by='ai'`, `state='candidate'`, `source='chat'`으로만 부른다(SPEC-17.7).
+  - `PATCH /records/:r {text?, type?, parts?, chapter?, date?, time?}` — `updatedAt`·`updatedBy`를 남긴다. `supersededBy`가 있는 기록은 `RECORD_SUPERSEDED`. `POST /records/:r/correct {text, type?}` — 뜻이 달라지는 정정: 새 기록(같은 `parts`·`source='manual'`)을 만들고 옛 기록의 `supersededBy`를 채우며 옛→새 `record_links`를 넣는다.
+  - `POST /records/:r/state {state}`, `POST /records/state {ids[], state}`(보이는 것 전체 O/X). `state`는 `candidate|kept|dropped` 사이를 오간다(지움 = `candidate`).
+  - `POST /records/:r/links {to}`, `DELETE /records/:r/links/:to`. `GET /records/chains?state=` → `{chains: [{root, ids[]}]}`.
+  - `GET /records/export?format=marks|jsonl&…(목록과 같은 거르기)` — `marks`는 목록 순서대로 한 글자 한 건(`o`=kept, `x`=dropped, `.`=candidate), `jsonl`은 기록 행 한 줄씩. `POST /records/import {marks, ids[]}` — `ids`와 `marks` 길이가 다르면 `RECORD_MARKS_MISMATCH`.
+  - `GET|POST /parts`, `PUT|DELETE /parts/:id`(지우면 `record_parts`에서만 떼고 기록은 남김), `GET /parts/status`. `GET|POST /milestones`, `DELETE /milestones/:id`.
+  - `GET /objects/:o/records?linkId=` — '이 객체의 기록'(SPEC-17.5·SPEC-03.8): 요청 결과의 `changes`·`executions[].changes`(추가·변경·삭제)에서 객체 id → 요청 id 역색인을 읽을 때 만들고(표 없음, 프로젝트마다 15초 보관), 그 요청을 가리키는 기록과 그 객체의 레이어가 매핑된 부위의 기록을 `date` 순으로 돌려준다 `{records[], via: {requestIds[], partIds[]}}`. 여러 연결 파일의 같은 id는 `linkId`로 가른다(ADR-027).
+- **코드와 HTTP 상태:** `RECORD_NOT_FOUND` 404, `PART_NOT_FOUND` 404, `MILESTONE_NOT_FOUND` 404, `RECORD_LINK_CYCLE` 409, `RECORD_SOURCE_DUPLICATE` 409(`{existingId}`), `RECORD_SUPERSEDED` 409, `RECORD_MARKS_MISMATCH` 409(`{expected, got}`), `RECORD_AI_FORBIDDEN` 403(AI 경로가 `kept`·`dropped`·본문 고치기를 시도), 원격 세션 쓰기 `FORBIDDEN` 403, 잘못된 유형·상태·날짜 `INVALID_INPUT` 400.
+- **자동 후보의 진입점(한 모듈 `src/core/record-candidates.ts`가 규칙을, `src/server/record-sources.ts`가 아래 훅을 받아 비동기로 넣는다 — 실패는 진단 기록에만 남기고 요청 시간을 늘리지 않는다):** 요청 완료 `Execution.onFinished`(바뀐 객체가 있으면 D, 없으면 E; 문서 Sync 행은 `source='sync'`·K), 대화 결정 문장(같은 훅에서 그 요청의 원장 `decision` 항목과 사용자 문장의 결정 어휘 규칙 → D), 노트·일지 사본 `SharedNotes.onCopy`·`agendaRoutes.dayEnded`(문단 단위 `?`, 하루 30건 상한), jig 설정값 `JigRuntime.setParams` 뒤(D)·확정 실행 `RuntimeOptions.onRun`(법규 체크·구조 검토 jig의 `mode='confirmed'` → E), 체크아웃·반영 `CheckoutOptions.onChange`·`log`(K), 폴더 역할 확정 `confirmWorkspaceSchema` 뒤(K). 기존 소비자가 하나뿐인 훅은 감싸서 둘에게 전달한다.
+- **사람용 사본(PLAN-53 T-331, 작업 폴더가 있을 때만):** `<ops>/기록/YYYY-MM.jsonl`(그 달 `date`의 기록 행 전부, 상태 포함, 한 줄 한 건), `<ops>/기록/README.md`의 VIDE 소유 구간(부위 사전 표·마일스톤·장 목록), 가져온 원문 `<ops>/기록/원문/<파일 이름>`(웨이브 2). 사본 첫 줄의 `vide-copy:` 표식·덮어쓰기 금지·루트 밖 `OUTSIDE_WORKSPACE`는 「작업 폴더(PLAN-52)」의 산출물 경로 규칙과 같다. `원문/`은 진단 묶음(`diagnostic-bundle.ts`의 금지 목록)·AI 파일 도구·공유 사이트 업로드에서 뺀다.
+- **사이트(웨이브 3 T-336):** 켠 프로젝트만 `kept` 기록의 `{record_id, date, type, text, parts(이름 배열), chapter, updated_at}`을 D1 표 `project_records`(마이그레이션 **0018**, 0017 `report_publications` 다음)에 PLAN-35의 할 일 복사 방식(PC가 자기 행을 바꿔치기)으로 올린다. 후보·`dropped`·attachments·원문은 올리지 않는다. 웨이브 1·2는 사이트에 아무것도 올리지 않는다.
+- **화면 자료 모양:** 기록 탭(SCR-44)은 위 목록 API만 쓰고, 차트(SCR-45)·타임라인(SCR-46)은 `src/ui/chart/*`의 `ChartModel {rows, items, links, milestones}`로 바꿔 그린다 — `items[].kind`는 `record:R|I|K|E|D|?`, `links[].kind`는 `follows`. 파일 지도와 글리프·연결선·시간 커서 부품을 함께 쓴다.
 
 <a id="detail-5"></a>
 
