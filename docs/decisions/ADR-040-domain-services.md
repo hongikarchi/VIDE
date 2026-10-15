@@ -2,8 +2,8 @@
 id: ADR-040
 title: 법규·자료·사이트·구조는 별도 서비스로 두고 VIDE는 가져다 jig로 개조해 쓴다
 status: review
-version: 0.2
-updated: 2026-10-08
+version: 0.3
+updated: 2026-10-15
 owner: user
 related: [C-04, C-05, C-06, OQ-16, OQ-17, ARCH-01, SPEC-07, ADR-020, ADR-037, RESEARCH-04, RESEARCH-16, PLAN-43]
 ---
@@ -46,3 +46,4 @@ related: [C-04, C-05, C-06, OQ-16, OQ-17, ARCH-01, SPEC-07, ADR-020, ADR-037, RE
   - 서비스 DB를 공유하는 방식(직접 읽기, API, 사본 동기화): OQ-16
   - 역전송 확인의 단위(항목별, 묶음별): OQ-17
 - 규모검토, 법규 Q&A, 패널링 같은 세부 흐름은 [RESEARCH-16](../research/RESEARCH-16-domain-services-roadmap.md)에 정리한다. 해당 서비스가 정본을 갖는다(cLAWde는 별도 저장소, 나머지는 VIDE 저장소 안의 서비스 폴더).
+- 사용자가 **자기 계정**으로 쓰는 범용 서비스(GitHub·Cloudflare)는 이 결정의 대상이 아니며 [ADR-043](ADR-043-user-accounts-deploy.md)이 따로 정한다(2026-10-15). VIDE 계정으로 토큰을 받는 도메인 서비스와 달리 사용자가 토큰을 넣고, 푸시·게시는 사람이 누를 때만 한다.
