@@ -115,3 +115,52 @@
   flex-direction: column;
   gap: 4px;
 }
+
+/* 이력 줄 (Design SCR-42): plain status on the left, small buttons on the right; a warning is
+   colored text only (no side bars). Cards are at most 420px wide. */
+.ws-history {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ws-history-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 10px;
+  font-size: 12px;
+}
+.ws-history-text {
+  color: var(--text-2);
+}
+.ws-history-text[data-warn] {
+  color: var(--warn);
+}
+.ws-history-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ws-history-buttons > button:not(.link-button) {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.ws-history-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.ws-history-card {
+  max-width: 420px;
+}
+.ws-history-visibility {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+}
+.ws-history-visibility label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}

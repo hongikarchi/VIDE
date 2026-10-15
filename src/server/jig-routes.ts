@@ -5,8 +5,8 @@
 // are confirmed actions (SPEC-02.19 T2) and refuse remote sessions. The temporary S-06 diagnosis
 // routes of PLAN-23 T-044 stay until T-051 moves the step to the v3 runner.
 
-import type { IncomingMessage } from 'node:http';
-import { randomUUID } from 'node:crypto';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { DomainError } from '../core/store.ts';
 import { JigStore } from '../core/jig-store.ts';
@@ -44,15 +44,25 @@ import { join } from 'node:path';
 import {
   parseReportTemplate,
   resolveReport,
+  resolveBlock,
   type ReportContext,
   type ReportModel,
+  type ReportTemplate,
 } from '../jigs/runtime/report-format.ts';
+import { publicSectionIds, renderReportHtml, stripCitations } from '../core/report-html.ts';
+import { csvFile } from '../core/csv.ts';
+import { dayOf, safeName } from '../core/workspace-paths.ts';
 import { jigReportInputs, renderJigReport, type JigReportLedgerRow } from './report.ts';
 import { ConversationStore } from '../core/conversation-store.ts';
 import { isItemList } from '../core/model-store.ts';
 import { orderLayerPaths, type HostLayer } from '../core/layer-tree.ts';
 import { skillCatalog } from './skill-catalog.ts';
-import { copyProjectJig, workspaceOutputsFor } from './workspace-outputs.ts';
+import {
+  copyProjectJig,
+  listPublicReports,
+  readPublicReportFile,
+  workspaceOutputsFor,
+} from './workspace-outputs.ts';
 import { diagnose, type DiagnoseInputs } from '../../extensions/jigs/s06-frame/steps/diagnose.ts';
 import { ROLE_KEYS } from '../../extensions/jigs/s06-frame/steps/labels.ts';
 import {
@@ -79,6 +89,8 @@ export interface JigRouteContext {
    * routes use `sdk.directExecute` / `sdk.directUndo` / `sdk.fingerprint` when the engine has them.
    */
   direct?: DirectHost;
+  /** The raw response, for pages served as they are (보고용 files, PLAN-54 T-342). */
+  response?: ServerResponse;
 }
 
 /** HTTP statuses of the jig error codes (ARCH-03 §7); server.ts merges them into its table. */
@@ -112,6 +124,10 @@ export const jigStatuses: Record<string, number> = {
   BAKE_SURFACE_CHANGED: 409,
   /** A jig read of a closed Link or a Rhino that stopped answering (T-282 follow-up). */
   HOST_UNAVAILABLE: 409,
+  /** [보고용 만들기] of a result that is not final (다시 계산 필요·아직 계산 전, SPEC-07.11). */
+  REPORT_NOT_FINAL: 409,
+  REPORT_SECTIONS_EMPTY: 422,
+  EXPORT_FOLDER_TAKEN: 409,
 };
 /** Host connection codes a jig read passes on as classified failures, never a 500 (T-282). */
 const HOST_READ_CODES = new Set(['HOST_UNAVAILABLE', 'STALE_CONNECTION', 'HOST_BUSY']);
@@ -403,6 +419,26 @@ export async function jigRoutes(
     return true;
   }
 
+  // 보고용 산출물 (PLAN-54 T-342, SPEC-07.11 두 등급): the kept 보고용 reports of the project and
+  // their files (the work folder copy is written at making; these are the data folder's).
+  const outputsList = /^\/api\/v1\/projects\/([^/]+)\/outputs$/.exec(url.pathname);
+  if (outputsList && method === 'GET') {
+    workspace.store.project(outputsList[1]);
+    send(200, { outputs: await listPublicReports(context.dataDirectory, outputsList[1]) });
+    return true;
+  }
+  const outputFile = /^\/api\/v1\/projects\/([^/]+)\/outputs\/([^/]+)\/files\/([^/]+)$/.exec(
+    url.pathname,
+  );
+  if (outputFile && method === 'GET') {
+    workspace.store.project(outputFile[1]);
+    const [name, file] = [decodeURIComponent(outputFile[2]), decodeURIComponent(outputFile[3])];
+    const data = await readPublicReportFile(context.dataDirectory, outputFile[1], name, file);
+    if (!data) throw new DomainError('NOT_FOUND');
+    servePage(context, data, file, url.searchParams.has('download') ? file : undefined);
+    return true;
+  }
+
   // --- instances ------------------------------------------------------------------------------
   const instances = /^\/api\/v1\/projects\/([^/]+)\/jig-instances(?:\/([^/]+)(?:\/(.+))?)?$/.exec(
     url.pathname,
@@ -608,14 +644,41 @@ export async function jigRoutes(
     }
     const reportRoute = /^reports\/([^/]+)$/.exec(rest);
     if (reportRoute && method === 'GET') {
+      const tier = url.searchParams.get('tier') === 'public' ? 'public' : 'review';
+      const sections = url.searchParams.get('sections');
+      const answer = await instanceReport(
+        rt,
+        workspace,
+        projectId,
+        instanceId,
+        decodeURIComponent(reportRoute[1]),
+        {
+          tier,
+          ...(sections !== null ? { sections: sections.split(',').filter(Boolean) } : {}),
+          ...(url.searchParams.get('title') ? { title: url.searchParams.get('title')! } : {}),
+        },
+      );
+      // The 보고용 preview of [보고용 만들기] is shown in a frame as the page itself.
+      if (url.searchParams.get('as') === 'html' && answer.html)
+        servePage(context, Buffer.from(answer.html, 'utf8'), 'index.html');
+      else send(200, answer);
+      return true;
+    }
+    // [보고용 만들기] (PLAN-54 T-342, SPEC-07.11 두 등급): this PC only.
+    const publicRoute = /^reports\/([^/]+)\/public$/.exec(rest);
+    if (publicRoute && method === 'POST') {
+      if (remote) throw new DomainError('FORBIDDEN');
+      const input = publicInput.parse(await body(request));
       send(
         200,
-        await instanceReport(
+        await makePublicReport(
           rt,
           workspace,
+          context.dataDirectory,
           projectId,
           instanceId,
-          decodeURIComponent(reportRoute[1]),
+          decodeURIComponent(publicRoute[1]),
+          input,
         ),
       );
       return true;
@@ -1142,7 +1205,8 @@ export function withoutEmptyBlocks(model: ReportModel): ReportModel {
     })),
   };
 }
-async function instanceReport(
+/** A report frame resolved on an instance's kept results (both tiers start here). */
+async function loadInstanceReport(
   rt: JigRuntime,
   workspace: Workspace,
   projectId: string,
@@ -1151,7 +1215,8 @@ async function instanceReport(
 ) {
   const view = await rt.view(projectId, instanceId);
   const jig = await rt.registry.resolve(view.jig.id, view.jig.version);
-  const frame = reportFrames(jig).find((r) => r.id === reportId);
+  const frames = reportFrames(jig);
+  const frame = frames.find((r) => r.id === reportId);
   if (!frame) throw new DomainError('NOT_FOUND');
   let raw: unknown;
   try {
@@ -1166,6 +1231,7 @@ async function instanceReport(
     );
   const outputs: Record<string, unknown> = {};
   const final: Record<string, boolean> = {};
+  let runAt: string | undefined;
   for (const step of view.steps) {
     if (!step.hasOutput) continue;
     try {
@@ -1173,6 +1239,7 @@ async function instanceReport(
       // A stale or re-confirm result is shown as it was, never as final.
       final[step.id] =
         outputIsFinal(outputs[step.id]) && (step.status === 'done' || step.status === 'confirmed');
+      if (step.at && (!runAt || step.at > runAt)) runAt = step.at;
     } catch {
       /* An output that went missing reads as not yet computed. */
     }
@@ -1198,6 +1265,84 @@ async function instanceReport(
     },
   };
   const model = withoutEmptyBlocks(resolveReport(parsed.template, context));
+  const title = frame.title === frame.id ? model.title : frame.title;
+  // [보고용 만들기] only on a final result (SPEC-07.11 두 등급; SPEC-15.12·SPEC-12.13 4).
+  const refusedText = parsed.template.export?.refused;
+  const reason = !Object.keys(outputs).length
+    ? '아직 계산 전입니다 — 먼저 계산하면 만들 수 있습니다'
+    : model.provisional.length
+      ? '다시 계산 필요 — 먼저 다시 계산하면 만들 수 있습니다'
+      : model.exportRefused?.length
+        ? refusedText && model.exportRefused.includes(refusedText)
+          ? refusedText
+          : '먼저 다시 계산하면 만들 수 있습니다'
+        : undefined;
+  const sourceRun = {
+    instanceId,
+    reportId,
+    at: runAt ?? view.updatedAt,
+    revision: createHash('sha256').update(JSON.stringify(outputs)).digest('hex').slice(0, 12),
+  };
+  return {
+    view,
+    frame: { ...frame, title },
+    single: frames.length === 1,
+    template: parsed.template,
+    context,
+    model,
+    outputs,
+    reason,
+    sourceRun,
+  };
+}
+type LoadedReport = Awaited<ReturnType<typeof loadInstanceReport>>;
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+/** `YYYY-MM-DD HH:mm` (local) of an ISO time, as the 보고용 head shows it. */
+const stampOf = (iso: string) => {
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime())
+    ? iso
+    : `${dayOf(at)} ${pad2(at.getHours())}:${pad2(at.getMinutes())}`;
+};
+/** The 보고용 sections: the asked ones that exist (frame order), else the frame's public ones. */
+const chosenSections = (model: ReportModel, asked?: readonly string[]) =>
+  asked
+    ? model.sections.filter((s) => asked.includes(s.id)).map((s) => s.id)
+    : publicSectionIds(model);
+function publicHtml(loaded: LoadedReport, sections: string[], title: string, madeAt: string) {
+  const { model, view, sourceRun } = loaded;
+  return renderReportHtml(
+    model,
+    { project: '', instance: view.title, version: '', at: stampOf(madeAt) },
+    {
+      tier: 'public',
+      title,
+      sections,
+      sourceRun: {
+        instanceId: sourceRun.instanceId,
+        reportId: sourceRun.reportId,
+        at: stampOf(sourceRun.at),
+      },
+    },
+  );
+}
+const defaultTitle = (loaded: LoadedReport) => `${loaded.view.jig.name} 보고서`;
+async function workFolderOf(workspace: Workspace, projectId: string) {
+  const ws = await workspaceOutputsFor(workspace.store).target(projectId);
+  return ws ? { root: ws.root, output: ws.paths.output ?? null } : null;
+}
+
+async function instanceReport(
+  rt: JigRuntime,
+  workspace: Workspace,
+  projectId: string,
+  instanceId: string,
+  reportId: string,
+  options: { tier?: 'review' | 'public'; sections?: string[]; title?: string } = {},
+) {
+  const loaded = await loadInstanceReport(rt, workspace, projectId, instanceId, reportId);
+  const { view, model, frame, outputs, reason, sourceRun } = loaded;
   const at = new Date().toISOString();
   const origin = {
     project: workspace.store.project(projectId).name,
@@ -1205,6 +1350,40 @@ async function instanceReport(
     version: `${view.jig.name} ${view.jig.version}`,
     at,
   };
+  const publicInfo = {
+    sections: model.sections.map((s) => ({
+      id: s.id,
+      no: s.no,
+      title: stripCitations(s.title.text),
+      public: s.public,
+    })),
+    allowed: !reason,
+    ...(reason ? { reason } : {}),
+    sourceRun,
+    defaultTitle: defaultTitle(loaded),
+    /** The work folder and its output role (absolute), for the 저장 위치 line; null when none. */
+    workFolder: await workFolderOf(workspace, projectId),
+  };
+  if (options.tier === 'public') {
+    // The 보고용 preview (nothing written): only for a final result.
+    const html = reason
+      ? ''
+      : publicHtml(
+          loaded,
+          chosenSections(model, options.sections),
+          options.title?.trim() || defaultTitle(loaded),
+          at,
+        );
+    return {
+      report: frame,
+      instance: { id: view.id, title: view.title, jig: view.jig },
+      origin,
+      model,
+      html,
+      copy: null,
+      public: publicInfo,
+    };
+  }
   // A frame that says when it may be exported (SPEC-12.13 4) gives no page while it may not.
   const html = model.exportRefused?.length ? '' : renderJigReport(model, origin);
   // 작업 폴더의 검토용 보고서 사본 (PLAN-52 T-313): next to the run's data. Waited for a moment
@@ -1214,12 +1393,7 @@ async function instanceReport(
     ? workspaceOutputsFor(workspace.store).writeJigReport(
         projectId,
         { jigId: view.jig.id, instanceId, title: view.title, outputs },
-        {
-          reportId,
-          title: frame.title === frame.id ? model.title : frame.title,
-          html,
-          single: reportFrames(jig).length === 1,
-        },
+        { reportId, title: frame.title, html, single: loaded.single },
       )
     : null;
   const copy = written
@@ -1229,7 +1403,7 @@ async function instanceReport(
       ])
     : null;
   return {
-    report: { ...frame, title: frame.title === frame.id ? model.title : frame.title },
+    report: frame,
     instance: { id: view.id, title: view.title, jig: view.jig },
     origin,
     /** The resolved report: the app draws it with the kit parts (the page CSP forbids inline styles). */
@@ -1238,5 +1412,135 @@ async function instanceReport(
     html,
     /** Where the 검토용 copy went in the work folder (absolute), or null (none, or still writing). */
     copy,
+    /** [보고용 만들기]: the sections to choose from, whether it may be made now and why not. */
+    public: publicInfo,
   };
+}
+
+const publicInput = z
+  .object({
+    title: z.string().max(120).optional(),
+    sections: z.array(z.string().max(80)).max(40).optional(),
+  })
+  .strict();
+
+/**
+ * [보고용 만들기]: the 보고용 page of the chosen sections, a CSV per table of them (all rows),
+ * `report.json`, written by WorkspaceOutputs.writePublicReport. Refused with REPORT_NOT_FINAL
+ * unless the result is final.
+ */
+async function makePublicReport(
+  rt: JigRuntime,
+  workspace: Workspace,
+  dataDirectory: string,
+  projectId: string,
+  instanceId: string,
+  reportId: string,
+  input: z.infer<typeof publicInput>,
+) {
+  const loaded = await loadInstanceReport(rt, workspace, projectId, instanceId, reportId);
+  if (loaded.reason) throw new DomainError('REPORT_NOT_FINAL');
+  const { model, template, context, sourceRun } = loaded;
+  const sections = chosenSections(model, input.sections);
+  if (!sections.length) throw new DomainError('REPORT_SECTIONS_EMPTY');
+  const title = input.title?.trim() || defaultTitle(loaded);
+  const madeAt = new Date().toISOString();
+  const html = publicHtml(loaded, sections, title, madeAt);
+  const csvs = publicCsvs(template, context, model, sections);
+  const result = await workspaceOutputsFor(workspace.store).writePublicReport(
+    projectId,
+    {
+      title,
+      html,
+      csvs,
+      reportJson: {
+        title,
+        sourceRun: { ...sourceRun, jigId: loaded.view.jig.id, version: loaded.view.jig.version },
+        sections,
+        scenes: [],
+        madeAt,
+      },
+    },
+    dataDirectory,
+  );
+  return {
+    name: result.name,
+    folder: result.folder,
+    written: result.written,
+    ...(result.reason ? { reason: result.reason } : {}),
+    files: result.files,
+    title,
+    sections,
+    sourceRun,
+    madeAt,
+  };
+}
+
+/** One CSV per table (and ledger) of the chosen sections, every row (the page shows at most `max`). */
+function publicCsvs(
+  template: ReportTemplate,
+  context: ReportContext,
+  model: ReportModel,
+  sections: readonly string[],
+) {
+  const out: { name: string; text: string }[] = [];
+  const taken = new Set<string>();
+  sections.forEach((id, i) => {
+    const spec = template.sections.find((s) => s.id === id);
+    const section = model.sections.find((s) => s.id === id);
+    if (!spec || !section) return;
+    for (const blockSpec of spec.blocks ?? []) {
+      if (/^inputs.settings(?:.|$)/.test(blockSpec.from)) continue;
+      if (blockSpec.kind !== 'table' && blockSpec.kind !== 'ledger') continue;
+      const block = resolveBlock(
+        blockSpec.kind === 'table' ? { ...blockSpec, max: Number.MAX_SAFE_INTEGER } : blockSpec,
+        context,
+      );
+      if ((block.kind !== 'table' && block.kind !== 'ledger') || !block.rows.length) continue;
+      const head = block.columns.map((c) => (c.unit ? `${c.label} (${c.unit})` : c.label));
+      const text =
+        block.kind === 'table'
+          ? csvFile(head, block.rows)
+          : csvFile(
+              ['구분', ...head],
+              block.rows.map((r) => [r.group, ...r.cells]),
+            );
+      const stem = `${String(i + 1).padStart(2, '0')}-${safeName(
+        stripCitations(block.title ?? section.title.text),
+        '표',
+      )}`;
+      let name = `${stem}.csv`;
+      for (let n = 2; taken.has(name); n++) name = `${stem}-${n}.csv`;
+      taken.add(name);
+      out.push({ name, text });
+    }
+  });
+  return out;
+}
+
+/** A page or file served as it is: no scripts, framed only by the app (보고용 미리보기). */
+function servePage(context: JigRouteContext, data: Buffer, file: string, download?: string) {
+  const response = context.response;
+  const type = /\.html$/i.test(file)
+    ? 'text/html; charset=utf-8'
+    : /\.csv$/i.test(file)
+      ? 'text/csv; charset=utf-8'
+      : /\.json$/i.test(file)
+        ? 'application/json; charset=utf-8'
+        : 'application/octet-stream';
+  if (!response) {
+    context.send(200, { file, text: data.toString('utf8') });
+    return;
+  }
+  response.setHeader(
+    'Content-Security-Policy',
+    "default-src 'none'; style-src 'unsafe-inline'; img-src data:; frame-ancestors 'self'; base-uri 'none'; form-action 'none'",
+  );
+  response.writeHead(200, {
+    'Content-Type': type,
+    ...(download
+      ? { 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(download)}` }
+      : {}),
+  });
+  response.end(data);
 }

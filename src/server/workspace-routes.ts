@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir } from 'node:fs/promises';
 import { userInfo } from 'node:os';
@@ -27,7 +28,18 @@ import {
 import { writeGuideFiles } from '../core/workspace-files.ts';
 import { pathKey } from '../core/xref-graph.ts';
 import { checkFolder, type FileContext } from './project-files.ts';
-import { gitAvailability, initRepository, type GitSetup } from './workspace-git.ts';
+import {
+  commit,
+  ensureRemote,
+  gitAvailability,
+  gitHistoryStatuses,
+  gitStatus,
+  initRepository,
+  pull,
+  push,
+  type GitSetup,
+} from './workspace-git.ts';
+import { GithubApi, repoNameOf } from './github-api.ts';
 import { checkoutRoutes, checkoutStatuses, type CheckoutRouteDeps } from './workspace-checkout.ts';
 
 /**
@@ -54,6 +66,8 @@ export const workspaceStatuses: Record<string, number> = {
   WORKSPACE_ACCESS_DENIED: 403,
   // 체크아웃·서버에 반영 (T-310~T-312).
   ...checkoutStatuses,
+  // 이력: 저장점·원격·푸시·가져오기 (PLAN-54 T-346).
+  ...gitHistoryStatuses,
 };
 
 export interface WorkspaceRouteDeps {
@@ -69,7 +83,28 @@ export interface WorkspaceRouteDeps {
   setup?: WorkspaceSetupDeps;
   /** 체크아웃·서버에 반영·도면 보호 (T-310~T-312); without it those paths are not routed here. */
   checkout?: CheckoutRouteDeps;
+  /** 이력 — 저장점·원격·푸시·가져오기 (PLAN-54 T-346); without it those paths are not routed here. */
+  history?: WorkspaceHistoryDeps;
 }
+
+export interface WorkspaceHistoryDeps {
+  body: () => Promise<Record<string, unknown>>;
+  /** A remote session reads the history line but never commits, pushes or pulls. */
+  remote: boolean;
+  /**
+   * The person's GitHub account (설정 → 외부 서비스): its REST address and token
+   * (`accountConnection(settings, 'github')`); throws ACCOUNT_NOT_CONNECTED or ACCOUNT_SCOPE.
+   */
+  github: () => Promise<{ api: string; token: string; timeoutMs?: number }>;
+  /** [폴더 열기] for a folder that differs from its remote (default: Explorer). */
+  launch?: (path: string) => void;
+}
+
+const explorer = (path: string) =>
+  // A start that fails emits 'error'; unheard, it would end the engine.
+  spawn('explorer.exe', [path], { detached: true, stdio: 'ignore', windowsHide: false })
+    .on('error', () => {})
+    .unref();
 
 export interface WorkspaceSetupDeps {
   body: () => Promise<Record<string, unknown>>;
@@ -104,7 +139,16 @@ export async function requireWorkspace(
 export async function workspaceRoutes(
   url: URL,
   method: string | undefined,
-  { folders, project, isProject, dataDirectory, send, setup, checkout }: WorkspaceRouteDeps,
+  {
+    folders,
+    project,
+    isProject,
+    dataDirectory,
+    send,
+    setup,
+    checkout,
+    history,
+  }: WorkspaceRouteDeps,
 ) {
   if (checkout && (await checkoutRoutes(url, method, project, send, checkout))) return true;
   const action = /^\/api\/v1\/workspace\/(git|inspect|create|open)$/.exec(url.pathname)?.[1];
@@ -120,6 +164,19 @@ export async function workspaceRoutes(
     if (action === 'inspect') send(200, await inspectFolder(await setup.body(), deps));
     else if (action === 'create') send(201, await createWorkspace(await setup.body(), deps));
     else send(200, await openWorkspace(await setup.body(), deps));
+    return true;
+  }
+  const historyMatch =
+    history &&
+    /^\/api\/v1\/projects\/([^/]+)\/workspace\/git\/(status|commit|remote|push|pull|open)$/.exec(
+      url.pathname,
+    );
+  if (history && historyMatch) {
+    const [, projectId, step] = historyMatch;
+    send(
+      200,
+      await historyRoute(step, method, projectId, { folders, project, isProject, history }),
+    );
     return true;
   }
   if (url.pathname === '/api/v1/settings/workspace-template') {
@@ -439,4 +496,80 @@ export async function openWorkspace(input: Record<string, unknown>, deps: SetupC
     paths: await absolutePaths(deps, id),
     collect,
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// 이력 — 저장점·원격·푸시·가져오기 (PLAN-54 T-346, SPEC-05.11, Design SCR-42)
+
+const commitSchema = z.object({ message: z.string().max(2000).optional() }).strict();
+const remoteSchema = z
+  .object({
+    name: z.string().max(100).optional(),
+    private: z.boolean().optional(),
+    reuse: z.boolean().optional(),
+  })
+  .strict();
+
+/** Whether a usable GitHub token is set (the panel's [푸시] is dim without one); never the token. */
+async function githubConnected(history: WorkspaceHistoryDeps) {
+  try {
+    return !!(await history.github()).token;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `GET …/workspace/git/status` → GitStatus + `github` (a token is set) + `suggestedName`;
+ * `POST …/commit {message?}`, `…/remote {name?, private?, reuse?}`, `…/push`, `…/pull` and
+ * `…/open` (the folder in Explorer, for a folder that differs from its remote) — this PC only.
+ * A folder on a server share is `WORKSPACE_READ_ONLY`.
+ */
+async function historyRoute(
+  step: string,
+  method: string | undefined,
+  projectId: string,
+  {
+    folders,
+    project,
+    isProject,
+    history,
+  }: Pick<WorkspaceRouteDeps, 'folders' | 'project' | 'isProject'> & {
+    history: WorkspaceHistoryDeps;
+  },
+) {
+  if (step === 'status' ? method !== 'GET' : method !== 'POST') throw new DomainError('NOT_FOUND');
+  if (step !== 'status' && history.remote) throw new DomainError('FORBIDDEN');
+  project(projectId);
+  const { root } = await requireWorkspace(folders, projectId, isProject);
+  if (step === 'status')
+    return {
+      ...(await gitStatus(root)),
+      github: await githubConnected(history),
+      suggestedName: repoNameOf(folderName(root)),
+    };
+  if (step === 'commit') {
+    const { message } = commitSchema.parse(await history.body());
+    return commit(root, message);
+  }
+  if (step === 'remote') {
+    const value = remoteSchema.parse(await history.body());
+    return ensureRemote(root, value, async () => {
+      const { api, token, timeoutMs } = await history.github();
+      return new GithubApi({ token, base: api, timeoutMs });
+    });
+  }
+  if (step === 'push') return push(root, (await history.github()).token);
+  if (step === 'open') {
+    (history.launch ?? explorer)(root);
+    return { opened: true };
+  }
+  // A pull needs no token for a public or local remote; with one it reads a private one too.
+  let token: string | undefined;
+  try {
+    token = (await history.github()).token;
+  } catch {
+    token = undefined;
+  }
+  return pull(root, token);
 }

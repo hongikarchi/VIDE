@@ -2,8 +2,8 @@
 id: INDEX-SPECS
 title: VIDE 기능 명세 · 사용자 작업과 기능 목록
 status: review
-version: 0.20
-updated: 2026-10-08
+version: 0.21
+updated: 2026-10-15
 owner: user
 related: []
 ---
@@ -36,6 +36,7 @@ VIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 �
 | 주소로 대지를 모델링하고 가능 영역·매스 대안을 거쳐 건축개요 내기 | [SPEC-12](SPEC-12-site-and-massing.md) · SPEC-12.1 | 공공 자료·계산·사람 확정·AI 추정의 출처가 값마다 구분되고, 법규 판단 없이 규제 조건을 읽어 닫힌 외피와 대안 면적을 계산하는가 |
 | 지금 Rhino 모델이 건폐율·용적률·높이·층수, 가능 외피(일조·건축선·이격), 주차·조경·공개공지를 넘는지 근거와 함께 보기 | [SPEC-15](SPEC-15-compliance-check.md) · SPEC-15.1 | [법규 체크]를 누를 때만 돌고, 한계 값이 모두 규제 조건(사람 입력·법규 Q&A 결과)에서 오며, 정할 수 없는 항목이 '판단 필요'·'사람 입력 필요'로 남고, AI는 객체 역할을 제안만 하는가 |
 | Rhino 곡면을 패널로 나눠 미리 보고, 두께·줄눈을 더한 부재로 만들고, 평면화·타입·결합부 일람표와 함께 Rhino에 만들기 | [SPEC-16](SPEC-16-paneling.md) · SPEC-16.1 | 빠진 입력을 되묻고 추천값을 '가정'으로 표시하며, 부재·타입 만들기는 사람이 확인한 값으로만 하고, 실패 패널을 빼거나 메우지 않고 보고하는가 |
+| 프로젝트의 요구·의도·앎·근거·결정을 부위와 시간 위에 놓고, 객체를 골라 "왜 이 형상인가"로 거슬러 가기 | [SPEC-17](SPEC-17-project-records.md) · SPEC-17.1 | 자동 후보가 사람이 거르기 전에 사실로 쓰이지 않고, 기록이 요청·노트·검토본을 대신하지 않고 가리키며, 가져온 원문이 이 PC 밖으로 나가지 않는가 |
 
 ## 구체적인 첫 지원안과 확인된 사실
 
@@ -55,8 +56,8 @@ VIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 �
 | FR-06 | [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-04](SPEC-04-web-review.md) | — |
 | FR-07 | [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-10](SPEC-10-shared-notes.md) | SPEC-10은 공유 노트·일지(2026-10-06 요청, PRD FR-26 제안 R-77) |
 | FR-08 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-05](SPEC-05-extensions-install.md) | — |
-| FR-09 | [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-08](SPEC-08-project-facts.md) | SPEC-08은 프로젝트 자료(C-02): 검색·검토·근거·AI 자료 도구 |
-| FR-10 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
+| FR-09 | [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-08](SPEC-08-project-facts.md) · [SPEC-17](SPEC-17-project-records.md) | SPEC-08은 프로젝트 자료(C-02): 검색·검토·근거·AI 자료 도구; SPEC-17은 프로젝트 기록(C-09, 2026-10-15 후보): 결정·근거·영향을 부위×시간에 놓음 |
+| FR-10 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) · [SPEC-17](SPEC-17-project-records.md) | SPEC-17 기록은 요청·바뀐 객체를 가리키는 역추적 |
 | FR-11 | [SPEC-00](SPEC-00-common.md) · [SPEC-02](SPEC-02-execution-candidates.md) | — |
 | FR-12 | [SPEC-00](SPEC-00-common.md) · [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
 | FR-13 | [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |

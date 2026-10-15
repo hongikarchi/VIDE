@@ -64,12 +64,68 @@ export const clawdeSettingsViewSchema = z.object({
 });
 export type ClawdeSettingsView = z.infer<typeof clawdeSettingsViewSchema>;
 
-export const serviceSettingsViewSchema = z.object({ clawde: clawdeSettingsViewSchema });
+/**
+ * The user's own accounts (SPEC-05.11, ADR-043, ARCH-01 「사용자 계정 서비스」): the last [연결]
+ * check's outcome. `scope-missing` = the token works but cannot create repositories (GitHub) or
+ * was refused; `unreachable` = the service did not answer.
+ */
+export const accountStatusSchema = z.enum([
+  'connected',
+  'scope-missing',
+  'unreachable',
+  'off',
+  'not-configured',
+  'unchecked',
+]);
+export type AccountStatus = z.infer<typeof accountStatusSchema>;
+export const ACCOUNT_SERVICES = ['github', 'cloudflare'] as const;
+export type AccountService = (typeof ACCOUNT_SERVICES)[number];
+
+/** A token is write-only: the view says only whether one is saved and when it was last checked. */
+const accountTokenViewSchema = z.object({ set: z.boolean(), checkedAt: z.string().nullable() });
+
+export const githubSettingsViewSchema = z.object({
+  enabled: z.boolean(),
+  /** The account name `GET /user` answered. */
+  login: z.string().nullable(),
+  /** The classic token's scopes (`X-OAuth-Scopes`); empty when not known. */
+  scopes: z.array(z.string()),
+  /**
+   * Whether the token listed its scopes. A fine-grained token does not; its permissions are then
+   * found only when pushing, and the status stays 'connected'.
+   */
+  scopesChecked: z.boolean(),
+  /** The service refused the token itself (401) on the last check. */
+  rejected: z.boolean(),
+  token: accountTokenViewSchema,
+  status: accountStatusSchema,
+  checkedAt: z.string().nullable(),
+});
+export type GithubSettingsView = z.infer<typeof githubSettingsViewSchema>;
+
+export const cloudflareSettingsViewSchema = z.object({
+  enabled: z.boolean(),
+  accountId: z.string().nullable(),
+  accountName: z.string().nullable(),
+  /** The service refused the token or the account (401·403·404) on the last check. */
+  rejected: z.boolean(),
+  token: accountTokenViewSchema,
+  status: accountStatusSchema,
+  checkedAt: z.string().nullable(),
+});
+export type CloudflareSettingsView = z.infer<typeof cloudflareSettingsViewSchema>;
+
+export const serviceSettingsViewSchema = z.object({
+  clawde: clawdeSettingsViewSchema,
+  github: githubSettingsViewSchema,
+  cloudflare: cloudflareSettingsViewSchema,
+});
 export type ServiceSettingsView = z.infer<typeof serviceSettingsViewSchema>;
 
 /**
- * `PUT /api/v1/settings/services`. `token` is the development static token: a string saves it
- * (and drops an account token), `null` removes it. Omitted fields stay as they are.
+ * `PUT /api/v1/settings/services`. `clawde.token` is the development static token: a string saves
+ * it (and drops an account token), `null` removes it. `github`·`cloudflare` tokens are the user's
+ * own (SPEC-05.11). Omitted services and fields stay as they are.
  */
 export const serviceSettingsUpdateSchema = z.object({
   clawde: z
@@ -79,7 +135,29 @@ export const serviceSettingsUpdateSchema = z.object({
       projectsOff: z.array(z.string().min(1).max(100)).max(1000).optional(),
       token: z.string().min(1).max(4096).nullable().optional(),
     })
-    .strict(),
+    .strict()
+    .optional(),
+  /** A string token saves it and turns the account on (status 'unchecked' until [연결]). */
+  github: z
+    .object({
+      enabled: z.boolean().optional(),
+      token: z.string().trim().min(1).max(4096).nullable().optional(),
+    })
+    .strict()
+    .optional(),
+  cloudflare: z
+    .object({
+      enabled: z.boolean().optional(),
+      token: z.string().trim().min(1).max(4096).nullable().optional(),
+      accountId: z
+        .string()
+        .trim()
+        .regex(/^[0-9a-f]{32}$/i)
+        .nullable()
+        .optional(),
+    })
+    .strict()
+    .optional(),
 });
 export type ServiceSettingsUpdate = z.infer<typeof serviceSettingsUpdateSchema>;
 

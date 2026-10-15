@@ -1,0 +1,101 @@
+/* 보고용 게시 [공유] (Design SCR-43): a choice card under the button; the result line stays in the
+   보고용 head. Failures are a red line without colour bars. */
+.publish-card {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+  min-width: 0;
+  margin-top: 6px;
+}
+.publish-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: var(--fs-sm, 12px);
+  color: var(--muted);
+}
+.publish-url {
+  font-family: var(--font-mono);
+  color: var(--text-2, inherit);
+  overflow-wrap: anywhere;
+}
+.publish-panel,
+.publish-confirm {
+  display: grid;
+  gap: 10px;
+  width: min(420px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  justify-self: end;
+}
+.publish-confirm p {
+  margin: 0;
+}
+.publish-confirm {
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+}
+.publish-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+.publish-choice[data-disabled='true'] > span {
+  color: var(--muted);
+}
+.publish-choice > span {
+  display: grid;
+  gap: 2px;
+}
+.publish-choice small,
+.publish-field small,
+.publish-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+}
+.publish-field {
+  display: grid;
+  gap: 4px;
+}
+.publish-field input {
+  font-family: var(--font-mono);
+  min-width: 0;
+}
+.publish-password-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.publish-password-row input {
+  flex: 1;
+}
+.publish-progress {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  font-size: 12px;
+}
+.publish-progress [data-done='true'] {
+  color: var(--muted);
+}
+.publish-panel > .primary {
+  justify-self: start;
+}
+.publish-failure {
+  margin: 0;
+  color: var(--ng);
+  font-size: 12px;
+}
+/* The slot (report-tab.tsx) takes its own row of the 보고용 head, the card on the right. */
+#report-publish-slot:not(:empty) {
+  flex-basis: 100%;
+  display: flex;
+  justify-content: flex-end;
+}

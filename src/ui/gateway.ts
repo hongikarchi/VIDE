@@ -186,6 +186,10 @@ export const labels: Record<string, string> = {
   'needs-confirmation': '진행 확인 필요',
 };
 export const errors: Record<string, string> = {
+  // 보고용 만들기 (PLAN-54 T-342, SPEC-07.11 두 등급).
+  REPORT_NOT_FINAL: '확정된 결과가 아닙니다. 먼저 다시 계산하면 보고용을 만들 수 있습니다.',
+  REPORT_SECTIONS_EMPTY: '보고용에 넣을 절을 하나 이상 고르세요.',
+  EXPORT_FOLDER_TAKEN: '같은 이름의 폴더가 너무 많아 만들지 못했습니다. 제목을 바꾸세요.',
   ZWCAD_ATTACHED_EDIT_UNAVAILABLE:
     '현재 ZWCAD 연결은 화면 동기화용입니다. 이 도면의 AI 수정 연결은 아직 지원하지 않습니다.',
   APPLIED_SYNC_FAILED:
@@ -327,6 +331,40 @@ Object.assign(errors, {
 });
 
 Object.assign(errors, { APP_STOPPING: 'VIDE가 종료 중이라 새 작업을 시작할 수 없습니다.' });
+
+// The user's own GitHub·Cloudflare accounts (SPEC-05.11, PLAN-54 T-344).
+Object.assign(errors, {
+  ACCOUNT_NOT_CONNECTED: '연결된 계정이 없습니다. 설정 → 외부 서비스에서 연결하세요.',
+  ACCOUNT_SCOPE: '이 토큰으로는 할 수 없는 작업입니다. 권한이 있는 토큰으로 다시 연결하세요.',
+  SERVICE_UNREACHABLE: '서비스에 닿지 않습니다. 잠시 뒤 다시 시도하세요.',
+});
+
+// 작업 폴더 이력 — 저장점·원격·푸시·가져오기 (SPEC-05.11, PLAN-54 T-346, Design SCR-42).
+Object.assign(errors, {
+  GIT_UNAVAILABLE: '이 PC에 git이 설치되어 있지 않습니다.',
+  NO_REPOSITORY: '이 작업 폴더에는 이력(git)이 없습니다.',
+  NOTHING_TO_COMMIT: '바뀐 것이 없습니다.',
+  NO_REMOTE: '원격 저장소가 없습니다. [푸시]로 내 GitHub에 만드세요.',
+  REMOTE_EXISTS: '같은 이름의 저장소가 있습니다 — 이어 쓸까요?',
+  REMOTE_DIVERGED: '로컬이 다릅니다 — 폴더를 git 도구로 여세요.',
+  UNCOMMITTED_CHANGES: '저장하지 않은 변경이 있습니다. 저장점을 만든 뒤 가져옵니다.',
+  GIT_FAILED: 'git이 작업을 마치지 못했습니다. 폴더를 git 도구로 열어 확인하세요.',
+});
+
+// 보고용 게시 — [공유] (SPEC-04.14, SPEC-05.11, PLAN-54 T-343, Design SCR-43).
+Object.assign(errors, {
+  ACCOUNT_NOT_LINKED: 'VIDE 계정에 로그인한 PC에서만 할 수 있습니다. 설정에서 계정에 로그인하세요.',
+  PUBLISH_FAILED: '올리지 못했습니다 — 잠시 뒤 다시 시도하세요.',
+  PUBLISH_TARGET_LIVE: '다른 곳에 올린 게시가 있습니다 — 먼저 [내리기]를 누르세요.',
+  PUBLISH_NAME_LIVE:
+    '이미 다른 사이트 이름으로 게시되어 있습니다 — 이름을 바꾸려면 먼저 [내리기]를 누르세요.',
+  PUBLISH_PASSWORD_REQUIRED: '비밀번호를 만든 뒤 게시하세요.',
+  PUBLISH_TOO_LARGE: '파일이 너무 커서 올릴 수 없습니다.',
+  INVALID_SITE_NAME: '사이트 이름은 영문 소문자·숫자·하이픈으로 63자까지입니다.',
+  INVALID_PASSWORD: '비밀번호는 공백 없이 8자 이상이어야 합니다.',
+  INVALID_PUBLISH_FILES: '이 보고용 폴더에 올릴 보고서 페이지가 없습니다. 보고용을 다시 만드세요.',
+  NOT_PUBLISHED: '게시된 것이 없습니다.',
+});
 
 Object.assign(errors, {
   IMPORT_EVIDENCE_MISSING: '업로드 당시의 확인 근거가 없어 자동 복구할 수 없습니다.',

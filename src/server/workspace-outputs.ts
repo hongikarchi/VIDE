@@ -483,6 +483,179 @@ export class WorkspaceOutputs {
       return dir;
     });
   }
+
+  // --- 보고용 (PLAN-54 T-342·T-343, SPEC-07.11 두 등급) ----------------------------------------
+  /**
+   * A 보고용 report → `<output>/<YYYY-MM-DD>-<제목>/` (`index.html`, the tables as `*.csv`,
+   * `report.json`; ARCH-01 산출물 경로), `-2`, `-3` when the name is taken. The same files are
+   * always kept in `<data>/projects/<p>/outputs/<name>/` too, so the screen lists and downloads
+   * them — also when there is no work folder, no output role, or the folder cannot be written
+   * (`written: false` and the reason). Each making is a new folder (never overwrites another).
+   */
+  async writePublicReport(
+    projectId: string,
+    report: PublicReportFiles,
+    dataDirectory: string,
+  ): Promise<PublicReportWritten> {
+    if (!SAFE_SEGMENT.test(projectId)) throw new DomainError('NOT_FOUND');
+    if (report.csvs.some((c) => !SAFE_SEGMENT.test(c.name) || !c.name.endsWith('.csv')))
+      throw new DomainError('INVALID_REQUEST');
+    const parent = publicReportsDir(dataDirectory, projectId);
+    await mkdir(parent, { recursive: true });
+    const ws = await this.target(projectId);
+    const out = ws?.paths.output ?? null;
+    const base = `${dayOf(this.now())}-${safeName(report.title, '보고서')}`;
+    let name = '';
+    for (let n = 1; n < 1000 && !name; n++) {
+      const cand = candidate(base, n);
+      if (existsSync(join(parent, cand)) || (out && existsSync(join(out, cand)))) continue;
+      try {
+        await mkdir(join(parent, cand));
+        name = cand;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      }
+    }
+    if (!name) throw new DomainError('EXPORT_FOLDER_TAKEN');
+    const key = `public-report:${randomUUID()}`;
+    const files: { name: string; text: string }[] = [
+      { name: 'index.html', text: markHtml(report.html, copyHeader('VIDE 보고용 보고서', key)) },
+      ...report.csvs.map((c) => ({ name: c.name, text: c.text })),
+      { name: 'report.json', text: JSON.stringify(report.reportJson, null, 2) + '\n' },
+    ];
+    for (const file of files) await writeFile(join(parent, name, file.name), file.text, 'utf8');
+    let folder: string | null = null;
+    let reason: PublicReportWritten['reason'];
+    if (!ws) reason = 'no-workspace';
+    else if (!out) reason = 'no-output-role';
+    else {
+      folder = await this.queue(projectId, 'public-report', async () => {
+        const dir = join(out, name);
+        await this.ensureDir(ws.root, dir);
+        for (const file of files) await this.put(ws.root, join(dir, file.name), file.text);
+        return dir;
+      });
+      if (!folder) reason = 'failed';
+    }
+    await writeFile(
+      join(parent, name, KEPT_META),
+      JSON.stringify({ key, folder, ...(reason ? { reason } : {}) }) + '\n',
+      'utf8',
+    );
+    return {
+      name,
+      folder,
+      written: !!folder,
+      ...(reason ? { reason } : {}),
+      files: files.map((f) => f.name),
+      kept: join(parent, name),
+    };
+  }
+}
+
+/** What [보고용 만들기] writes (PLAN-54 T-342). */
+export interface PublicReportFiles {
+  title: string;
+  /** The 보고용 page (src/core/report-html.ts, tier `public`). */
+  html: string;
+  /** One CSV per table of the chosen sections; `name` is a plain file name ending in `.csv`. */
+  csvs: { name: string; text: string }[];
+  /** `report.json`: `{ sourceRun, sections, scenes, madeAt, title }` (ARCH-01). */
+  reportJson: Record<string, unknown>;
+}
+export interface PublicReportWritten {
+  /** The folder name (`<YYYY-MM-DD>-<제목>`, `-2` …), the same in the work folder and the data copy. */
+  name: string;
+  /** The work folder's `<output>/<name>` (absolute), or null when not written there. */
+  folder: string | null;
+  written: boolean;
+  /** Why it is not in the work folder: none, no output role, or the write failed (e.g. outside). */
+  reason?: 'no-workspace' | 'no-output-role' | 'failed';
+  files: string[];
+  /** The data folder copy (absolute). */
+  kept: string;
+}
+export interface PublicReportRow {
+  name: string;
+  title: string;
+  madeAt: string | null;
+  folder: string | null;
+  reason?: string;
+  sourceRun: Record<string, unknown> | null;
+  sections: unknown[];
+  files: string[];
+  /** `publish.json` of the folder (T-343), when it has been published. */
+  published?: Record<string, unknown>;
+}
+
+const KEPT_META = 'vide.json';
+/** One path segment: no separators, no `..`, no reserved characters. */
+const SAFE_SEGMENT = /^(?!\.{1,2}$)[^<>:"/\\|?*\u0000-\u001f]{1,120}$/;
+const publicReportsDir = (dataDirectory: string, projectId: string) =>
+  join(dataDirectory, 'projects', projectId, 'outputs');
+const readJson = async (path: string): Promise<Record<string, unknown> | null> => {
+  try {
+    const value: unknown = JSON.parse(await readFile(path, 'utf8'));
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+/** The 보고용 reports kept for a project (newest first). */
+export async function listPublicReports(
+  dataDirectory: string,
+  projectId: string,
+): Promise<PublicReportRow[]> {
+  if (!SAFE_SEGMENT.test(projectId)) return [];
+  const parent = publicReportsDir(dataDirectory, projectId);
+  const rows: PublicReportRow[] = [];
+  for (const name of await readdir(parent).catch(() => [] as string[])) {
+    const dir = join(parent, name);
+    const meta = await readJson(join(dir, 'report.json'));
+    if (!meta) continue;
+    const kept = (await readJson(join(dir, KEPT_META))) ?? {};
+    const folder = typeof kept.folder === 'string' ? kept.folder : null;
+    const published =
+      (folder ? await readJson(join(folder, 'publish.json')) : null) ??
+      (await readJson(join(dir, 'publish.json')));
+    const files = (await readdir(dir).catch(() => [] as string[]))
+      .filter((f) => f !== KEPT_META)
+      .sort();
+    rows.push({
+      name,
+      title: typeof meta.title === 'string' ? meta.title : name,
+      madeAt: typeof meta.madeAt === 'string' ? meta.madeAt : null,
+      folder: folder && existsSync(folder) ? folder : null,
+      ...(typeof kept.reason === 'string' ? { reason: kept.reason } : {}),
+      sourceRun:
+        meta.sourceRun && typeof meta.sourceRun === 'object'
+          ? (meta.sourceRun as Record<string, unknown>)
+          : null,
+      sections: Array.isArray(meta.sections) ? meta.sections : [],
+      files,
+      ...(published ? { published } : {}),
+    });
+  }
+  return rows.sort((a, b) => (b.madeAt ?? '').localeCompare(a.madeAt ?? ''));
+}
+
+/** One kept file of a 보고용 report, or null (unknown name, path characters, missing). */
+export async function readPublicReportFile(
+  dataDirectory: string,
+  projectId: string,
+  name: string,
+  file: string,
+): Promise<Buffer | null> {
+  if (![projectId, name, file].every((s) => SAFE_SEGMENT.test(s)) || file === KEPT_META)
+    return null;
+  try {
+    return await readFile(join(publicReportsDir(dataDirectory, projectId), name, file));
+  } catch {
+    return null;
+  }
 }
 
 function defaultReadme(jig: ProjectJigCopy) {

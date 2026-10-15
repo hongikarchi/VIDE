@@ -4,6 +4,7 @@
 
 import type { OverlayItem, OverlayTone } from '../viewport.ts';
 import type { ColumnSpec, LayerSpec } from '../kit/registry.ts';
+import { csvCell } from '../../core/csv.ts';
 
 /** One setting of an instance as the engine shows it (runtime `ParamView`). */
 export interface PanelSetting {
@@ -309,16 +310,15 @@ export const isNumeric = (rows: readonly Record<string, unknown>[], field: strin
 
 /** CSV with a BOM for spreadsheet programs; text cells that start like a formula are quoted. */
 export function toCsv(rows: readonly Record<string, unknown>[], columns: readonly ColumnSpec[]) {
-  const quote = (text: string) =>
-    /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
   const cell = (value: unknown, column: ColumnSpec) => {
     if (finite(value))
       return column.decimals === undefined ? String(value) : value.toFixed(column.decimals);
     const text = cellText(value, column.decimals);
-    const safe = text === '—' ? '' : /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
-    return quote(safe);
+    return text === '—' ? '' : csvCell(text);
   };
-  const head = columns.map((c) => quote(c.unit ? `${c.label} (${unitText(c.unit)})` : c.label));
+  const head = columns.map((c) =>
+    csvCell(c.unit ? `${c.label} (${unitText(c.unit)})` : c.label, { guard: false }),
+  );
   const body = rows.map((row) => columns.map((c) => cell(fieldOf(row, c.field), c)).join(','));
   return '﻿' + [head.join(','), ...body].join('\r\n') + '\r\n';
 }

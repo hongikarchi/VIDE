@@ -143,6 +143,9 @@ interface ServerOptions {
     /** The answer prose runner and the writers this PC has (T-236; default the real CLIs). */
     proseRunner?: ProseRunner;
     writers?: () => Promise<WriterAvailability>;
+    /** The user's GitHub·Cloudflare APIs (SPEC-05.11, T-344; default env or the real services). */
+    githubApi?: string;
+    cloudflareApi?: string;
   };
   /** Test seam for 도곽 미리보기 (SPEC-14.15): the title block reader (null: no ZWCAD). */
   sheetsReader?: SheetsReader | null;
@@ -242,6 +245,8 @@ import {
 } from './compliance-routes.ts';
 import { panelingRoutes, panelingStatuses } from './paneling-routes.ts';
 import { SecretStore, type SecretProtector } from '../services/secrets.ts';
+import { accountConnection } from '../services/account-services.ts';
+import { publishRoutes, publishStatuses } from './publish-routes.ts';
 import {
   ServiceSettings,
   serviceSettingsStatuses,
@@ -366,6 +371,7 @@ const statuses: Record<string, number> = {
   ...drawingLayerStatuses,
   ...drawingBackflowStatuses,
   ...serviceSettingsStatuses,
+  ...publishStatuses,
   ...legalStatuses,
   ...complianceStatuses,
   ...panelingStatuses,
@@ -536,7 +542,14 @@ export async function startServer({
     directory: serviceDirectory,
     secrets: new SecretStore(serviceDirectory, serviceOptions?.protector),
     account: serviceOptions?.account ?? accountTokens(remoteAccess),
+    apis: { githubApi: serviceOptions?.githubApi, cloudflareApi: serviceOptions?.cloudflareApi },
   });
+  // 보고용 게시 passwords (PLAN-54 T-343): sealed like the tokens, in their own file so the two
+  // stores never overwrite each other's cache (`<data>/publish/secrets/services.bin`).
+  const publishSecrets = new SecretStore(
+    serviceDirectory === undefined ? undefined : join(serviceDirectory, 'publish'),
+    serviceOptions?.protector,
+  );
   const clawde = new ClawdeClient({
     settings: serviceSettings,
     fetcher: serviceOptions?.fetcher,
@@ -1467,6 +1480,12 @@ export async function startServer({
             announce: (row) => remoteAccess.pushProject(row),
           },
           checkout: { service: workspaceCheckouts, body: () => body(request), remote },
+          // 이력 — 저장점·원격·푸시·가져오기 (PLAN-54 T-346): the person's own GitHub account.
+          history: {
+            body: () => body(request),
+            remote,
+            github: () => accountConnection(serviceSettings, 'github'),
+          },
         })
       )
         return;
@@ -2557,11 +2576,29 @@ export async function startServer({
           workspace,
           body,
           send,
+          response,
           remote,
           dataDirectory: dirname(filename),
           links,
           sdk,
           execution,
+        })
+      )
+        return;
+      // 보고용 게시 (PLAN-54 T-343, SPEC-04.14, SPEC-05.11): VIDE site link or the user's Cloudflare.
+      if (
+        await publishRoutes(url, request.method ?? 'GET', {
+          dataDirectory: dirname(filename),
+          body: () => body(request),
+          send,
+          remote,
+          site: remoteAccess,
+          siteLinked: async () => (await remoteAccess.status()).linked,
+          cloudflare: () => accountConnection(serviceSettings, 'cloudflare'),
+          secrets: publishSecrets,
+          projectName: (projectId) => store.project(projectId).name,
+          outputFolder: async (projectId) =>
+            (await workspaceOutputsFor(store).roleFolder(projectId, 'output'))?.dir ?? null,
         })
       )
         return;

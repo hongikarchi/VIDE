@@ -141,6 +141,11 @@ export const reportTemplateSchema = z
             title: claim,
             lede: claim.optional(),
             blocks: z.array(block).max(8).optional(),
+            /**
+             * Whether the section goes into the 보고용 (public) paper by default (SPEC-07.11 두 등급;
+             * default false). Not called `tier`: that names the approval tier of panel actions.
+             */
+            public: z.boolean().optional(),
           })
           .strict(),
       )
@@ -215,6 +220,9 @@ export type ReportBlock =
       rows: { group: string; cells: string[] }[];
     }
   | { kind: 'list'; title?: string; items: string[] };
+/** Marks of a resolved block. `settings`: read from the settings ledger (`inputs.settings`), the
+ * 설정값 이력·근거 that only the 검토용 paper carries (SPEC-07.11 두 등급). */
+export type ReportBlockOut = ReportBlock & { settings?: true };
 export interface ReportGate {
   id: 'claim-consistent' | 'numbers-in-source' | 'unchecked-listed';
   ok: boolean;
@@ -233,7 +241,9 @@ export interface ReportModel {
     id: string;
     title: ClaimOut;
     lede?: ClaimOut;
-    blocks: ReportBlock[];
+    blocks: ReportBlockOut[];
+    /** In the 보고용 paper by default (the frame's `public`, SPEC-07.11 두 등급). */
+    public: boolean;
   }[];
   assumptions: string[];
   unchecked: string[];
@@ -242,6 +252,8 @@ export interface ReportModel {
   provisional: string[];
   /** Why the report may not be exported (a frame with `export` whose condition or gates fail). */
   exportRefused?: string[];
+  /** Fixed notices of the jig (e.g. '탐색용 법규 체크 — …'); both tiers carry them. */
+  notices?: string[];
 }
 
 export interface ReportIssue {
@@ -577,7 +589,11 @@ export function resolveReport(
     id: s.id,
     title: run(`${s.id}.title`, s.title, s.from),
     ...(s.lede ? { lede: run(`${s.id}.lede`, s.lede, s.from) } : {}),
-    blocks: (s.blocks ?? []).map((b) => resolveBlock(b, ctx)),
+    blocks: (s.blocks ?? []).map((b): ReportBlockOut => {
+      const out = resolveBlock(b, ctx);
+      return /^inputs.settings(?:.|$)/.test(b.from) ? { ...out, settings: true } : out;
+    }),
+    public: s.public === true,
   }));
   const kpis = (template.kpis ?? []).map((k) => {
     const value = resolvePath(k.from, ctx);

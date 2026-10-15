@@ -35,6 +35,7 @@
   "sections": [
     {
       "id": "overview",
+      "public": true,
       "from": ["step.check.overview", "step.summary.needsInputCount"],
       "title": {
         "cases": [
@@ -64,6 +65,7 @@
     },
     {
       "id": "floors",
+      "public": true,
       "from": ["step.check.floors", "step.summary.floorSum", "step.summary.gfaTotal"],
       "title": {
         "cases": [
@@ -93,6 +95,7 @@
     },
     {
       "id": "check",
+      "public": true,
       "from": ["step.check.mismatches", "step.check.mismatchCount"],
       "title": {
         "cases": [

@@ -207,7 +207,7 @@ export function ProjectFolders({
         )}
       </div>
       {/* 작업 폴더 만들기·열기 (SCR-35, PLAN-52 T-308): hidden in a remote session. */}
-      <WorkspaceSetup onAddFolder={(value) => change('add', value)} />
+      <WorkspaceSetup projectId={projectId} onAddFolder={(value) => change('add', value)} />
       {typing ? (
         <form
           className="dash-folder-form"

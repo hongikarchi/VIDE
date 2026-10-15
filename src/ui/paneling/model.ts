@@ -30,6 +30,7 @@ import {
   type PanelSetting,
 } from '../jig-panel/bindings.ts';
 import { OVERLAY_CATEGORIES, type OverlayItem, type OverlayTone } from '../viewport.ts';
+import { FORMULA_START, csvFile } from '../../core/csv.ts';
 
 export type { MemberSet, PanelLayout, PanelTyping, PanelingStage };
 
@@ -633,12 +634,8 @@ export function panelRows(results: Results): PanelRow[] {
 }
 
 type Cell = string | number | null | undefined;
-const csvCell = (value: Cell) => {
-  if (value === null || value === undefined) return '';
-  const text = String(value);
-  const safe = /^[=+\-@\t\r]/.test(text) && !/^-?\d/.test(text) ? `'${text}` : text;
-  return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
-};
+/** Formula-like text is kept as words, except text that starts as a signed number (`-3.0~4.0`). */
+const CSV_GUARD = (text: string) => FORMULA_START.test(text) && !/^-?\d/.test(text);
 const len = (m: number | null | undefined) =>
   m === null || m === undefined ? null : (m * 1000).toFixed(1);
 const area = (value: number | null | undefined) =>
@@ -716,9 +713,11 @@ export function scheduleCsv(kind: ScheduleKind, results: Results): string {
       totalLength: joint.totalLength.toFixed(3),
     }));
   }
-  const head = columns.map(([, label]) => csvCell(label)).join(',');
-  const body = rows.map((row) => columns.map(([key]) => csvCell(row[key])).join(','));
-  return '﻿' + [head, ...body].join('\r\n') + '\r\n';
+  return csvFile(
+    columns.map(([, label]) => label),
+    rows.map((row) => columns.map(([key]) => row[key])),
+    { guard: CSV_GUARD },
+  );
 }
 /** What an export must say about itself (SPEC-16.11): assumed values left, a stale stage. */
 export interface ExportMarks {

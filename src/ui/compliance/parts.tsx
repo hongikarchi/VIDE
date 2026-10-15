@@ -3,6 +3,7 @@ import type { PanelHost } from '../jig-panel/panel.tsx';
 import { messageOf, type InstanceState } from '../jig-panel/instance.ts';
 import { selectNative } from '../legal-target.ts';
 import type { ComplianceView } from './context.ts';
+import { renderReportHtml } from '../../core/report-html.ts';
 import {
   COMPLIANCE_GROUPS,
   COMPLIANCE_STATES,
@@ -12,6 +13,7 @@ import {
   OVERLAY_EXCEEDANCE,
   STATE_META,
   answersOf,
+  complianceReportModel,
   envelopeItems,
   exceedanceItems,
   exceedancesOf,
@@ -52,6 +54,19 @@ function StateChip({ state }: { state: ComplianceState }) {
     <span className="cmp-state" data-tone={meta.tone} data-state={state}>
       <b aria-hidden="true">{meta.symbol}</b> {state}
     </span>
+  );
+}
+
+/** The 법규 체크 보고용 page: the frame's public sections, the run it came from in the head. */
+function publicReportHtml(result: ComplianceResult, instanceId: string) {
+  return renderReportHtml(
+    complianceReportModel(result),
+    { project: '', instance: '', version: '', at: stamp(new Date().toISOString()) },
+    {
+      tier: 'public',
+      title: '법규 체크 보고서',
+      sourceRun: { instanceId, reportId: 'compliance', at: stamp(result.checkedAt) },
+    },
   );
 }
 
@@ -686,6 +701,9 @@ export function ComplianceResultPart({
   const [tab, setTab] = useState<Tab>('result');
   const [open, setOpen] = useState<number>();
   const [envelope, setEnvelope] = useState(false);
+  // 보고서 등급 (SPEC-07.11 두 등급, PLAN-54 T-342): 검토용 has everything; 보고용 the public
+  // sections (결과·초과 부분) with the notice and the first-page summary.
+  const [tier, setTier] = useState<'review' | 'public'>('review');
   const exceedances = useMemo(() => (result ? exceedanceItems(result) : []), [result]);
   const outline = useMemo(() => (result ? envelopeItems(result) : []), [result]);
 
@@ -740,11 +758,24 @@ export function ComplianceResultPart({
         disabled={!!blocked}
         onClick={() =>
           result &&
-          download(`${exportName(result)}.html`, reportHtml(result), 'text/html;charset=utf-8')
+          download(
+            `${exportName(result)}${tier === 'public' ? '-보고용' : ''}.html`,
+            tier === 'public' ? publicReportHtml(result, jig.view?.id ?? '') : reportHtml(result),
+            'text/html;charset=utf-8',
+          )
         }
       >
         보고서
       </button>
+      <select
+        aria-label="보고서 등급"
+        value={tier}
+        disabled={!!blocked}
+        onChange={(e) => setTier(e.currentTarget.value as 'review' | 'public')}
+      >
+        <option value="review">검토용</option>
+        <option value="public">보고용</option>
+      </select>
       {blocked ? <span className="kit-reason">{blocked}</span> : null}
     </div>
   );

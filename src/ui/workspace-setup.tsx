@@ -6,10 +6,17 @@
 // opens (a project that is not here is made again with the same id and 자료 정리 starts — shown as
 // three progress lines with [중단]); without one it offers to make it here or just add the folder.
 // Blocked states are one warning line in the panel (no colored bars). Hidden in a remote session.
+//
+// 이력 줄 (Design SCR-42, PLAN-54 T-346): under the actions, for a work folder with its own git —
+// '저장점 3 · 원격 없음' and [저장점 만들기]·[푸시]·[가져오기]; a folder that differs from its
+// remote stops with '로컬이 다릅니다 — 폴더를 git 도구로 여세요' and [폴더 열기]. Not shown for a
+// folder on a server share, a folder without git, or in a remote session.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './gateway.ts';
 import { remoteSession } from './remote-panel.ts';
 import { pickFolder, useFolderPicker } from './project-folders.tsx';
+import { sessionState } from './store/session.ts';
+import { statusState } from './store/status.ts';
 import './workspace-setup.css';
 
 export type SetupMode = 'create' | 'open';
@@ -115,9 +122,12 @@ const go = (projectId: string) => {
 
 export function WorkspaceSetup({
   onAddFolder,
+  projectId,
 }: {
   /** [그냥 프로젝트 폴더로 추가]: the folder added to the current project as before. */
   onAddFolder?: (path: string) => Promise<boolean>;
+  /** The project whose history line shows (default: the open project). */
+  projectId?: string;
 }) {
   const [step, setStep] = useState<Step>({ kind: 'idle' });
   const [busy, setBusy] = useState(false);
@@ -247,6 +257,9 @@ export function WorkspaceSetup({
           폴더 열기
         </button>
       </div>
+      {step.kind === 'idle' ? (
+        <WorkspaceHistory projectId={projectId ?? sessionState.project?.id} />
+      ) : null}
       {step.kind === 'typing' ? (
         <form
           className="dash-folder-form"
@@ -602,6 +615,403 @@ function OpenProgress({
           </button>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// 이력 줄 — 저장점·푸시·가져오기 (Design SCR-42, SPEC-05.11, PLAN-54 T-346)
+
+interface HistoryRemote {
+  url: string;
+  ahead: number;
+  behind: number;
+  diverged: boolean;
+  pushed: boolean;
+  lastPush: string | null;
+}
+interface History {
+  repository: boolean;
+  branch: string | null;
+  commits: number;
+  dirty: number;
+  added: number;
+  modified: number;
+  remote: HistoryRemote | null;
+  draft: string;
+  github: boolean;
+  suggestedName: string;
+}
+type HistoryCard =
+  | null
+  | { kind: 'commit'; message: string; thenPull: boolean }
+  | { kind: 'remote'; name: string; isPrivate: boolean; exists: boolean }
+  | { kind: 'pull-first' };
+type HistoryStep = 'commit' | 'remote' | 'push' | 'pull';
+
+/** Refusals this line explains itself (no notice in the status bar). */
+const HISTORY_QUIET = [
+  'NO_WORKSPACE',
+  'WORKSPACE_READ_ONLY',
+  'GIT_UNAVAILABLE',
+  'NO_REPOSITORY',
+  'NOTHING_TO_COMMIT',
+  'NO_REMOTE',
+  'REMOTE_EXISTS',
+  'REMOTE_DIVERGED',
+  'UNCOMMITTED_CHANGES',
+  'GIT_FAILED',
+  'ACCOUNT_NOT_CONNECTED',
+  'ACCOUNT_SCOPE',
+  'SERVICE_UNREACHABLE',
+  'INVALID_INPUT',
+  'FORBIDDEN',
+];
+const codeOf = (error: unknown) => (error as { code?: string }).code ?? '';
+const monthDay = (iso: string | null) => {
+  if (!iso) return '';
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? ''
+    : `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+/** The plain status text of the line (Design SCR-42). */
+export function historyText(history: History) {
+  const head = `저장점 ${history.commits}`;
+  const changed = history.dirty ? ` · 바뀐 파일 ${history.dirty}` : '';
+  const remote = history.remote;
+  if (!remote) return `${head} · 원격 없음${changed}`;
+  const pushed = remote.lastPush ? ` · 마지막 푸시 ${monthDay(remote.lastPush)}` : '';
+  if (!remote.pushed) return `${head} · 아직 올리지 않음${changed}`;
+  if (remote.ahead && !remote.behind)
+    return `${head} · 원격보다 ${remote.ahead} 앞섬${pushed}${changed}`;
+  if (remote.behind && !remote.ahead)
+    return `${head} · 원격에 새 저장점 ${remote.behind}${pushed}${changed}`;
+  return `${head} · 원격과 같음${pushed}${changed}`;
+}
+
+const REPO_NAME = /^[A-Za-z0-9._-]{1,100}$/;
+
+export function WorkspaceHistory({ projectId }: { projectId: string | undefined }) {
+  const [history, setHistory] = useState<History | null>(null);
+  const [card, setCard] = useState<HistoryCard>(null);
+  const [running, setRunning] = useState<HistoryStep | ''>('');
+  const [reason, setReason] = useState('');
+  const [diverged, setDiverged] = useState(false);
+  const base = projectId ? `/projects/${encodeURIComponent(projectId)}/workspace/git` : '';
+
+  /** The line read again (files change outside VIDE); null hides it. */
+  const reread = useCallback(async () => {
+    if (!base) return null;
+    try {
+      const read = (await api(`${base}/status`, 'GET', undefined, {
+        quiet: HISTORY_QUIET,
+      })) as History;
+      return read.repository ? read : null;
+    } catch {
+      // No work folder, no git, a server folder: no line.
+      return null;
+    }
+  }, [base]);
+  useEffect(() => {
+    let live = true;
+    const load = () =>
+      void reread().then((read) => {
+        if (!live) return;
+        setHistory(read);
+        setDiverged(!!read?.remote?.diverged);
+      });
+    load();
+    // Back from Explorer or a git tool: the counts follow.
+    addEventListener('focus', load);
+    return () => {
+      live = false;
+      removeEventListener('focus', load);
+    };
+  }, [reread]);
+
+  if (!history || !base) return null;
+  const busy = running !== '';
+  const remote = history.remote;
+  const stopped = diverged;
+
+  /** One action; its refusal becomes the line's own state or one warning line. */
+  async function act<T>(step: HistoryStep, body: unknown = {}): Promise<T | null> {
+    setRunning(step);
+    setReason('');
+    try {
+      return (await api(`${base}/${step}`, 'POST', body, { quiet: HISTORY_QUIET })) as T;
+    } catch (error) {
+      const code = codeOf(error);
+      if (code === 'REMOTE_DIVERGED') setDiverged(true);
+      else if (code === 'UNCOMMITTED_CHANGES') setCard({ kind: 'pull-first' });
+      else if (code === 'REMOTE_EXISTS')
+        setCard((current) => (current?.kind === 'remote' ? { ...current, exists: true } : current));
+      else setReason((error as Error).message);
+      return null;
+    } finally {
+      setRunning('');
+    }
+  }
+  const settle = (value: History | { status: History } | null) => {
+    if (!value) return false;
+    const next = 'status' in value ? value.status : value;
+    setHistory((current) => (current ? { ...current, ...next } : current));
+    setDiverged(!!next.remote?.diverged);
+    return true;
+  };
+
+  /** The counts as they are now (a file may have changed since the line was read). */
+  const fresh = async () => {
+    const read = await reread();
+    if (read) settle(read);
+    return read ?? history;
+  };
+  const pullNow = async () => {
+    if ((await fresh()).dirty) return setCard({ kind: 'pull-first' });
+    if (settle(await act<History>('pull'))) setCard(null);
+  };
+  const pushNow = async () => {
+    if (!remote)
+      return setCard({
+        kind: 'remote',
+        name: history.suggestedName,
+        isPrivate: true,
+        exists: false,
+      });
+    if (settle(await act<History>('push'))) setCard(null);
+  };
+  const makeRemote = async (reuse: boolean) => {
+    if (card?.kind !== 'remote') return;
+    const made = await act<{ status: History }>('remote', {
+      name: card.name.trim(),
+      private: card.isPrivate,
+      ...(reuse ? { reuse: true } : {}),
+    });
+    if (!settle(made)) return;
+    setCard(null);
+    settle(await act<History>('push'));
+  };
+  const makeCommit = async () => {
+    if (card?.kind !== 'commit') return;
+    const thenPull = card.thenPull;
+    if (!settle(await act<History>('commit', { message: card.message.trim() }))) return;
+    setCard(null);
+    if (thenPull) settle(await act<History>('pull'));
+  };
+  const openCommit = async (thenPull = false) =>
+    setCard({ kind: 'commit', message: (await fresh()).draft, thenPull });
+
+  return (
+    <div className="ws-history" role="group" aria-label="작업 폴더 이력">
+      <div className="ws-history-line">
+        {stopped ? (
+          <span className="ws-history-text" data-warn="">
+            로컬이 다릅니다 — 폴더를 git 도구로 여세요
+          </span>
+        ) : (
+          <span className="ws-history-text">
+            {running === 'push' || running === 'remote'
+              ? '올리는 중…'
+              : running === 'pull'
+                ? '가져오는 중…'
+                : historyText(history)}
+          </span>
+        )}
+        <span className="ws-history-buttons">
+          {stopped ? (
+            <button
+              type="button"
+              className="link-button"
+              onClick={() =>
+                void api(`${base}/open`, 'POST', {}, { quiet: HISTORY_QUIET }).catch(
+                  (error: Error) => setReason(error.message),
+                )
+              }
+            >
+              폴더 열기
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={busy || card?.kind === 'commit'}
+            onClick={() => void openCommit()}
+          >
+            저장점 만들기
+          </button>
+          <button
+            type="button"
+            disabled={
+              busy || stopped || !history.github || (!!remote?.pushed && remote.ahead === 0)
+            }
+            title={history.github ? undefined : '설정 → 외부 서비스에서 GitHub를 연결하세요'}
+            onClick={() => void pushNow()}
+          >
+            푸시
+          </button>
+          <button
+            type="button"
+            disabled={busy || stopped || !remote}
+            onClick={() => void pullNow()}
+          >
+            가져오기
+          </button>
+        </span>
+      </div>
+      {!history.github && !stopped ? (
+        <p className="ws-history-hint">
+          설정 → 외부 서비스에서 GitHub를 연결하세요{' '}
+          <button
+            type="button"
+            className="link-button"
+            onClick={(event) => statusState.actions.open(event.currentTarget, 'services')}
+          >
+            외부 서비스 열기
+          </button>
+        </p>
+      ) : null}
+      {reason ? (
+        <p className="ws-setup-reason" role="alert">
+          {reason}
+        </p>
+      ) : null}
+      {card?.kind === 'commit' ? (
+        <div className="ws-setup-panel ws-history-card" role="dialog" aria-label="저장점 만들기">
+          <p>
+            {history.dirty
+              ? [
+                  history.modified ? `바뀐 파일 ${history.modified}` : '',
+                  history.added ? `새 파일 ${history.added}` : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+              : '바뀐 것이 없습니다'}
+          </p>
+          <label className="ws-setup-name">
+            <span>메시지</span>
+            <input
+              type="text"
+              maxLength={200}
+              autoFocus
+              aria-label="저장점 메시지"
+              value={card.message}
+              disabled={busy}
+              onChange={(event) => setCard({ ...card, message: event.target.value })}
+            />
+          </label>
+          <div className="ws-setup-buttons">
+            <button
+              type="button"
+              className="primary-button"
+              disabled={busy || !history.dirty}
+              onClick={() => void makeCommit()}
+            >
+              {running === 'commit' ? '만드는 중…' : card.thenPull ? '만들고 가져오기' : '만들기'}
+            </button>
+            <button type="button" disabled={busy} onClick={() => setCard(null)}>
+              취소
+            </button>
+          </div>
+        </div>
+      ) : card?.kind === 'pull-first' ? (
+        <div className="ws-setup-panel ws-history-card" role="group" aria-label="가져오기">
+          <p>저장점을 만든 뒤 가져옵니다</p>
+          <div className="ws-setup-buttons">
+            <button
+              type="button"
+              className="primary-button"
+              disabled={busy}
+              onClick={() => void openCommit(true)}
+            >
+              저장점 만들고 가져오기
+            </button>
+            <button type="button" disabled={busy} onClick={() => setCard(null)}>
+              취소
+            </button>
+          </div>
+        </div>
+      ) : card?.kind === 'remote' ? (
+        <div
+          className="ws-setup-panel ws-history-card"
+          role="dialog"
+          aria-label="내 GitHub에 저장소를 만듭니다"
+        >
+          <h4>내 GitHub에 저장소를 만듭니다</h4>
+          {card.exists ? (
+            <>
+              <p>같은 이름의 저장소가 있습니다 — 이어 쓸까요?</p>
+              <div className="ws-setup-buttons">
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={busy}
+                  onClick={() => void makeRemote(true)}
+                >
+                  {busy ? '올리는 중…' : '이어 쓰기'}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setCard({ ...card, exists: false })}
+                >
+                  다른 이름
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <label className="ws-setup-name">
+                <span>저장소 이름</span>
+                <input
+                  type="text"
+                  maxLength={100}
+                  aria-label="저장소 이름"
+                  value={card.name}
+                  disabled={busy}
+                  onChange={(event) => setCard({ ...card, name: event.target.value })}
+                />
+              </label>
+              <div className="ws-history-visibility" role="radiogroup" aria-label="공개 범위">
+                <label>
+                  <input
+                    type="radio"
+                    name="ws-history-visibility"
+                    checked={card.isPrivate}
+                    disabled={busy}
+                    onChange={() => setCard({ ...card, isPrivate: true })}
+                  />
+                  비공개(기본)
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="ws-history-visibility"
+                    checked={!card.isPrivate}
+                    disabled={busy}
+                    onChange={() => setCard({ ...card, isPrivate: false })}
+                  />
+                  공개
+                </label>
+              </div>
+              <p className="ws-setup-note">3dm·dwg·pdf·이미지는 올리지 않습니다(이력 제외 목록)</p>
+              <div className="ws-setup-buttons">
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={busy || !REPO_NAME.test(card.name.trim())}
+                  onClick={() => void makeRemote(false)}
+                >
+                  {busy ? '올리는 중…' : '만들고 푸시'}
+                </button>
+                <button type="button" disabled={busy} onClick={() => setCard(null)}>
+                  취소
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

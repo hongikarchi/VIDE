@@ -258,14 +258,12 @@ test('jig list, jig run and export against a real engine; writes stay in the wor
   assert.equal(twice.json().folder, saved.folder);
   assert.ok(!(await readdir(join(root, '05_검토'))).includes(pinned.id.replace('/', '-')));
 
-  const report = io(root, env, { now: () => new Date(2026, 9, 15, 10, 0) });
-  assert.equal(await runCli(['export', pinned.id, '--kind', 'report', '--json'], report.io), 0);
-  const made = report.json();
-  assert.ok(made.folder.startsWith(join(root, '06_산출물', '2026-10-15-')), made.folder);
-  assert.ok(existsSync(join(made.folder, 'index.html')));
-  const meta = JSON.parse(await readFile(join(made.folder, 'report.json'), 'utf8'));
-  assert.equal(meta.sourceRun.jigId, pinned.id);
-  assert.ok(Array.isArray(meta.sections));
+  // 보고용 goes through the engine's [보고용 만들기] (PLAN-54 T-342): a run that is not final (its
+  // first step stopped) is refused and nothing lands in the output role.
+  const report = io(root, env);
+  assert.equal(await runCli(['export', pinned.id, '--kind', 'report', '--json'], report.io), 1);
+  assert.equal(report.json().code, 'REPORT_NOT_FINAL');
+  assert.equal(existsSync(join(root, '06_산출물')), false);
 
   await api(`/projects/${project.id}/folders/remove`, 'POST', { path: root });
   // A 규모검토 manifest names no VIDE project: the project whose folder it is answers.
@@ -302,7 +300,7 @@ test('jig list, jig run and export against a real engine; writes stay in the wor
   assert.equal(refused.json().code, 'OUTSIDE_WORKSPACE');
   const refusedReport = io(root, env);
   assert.equal(await runCli(['export', pinned.id, '--kind', 'report'], refusedReport.io), 1);
-  assert.match(refusedReport.err.join(''), /OUTSIDE_WORKSPACE/);
+  assert.match(refusedReport.err.join(''), /OUTSIDE_WORKSPACE|REPORT_NOT_FINAL/);
   assert.deepEqual(await readdir(away), []);
   assert.equal(existsSync(join(directory, '밖')), false);
 });
@@ -390,4 +388,89 @@ test('a run stopping at a person step exits 3 with the question (stubbed engine 
   });
   assert.equal(await runCli(['jig', 'list', '--json'], down.io), 1);
   assert.equal(down.json().code, 'ENGINE_UNAVAILABLE');
+});
+
+test('export --kind report asks the engine to make the 보고용 (stubbed engine answer)', async (t) => {
+  const projectId = '00000000-0000-4000-8000-000000000003';
+  const { directory, root } = await workFolder(t, projectId);
+  const token = 'c'.repeat(64);
+  await writeFile(
+    join(directory, 'launch.json'),
+    JSON.stringify({ url: `http://127.0.0.1:59998/#${token}` }),
+  );
+  const folder = join(root, '06_산출물', '2026-10-15-격자 보고서');
+  const calls = [];
+  const reply = (status, value, extra = {}) =>
+    new Response(JSON.stringify(value), {
+      status,
+      headers: { 'Content-Type': 'application/json', ...extra },
+    });
+  let written = true;
+  const fakeFetch = async (url, init) => {
+    const path = new URL(url).pathname;
+    calls.push({ method: init.method, path, body: init.body });
+    if (path === '/api/v1/session')
+      return reply(
+        200,
+        { authenticated: true },
+        { 'Set-Cookie': 'vide_session_59998=s; HttpOnly' },
+      );
+    const base = `/api/v1/projects/${projectId}`;
+    if (path === `${base}/skills`) return reply(200, { skills: [] });
+    if (path === `${base}/jig-reports`)
+      return reply(200, {
+        instances: [
+          {
+            instance: {
+              id: 'i1',
+              jigId: 'project/grid',
+              version: '0.1.0',
+              title: '격자',
+              status: 'done',
+              updatedAt: '2026-10-15T00:00:00Z',
+            },
+            reports: [{ id: 'grid-summary', title: '격자 보고서' }],
+          },
+        ],
+      });
+    if (path === `${base}/jig-instances/i1/reports/grid-summary` && init.method === 'GET')
+      return reply(200, {
+        report: { id: 'grid-summary', title: '격자 보고서' },
+        instance: {
+          id: 'i1',
+          title: '격자',
+          jig: { id: 'project/grid', version: '0.1.0', name: '격자' },
+        },
+        model: { sections: [] },
+        html: '<!doctype html>',
+        copy: null,
+      });
+    if (path === `${base}/jig-instances/i1/reports/grid-summary/public` && init.method === 'POST')
+      return reply(200, {
+        name: '2026-10-15-격자 보고서',
+        folder: written ? folder : null,
+        written,
+        ...(written ? {} : { reason: 'no-output-role' }),
+        files: ['index.html', '01-보.csv', 'report.json'],
+      });
+    return reply(404, { code: 'NOT_FOUND' });
+  };
+  const env = { VIDE_DATA_DIR: directory };
+  const made = io(root, env, { fetch: fakeFetch });
+  assert.equal(await runCli(['export', 'grid', '--kind', 'report', '--json'], made.io), 0);
+  const answer = made.json();
+  assert.equal(answer.folder, folder);
+  assert.deepEqual(answer.files, [
+    join(folder, 'index.html'),
+    join(folder, '01-보.csv'),
+    join(folder, 'report.json'),
+  ]);
+  assert.ok(calls.some((c) => c.method === 'POST' && c.path.endsWith('/public')));
+  // The CLI writes nothing itself.
+  assert.equal(existsSync(join(root, '06_산출물')), false);
+
+  written = false;
+  const loose = io(root, env, { fetch: fakeFetch });
+  assert.equal(await runCli(['export', 'grid', '--kind', 'report', '--json'], loose.io), 1);
+  assert.equal(loose.json().code, 'OUTPUT_NOT_WRITTEN');
 });

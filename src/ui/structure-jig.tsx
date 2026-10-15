@@ -4,6 +4,7 @@ import type { JigContext } from './jigs.tsx';
 import { S06Diagnose } from './s06-diagnose.tsx';
 import { VerdictLegend, type VerdictBand } from './kit/status.tsx';
 import { tokenColor } from './tokens.ts';
+import { csvFile } from '../core/csv.ts';
 
 // Structure analysis jig (J-09, SPEC-06): pick Syncs → draft (computed + AI help) → check and fix →
 // confirm & analyse → member table and verdict colours. Results are exploratory, never sign-off.
@@ -129,10 +130,6 @@ export function checksCsv(
   label: string,
   member: (id: string) => { role: string; section: string } | undefined,
 ) {
-  const cell = (v: unknown) => {
-    const s = v === null || v === undefined ? '' : String(v);
-    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
   const head = [
     '결과',
     '부재',
@@ -160,7 +157,7 @@ export function checksCsv(
       c.notes.join(' · '),
     ];
   });
-  return '\uFEFF' + [head, ...body].map((row) => row.map(cell).join(',')).join('\r\n') + '\r\n';
+  return csvFile(head, body, { guard: false });
 }
 const fmt = (v: number | null | undefined, digits = 2) =>
   v === null || v === undefined ? '—' : v.toFixed(digits);

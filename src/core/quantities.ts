@@ -4,6 +4,7 @@ import { DomainError } from './store.ts';
 import { StoredList } from './model-store.ts';
 import { sceneItems } from './scene-items.ts';
 import { orderLayerPaths, type HostLayer } from './layer-tree.ts';
+import { csvText } from './csv.ts';
 export interface SourceScene {
   id: string;
   nativeType?: string;
@@ -140,11 +141,8 @@ export function quantities(request: SourceRequest, rawQuery: unknown = {}): Quan
     totals: summarize(filtered),
   };
 }
-function cell(value: unknown) {
-  let text = value === null ? '미상' : String(value ?? '');
-  if (/^[\s]*[=+@-]/.test(text)) text = "'" + text;
-  return '"' + text.replaceAll('"', '""') + '"';
-}
+/** A null measure is '미상'; numbers go as text so formula-like ones are guarded too. */
+const cellText = (value: unknown) => (value === null ? '미상' : String(value ?? ''));
 export function quantitiesCsv(table: QuantityTable) {
   const header = [
     '기준 후보',
@@ -199,7 +197,13 @@ export function quantitiesCsv(table: QuantityTable) {
       table.query.groupBy,
     ]);
   }
-  return '\ufeff' + [header, ...rows].map((row) => row.map(cell).join(',')).join('\r\n') + '\r\n';
+  return csvText(
+    [header, ...rows].map((row) => row.map(cellText)),
+    {
+      quote: 'always',
+      guard: /^[\s]*[=+@-]/,
+    },
+  );
 }
 
 export function quantityQuery(value: unknown = {}): QuantityQuery {

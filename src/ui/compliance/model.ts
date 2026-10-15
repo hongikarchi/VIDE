@@ -20,6 +20,9 @@ import {
   type Exceedance,
 } from '../../contracts/compliance.ts';
 import type { OverlayItem } from '../viewport.ts';
+import { csvFile } from '../../core/csv.ts';
+import type { ReportBlock, ReportModel } from '../../jigs/runtime/report-format.ts';
+import { renderReportHtml } from '../../core/report-html.ts';
 
 export type { ComplianceItem, ComplianceResult, ComplianceState, Exceedance };
 
@@ -412,15 +415,6 @@ const CSV_HEAD = [
   '이유',
   '미확정 사항',
 ];
-function csvCell(value: unknown) {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '';
-  const text = String(value);
-  // A cell that a spreadsheet would read as a formula is kept as words.
-  const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
-  return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
-}
-
 /** The result table as CSV: unrounded values, the limit's unit, every check once (UTF-8 BOM). */
 export function resultCsv(result: ComplianceResult): string {
   const rows: unknown[][] = orderedItems(result).map((item) => [
@@ -454,149 +448,258 @@ export function resultCsv(result: ComplianceResult): string {
       `규제 조건 ${na.id} 미적용(확정)`,
       '',
     ]);
-  const lines = [CSV_HEAD, ...rows].map((row) => row.map(csvCell).join(','));
-  return '﻿' + lines.join('\r\n') + '\r\n';
+  // A cell that a spreadsheet would read as a formula is kept as words (the shared default).
+  return csvFile(CSV_HEAD, rows);
 }
 
-// ── 보고서 (SPEC-15.12) ─────────────────────────────────────────────────────────────────
+// ── 보고서 (SPEC-15.12, SPEC-07.11 두 등급) ─────────────────────────────────────────────────
+// The 법규 체크 has no report frame: its result becomes a ReportModel here and the shared page
+// (src/core/report-html.ts) draws it, so the 검토용 and the 보고용 paper look like every other
+// jig report. The result table and the exceedances are public; the number sources, the 미적용
+// rows (규제 조건 ids), the classification and the inputs stay in the 검토용 paper.
 
-const escape = (value: unknown) =>
-  String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+const claimOf = (id: string, text: string, tone?: 'ok' | 'warn' | 'ng' | 'na') => ({
+  id,
+  text,
+  case: 0,
+  ...(tone ? { tone } : {}),
+});
+const stateText = (s: ComplianceState) => `${STATE_META[s].symbol} ${s}`;
+const column = (label: string, numeric = false) => ({ label, numeric });
+const tableBlock = (
+  title: string | undefined,
+  columns: ReturnType<typeof column>[],
+  rows: string[][],
+): ReportBlock => ({ kind: 'table', ...(title ? { title } : {}), columns, rows, more: 0 });
+const listBlock = (title: string | undefined, items: string[]): ReportBlock => ({
+  kind: 'list',
+  ...(title ? { title } : {}),
+  items,
+});
 
-const REPORT_CSS = `
-body{margin:0;padding:32px;font:14px/1.55 system-ui,-apple-system,'Segoe UI','Malgun Gothic',sans-serif;color:#1f1f1f;background:#fff}
-main{max-width:1080px;margin:0 auto}
-h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:28px 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px}
-h3{font-size:14px;margin:16px 0 6px}
-.notice{padding:10px 14px;border:1px solid #a8660b;border-radius:6px;background:#fdf6ea;font-weight:600}
-.muted{color:#6b6b6b}.mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
-table{width:100%;border-collapse:collapse;margin:6px 0 12px;font-variant-numeric:tabular-nums}
-th,td{border-bottom:1px solid #e3e3e3;padding:4px 8px;text-align:left;vertical-align:top}
-th{background:#f4f4f2;font-weight:600}td.num,th.num{text-align:right;white-space:nowrap}
-.state{white-space:nowrap;font-weight:600}
-.s-ok{color:#2f7d4f}.s-ng{color:#b42323}.s-warn{color:#a8660b}.s-info{color:#2f5aa8}.s-na{color:#808080}
-.counts{display:flex;flex-wrap:wrap;gap:8px 20px;margin:12px 0}.counts b{font-size:20px}
-.tag{display:inline-block;border:1px solid #bbb;border-radius:4px;padding:0 4px;font-size:11px;margin-left:4px}
-@media print{body{padding:0}h2{break-after:avoid}tr{break-inside:avoid}}
-`;
-
-/** The self-contained HTML report (no script, no outside files). */
-export function reportHtml(result: ComplianceResult): string {
+/** The 법규 체크 result as a report model (sections: 결과·초과 부분 public, the rest 검토용 only). */
+export function complianceReportModel(result: ComplianceResult): ReportModel {
   const rows = orderedItems(result);
   const head = headline(result);
   const model = result.inputs.model;
-  const state = (s: ComplianceState) =>
-    `<span class="state s-${STATE_META[s].tone}">${STATE_META[s].symbol} ${escape(s)}</span>`;
-  const basis = (item: ComplianceItem) =>
+  const basisText = (item: ComplianceItem) =>
     item.basis.length
       ? item.basis
-          .map((b) => {
-            const link = safeLink(b.link);
-            const clause = link
-              ? `<a href="${escape(link)}">${escape(b.clause || '원문')}</a>`
-              : escape(b.clause || '근거 없음');
-            return clause + (b.answer ? ` <span class="tag">${escape(b.answer)}</span>` : '');
-          })
-          .join('<br>')
+          .map(
+            (b) =>
+              (b.clause || (b.link ? '원문' : '근거 없음')) + (b.answer ? ` (${b.answer})` : ''),
+          )
+          .join(' / ')
       : item.limit
         ? '근거 없음'
         : '—';
-  const table = rows
-    .map((item) => {
-      const texts = rowTexts(item);
-      const assumed = item.limit?.status === '가정' ? '<span class="tag">가정</span>' : '';
-      return `<tr><td class="num mono">${item.no}</td><td>${escape(item.group)}</td><td>${escape(item.title)}</td><td>${state(item.state)}</td><td class="num">${escape(texts.planned)}</td><td class="num">${escape(texts.limit)}${assumed}</td><td class="num">${escape(texts.margin)}</td><td>${basis(item)}</td><td>${escape(item.reason)}</td></tr>`;
-    })
-    .join('');
+  const resultRows = rows.map((item) => {
+    const texts = rowTexts(item);
+    const assumed = item.limit?.status === '가정' ? ' (가정)' : '';
+    return [
+      String(item.no),
+      item.group,
+      item.title,
+      stateText(item.state),
+      texts.planned,
+      texts.limit + assumed,
+      texts.margin,
+      basisText(item),
+      item.reason,
+    ];
+  });
   const details = rows
     .filter((item) => item.numbers.length || item.cases.length || item.parts.length)
-    .map((item) => {
-      const numbers = item.numbers.length
-        ? `<table><thead><tr><th>숫자</th><th class="num">값</th><th>출처</th><th>참조</th><th>비고</th></tr></thead><tbody>${item.numbers
-            .map(
-              (n) =>
-                `<tr><td>${escape(n.label)}</td><td class="num">${n.value === null ? '—' : escape(valueText(n.value, n.unit))}</td><td>${escape(n.kind)}</td><td class="mono">${escape(n.ref)}</td><td>${escape(n.note ?? '')}</td></tr>`,
-            )
-            .join('')}</tbody></table>`
-        : '';
-      const cases = item.cases.length
-        ? `<p>경우별 결과: ${item.cases
-            .map((c) => `${escape(c.label)} → ${state(c.state)}`)
-            .join(' · ')}</p>`
-        : '';
-      const parts = item.parts.length
-        ? `<p>구간별 결과: ${item.parts
-            .map(
-              (p) =>
-                `${escape(p.label)} → ${state(p.state)}${p.reason ? ` (${escape(p.reason)})` : ''}`,
-            )
-            .join(' · ')}</p>`
-        : '';
-      const unconfirmed = item.unconfirmed.length
-        ? `<p class="muted">미확정 사항: ${item.unconfirmed.map(escape).join(' · ')}</p>`
-        : '';
-      return `<h3>${item.no}. ${escape(item.title)} — ${state(item.state)}</h3>${numbers}${cases}${parts}${unconfirmed}`;
-    })
-    .join('');
+    .flatMap((item): ReportBlock[] => {
+      const title = `${item.no}. ${item.title} — ${stateText(item.state)}`;
+      const lines = [
+        item.cases.length
+          ? `경우별 결과: ${item.cases.map((c) => `${c.label} → ${stateText(c.state)}`).join(' · ')}`
+          : '',
+        item.parts.length
+          ? `구간별 결과: ${item.parts
+              .map((p) => `${p.label} → ${stateText(p.state)}${p.reason ? ` (${p.reason})` : ''}`)
+              .join(' · ')}`
+          : '',
+        item.unconfirmed.length ? `미확정 사항: ${item.unconfirmed.join(' · ')}` : '',
+      ].filter(Boolean);
+      return [
+        ...(item.numbers.length
+          ? [
+              tableBlock(
+                title,
+                [
+                  column('숫자'),
+                  column('값', true),
+                  column('출처'),
+                  column('참조'),
+                  column('비고'),
+                ],
+                item.numbers.map((n) => [
+                  n.label,
+                  n.value === null ? '—' : valueText(n.value, n.unit),
+                  n.kind,
+                  n.ref,
+                  n.note ?? '',
+                ]),
+              ),
+            ]
+          : []),
+        ...(lines.length ? [listBlock(item.numbers.length ? undefined : title, lines)] : []),
+      ];
+    });
   const pieces = exceedancesOf(result);
   const exceedances = pieces.length
-    ? `<table><thead><tr><th class="num">번호</th><th>규칙</th><th>변형</th><th>지반</th><th class="num">부피</th><th class="num">높이 범위</th><th>구간</th><th class="num">객체</th></tr></thead><tbody>${pieces
-        .map(
-          (p) =>
-            `<tr><td class="num mono">${p.no}</td><td>${escape(ruleLabel(p.rule))}${p.rooftopOnly ? '<span class="tag">옥탑만</span>' : ''}</td><td>${escape(variantLabel(p.variant))}</td><td>${escape(groundLabel(p.groundCase))}</td><td class="num">${escape(valueText(p.volume, '㎥'))}</td><td class="num">${escape(`${formatFixed(p.min[2], 2)}~${formatFixed(p.max[2], 2)} m`)}</td><td>${escape(p.segments.join(', ') || '—')}</td><td class="num">${p.objectIds.length}</td></tr>`,
-        )
-        .join('')}</tbody></table>`
-    : '<p class="muted">초과 부분 없음</p>';
+    ? tableBlock(
+        undefined,
+        [
+          column('번호', true),
+          column('규칙'),
+          column('변형'),
+          column('지반'),
+          column('부피', true),
+          column('높이 범위', true),
+          column('구간'),
+          column('객체', true),
+        ],
+        pieces.map((p) => [
+          String(p.no),
+          ruleLabel(p.rule) + (p.rooftopOnly ? ' (옥탑만)' : ''),
+          variantLabel(p.variant),
+          groundLabel(p.groundCase),
+          valueText(p.volume, '㎥'),
+          `${formatFixed(p.min[2], 2)}~${formatFixed(p.max[2], 2)} m`,
+          p.segments.join(', ') || '—',
+          String(p.objectIds.length),
+        ]),
+      )
+    : listBlock(undefined, ['초과 부분 없음']);
   const notApplicable = result.notApplicable.length
-    ? `<table><thead><tr><th>항목</th><th>규제 조건</th><th>근거</th></tr></thead><tbody>${result.notApplicable
-        .map(
-          (n) =>
-            `<tr><td>${escape(n.title)}</td><td class="mono">${escape(n.id)}</td><td>${escape(n.basis || '—')}</td></tr>`,
-        )
-        .join('')}</tbody></table>`
-    : '<p class="muted">없음</p>';
+    ? tableBlock(
+        undefined,
+        [column('항목'), column('규제 조건'), column('근거')],
+        result.notApplicable.map((n) => [n.title, n.id, n.basis || '—']),
+      )
+    : listBlock(undefined, ['없음']);
   const roles = roleCounts(result)
-    .map((r) => `${escape(r.label)} ${r.count}`)
+    .map((r) => `${r.label} ${r.count}`)
     .join(' · ');
   const unused = unusedCounts(result)
-    .map((u) => `${escape(u.reason)} ${u.count}`)
+    .map((u) => `${u.reason} ${u.count}`)
     .join(' · ');
   const c = result.classification;
   const answers = answersOf(result);
-  const source = (label: string, ref: ComplianceResult['inputs']['limits']) =>
-    `<tr><th>${label}</th><td>${escape(sourceText(ref))}</td></tr>`;
-  return `<!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>법규 체크 보고서 ${escape(stamp(result.checkedAt))}</title><style>${REPORT_CSS}</style></head>
-<body><main>
-<p class="notice">${escape(result.notice)} · ${escape(OUT_OF_LIST)}</p>
-<h1>법규 체크 보고서</h1>
-<p class="muted">체크 ${escape(stamp(result.checkedAt))}${model ? ` · 문서 ${escape(model.documentKey)} · 판 ${escape(revisionOf(model.revisionKey))}` : ''}</p>
-<p class="state s-${head.tone === 'ok' ? 'ok' : head.tone === 'ng' ? 'ng' : 'warn'}">${escape(head.text)}</p>
-<div class="counts">${COMPLIANCE_STATES.map((s) => `<span>${state(s)} <b>${result.counts[s]}</b></span>`).join('')}<span>미확정 <b>${result.unconfirmedCount}</b></span></div>
-<h2>결과</h2>
-<table><thead><tr><th class="num">번호</th><th>묶음</th><th>항목</th><th>상태</th><th class="num">계획</th><th class="num">한계</th><th class="num">여유</th><th>근거</th><th>이유</th></tr></thead><tbody>${table}</tbody></table>
-<h2>숫자 출처와 경우별 결과</h2>${details || '<p class="muted">없음</p>'}
-<h2>초과 부분</h2>${exceedances}
-<h2>미적용 항목</h2>${notApplicable}
-<h2>분류 요약</h2>
-<p>${roles || '역할이 정해진 객체 없음'}</p>
-<p class="muted">쓰지 못한 객체: ${unused || '없음'} · AI 제안을 받은 객체 ${c.aiAccepted} · 숨긴 역할 객체 ${c.hiddenWithRole} · 형상이 바뀐 객체 ${c.geometryChanged}</p>
-<h2>입력</h2>
-<table><tbody>
-<tr><th>읽은 문서</th><td>${model ? `${escape(model.documentKey)} · 판 ${escape(revisionOf(model.revisionKey))} · 읽음 ${escape(stamp(model.readAt))} · 객체 ${model.objects} · 역할 없음·쓰지 못함 ${model.unclassified} · 분류 판 ${model.rolesVersion}` : '없음'}</td></tr>
-${source('규제 조건 · 건축 가능 영역·매스', result.inputs.limits)}
-${source('대지 · 사이트 모델링', result.inputs.siteModel)}
-<tr><th>법규 답 번호</th><td>${answers.length ? answers.map(escape).join(' · ') : '없음'}</td></tr>
-</tbody></table>
-<p class="muted">${escape(result.notice)} · ${escape(OUT_OF_LIST)}</p>
-</main></body></html>
-`;
+  const inputs = [
+    [
+      '읽은 문서',
+      model
+        ? `${model.documentKey} · 판 ${revisionOf(model.revisionKey)} · 읽음 ${stamp(model.readAt)} · 객체 ${model.objects} · 역할 없음·쓰지 못함 ${model.unclassified} · 분류 판 ${model.rolesVersion}`
+        : '없음',
+    ],
+    ['규제 조건 · 건축 가능 영역·매스', sourceText(result.inputs.limits)],
+    ['대지 · 사이트 모델링', sourceText(result.inputs.siteModel)],
+    ['법규 답 번호', answers.length ? answers.join(' · ') : '없음'],
+  ];
+  const section = (
+    no: number,
+    id: string,
+    title: string,
+    blocks: ReportBlock[],
+    isPublic: boolean,
+  ) => ({
+    no: String(no).padStart(2, '0'),
+    id,
+    title: claimOf(`${id}.title`, title),
+    blocks,
+    public: isPublic,
+  });
+  return {
+    title: '법규 체크 보고서',
+    eyebrow: '법규 체크 보고서',
+    headline: claimOf('headline', head.text, head.tone),
+    source: [
+      `체크 ${stamp(result.checkedAt)}`,
+      ...(model ? [`문서 ${model.documentKey} · 판 ${revisionOf(model.revisionKey)}`] : []),
+    ],
+    kpis: [
+      ...COMPLIANCE_STATES.map((s) => ({
+        label: stateText(s),
+        value: String(result.counts[s]),
+      })),
+      { label: '미확정', value: String(result.unconfirmedCount) },
+    ],
+    sections: [
+      section(
+        1,
+        'results',
+        '결과',
+        [
+          tableBlock(
+            undefined,
+            [
+              column('번호', true),
+              column('묶음'),
+              column('항목'),
+              column('상태'),
+              column('계획', true),
+              column('한계', true),
+              column('여유', true),
+              column('근거'),
+              column('이유'),
+            ],
+            resultRows,
+          ),
+        ],
+        true,
+      ),
+      section(
+        2,
+        'details',
+        '숫자 출처와 경우별 결과',
+        details.length ? details : [listBlock(undefined, ['없음'])],
+        false,
+      ),
+      section(3, 'exceedances', '초과 부분', [exceedances], true),
+      section(4, 'not-applicable', '미적용 항목', [notApplicable], false),
+      section(
+        5,
+        'classification',
+        '분류 요약',
+        [
+          listBlock(undefined, [
+            roles || '역할이 정해진 객체 없음',
+            `쓰지 못한 객체: ${unused || '없음'} · AI 제안을 받은 객체 ${c.aiAccepted} · 숨긴 역할 객체 ${c.hiddenWithRole} · 형상이 바뀐 객체 ${c.geometryChanged}`,
+          ]),
+        ],
+        false,
+      ),
+      section(
+        6,
+        'inputs',
+        '입력',
+        [tableBlock(undefined, [column('입력'), column('내용')], inputs)],
+        false,
+      ),
+    ],
+    assumptions: rows
+      .filter((item) => item.limit?.status === '가정')
+      .map((item) => `${item.no}. ${item.title}: 한계 ${rowTexts(item).limit} (가정)`),
+    unchecked: rows.flatMap((item) =>
+      item.unconfirmed.map((u) => `${item.no}. ${item.title}: ${u}`),
+    ),
+    gates: [],
+    provisional: [],
+    notices: [`${result.notice} · ${OUT_OF_LIST}`],
+  };
+}
+
+/** The self-contained HTML report, 검토용 (no script, no outside files). */
+export function reportHtml(result: ComplianceResult): string {
+  return renderReportHtml(
+    complianceReportModel(result),
+    { project: '', instance: '', version: '' },
+    { tier: 'review' },
+  );
 }
 
 /** File name stem of the exports: `법규-체크-YYYYMMDD-HHmm`. */

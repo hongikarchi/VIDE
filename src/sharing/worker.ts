@@ -18,6 +18,7 @@ import { noteSocket, notesRoute } from './notes';
 import { sharedLayerRoute } from './shared-layer';
 import { conversationsRoute } from './conversations';
 import { adminJigRoute } from './jig-submissions';
+import { reportPublicationDeviceRoute, reportPublicationPublicRoute } from './report-publications';
 
 export { NoteRoom } from './note-room';
 
@@ -97,6 +98,11 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
         admin,
       );
     }
+    // 보고용 게시 links (SPEC-04.14): no account, the publication's own password and cookie.
+    if (url.pathname === '/r' || url.pathname.startsWith('/r/')) {
+      const published = await reportPublicationPublicRoute(request, env, url);
+      if (published) return published;
+    }
     if (url.pathname.startsWith('/api/account/'))
       return await accountRoute(request, env, auth, url.pathname);
     if (url.pathname.startsWith('/api/auth/')) return auth.handler(request);
@@ -124,6 +130,9 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
         !['GET', 'HEAD', 'DELETE'].includes(request.method)
       )
         throw new HttpError(503, 'SNAPSHOTS_DISABLED');
+      // A PC's 보고용 게시 (SPEC-04.14): its own host-key check and upload pause rule.
+      if (devicePath[0] === 'report-publications')
+        return await reportPublicationDeviceRoute(request, env, devicePath.slice(1));
       return await hostDeviceRoute(request, env, auth, devicePath);
     }
     if (

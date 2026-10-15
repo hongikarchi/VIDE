@@ -16,7 +16,6 @@ import {
   findLocalWorkspace,
   listFolder,
   makeOutputFolder,
-  outputFolder,
   reviewFolder,
   roleEntries,
   rolePath,
@@ -50,6 +49,10 @@ export const MESSAGES: Record<string, string> = {
   NO_REPORT: '내보낼 보고서가 없습니다. 먼저 jig를 계산하세요.',
   EXPORT_REFUSED: '이 보고서는 아직 내보낼 수 없습니다. VIDE 화면에서 이유를 확인하세요.',
   EXPORT_FOLDER_TAKEN: '같은 이름의 폴더가 너무 많아 저장하지 못했습니다.',
+  REPORT_NOT_FINAL:
+    '확정된 결과가 아니라 보고용을 만들지 않았습니다. 먼저 다시 계산하면 만들 수 있습니다.',
+  OUTPUT_NOT_WRITTEN:
+    '산출물 폴더에 쓰지 못했습니다. 보고용은 VIDE 화면의 산출물 → 보고서에서 내려받을 수 있습니다.',
   JIG_RUN_FAILED: 'jig 계산이 끝나지 못했습니다. 입력과 검사 결과는 VIDE 화면에서 확인하세요.',
   USAGE: '명령을 이해하지 못했습니다.',
 };
@@ -323,33 +326,20 @@ async function dispatch(args: CliArgs, io: CliIo): Promise<number> {
       ),
     );
   } else {
-    folder = await makeOutputFolder(
-      ws.root,
-      outputFolder(rolePath(ws, 'output'), rendered.report.title || frame.title, now),
-    );
-    files.push(await put(folder, 'index.html', rendered.html));
-    files.push(
-      await put(
-        folder,
-        'report.json',
-        JSON.stringify(
-          {
-            sourceRun: {
-              instanceId: instance.id,
-              jigId,
-              version: instance.version,
-              report: frame.id,
-              at: instance.updatedAt,
-            },
-            sections: rendered.model.sections ?? [],
-            scenes: [],
-            madeAt: now.toISOString(),
-          },
-          null,
-          2,
-        ),
-      ),
-    );
+    // 보고용 (SPEC-07.11 두 등급): the engine's [보고용 만들기] makes it — the frame's public
+    // sections, `<output>/<YYYY-MM-DD>-<제목>/` with index.html, the tables as CSV and report.json —
+    // so the terminal and the screen write one shape (PLAN-54 T-342).
+    const made = await engine.call<{
+      name: string;
+      folder: string | null;
+      written: boolean;
+      files: string[];
+      reason?: string;
+    }>(`${path}/reports/${encodeURIComponent(frame.id)}/public`, 'POST', {});
+    if (!made.written || !made.folder)
+      throw new CliFailure('OUTPUT_NOT_WRITTEN', { name: made.name, reason: made.reason });
+    folder = made.folder;
+    files.push(...made.files.map((name) => win32.join(made.folder!, name)));
   }
   out(
     { projectId, jigId, instanceId: instance.id, kind: command.exportKind, folder, files },

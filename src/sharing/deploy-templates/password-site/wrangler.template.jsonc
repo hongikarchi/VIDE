@@ -1,0 +1,24 @@
+// VIDE 보고용 게시 템플릿 (PLAN-54 T-347). VIDE는 이 파일로 wrangler를 실행하지 않는다 —
+// Cloudflare API로 같은 설정을 올린다(src/server/cloudflare-deploy.ts가 compatibility_date를
+// 여기서 읽는다). 손으로 배포할 때만 {{name}}을 바꾸고 보고용 폴더를 ./public에 둔 뒤
+// `npx wrangler deploy -c wrangler.jsonc`, 비밀은 `npx wrangler secret put REPORT_PASSWORD`·
+// `npx wrangler secret put SESSION_SECRET`로 넣는다(값을 이 파일에 쓰지 않는다).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "{{name}}",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-23",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  },
+  "vars": {
+    // 로그인 없이 내보낼 자산 경로(쉼표로 구분, 예: "/logo.png"). 비워 두면 모두 비밀번호 뒤.
+    "PUBLIC_PATHS": ""
+  }
+}

@@ -353,7 +353,8 @@ test('the report is self-contained, escaped, and carries the notice and every pa
     '경우별 결과',
     '구간별 결과',
     '정북 일조',
-    '<span class="tag">가정</span>',
+    // An assumed limit says so in its cell (the shared report page, T-341).
+    ' (가정)</td>',
   ])
     assert.ok(html.includes(words), words);
 });

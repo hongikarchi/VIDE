@@ -78,6 +78,7 @@
     },
     {
       "id": "layout",
+      "public": true,
       "from": [
         "step.preview.counts.total",
         "step.preview.counts.boundary",
@@ -100,6 +101,7 @@
     },
     {
       "id": "members",
+      "public": true,
       "from": ["step.members.members.length", "step.members.overStock.length"],
       "title": {
         "cases": [
@@ -117,6 +119,7 @@
     },
     {
       "id": "types",
+      "public": true,
       "from": [
         "step.optimize.types",
         "step.optimize.types.length",
@@ -153,6 +156,7 @@
     },
     {
       "id": "connections",
+      "public": true,
       "from": [
         "step.optimize.nodes",
         "step.optimize.joints",

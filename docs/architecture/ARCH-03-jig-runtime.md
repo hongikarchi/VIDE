@@ -2,8 +2,8 @@
 id: ARCH-03
 title: jig 런타임과 저장 스키마 v5의 물리 계약
 status: review
-version: 1.13
-updated: 2026-10-14
+version: 1.14
+updated: 2026-10-15
 owner: agent:claude
 related: [FR-23, FR-24, FR-25, SPEC-02, SPEC-05, SPEC-06, SPEC-07, ADR-014, ADR-019, ADR-020, ADR-021, ADR-022, ADR-026, ARCH-01, ARCH-02, PLAN-22, PLAN-23, PLAN-24, PLAN-26, PLAN-45, SPEC-12, RESEARCH-10, RESEARCH-12, SPEC-13, PLAN-46, SPEC-15, PLAN-48, SPEC-16, PLAN-49]
 ---
@@ -319,6 +319,7 @@ export type Binding = `step.${string}` | `$${string}` | 'params' | `inputs.${str
 - 보고서 점검은 `claim-consistent`(쓰인 틀의 `when`이 참), `numbers-in-source`, `unchecked-listed`, `combo-echo`다(§11).
 - 렌더러는 `src/server/report.ts`를 넓힌다. 스크립트 없는 CSP와 외부 요청 없는 HTML을 유지한다.
 - **내보내기 조건(선택, T-213):** `export: {when, refused}`. `when`은 헤드라인과 같은 닫힌 조건이다. 틀에 `export`가 있으면 `when`이 거짓이거나 보고서 점검(`claim-consistent`·`numbers-in-source`·`unchecked-listed`) 하나라도 실패하거나 확정되지 않은(다시 계산 필요·미리보기) 단계 결과가 있을 때 해석된 보고서에 `exportRefused: string[]`(이유)를 싣고, §7 보고서 경로는 `html`을 빈 문자열로 준다. 보고서 탭은 [인쇄]·[HTML 저장]을 끄고 이유를 보이며, 패널의 보고서 부품도 '내보내지 않음'을 보인다. `export`가 없는 틀은 지금처럼 점검 실패를 '확인 필요'로만 보인다. 건축개요(SPEC-12.13 4)가 `step.check.mismatchCount == 0 && step.check.floorsCount > 0`으로 쓴다.
+- **보고용 절 표시(선택, PLAN-54 T-341, SPEC-07.11 두 등급):** 절 객체의 `public: boolean`(기본 false)은 [보고용 만들기]의 기본 선택이다(이름을 `tier`로 두지 않는다 — 패널 동작의 승인 등급과 겹침). 해석된 보고서의 절은 `public`을 늘 싣고, `inputs.settings…`에서 읽은 블록에는 `settings: true`가 붙어 보고용에서 빠진다. 해석된 보고서에는 선택 필드 `notices[]`(고정 고지)가 더 있다. 두 등급 렌더러는 `src/core/report-html.ts` `renderReportHtml(model, origin, {tier, title?, sourceRun?, sections?})`이며 검토용은 `renderJigReport`와 같은 바이트다. 보고용은 고른 절만 01부터 다시 번호를 매기고 절 id·설정값 원장·[S#]·게이트 id·'VIDE에서 열기' 줄·단추를 빼며, 머리는 '만든 날 …'과 '검토용 <시각> 회차에서 만듦 · 회차 <instanceId 앞 8자>'다. 틀에 그림·장면 블록 종류가 없으므로 1차 선택은 절 단위이고 `report.json`의 `scenes`는 늘 빈 배열이다. 공식 틀의 공개 절: building-summary `overview·floors·check`, site-model `site·buildings`, paneling `layout·members·types·connections`, s06-frame `placement·spans·members·schedule`, example-grid `beams`.
 
 ### 5.3 `skill.md`와 skill 시작
 
@@ -463,7 +464,7 @@ jig·보고서 경로는 `src/server/jig-routes.ts`, 초안 경로(`jig-drafts`)
 | `GET …/:iid/reports` | — | 그 작업본 jig의 보고서 틀 목록(설명서 `reports`, 없으면 패키지의 `reports/*.json`) |
 | `GET …/:iid/jig-outputs/:key` | — | `jig-output` 입력의 상태(§8.5): `{input, chosen, current, ready, reason, candidates[{instanceId, title, version, at, ready, reason?}], used, stale}`. `current`는 고른 작업본 또는 가장 최근에 계산된 작업본(`{instanceId, title, jig, version, step, status, at, hash, reason?}`), `stale`은 마지막 계산 때 읽은 결과(`used.hash`)와 지금이 다름. 제공자가 주는 입력(법규)은 `service: true`, `chosen: null`, `candidates: []`, `current = {instanceId: '', title: '서비스 결과', jig, step: <output>, status: 'done', at: null, hash}`, `ready: true`이고 `stale`은 같은 비교(T-214 F-8) |
 | `PUT …/:iid/jig-outputs/:key` | `{instanceId: string \| null}` | 앞 작업본 고르기(`null` = 최근 계산된 작업본). 같은 프로젝트의 `from.jig` 작업본만(자기 자신·다른 jig는 422 `INVALID_INPUT`). 그 입력을 읽는 단계가 `stale` |
-| `GET …/:iid/reports/:name` | — | 해석된 보고서(§5.2). 보관된 단계 결과·설정값 원장·남은 조건·해석 보기를 읽고, `previewOnly` 결과는 확정으로 쓰지 않는다. 화면이 부품으로 그린다(CSP가 인라인 스타일을 막으므로 HTML을 내려보내지 않음). 일람표 CSV는 표 부품의 `csv`로 화면이 만든다 |
+| `GET …/:iid/reports/:name` | — | 해석된 보고서(§5.2). 보고용 미리보기 `?tier=public&sections=&title=&as=html`, 응답의 `public` 블록과 `POST …/reports/:name/public`([보고용 만들기]), `GET /api/v1/projects/:id/outputs[/:name/files/:file]`은 ARCH-01 「외부 도메인 서비스」의 보고용 산출물 경로가 소유한다. 보관된 단계 결과·설정값 원장·남은 조건·해석 보기를 읽고, `previewOnly` 결과는 확정으로 쓰지 않는다. 화면이 부품으로 그린다(CSP가 인라인 스타일을 막으므로 HTML을 내려보내지 않음). 일람표 CSV는 표 부품의 `csv`로 화면이 만든다 |
 | `GET·POST /api/v1/projects/:id/jig-drafts` | POST `{name, from?}` 또는 `{from: {jig, version?}}` | 초안 목록·만들기(`from`은 시작 본). 201. `from`이 jig이면 [수정하기](T-101): 등록부에서 그 버전(없으면 이 프로젝트의 고정 버전)을 찾아 `project/` 도구 jig만 사본으로 만든다 — 패키지 파일을 초안 경로 규칙으로 하나씩 복사(`dist/` 묶음과 `derived` 선언은 빼고), id 유지, 버전은 그 id의 설치본·열린 초안·원본 중 가장 높은 것의 패치 +1. 출처 `{jigId, version, name, at}`는 `.results/<did>.json`의 `origin`에 두고 초안 보기에 실린다. 사본은 계산 상자에서 돌므로, 단계 소스(타입을 걷어 낸 본문)의 import가 패키지 파일·공식 라이브러리 밖(저장소 상대 경로·`node:`·꾸러미 이름)으로 가면 `JIG_NOT_FORKABLE`(422)로 거절한다(`drafts.ts` `forkable`, 판단은 상자의 모듈 규칙 `compute-box.ts` `boxImportTarget`과 같음). 등록부 목록(`GET /api/v1/jigs/packages`)의 도구 항목은 같은 판단을 `forkable`로 싣는다. 없는 jig 404, 그 밖 `INVALID_INPUT` |
 | `GET·DELETE …/jig-drafts/:did` | — | 초안 하나. `DELETE`는 버리기: 상태 `discarded`, 초안 폴더와 그 초안에 붙은 만들기 대화의 공급자 기록을 지우고 열린 대화를 닫는다. 엔진이 DELETE를 받는 경로는 이것과 jig 고정 해제(위), 프로젝트 삭제(ARCH-01)뿐이다 |
 | `POST …/jig-drafts/:did/validate·test·preview` | preview `{fixture?}` | 형식 점검·자체 시험·미리보기(계산 상자, §6.5). 마지막 결과는 초안 폴더 밖 `.results/<did>.json`에 둔다 |

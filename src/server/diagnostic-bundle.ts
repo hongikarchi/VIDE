@@ -36,7 +36,7 @@ const SETTINGS = [
 ];
 /** Never in a bundle, whatever else changes (checked again on every entry). */
 const FORBIDDEN =
-  /(^|[\\/])(launch\.json|local-session\.key|remote-host\.json|typesafe\.env|public-data\.env|[^\\/]*\.sqlite[^\\/]*|cli-profiles)([\\/]|$)/i;
+  /(^|[\\/])(launch\.json|local-session\.key|remote-host\.json|typesafe\.env|public-data\.env|[^\\/]*\.sqlite[^\\/]*|cli-profiles|secrets|service-settings\.json)([\\/]|$)/i;
 const KEEP_BUNDLES = 3;
 
 export interface DumpInfo {

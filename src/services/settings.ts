@@ -5,13 +5,23 @@ import { DomainError } from '../contracts/errors.ts';
 import {
   CLAWDE_FEATURES,
   serviceSettingsUpdateSchema,
+  type AccountService,
+  type AccountStatus,
   type ClawdeFeature,
   type ClawdeFeatures,
+  type ServiceSettingsUpdate,
   type ServiceSettingsView,
   type ServiceStatus,
   type ServiceToken,
 } from '../contracts/services.ts';
 import { SecretStore } from './secrets.ts';
+import {
+  accountApis,
+  checkCloudflare,
+  checkGithub,
+  githubScopesEnough,
+  type AccountApis,
+} from './account-services.ts';
 
 /**
  * External service settings (SPEC-13.11, ARCH-01 「cLAWde 연결 계약」 설정·비밀·토큰 받기, PLAN-46
@@ -39,6 +49,10 @@ export const serviceSettingsStatuses: Record<string, number> = {
   SERVICE_NOT_IMPLEMENTED: 409,
   SERVICE_NOT_READY: 503,
   SECRETS_UNAVAILABLE: 500,
+  // The user's own accounts (SPEC-05.11).
+  ACCOUNT_NOT_CONNECTED: 409,
+  ACCOUNT_SCOPE: 403,
+  SERVICE_UNREACHABLE: 502,
 };
 
 const storedSchema = z.object({
@@ -55,10 +69,36 @@ const storedSchema = z.object({
       endpoints: z.array(z.string()).nullable().default(null),
       plannedEndpoints: z.array(z.string()).nullable().default(null),
     }),
+    /** The user's own accounts (SPEC-05.11, ARCH-01): no secret here; the tokens are sealed. */
+    github: z
+      .object({
+        enabled: z.boolean().default(false),
+        login: z.string().nullable().default(null),
+        scopes: z.array(z.string()).default([]),
+        scopesChecked: z.boolean().default(false),
+        rejected: z.boolean().default(false),
+        checkedAt: z.string().nullable().default(null),
+        status: z.enum(['connected', 'scope-missing', 'unreachable']).nullable().default(null),
+      })
+      .prefault({}),
+    cloudflare: z
+      .object({
+        enabled: z.boolean().default(false),
+        accountId: z.string().nullable().default(null),
+        accountName: z.string().nullable().default(null),
+        rejected: z.boolean().default(false),
+        checkedAt: z.string().nullable().default(null),
+        status: z.enum(['connected', 'scope-missing', 'unreachable']).nullable().default(null),
+      })
+      .prefault({}),
   }),
 });
 type Stored = z.infer<typeof storedSchema>;
 const empty = (): Stored => storedSchema.parse({ services: { clawde: {} } });
+const ACCOUNT_SECRET: Record<AccountService, string> = {
+  github: 'github.token',
+  cloudflare: 'cloudflare.token',
+};
 
 const TOKEN_SECRET = 'clawde.token';
 /** An account token is renewed this long before it expires. */
@@ -79,21 +119,26 @@ export class ServiceSettings {
   private readonly notImplemented = new Set<string>();
   /** The last call found the service not ready (503 NO_PUBLICATION·PUBLISHING). */
   private lastNotReady = false;
+  private readonly apis: AccountApis;
   constructor({
     directory,
     secrets,
     account,
     now = () => new Date(),
+    apis,
   }: {
     directory: string | undefined;
     secrets: SecretStore;
     account?: AccountTokens;
     now?: () => Date;
+    /** The user's account APIs (test seams; default env `VIDE_GITHUB_API`… or the real ones). */
+    apis?: { githubApi?: string; cloudflareApi?: string; timeoutMs?: number };
   }) {
     this.file = directory === undefined ? undefined : join(directory, 'service-settings.json');
     this.secrets = secrets;
     this.account = account;
     this.now = now;
+    this.apis = accountApis(apis);
   }
   private load() {
     return (this.loaded ??= (async () => {
@@ -106,10 +151,13 @@ export class ServiceSettings {
     })());
   }
   private save(change: (clawde: Stored['services']['clawde']) => void) {
+    return this.saveAll((services) => change(services.clawde));
+  }
+  private saveAll(change: (services: Stored['services']) => void) {
     const run = this.queue.then(async () => {
       await this.load();
       const next = structuredClone(this.stored);
-      change(next.services.clawde);
+      change(next.services);
       if (this.file) {
         await mkdir(join(this.file, '..'), { recursive: true });
         await writeFile(this.file + '.tmp', JSON.stringify(next, null, 2));
@@ -148,11 +196,46 @@ export class ServiceSettings {
         features: this.features(),
         ...(this.lastNotReady ? { notReady: true } : {}),
       },
+      ...(await this.accountsView()),
+    };
+  }
+  private async accountsView() {
+    const { github: g, cloudflare: f } = this.stored.services;
+    const githubSet = !!(await this.secrets.get(ACCOUNT_SECRET.github));
+    const cloudflareSet = !!(await this.secrets.get(ACCOUNT_SECRET.cloudflare));
+    const status = (set: boolean, enabled: boolean, stored: AccountStatus | null): AccountStatus =>
+      !set ? 'not-configured' : !enabled ? 'off' : (stored ?? 'unchecked');
+    return {
+      github: {
+        enabled: g.enabled,
+        login: g.login,
+        scopes: g.scopes,
+        scopesChecked: g.scopesChecked,
+        rejected: g.rejected,
+        token: { set: githubSet, checkedAt: githubSet ? g.checkedAt : null },
+        status: status(githubSet, g.enabled, g.status),
+        checkedAt: g.checkedAt,
+      },
+      cloudflare: {
+        enabled: f.enabled,
+        accountId: f.accountId,
+        accountName: f.accountName,
+        rejected: f.rejected,
+        token: { set: cloudflareSet, checkedAt: cloudflareSet ? f.checkedAt : null },
+        status: status(cloudflareSet && !!f.accountId, f.enabled, f.status),
+        checkedAt: f.checkedAt,
+      },
     };
   }
   /** `PUT /api/v1/settings/services`. A static token replaces any account token. */
   async update(input: unknown) {
-    const { clawde } = serviceSettingsUpdateSchema.parse(input);
+    const { clawde, github, cloudflare } = serviceSettingsUpdateSchema.parse(input);
+    if (github) await this.updateGithub(github);
+    if (cloudflare) await this.updateCloudflare(cloudflare);
+    if (clawde) await this.updateClawde(clawde);
+    return this.view();
+  }
+  private async updateClawde(clawde: NonNullable<ServiceSettingsUpdate['clawde']>) {
     if (clawde.token !== undefined) {
       await this.secrets.set(TOKEN_SECRET, clawde.token ?? undefined);
       this.lastStatus = undefined;
@@ -175,7 +258,128 @@ export class ServiceSettings {
       // Saving a token with an address turns the service on, as [연결] does.
       if (clawde.token && clawde.enabled === undefined) c.enabled = true;
     });
+  }
+  /** A new token (or none) forgets the last check; saving one turns the account on. */
+  private async updateGithub(github: NonNullable<ServiceSettingsUpdate['github']>) {
+    if (github.token !== undefined)
+      await this.secrets.set(ACCOUNT_SECRET.github, github.token ?? undefined);
+    await this.saveAll(({ github: g }) => {
+      if (github.token !== undefined) {
+        Object.assign(g, {
+          login: null,
+          scopes: [],
+          scopesChecked: false,
+          rejected: false,
+          checkedAt: null,
+          status: null,
+        });
+        g.enabled = github.token !== null;
+      }
+      if (github.enabled !== undefined) g.enabled = github.enabled;
+    });
+  }
+  private async updateCloudflare(cloudflare: NonNullable<ServiceSettingsUpdate['cloudflare']>) {
+    if (cloudflare.token !== undefined)
+      await this.secrets.set(ACCOUNT_SECRET.cloudflare, cloudflare.token ?? undefined);
+    await this.saveAll(({ cloudflare: f }) => {
+      const nextId =
+        cloudflare.accountId === undefined
+          ? f.accountId
+          : (cloudflare.accountId?.toLowerCase() ?? null);
+      if (cloudflare.token !== undefined || nextId !== f.accountId)
+        Object.assign(f, { accountName: null, rejected: false, checkedAt: null, status: null });
+      f.accountId = nextId;
+      if (cloudflare.token !== undefined) f.enabled = cloudflare.token !== null;
+      if (cloudflare.enabled !== undefined) f.enabled = cloudflare.enabled;
+    });
+  }
+  /**
+   * [연결] for the user's own account (SPEC-05.11): one 'who am I' call with the saved token. The
+   * outcome is kept and shown; a token short of rights stays saved. No token (or no Cloudflare
+   * account ID) is ACCOUNT_NOT_CONNECTED. Turns the account on.
+   */
+  async checkAccount(service: AccountService) {
+    await this.load();
+    const token = await this.secrets.get(ACCOUNT_SECRET[service]);
+    const at = this.now().toISOString();
+    if (service === 'github') {
+      if (!token) throw new DomainError('ACCOUNT_NOT_CONNECTED');
+      const found = await checkGithub(this.apis, token);
+      await this.saveAll(({ github: g }) => {
+        g.enabled = true;
+        g.checkedAt = at;
+        g.rejected = found.kind === 'rejected';
+        if (found.kind === 'ok') {
+          g.login = found.login;
+          g.scopes = found.scopes ?? [];
+          g.scopesChecked = found.scopes !== null;
+          g.status = githubScopesEnough(found.scopes) ? 'connected' : 'scope-missing';
+        } else g.status = found.kind === 'rejected' ? 'scope-missing' : 'unreachable';
+      });
+    } else {
+      const accountId = this.stored.services.cloudflare.accountId;
+      if (!token || !accountId) throw new DomainError('ACCOUNT_NOT_CONNECTED');
+      const found = await checkCloudflare(this.apis, token, accountId);
+      await this.saveAll(({ cloudflare: f }) => {
+        f.enabled = true;
+        f.checkedAt = at;
+        f.rejected = found.kind === 'rejected';
+        if (found.kind === 'ok') {
+          f.accountName = found.accountName;
+          f.status = 'connected';
+        } else f.status = found.kind === 'rejected' ? 'scope-missing' : 'unreachable';
+      });
+    }
     return this.view();
+  }
+  /**
+   * [끊기] for the user's own account: the token and what the check found are forgotten and the
+   * account is off. Repositories and published sites stay as they are (SPEC-05.11).
+   */
+  async disconnectAccount(service: AccountService) {
+    await this.secrets.set(ACCOUNT_SECRET[service], undefined);
+    await this.saveAll((services) => {
+      if (service === 'github')
+        Object.assign(services.github, {
+          enabled: false,
+          login: null,
+          scopes: [],
+          scopesChecked: false,
+          rejected: false,
+          checkedAt: null,
+          status: null,
+        });
+      else
+        Object.assign(services.cloudflare, {
+          enabled: false,
+          accountId: null,
+          accountName: null,
+          rejected: false,
+          checkedAt: null,
+          status: null,
+        });
+    });
+    return this.view();
+  }
+  /**
+   * The saved token, API address and last status of the user's `service` account, or undefined
+   * when it cannot be used (no token, off, or Cloudflare without an account ID). Callers outside
+   * this module use `accountTokenFor`·`accountConnection` (account-services.ts).
+   */
+  async accountConnection(service: AccountService) {
+    await this.load();
+    const token = await this.secrets.get(ACCOUNT_SECRET[service]);
+    const stored = this.stored.services[service];
+    const accountId = service === 'cloudflare' ? this.stored.services.cloudflare.accountId : null;
+    if (!token || !stored.enabled || (service === 'cloudflare' && !accountId)) return undefined;
+    return {
+      api: this.apis[service],
+      token,
+      accountId,
+      status: stored.status,
+      rejected: stored.rejected,
+      timeoutMs: this.apis.timeoutMs,
+    };
   }
   /** [연결]: a token from the VIDE account (ADR-039). Refused on a PC not signed in. */
   async connect() {

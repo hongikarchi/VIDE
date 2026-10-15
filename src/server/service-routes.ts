@@ -34,7 +34,8 @@ export function accountTokens(remote: RemoteAccess): AccountTokens {
 /**
  * External service settings (SPEC-13.11, ARCH-01 「cLAWde 연결 계약」, PLAN-46 T-217):
  * `GET/PUT /api/v1/settings/services`, `POST …/services/clawde/connect` ([연결], the VIDE account),
- * `POST …/clawde/disconnect` ([끊기]) and `POST …/clawde/check` (one `meta` call for the status).
+ * `POST …/clawde/disconnect` ([끊기]) and `POST …/clawde/check` (one `meta` call for the status);
+ * the user's own accounts at `POST …/services/(github|cloudflare)/(check|disconnect)` (SPEC-05.11).
  * Answers never carry the token. Remote sessions read only (the server gate refuses their writes
  * to `/api/v1/settings` too; this check keeps the rule with the routes).
  */
@@ -63,6 +64,21 @@ export async function serviceSettingsRoutes(
     if (method === 'GET') send(200, await settings.view());
     else if (method === 'PUT') send(200, await settings.update(await body()));
     else throw new DomainError('NOT_FOUND');
+    return true;
+  }
+  // The user's own accounts (SPEC-05.11, PLAN-54 T-344): [연결] = one check, [끊기] = forget.
+  const account = /^\/api\/v1\/settings\/services\/(github|cloudflare)\/(check|disconnect)$/.exec(
+    path,
+  );
+  if (account) {
+    if (method !== 'POST') throw new DomainError('NOT_FOUND');
+    const service = account[1] as 'github' | 'cloudflare';
+    send(
+      200,
+      account[2] === 'check'
+        ? await settings.checkAccount(service)
+        : await settings.disconnectAccount(service),
+    );
     return true;
   }
   const action = /^\/api\/v1\/settings\/services\/clawde\/(connect|disconnect|check)$/.exec(path);

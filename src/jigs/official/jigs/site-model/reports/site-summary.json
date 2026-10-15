@@ -39,6 +39,7 @@
   "sections": [
     {
       "id": "site",
+      "public": true,
       "from": ["step.summary.rows"],
       "title": { "cases": [{ "template": "대지 요약과 출처" }] },
       "blocks": [
@@ -75,6 +76,7 @@
     },
     {
       "id": "buildings",
+      "public": true,
       "from": ["step.buildings.buildings", "step.buildings.estimated"],
       "title": {
         "cases": [
