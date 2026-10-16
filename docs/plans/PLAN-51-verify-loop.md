@@ -2,8 +2,8 @@
 id: PLAN-51
 title: 검증–수정 반복 루프 — 사용자 문장 시나리오·페르소나·스코어카드 (T-264~T-268)
 status: review
-version: 1.3
-updated: 2026-10-15
+version: 1.4
+updated: 2026-10-16
 owner: agent:claude
 related: [PRD, SPEC-00, SPEC-01, SPEC-02, SPEC-05, SPEC-06, SPEC-07, SPEC-12, SPEC-13, SPEC-15, PLAN-12, PLAN-14, PLAN-19, PLAN-45, PLAN-46, PLAN-47, PLAN-48, PLAN-16, PLAN-23, PLAN-24, PLAN-07, AC-22, AC-48, FR-25, T-012]
 ---
@@ -102,6 +102,7 @@ related: [PRD, SPEC-00, SPEC-01, SPEC-02, SPEC-05, SPEC-06, SPEC-07, SPEC-12, SP
 | T-303 P1 ZWCAD 연결 중 엔진 이벤트 루프 정지 | 동작 변경 없음(원인 측정). ZWCAD가 연결된 동안 1분 구간 loopMax가 2.9~22.0 s였다(R1-A 21,978 ms, T-299 11,727 ms·p99 4,496 ms, Sync 중 8,024 ms·p99 4,605 ms), RSS 최대 822 MB. R1-A 첫 시도의 스크린샷 20 s 시간 초과와 겹친다. T-301과 함께 측정 | 설치본 사본 ZWCAD 연결·Sync 중 `health`와 엔진 단계 시간 | 원인 확인과 정지 감소 수치 · **R6: 등록** |
 | T-304 도구: 페르소나 드라이버 스크롤 | `tools/persona/run.mjs`에 스크롤(휠) 동작이 없어, R1-B 7–12단계가 화면 밖 '9. Rhino에 만들기' 내용을 찾느라 같은 화면에서 무진전 4가 됐다. 스크롤 동작을 더하고, 제품 패널이 스크롤되는지 함께 가린다 | `tools/persona` 시험, L1 R1-B | 화면 밖 단계를 페르소나가 스크롤로 찾음, 제품 원인 여부 기록 · **R6: 등록** — `r6-R1-B/steps.jsonl` 7–12단계 |
 | T-305 P0 후보 S-06 '축선·배치' 실패·결과 0 | 원인 조사 먼저. 입력 조립 10 뒤에도 작업본의 '축선·배치'(`axes`)가 `failed`(395 ms)이고 이유가 기록되지 않았다. 기둥·평면·간섭은 `stale`, 거더·작은보 등은 0, `structure_summary` `STRUCTURE_NOT_COMPUTED`(라운드 5도 결과 0). 실패 이유 표시는 SPEC-07.12, 축선 입력은 SPEC-06에서 확인한 뒤 [PLAN-23](PLAN-23-s06-frame-jig.md) | `.vide/loop/r6/jig-s06-r6-after-t293.json`, L1 R1-D | 축선·배치가 계산되거나 실패 이유와 다음 행동이 화면에 보임 · **R6: 등록** |
+| T-360 P0 모델링 요청이 문장 속 부름말로 jig에 강제 진입 | SPEC-02.17의 1(0.68)에 모델링 말·jig 사양 말 규칙을 더하고 `src/ui/request-route.ts` `jigFor`·`declinesJig`, `/route`의 Jev jig 목록 비움(`src/server/server.ts`) | `tests/core/request-route.test.mjs` T-360 블록, 설치본에서 원문 재전송(라운드 7) | 원문이 jig 없이 파일 작업으로 가고 '구조 검토해줘'는 여전히 jig · **핫픽스(§5 R6 아래)** |
 
 수정 티켓은 측정 뒤 T-269부터 등록하며 동작 변경은 해당 SPEC을 먼저 보완한다. 예상 후보: A의 Sync jig 채팅 진입(jig 열기와 질문의 구분, PLAN-14·PLAN-19), B의 프로젝트 주소 fallback(SPEC-12), D의 구조 검토 단일 진입점(SPEC-06·07), '응답 완료' 라벨과 실패 코드 분리, planned jig 영역 요청의 '준비 중' 카드(SPEC-02.17·07).
 
@@ -368,6 +369,14 @@ related: [PRD, SPEC-00, SPEC-01, SPEC-02, SPEC-05, SPEC-06, SPEC-07, SPEC-12, SP
 - **T-302:** 함께 고쳤다(SPEC-05.8 '입력 Sync 고르기', 0.21). Sync jig의 Rhino·ZWCAD Sync 칸은 열린 연결의 최신 Sync를 기본으로 고르고, 닫힌 Sync는 구분선 뒤 '(닫힘)'으로 사람이 고를 때만 쓴다. 열린 연결에 Sync가 없으면 고르지 않고 안내하며, Sync가 생기면 사람이 고르지 않은 칸은 그것을 고른다.
 - **검증:** ZWCAD 플러그인(연결·worker) Release 빌드 오류·경고 0(임시 출력, 설치·로드 안 함), `npm run typecheck`, `node --test tests/core tests/ai tests/server tests/contract` 1,700개 중 1,699 통과(`legal-model-link` 1건은 병렬 부하에서 실패, 단독 재실행 5/5 통과, 이번 변경과 무관), `build:web`·`browser-jigs` 통과, 바꾼 파일 Prettier 통과, `npm run docs:check`. 새 시험: `tests/server/sync-scheduler.test.mjs`(느린 `HOST_BUSY` 재시도·멈춤), `tests/server/zwcad-capture-status.test.mjs`(짧은 쪽 이어 읽기·10분 상한), `tests/core/closed-link-sources.test.mjs`(`syncPick`), `browser-jigs`.
 - **남음(라운드 7):** 0.2.37 설치 뒤 같은 `cad.dwg` 첫 Sync 성공, 쪽 read·serialize가 라운드 5 수준, 수신 `IOException`·`host/selection` `server-error` 0, R1-A Sync jig 칸의 열린 연결 기준. 첫 Sync는 약 100–110 s로 경보선 20 s를 넘으므로 T-285는 계속 열려 있다(캐시 재도입은 PLAN-07의 조건을 실호스트·SPIKE로 잰 뒤). T-303 정지 원인은 별도.
+
+#### 핫픽스 T-360 (2026-10-16, 사용자 동승 중 발견)
+
+설치본 0.2.39에서 사용자가 브릿지 모델링 요청(패널은 단일 surface, 내부 구조는 지름을 바꿀 수 있는 pipe, "구조 검토에 따라 변경될 수 있음")을 보냈는데 엔진 로그 `route by rules target jig project/s06-frame`가 네 번 연속 찍혔다. 문장 안의 '구조 검토'가 S-06 골조 jig의 부름말(구절, 점수 2)과 맞아 jig가 강제로 열렸고, jig는 입력이 없다며 멈췄다. 사용자는 "jig 열지 말고 그냥 모델링하는 작업으로"라고 썼지만 그 말은 규칙에 없었다. PLAN-51 등급으로 **P0 경로 오판**이다.
+
+- **변경(SPEC-02.17의 1 보완, 0.68):** `src/ui/request-route.ts` `jigFor` — 요청이 모델링·구현 작업을 말하면(모델링을·모델링해·구현해 등) 부름말이 있어도 규칙으로 jig를 열지 않는다. 'jig 열지 말고'·'jig 없이'·'그냥 모델링'처럼 jig를 사양하는 말(`declinesJig`)이 있으면 규칙은 jig를 고르지 않고 `/route`는 Jev에 jig 목록을 비워 보낸다(`src/server/server.ts`). 부름말 자체인 요청('구조 검토해줘', '구조 검토하고 싶은데 파악해줘')과 Sync 맞춤 말('모델링이랑 도면 맞춰줘')은 그대로 jig다.
+- **검증:** `tests/core/request-route.test.mjs` T-360 블록(원문 요지 → `document`, 부름말 → jig 유지, 사양 말 세 가지), 설치본에서 같은 글 재전송(라운드 7).
+- **동승 관찰(티켓은 사용자 결정 뒤):** Rhino가 사용자 문서를 읽기 전용으로 열어 저장이 "temporary file could not be renamed"로 실패(VIDE는 `document-read-only`를 로그에만 남기고 화면에 알리지 않음), 자료 정리가 연결 폴더 1,003파일·AI 호출 1,840번·약 192분으로 잡힘(범위를 고르기 전에 전체를 돎), 홈의 '목록에서 삭제' 문구가 PC 데이터 삭제를 드러내지 않음.
 
 ## 6. 하지 않는 것(1회차)
 

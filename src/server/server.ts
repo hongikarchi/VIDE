@@ -29,6 +29,7 @@ import {
 } from './jig-routes.ts';
 import { siteModelSource } from './legal-model-source.ts';
 import { routeJigsOf, skillCatalog } from './skill-catalog.ts';
+import { declinesJig } from '../ui/request-route.ts';
 import {
   analysisWorkerStats,
   closeAnalysisWorker,
@@ -2102,9 +2103,12 @@ export async function startServer({
           .strict()
           .parse(await body(request));
         // The project's skill catalog (its jigs first); the official list if it cannot be read.
-        const jigs = await skillCatalog(workspace, dirname(filename), routeQuery[1])
-          .then(routeJigsOf)
-          .catch(() => officialJigs(JIGS));
+        // Words that decline a jig ("jig 열지 말고") leave Jev no jig to pick (SPEC-02.17 1, T-360).
+        const jigs = declinesJig(query.body)
+          ? []
+          : await skillCatalog(workspace, dirname(filename), routeQuery[1])
+              .then(routeJigsOf)
+              .catch(() => officialJigs(JIGS));
         const judged = await judgeRoute(
           { ...query, jigs, links: linkLabels(links.list(routeQuery[1])) },
           { dataDirectory: dirname(filename), enabled: routeSettings().get().jev },

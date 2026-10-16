@@ -173,6 +173,17 @@ export const OFFICIAL_JIG_ROUTING: Record<string, { intent: string; words: strin
   },
 };
 
+/**
+ * The request says it is modeling or implementing something itself (SPEC-02.17 1, T-360): jig
+ * words inside such a sentence ("구조 검토에 따라 변경될 수 있음") do not open the jig.
+ */
+const MODELING_WORK = /모델링(을|해|하|으로|하는|하려|하고|해서|해보)|구현(을|해|하|했|하는|해서)/;
+/** "jig 열지 말고", "지그 없이", "그냥 모델링": the request declines every jig (T-360). */
+const NO_JIG =
+  /(jig|지그)\s*(은|는|을|를|로|으로)?\s*(열지\s*(마|말)|없이|말고|빼고|안\s*열|쓰지\s*(마|말))|그냥\s*(모델링|파일\s*작업|작업으로|대화로)/i;
+/** True when the words decline a jig outright: neither the rules nor Jev then pick one. */
+export const declinesJig = (body: string) => NO_JIG.test(body);
+
 const RECONCILE_NOT =
   /(확대|줌|zoom|옮겨|옮기|이동|바꿔|바꾸|변경|색|위치|높이|회전|스케일|scale|크기|늘려|줄여|키워|삭제|지워)/i;
 /**
@@ -610,10 +621,12 @@ export function requestValues(
  * needs at least two letters and no question, and a `not_for` word rules the jig out.
  */
 export function jigFor(body: string, jigs: readonly RouteJig[] | undefined) {
+  if (declinesJig(body)) return undefined;
   const acting =
     NOT_A_SETTING.test(body) ||
     FILE_WORDS.test(body) ||
     viewActions.some(([, pattern]) => pattern.test(body));
+  const modeling = MODELING_WORK.test(body);
   const words = squash(body);
   let best: { jig: RouteJig; score: number } | undefined;
   for (const jig of jigs ?? []) {
@@ -623,6 +636,9 @@ export function jigFor(body: string, jigs: readonly RouteJig[] | undefined) {
     for (const word of jig.words ?? []) {
       const squashed = squash(word);
       if (!squashed || !words.includes(squashed)) continue;
+      // A request that says it is modeling work names its own method ("구조 검토에 따라 바뀔 수
+      // 있는 파이프 지름"): a jig's words inside it are no call (SPEC-02.17 1, T-360).
+      if (modeling) continue;
       const phrase = /\s/.test(word.trim());
       if (skill && (acting || (!phrase && (squashed.length < 2 || QUESTION.test(body))))) continue;
       score = Math.max(score, phrase ? 2 : 1);

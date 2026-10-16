@@ -493,3 +493,33 @@ test('reconcile words with edit verbs or zoom words do not open the Sync jig', a
   }
   assert.equal(decisiveRoute('모델링이랑 도면 맞춰줘', jigs)?.jig?.id, 'sync');
 });
+
+// ── T-360: a modeling request keeps a jig word inside it from opening the jig; "jig 열지 말고" declines every jig (2026-10-16). ──
+test('modeling requests and jig refusals never open a jig by its words', async () => {
+  const { decisiveRoute, declinesJig, officialRouteJigs } =
+    await import('../../src/ui/request-route.ts');
+  const frame = {
+    id: 'project/s06-frame',
+    name: '골조',
+    words: ['구조 검토', '기둥 배치'],
+    source: 'skill',
+  };
+  const jigs = { jigs: [frame, ...officialRouteJigs()] };
+  const modeling =
+    '패널은 단일 surface로 구현을 하고, 안에 구조는 지름을 조정할 수 있게(구조 검토에 따라 변경될 수 있음) pipe의 형태로 구현했으면 해. 새롭게 모델링을 해보려고 해';
+  assert.equal(decisiveRoute(modeling, jigs), undefined);
+  assert.equal(routeRequest(modeling, [], [], jigs).target, 'document');
+  // The call words still open the jig when the request is the call.
+  for (const body of ['구조 검토해줘', '구조 검토하고 싶은데 파악해줘'])
+    assert.equal(decisiveRoute(body, jigs)?.jig?.id, 'project/s06-frame', body);
+  assert.equal(decisiveRoute('모델링이랑 도면 맞춰줘', jigs)?.jig?.id, 'sync');
+  for (const body of [
+    'jig 열지 말고 구조 검토 기준으로 기둥 배치해줘',
+    '지그 없이 그냥 모델링하자',
+    'JIG 말고 일반 대화로',
+  ]) {
+    assert.equal(declinesJig(body), true, body);
+    assert.equal(decisiveRoute(body, jigs), undefined, body);
+  }
+  assert.equal(declinesJig('구조 검토해줘'), false);
+});
