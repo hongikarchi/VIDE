@@ -241,7 +241,9 @@ $before = @{}
 if (-not $SkipOtherProjects) { foreach ($p in $projects) { if ($p.id -ne $target.id) { $before[$p.id] = ProjectLinks $p.id } } }
 
 $stamp = (Get-Date).ToString('yyyyMMdd-HHmmss')
-$run = if ($OutDir) { $OutDir } else { Join-Path $root ".vide\persona\host-link\$stamp-$HostApp" }
+# Absolute: Rhino's check script writes here from Rhino's own working directory (round 7: a
+# relative -OutDir made the check silently miss and the link time out).
+$run = if ($OutDir) { [IO.Path]::GetFullPath((Join-Path (Get-Location).Path $OutDir)) } else { Join-Path $root ".vide\persona\host-link\$stamp-$HostApp" }
 New-Item -ItemType Directory -Force -Path $run | Out-Null
 $statePath = Join-Path $run 'state.json'
 $result.state = $statePath
