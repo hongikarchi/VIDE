@@ -8,7 +8,7 @@ import { ActivityLog, activityEntries } from './activity.tsx';
 import { Markdown } from './kit/markdown.tsx';
 import { LegalTurnCards, legalCheckOf } from './legal-turn.tsx';
 import { inConversation } from './conversations.tsx';
-import { api } from './gateway.ts';
+import { api, failureText } from './gateway.ts';
 import { executeWaitOf, guardOpen, heldRowLabel, waitingText } from './request-scope.ts';
 import {
   Action,
@@ -976,7 +976,9 @@ function WorkView({
               ))}
             </p>
           ) : null}
-          {result?.code ? <p>{errorLabels[result.code] || result.code}</p> : null}
+          {result?.code ? (
+            <p>{failureText(result.code, result) || errorLabels[result.code] || result.code}</p>
+          ) : null}
           {(request.state === 'unknown' && !result?.applicationId) ||
           messages.some(
             (entry) =>

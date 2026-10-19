@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
-import { api, errors, projectSchema } from './gateway.ts';
+import { api, errors, failureText, projectSchema } from './gateway.ts';
 import {
   aiSettingsSchema,
   aiSettingsResponseSchema,
@@ -489,7 +489,9 @@ function Settings({ config, current, onStatus }: Props) {
             row.id,
             row.available
               ? '구독 로그인 확인됨'
-              : errorLabels[row.reason ?? ''] || '로그인 또는 실행 상태를 확인하세요.',
+              : failureText(row.reason, row) ||
+                errorLabels[row.reason ?? ''] ||
+                '로그인 또는 실행 상태를 확인하세요.',
           ]),
         ),
       );

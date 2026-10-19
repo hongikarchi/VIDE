@@ -2,8 +2,8 @@
 id: PLAN-51
 title: 검증–수정 반복 루프 — 사용자 문장 시나리오·페르소나·스코어카드 (T-264~T-268)
 status: review
-version: 1.5
-updated: 2026-10-16
+version: 1.6
+updated: 2026-10-19
 owner: agent:claude
 related: [PRD, SPEC-00, SPEC-01, SPEC-02, SPEC-05, SPEC-06, SPEC-07, SPEC-12, SPEC-13, SPEC-15, PLAN-12, PLAN-14, PLAN-19, PLAN-45, PLAN-46, PLAN-47, PLAN-48, PLAN-16, PLAN-23, PLAN-24, PLAN-07, AC-22, AC-48, FR-25, T-012]
 ---
@@ -103,7 +103,7 @@ related: [PRD, SPEC-00, SPEC-01, SPEC-02, SPEC-05, SPEC-06, SPEC-07, SPEC-12, SP
 | T-304 도구: 페르소나 드라이버 스크롤 | `tools/persona/run.mjs`에 스크롤(휠) 동작이 없어, R1-B 7–12단계가 화면 밖 '9. Rhino에 만들기' 내용을 찾느라 같은 화면에서 무진전 4가 됐다. 스크롤 동작을 더하고, 제품 패널이 스크롤되는지 함께 가린다 | `tools/persona` 시험, L1 R1-B | 화면 밖 단계를 페르소나가 스크롤로 찾음, 제품 원인 여부 기록 · **R6: 등록** — `r6-R1-B/steps.jsonl` 7–12단계 |
 | T-305 P0 후보 S-06 '축선·배치' 실패·결과 0 | 원인 조사 먼저. 입력 조립 10 뒤에도 작업본의 '축선·배치'(`axes`)가 `failed`(395 ms)이고 이유가 기록되지 않았다. 기둥·평면·간섭은 `stale`, 거더·작은보 등은 0, `structure_summary` `STRUCTURE_NOT_COMPUTED`(라운드 5도 결과 0). 실패 이유 표시는 SPEC-07.12, 축선 입력은 SPEC-06에서 확인한 뒤 [PLAN-23](PLAN-23-s06-frame-jig.md) | `.vide/loop/r6/jig-s06-r6-after-t293.json`, L1 R1-D | 축선·배치가 계산되거나 실패 이유와 다음 행동이 화면에 보임 · **R6: 등록** |
 | T-360 P0 모델링 요청이 문장 속 부름말로 jig에 강제 진입 | SPEC-02.17의 1(0.68)에 모델링 말·jig 사양 말 규칙을 더하고 `src/ui/request-route.ts` `jigFor`·`declinesJig`, `/route`의 Jev jig 목록 비움(`src/server/server.ts`) | `tests/core/request-route.test.mjs` T-360 블록, 설치본에서 원문 재전송(라운드 7) | 원문이 jig 없이 파일 작업으로 가고 '구조 검토해줘'는 여전히 jig · **핫픽스(§5 R6 아래)** · **R7: 확인** — 0.2.40 설치본 `/route`에 원문 재전송 → `document`(Jev, 200 ms; 마지막 문장을 뺀 모델링 말만으로도 `document`), '구조 검토해줘'·'구조 검토하고 싶은데 파악해줘' → `project/s06-frame`, '모델링이랑 도면 맞춰줘' → `sync` |
-| T-361 P0 Codex CLI 판 범위 밖(0.163.0)으로 모든 Codex 요청 즉시 실패 | 이 PC의 Codex CLI가 2026-10-16 08:44 0.163.0으로 올라가 `src/ai/cli-compat.json`(≥0.157.0 <0.158.0) 밖이 됐다. [PLAN-24](PLAN-24-ai-conversations.md) T-059 절차대로 [SPIKE-2026-09-30](../tdd/SPIKE-2026-09-30-cli-session-resume.md) 0·④ 항목을 0.163에 다시 돌려 범위를 넓힌다. `CLI_VERSION_UNSUPPORTED` 문구에 발견한 판·허용 범위를 넣고(`src/ui/gateway.ts`, 오류의 `version`·`supported`) 설정 → AI 연결 행에도 같은 값을 보인다(SPEC-02 실패 문구) | 설치본에서 Codex 대화 1건(합성 요청), 범위 밖 판을 흉내 낸 단위 시험 | Codex 요청이 실행되고, 범위 밖일 때 문구에 판 번호·허용 범위가 보임 · **R7: 등록**([VERIFY 라운드 7](../tdd/VERIFY-2026-10-16-loop-round-7.md) F31) |
+| T-361 P0 Codex CLI 판 범위 밖(0.163.0)으로 모든 Codex 요청 즉시 실패 | 이 PC의 Codex CLI가 2026-10-16 08:44 0.163.0으로 올라가 `src/ai/cli-compat.json`(≥0.157.0 <0.158.0) 밖이 됐다. [PLAN-24](PLAN-24-ai-conversations.md) T-059 절차대로 [SPIKE-2026-09-30](../tdd/SPIKE-2026-09-30-cli-session-resume.md) 0·④ 항목을 0.163에 다시 돌려 범위를 넓힌다. `CLI_VERSION_UNSUPPORTED` 문구에 발견한 판·허용 범위를 넣고(`src/ui/gateway.ts`, 오류의 `version`·`supported`) 설정 → AI 연결 행에도 같은 값을 보인다(SPEC-02 실패 문구) | 설치본에서 Codex 대화 1건(합성 요청), 범위 밖 판을 흉내 낸 단위 시험 | Codex 요청이 실행되고, 범위 밖일 때 문구에 판 번호·허용 범위가 보임 · **R7: 등록**([VERIFY 라운드 7](../tdd/VERIFY-2026-10-16-loop-round-7.md) F31) · **2026-10-19: 재검증 합격(0·④·app-server, [SPIKE](../tdd/SPIKE-2026-09-30-cli-session-resume.md)) → 범위 ≥0.157.0 <0.164.0으로 확대(0.163.0 확인), 실패 문구·설정 행에 공급자·판·범위 표시(SPEC-02.18의 6), 단위 시험 통과. 설치본 확인은 다음 릴리스** |
 | T-362 P1 Rhino 읽기 전용 열림을 화면에 알리지 않음 | SPEC-01 연결 상태에 '읽기 전용으로 열림 · 저장 불가'를 더하고(`read-only-watch.ts`의 `document-read-only` 결과를 상태로), 연결 행 표시와 직접 적용 전 경고(Design 연결 행) | 합성 문서를 읽기 전용 속성으로 열어 행 표시·경고 확인 | 행에 표시, 적용 전 경고, 로그와 일치 · **R7: 등록**(F32) |
 | T-363 P1 자료 정리 예측 오차·issues 단계 비용 | 예측을 단계별(select·statements·issues·proposals)로 마지막 실행의 비율로 계산하고 issues 단계의 문장당 호출(약 3회)을 묶음 처리(`src/knowledge/collect/survey.ts`·`stages.ts`), SPEC-08.9 예측 문구 보완 | 나진상가 증분 실행 예측 vs 실측(예고 1분·4회 → 실측 6분 20초·65회; 첫 정리 예고 192분·1,840회 → 실측 103분·1,728회) | 예측 오차 ±50% 안, issues 호출 수 절반 이하 · **R7: 등록**(F33) |
 | T-364 P1 읽을 수 없는 폴더를 빈 폴더로 보고 문장 숨김 | `inventory.ts`의 readdir 실패 폴더는 '닿지 않음'으로 두고 그 아래 source를 removed로 바꾸지 않는다. 정리 결과에 '서버 폴더에 닿지 못함 n개' 표시(SPEC-08.9 실패 규칙) | 존재하지 않는 루트 하나를 섞은 합성 폴더로 숨김 0·안내 표시 확인 | 끊김 때 문장 수 변화 없음, 안내 표시 · **R7: 등록**(F34) |
@@ -393,7 +393,7 @@ related: [PRD, SPEC-00, SPEC-01, SPEC-02, SPEC-05, SPEC-06, SPEC-07, SPEC-12, SP
 - **동승·로그 결함:** **P0 T-361** — Codex CLI 0.163.0이 `cli-compat.json` 범위 밖이라 사용자의 15:40·15:41 요청이 즉시 실패했고 문구에 판 번호가 없다. P1 T-362(읽기 전용 알림)·T-366(취소 뒤 CLI 606 s 생존), P2 T-365(삭제 문구).
 - **도구:** `host-link.ps1 -OutDir` 상대 경로로 Rhino 1차 연결이 240 s 시간 초과(F38, 절대 경로화로 수정). `run.mjs --engine installed` route-only의 "no engine line" 경고는 T-266 메모(F39).
 - **가드:** 다른 프로젝트 Link 변경 0, 플러그인 등록 변경 0(0.2.40 그대로), 엔진 시작·정지 0, 사본 저장 0, 호스트 종료 확인.
-- **다음:** T-361은 SPIKE 재실행이 필요해 사용자 확인 뒤(구독 사용), T-362~T-366은 결정 항목(Q1~Q5·R-NN)과 함께 수정 웨이브 6으로. 라운드 7 나머지(페르소나·L1')는 수정 웨이브 6 뒤 0.2.41 설치본에서.
+- **다음:** T-361은 2026-10-19 재검증 합격·범위 확대·문구 수정 완료(설치본 확인은 다음 릴리스), T-362~T-366은 결정 항목(Q1~Q5·R-NN)과 함께 수정 웨이브 6으로. 라운드 7 나머지(페르소나·L1')는 수정 웨이브 6 뒤 0.2.41 설치본에서.
 
 ## 6. 하지 않는 것(1회차)
 

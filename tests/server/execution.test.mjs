@@ -252,6 +252,30 @@ test('provider failure and interrupted restart cannot become successful host wor
   assert.equal(workspace.get(project.id, input.id).state, 'interrupted');
   store.close();
 });
+test('a refused CLI version keeps the found version and range on the failed request (T-361)', async () => {
+  const { store, workspace, project, input } = fixture();
+  const execution = new Execution(workspace, {
+    providerFactory: () => ({
+      run: async () => {
+        throw {
+          code: 'CLI_VERSION_UNSUPPORTED',
+          provider: 'codex-cli',
+          version: '0.164.0',
+          supported: '>=0.157.0 <0.164.0',
+        };
+      },
+    }),
+  });
+  execution.start(workspace.submit(project.id, input).request);
+  await Promise.all([...execution.active.values()].map((x) => x.completion));
+  const saved = workspace.get(project.id, input.id);
+  assert.equal(saved.state, 'failed');
+  assert.equal(saved.result.code, 'CLI_VERSION_UNSUPPORTED');
+  assert.equal(saved.result.provider, 'codex-cli');
+  assert.equal(saved.result.version, '0.164.0');
+  assert.equal(saved.result.supported, '>=0.157.0 <0.164.0');
+  store.close();
+});
 test('cross-host references are read-only input and cannot become the wrong output baseline', () => {
   const { store, workspace, project, input } = fixture();
   try {
@@ -539,7 +563,12 @@ test('automatic provider availability excludes an authenticated incompatible CLI
       status: async () => ({ available: true }),
       checkVersion: async () => {
         if (provider === 'codex-cli')
-          throw Object.assign(Error('unsupported'), { code: 'CLI_VERSION_UNSUPPORTED' });
+          throw Object.assign(Error('unsupported'), {
+            code: 'CLI_VERSION_UNSUPPORTED',
+            provider,
+            version: '0.164.0',
+            supported: '>=0.157.0 <0.164.0',
+          });
         return '2.1.284';
       },
     }),
@@ -556,6 +585,9 @@ test('automatic provider availability excludes an authenticated incompatible CLI
       id: 'codex-cli',
       available: false,
       reason: 'CLI_VERSION_UNSUPPORTED',
+      provider: 'codex-cli',
+      version: '0.164.0',
+      supported: '>=0.157.0 <0.164.0',
     },
   );
 });

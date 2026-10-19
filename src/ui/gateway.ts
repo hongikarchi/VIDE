@@ -288,6 +288,21 @@ Object.assign(errors, {
   UNSUPPORTED_APPLICATION:
     '이 후보는 현재 원본 적용을 지원하지 않습니다. 후보 파일을 내려받거나 별도 Rhino 문서로 열어 작업을 이어가세요.',
 });
+const CLI_NAMES: Record<string, string> = { 'claude-cli': 'Claude Code', 'codex-cli': 'Codex' };
+/**
+ * The failure text of a code, with the details some codes carry: a refused CLI version names the
+ * provider, the found version and the verified range (T-361, SPEC-02.18 6).
+ */
+export function failureText(code: string | undefined, detail?: unknown): string | undefined {
+  if (!code) return undefined;
+  const d = (detail && typeof detail === 'object' ? detail : {}) as Record<string, unknown>;
+  if (code === 'CLI_VERSION_UNSUPPORTED' && typeof d.version === 'string') {
+    const name = CLI_NAMES[String(d.provider ?? d.id ?? '')] ?? 'AI CLI';
+    const range = typeof d.supported === 'string' ? `(${d.supported})` : '';
+    return `${name}의 판(${d.version})이 VIDE가 확인한 범위${range} 밖이라 실행하지 않았습니다. 확인된 판을 설치하거나 VIDE 업데이트를 기다리세요.`;
+  }
+  return errors[code];
+}
 function apiError(code: string, reason?: string, quiet = false) {
   if (!quiet && typeof window !== 'undefined')
     window.dispatchEvent(

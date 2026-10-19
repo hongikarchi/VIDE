@@ -2,10 +2,10 @@
 id: SPIKE-2026-09-30-cli-session-resume
 title: CLI 판 확인·캐시 토큰·세션 이어 실행 시험
 status: review
-version: 0.1
-updated: 2026-09-30
+version: 0.2
+updated: 2026-10-19
 owner: agent:claude
-related: [PLAN-24, T-059, ADR-021, ARCH-01, SPEC-02, RESEARCH-10, FR-25]
+related: [PLAN-24, T-059, T-361, ADR-021, ARCH-01, SPEC-02, RESEARCH-10, FR-25]
 ---
 
 # CLI 판 확인·캐시 토큰·세션 이어 실행 시험
@@ -211,3 +211,76 @@ T-061이 ④의 조건을 구현한 뒤 같은 질문을 제품 `CodexCli`로 �
   - Claude 세션도 같은 공통 지시를 쓴다. 같은 현상이 있는지 확인이 필요하다(`src/ai/agent-connection.ts`, 이 티켓의 수정 범위 밖).
 - **MCP 턴의 입력량.** vide MCP를 붙인 턴은 도구 정의와 code-mode 호스트 때문에 입력이 약 3.2만 토큰 늘었다(C2 증가분).
 - **정리.** 이 재시험이 만든 Codex 기록 파일 2개는 시험 뒤 지웠다. 상태 DB의 스레드 색인은 이전과 같이 남는다.
+
+## 0·④ 재시험(T-361, 2026-10-19, Codex 0.163.0)
+
+이 PC의 Codex CLI가 0.163.0(npm 전역)으로 올라가 `src/ai/cli-compat.json`의 범위(`>=0.157.0 <0.158.0`) 밖이 됐다. 범위를 넓히기 전에 항목 0과 ④, 그리고 [SPIKE-2026-09-30-codex-app-server](SPIKE-2026-09-30-codex-app-server.md)의 핵심 확인(격리·질문·승인 이벤트)을 0.163.0에서 다시 돌렸다. 범위 파일과 제품 코드는 이 재시험에서 바꾸지 않았다.
+
+### 실행 조건
+
+- Windows 11, Node 24.15. Codex CLI 0.163.0(`installedCodex()`의 npm 설치본), 기본 로그인 프로필, 기본 모델 `low`. 합성 문장만 보냈다.
+- 시험 스크립트·최소 MCP 서버는 저장소 밖 임시 폴더(`<scratch>/t361`)에 두었다. 스크립트는 제품 모듈(`src/ai/codex-cli.ts`, `src/ai/codex-app-server.ts`)을 node로 직접 import했다. 범위 확인만 넘기려고 `checkVersion()`을 `readVersion()`으로 바꾼 시험용 하위 클래스를 썼고, 나머지(인자 생성·`codexTurnIsolated`·이벤트 파서·app-server 격리 확인)는 제품 코드 그대로다.
+- 턴의 임시 작업 폴더(`vide-cli-*`)가 `<scratch>` 아래에 생기도록 `TMP`/`TEMP`를 `<scratch>/t361/runs`로 두었다.
+- 최소 MCP 서버는 도구 `query` 하나(nonce 반환), bearer 확인, 요청 수를 센다. 토큰은 64자 hex 임시값이며 명령줄에 나타나지 않았다(환경 변수 `VIDE_AGENT_TOKEN`).
+- 개발 엔진 경로는 쓰지 않았다. 엔진도 같은 `checkVersion()`을 거치므로 0.163.0에서는 실행 전에 `CLI_VERSION_UNSUPPORTED`로 거절된다(아래 0). 범위 파일을 바꾸지 않는 이 단계에서는 제품 공급자 클래스를 직접 실행하는 것이 가장 가까운 재현이다.
+- 모델 호출은 7회다. ④ 4회(첫 시도 C1은 시험 스크립트의 연결 값 형식 오류로 C2 전에 멈춰 다시 했다), app-server 3회. 빈 `CODEX_HOME` 실행 2회와 C4는 모델을 부르지 않는다.
+
+### 0. 판 확인과 인증 없음 신호
+
+- `codex --version` 출력 `codex-cli 0.163.0`을 제품 `readVersion()`이 `0.163.0`으로 읽었다. `supportedCliVersion('codex-cli', '0.163.0')`은 `false`다.
+- 제품 `CodexCli.run()`과 `CodexAppServer.run()`은 둘 다 `--version` 한 번 뒤 `CLI_VERSION_UNSUPPORTED`(`version: 0.163.0`, `supported: >=0.157.0 <0.158.0`)로 거절했다. 로그인 확인과 모델 실행은 일어나지 않았다.
+- 빈 `CODEX_HOME`으로 제품 `codexArguments()` 인자의 `codex exec`를 실행하면 exit 1이다. `error` 이벤트가 `Reconnecting... n/5`를 반복하고(WebSocket 5회 뒤 HTTPS 5회) `turn.failed`로 끝난다. 문구는 0.157.1과 같은 `unexpected status 401 Unauthorized: Missing bearer or basic authentication in header`이고 `MODE_CHANGED`가 일치한다. `CLI_MODE_CHANGED` 분류에는 영향이 없다.
+- 0.163.0이 새로 내는 것: `turn.started` 전에 `item.completed`(item `type: "error"`) 경고 항목이 온다. 내용은 `tools.view_image`를 모르는 설정으로 무시한다는 경고(2회), 개발 중 기능 `skip_host_skill_discovery` 경고, `code_mode_host`를 끈 실행에서 "Code Mode is unavailable … fail closed" 경고, WebSocket에서 HTTPS로의 전환 안내다. 제품 파서는 `error` 항목을 `provider-warning` 진행 신호로만 보내고 실패로 세지 않으므로 정상 턴에는 영향이 없다. 실패한 턴의 `failureText`에는 이 경고 문구가 함께 들어간다.
+
+### ④ 결과
+
+| 턴 | 인자 | MCP 연결 / 도구 호출 | 응답 | 입력 누적 / 캐시 읽기 누적 |
+|---|---|---|---|---|
+| C1 여는 턴 | `exec --json … --sandbox read-only`, `mcp_servers={}` | 0 / 0 | `READY` | 12,320 / 4,096 |
+| C2 resume | `exec resume <thread> … -c sandbox_mode="read-only"`, vide MCP(`enabled_tools=["query"]`), `code_mode`·`code_mode_host` 켬 | HTTP 4회(initialize 1, tools/list 1, tools/call 1) / 1 | `NONCE-4821 MAPLE-7` | 37,906 / 28,800 |
+| C3 resume | `mcp_servers={}` | 0 / 0 | `NONE MAPLE-7` | 51,099 / 41,472 |
+| C4 resume | 없는 thread ID | 0 / 0 | `SESSION_LOST` | — |
+
+- 세 턴 모두 `codexTurnIsolated()`가 참이었고 같은 thread ID를 보고했다. resume 턴의 결과에는 `usageScope: 'session'`이 붙었다(사용량은 여전히 세션 누적값).
+- 기록 파일의 `turn_context` 세 개 모두 `approval_policy: never`, `sandbox_policy: {type: read-only}`, `permission_profile`의 파일 시스템 읽기 전용·네트워크 제한, 그 턴의 작업 폴더였다. 턴별 입력은 `last_token_usage`로 12,320 → 12,720 → 12,866 → 13,193이다.
+- C2의 도구 호출은 code mode의 `exec` 도구(`custom_tool_call`) 안에서 `vide` `query`를 한 번 부른 것이다. 셸 도구 호출은 없었다. 기록 파일에 토큰은 남지 않았다.
+- C1의 코드 단어를 C2·C3 모두 기억했다. C4의 없는 thread는 제품이 `SESSION_LOST`로 분류했다.
+- 0.163.0의 `turn_context`에는 `permission_profile`, `approvals_reviewer`, `cyber_access_program`(`standard`) 같은 필드가 새로 보인다. 제품은 이 기록을 읽지 않으므로 영향이 없다.
+
+### app-server 확인
+
+제품 `CodexAppServer`(인자 `appServerArguments()`, `appServerIsolated()` 참)로 프로세스를 띄웠다. 세 경우 모두 `initialize` → `initialized` → `config/read` → `thread/start` → `mcpServerStatus/list` → `turn/start`가 통과했고, 제품의 스레드 응답·MCP 상태 격리 확인(`threadResponseIsolated`, `mcpStatusIsolated`)에서 `UNEXPECTED_TOOL_ACCESS`가 나지 않았다.
+
+| 경우 | 설정 | 받은 서버 요청 | 응답 | 시간 |
+|---|---|---|---|---|
+| A1 일반 | 단발, 도구 없음 | 없음 | `PONG` | 3.8초 |
+| A2 질문 | 세션 여는 턴, `onQuestion` 처리기 | `item/tool/requestUserInput` → 카드 1장(선택지 Red·Blue, 자유 답 허용), 답 뒤 `serverRequest/resolved` | `Blue`(고른 답) | 5.4초 |
+| A3 작업 폴더 | `builtinTools.files`(빈 폴더), 승인 `untrusted` | `item/commandExecution/requestApproval` 1회 → 처리기에 `Bash`(command·cwd), 허용 뒤 `serverRequest/resolved` | `DONE`, 폴더에 `hello.txt`(`hi`) 생성 | 8.2초 |
+
+- 알림 이름 `turn/started`, `item/started`, `item/completed`, `thread/tokenUsage/updated`, `turn/completed`가 그대로다. 새로 보이는 알림은 `remoteControl/status/changed`, `account/updated`, `thread/status/changed`, `warning`, `turn/moderationMetadata`, `account/rateLimits/updated`, `thread/readState/changed`, `item/agentMessage/delta`이며 제품은 모르는 알림을 무시한다.
+- `codex app-server generate-ts --experimental`로 뽑은 0.163.0 프로토콜에 제품이 쓰는 메서드가 모두 있다: `initialize`, `initialized`, `config/read`, `thread/start`, `thread/resume`, `thread/unsubscribe`, `mcpServerStatus/list`, `turn/start`, `turn/interrupt`, `item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, `item/permissions/requestApproval`, `item/tool/requestUserInput`, `serverRequest/resolved`, `account/rateLimits/read`.
+- 스레드 전환(E: `thread/unsubscribe` → `thread/resume`)과 질문 중 `turn/interrupt`(C)는 실제 호출로 다시 하지 않았다. 메서드는 프로토콜에 그대로 있다.
+
+### 변경 조사(0.158.0~0.163.0)
+
+- `codex exec --help`, `codex exec resume --help`, `codex app-server --help`: 제품이 넘기는 `--json`, `--ephemeral`, `--ignore-user-config`, `--ignore-rules`, `--skip-git-repo-check`, `--sandbox`(exec만), `-c`, `--enable`, `--disable`, `--model`, `--image`, `--output-schema`, `--listen`이 모두 있다. `exec resume`에는 여전히 `--sandbox`가 없다.
+- `codex features list`: 제품이 끄는 16개(`shell_tool` … `shell_snapshot`)와 켜는 `skip_host_skill_discovery`, `default_mode_request_user_input`, `code_mode`, `code_mode_host`가 모두 알려진 기능 이름이다(제거됨 없음).
+- 공개 릴리스 노트(GitHub `rust-v0.158.0`~`rust-v0.163.0`)에서 `exec`·`exec resume` 인자, JSONL 이벤트 이름, app-server 메서드 이름의 제거·이름 변경은 찾지 못했다. 관련 변경은 다음과 같다.
+  - 0.163.0: patched `zsh` 셸 백엔드 제거(옛 셸 플래그에 이전 안내), Daybreak 기본 켬(`cyber_access_program`), 읽기 전용 도구 병렬 실행, cold resume 때 스레드 권한 복원.
+  - 0.162.0: 기록의 turn context에서 쓰지 않는 필드 제거, 명령 출력 `aggregated_output`로 통합.
+  - 0.161.0: thread resume가 최신 기록을 포함, `exec --cyber-access-program` 추가, app-server 프로토콜이 모르는 오류 종류를 받음.
+  - 0.159.0: app-server 스레드 기록 페이지 넘김 추가.
+- npm 패키지에는 CHANGELOG가 없다.
+
+### 판정
+
+- **0: 합격.** 판 읽기·범위 밖 거절·인증 없음 신호(`CLI_MODE_CHANGED`)가 0.157.1과 같다.
+- **④: 합격.** 턴마다 읽기 전용 sandbox, 그 턴에 허용한 MCP만 연결·호출, 앞 턴 코드 단어 기억, 없는 thread는 `SESSION_LOST`.
+- **app-server: 합격.** 핸드셰이크·한 턴·질문(`item/tool/requestUserInput`)·승인(`item/commandExecution/requestApproval`) 이벤트 이름이 기록과 같고 제품 격리 확인을 통과했다. 스레드 전환·질문 중 interrupt는 다시 호출하지 않았다.
+- 경고 항목(`item.completed` type `error`)이 늘었으나 제품 파서는 경고로만 다룬다. 범위를 `<0.164.0`까지 넓히는 판단 근거로 쓸 수 있다.
+- **적용(같은 날, T-361):** `src/ai/cli-compat.json`의 codex-cli를 `>=0.157.0 <0.164.0`으로 넓히고 `verified`에 0.163.0을 더했다. 범위 밖 문구에는 공급자·발견한 판·허용 범위가 들어간다([PLAN-51](../plans/PLAN-51-verify-loop.md) T-361).
+
+### 정리
+
+- 이 재시험이 만든 Codex 기록 파일 3개(첫 시도 C1, C1~C3 세션, A2 세션)는 `removeCodexTranscript()`로 지웠다. A1·A3는 단발(`ephemeral`)이라 기록 파일이 없다. 상태 DB의 스레드 색인은 이전과 같이 남는다.
+- `<scratch>/t361` 아래의 빈 `CODEX_HOME`, 작업 폴더, 프로토콜 생성물은 지웠다. 띄운 codex 프로세스는 모두 끝났고(시험 전부터 있던 다른 codex·node 프로세스만 남음) 설치된 VIDE 엔진은 건드리지 않았다.

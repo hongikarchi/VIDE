@@ -4,7 +4,7 @@
 // status-lines.tsx, settings-dialog.tsx, connection-banner.tsx) draw them.
 import { waitingOf } from '../../contracts/request-scope.ts';
 import { executionLimits } from '../../contracts/execution-limits.ts';
-import { errors, labels, api } from '../gateway.ts';
+import { failureText, labels, api } from '../gateway.ts';
 import { showExecutionLimits } from '../execution-limits.tsx';
 import { initializeWorkspaceStatus } from '../workspace-status.ts';
 import { element as $ } from '../elements.ts';
@@ -174,7 +174,7 @@ export function paintStatus() {
         id: entry.id,
         title: (entry.body || '작업').slice(0, 120),
         reason:
-          errors[entry.request?.result?.code || ''] ||
+          failureText(entry.request?.result?.code, entry.request?.result) ||
           labels[entry.request?.state ?? ''] ||
           String(entry.request?.state),
         code: entry.request?.result?.code,

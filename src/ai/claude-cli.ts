@@ -900,6 +900,7 @@ export class ClaudeCli {
     if (!supportedCliVersion(this.provider, entry.version)) {
       const range = cliCompat[this.provider];
       throw Object.assign(error('CLI_VERSION_UNSUPPORTED'), {
+        provider: this.provider,
         version: entry.version,
         supported: `>=${range.minimum} <${range.below}`,
       });

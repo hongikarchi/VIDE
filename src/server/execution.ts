@@ -212,6 +212,14 @@ const errorSchema = z
   .object({ code: z.string().optional(), intent: z.record(z.string(), z.unknown()).optional() })
   .passthrough();
 const errorData = (cause: unknown) => errorSchema.safeParse(cause).data ?? {};
+/** The found CLI version and the verified range of a refused CLI, for its failure text (T-361). */
+function versionDetail(cause: unknown) {
+  const { code, provider, version, supported } = errorData(cause) as Record<string, unknown>;
+  if (code !== 'CLI_VERSION_UNSUPPORTED') return {};
+  return Object.fromEntries(
+    Object.entries({ provider, version, supported }).filter(([, v]) => typeof v === 'string'),
+  ) as { provider?: string; version?: string; supported?: string };
+}
 
 import { claudeExecutable, codexExecutable } from '../ai/paths.ts';
 import { createProvider } from '../ai/providers.ts';
@@ -1061,6 +1069,7 @@ export class Execution {
             id: provider,
             available: false,
             reason: errorData(error).code || 'CLI_UNAVAILABLE',
+            ...versionDetail(error),
           };
         }
       }),
@@ -1892,6 +1901,7 @@ export class Execution {
             ? error.partial
             : {}),
           code: error.code || 'EXECUTION_FAILED',
+          ...versionDetail(cause),
           hostExecuted: false,
         },
       );

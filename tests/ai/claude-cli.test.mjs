@@ -216,7 +216,9 @@ test('검증한 판 범위(cli-compat.json)와 판 비교', () => {
   assert.ok(!supportedCliVersion('claude-cli', '2.2.0-beta.1'));
   assert.ok(supportedCliVersion('codex-cli', 'codex-cli 0.157.1'));
   assert.ok(!supportedCliVersion('codex-cli', '0.157.0-alpha.3'));
-  assert.ok(!supportedCliVersion('codex-cli', '0.158.0-alpha.1'));
+  assert.ok(supportedCliVersion('codex-cli', 'codex-cli 0.163.0'));
+  assert.ok(!supportedCliVersion('codex-cli', '0.164.0-alpha.1'));
+  assert.ok(!supportedCliVersion('codex-cli', '0.164.0'));
   assert.ok(!supportedCliVersion('codex-cli', 'unknown'));
   assert.equal(compareVersions('0.154.0-alpha.6.2', '0.154.0'), -1);
   assert.equal(compareVersions('0.154.0-alpha.10', '0.154.0-alpha.6.2'), 1);

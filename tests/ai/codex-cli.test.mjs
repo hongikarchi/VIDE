@@ -14,6 +14,7 @@ import {
 } from '../../src/ai/codex-cli.ts';
 import { configureAgentArguments } from '../../src/ai/agent-connection.ts';
 import { createProvider, providerCatalog } from '../../src/ai/providers.ts';
+import { errors, failureText } from '../../src/ui/gateway.ts';
 const context = {
   goal: '합성 요청',
   revision: 3,
@@ -202,18 +203,46 @@ test('취소는 실제 종료 확인과 구분하고 공급자 선택에 자동 
   });
 });
 test('범위 밖 Codex 판은 실행하지 않는다', async () => {
-  const transport = fake(success, 'Logged in using ChatGPT', 'codex-cli 0.158.0');
+  const transport = fake(success, 'Logged in using ChatGPT', 'codex-cli 0.164.0');
   await assert.rejects(
     new CodexCli({
       executable: resolve('fake-codex-newer.exe'),
       spawnProcess: transport.spawnProcess,
     }).run(context),
-    { code: 'CLI_VERSION_UNSUPPORTED', supported: '>=0.157.0 <0.158.0' },
+    { code: 'CLI_VERSION_UNSUPPORTED', version: '0.164.0', supported: '>=0.157.0 <0.164.0' },
   );
   assert.deepEqual(
     transport.calls.map((call) => call.args[0]),
     ['--version'],
   );
+});
+test('범위 밖 판의 실패 문구에 공급자·판 번호·허용 범위가 들어간다 (T-361)', async () => {
+  const transport = fake(success, 'Logged in using ChatGPT', 'codex-cli 0.164.0');
+  const refused = await new CodexCli({
+    executable: resolve('fake-codex-wording.exe'),
+    spawnProcess: transport.spawnProcess,
+  })
+    .run(context)
+    .then(
+      () => assert.fail('ran'),
+      (error) => error,
+    );
+  assert.equal(refused.provider, 'codex-cli');
+  const text = failureText(refused.code, refused);
+  assert.match(text, /Codex/);
+  assert.match(text, /0\.164\.0/);
+  assert.match(text, />=0\.157\.0 <0\.164\.0/);
+  // The settings row carries the provider as its id.
+  assert.match(
+    failureText('CLI_VERSION_UNSUPPORTED', {
+      id: 'claude-cli',
+      version: '2.2.0',
+      supported: '>=2.1.284 <2.2.0',
+    }),
+    /^Claude Code의 판\(2\.2\.0\)이 VIDE가 확인한 범위\(>=2\.1\.284 <2\.2\.0\) 밖/,
+  );
+  // No version known (unreadable --version): the plain text stays.
+  assert.equal(failureText('CLI_VERSION_UNSUPPORTED', {}), errors.CLI_VERSION_UNSUPPORTED);
 });
 test('인증 없이 나간 요청(401 Missing bearer)은 CLI_MODE_CHANGED로 멈춘다', async () => {
   // Shape collected from `codex exec` without credentials on 0.157.1 (SPIKE-2026-09-30 §0).
