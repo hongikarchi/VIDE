@@ -12,6 +12,14 @@ export interface DirectRefusal {
   final: boolean;
 }
 
+/**
+ * A document Rhino opened read-only (T-362, SPEC-01.11 3): the link row and the panel status
+ * line, and the note on a direct edit's result card (the edit itself is not stopped by VIDE).
+ */
+export const READ_ONLY_STATUS = '읽기 전용으로 열림 · 저장 불가';
+export const READ_ONLY_SAVE_NOTICE =
+  '이 문서는 읽기 전용으로 열려 있어 Rhino에서 저장할 수 없습니다. 다른 이름으로 저장하거나 Rhino를 완전히 닫고 다시 여세요.';
+
 const hostLabel = (host: DirectHostName) => (host === 'zwcad' ? 'ZWCAD' : 'Rhino');
 const reconnect = (host: DirectHostName) =>
   `연결한 문서가 닫혔거나 바뀌어 실행하지 않았습니다. ${hostLabel(host)}에서 문서를 다시 연결한 뒤 요청하세요.`;

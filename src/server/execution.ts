@@ -175,6 +175,11 @@ interface Options {
    * connected and the project is on; every turn's answer passes the legal citation gate.
    */
   legal?: LegalService;
+  /**
+   * The attached Rhino document was last seen read-only (T-362); default: the Rhino editor
+   * connections of `sdk`.
+   */
+  documentReadOnly?: (target: { instance: string; documentId: number }) => boolean | undefined;
 }
 const pinsSchema = z.array(
   z
@@ -362,6 +367,7 @@ export class Execution {
       questions,
       web,
       legal,
+      documentReadOnly,
       selectContext: choose = (body, candidates) =>
         selectContext(body, candidates, { key: () => '' }),
     }: Options = {},
@@ -390,7 +396,9 @@ export class Execution {
     this.questions = questions;
     this.web = web;
     this.legal = legal;
+    this.documentReadOnly = documentReadOnly;
   }
+  private readonly documentReadOnly?: Options['documentReadOnly'];
   private readonly legal?: LegalService;
   private readonly web?: Options['web'];
   /** AI 웹 검색 is on (an unreadable setting counts as off). */
@@ -1365,6 +1373,8 @@ export class Execution {
       host = jigReview ? undefined : this.hosts[target];
     this.workspace.update(projectId, id, 'running');
     let hostIntent: Record<string, unknown> | undefined;
+    /** A direct edit of a document Rhino opened read-only (T-362): the result card says so. */
+    let readOnlyNote: { documentReadOnly: true } | undefined;
     let turn: Turn | undefined;
     try {
       if (input.applyToSource && (!this.sdk || !this.applyAttached))
@@ -1573,6 +1583,15 @@ export class Execution {
       const origin =
         typeof this.tools?.origin === 'function' ? this.tools.origin() : this.tools?.origin;
       if (direct && previous && this.tools && origin) {
+        // Not stopped: Rhino refuses an execute itself; the card adds how to save it (SPEC-01.11 3).
+        if (
+          runMode !== 'plan' &&
+          direct.host === 'rhino' &&
+          (this.documentReadOnly ?? ((target) => this.sdk?.editors?.readOnly?.(target)))(
+            direct.target,
+          )
+        )
+          readOnlyNote = { documentReadOnly: true };
         const result = await runDirectTurn({
           input,
           mode: runMode,
@@ -1631,11 +1650,11 @@ export class Execution {
             ),
           update: (progress) => {
             if (progress.phase === 'host') hostIntent = progress;
-            this.workspace.update(projectId, id, 'running', progress);
+            this.workspace.update(projectId, id, 'running', { ...progress, ...readOnlyNote });
           },
           onExecution: (record) => this.ledgerExecution(request, record),
         });
-        this.settleModes(request, result, false);
+        this.settleModes(request, { ...result, ...readOnlyNote }, false);
         return;
       }
       if (sdk) {
@@ -1900,6 +1919,7 @@ export class Execution {
           typeof error.partial === 'object'
             ? error.partial
             : {}),
+          ...readOnlyNote,
           code: error.code || 'EXECUTION_FAILED',
           ...versionDetail(cause),
           hostExecuted: false,

@@ -64,6 +64,21 @@ export class EditorSessions {
   private attached = new Map<string, Worker>();
   /** Sees every attached document snapshot (read-only log, T-087); its errors never reach a read. */
   observe?: (target: HostTarget, snapshot: { readOnly?: boolean; name?: string }) => void;
+  /**
+   * Attached documents Rhino last reported as read-only (T-362, SPEC-01.11 3): set by a snapshot
+   * or a DOCUMENT_READ_ONLY refusal, cleared by a snapshot that says writable.
+   */
+  private readOnlyDocs = new Set<string>();
+  /** The attached document was last seen read-only (cannot be saved in Rhino). */
+  readOnly(target: HostTarget) {
+    return this.readOnlyDocs.has(target.instance + '|' + target.documentId);
+  }
+  private markReadOnly(target: HostTarget, readOnly: boolean | undefined) {
+    if (readOnly === undefined) return;
+    const key = target.instance + '|' + target.documentId;
+    if (readOnly) this.readOnlyDocs.add(key);
+    else this.readOnlyDocs.delete(key);
+  }
   constructor(options: Options) {
     this.options = options;
   }
@@ -185,6 +200,9 @@ export class EditorSessions {
           modified: snapshot.modified,
           host: 'rhino',
           connection: external ? 'attached-editor' : 'owned-editor',
+          ...(this.readOnly({ instance, documentId: snapshot.documentId })
+            ? { readOnly: true }
+            : {}),
           ...('generation' in snapshot
             ? {
                 ...(snapshot.path ? { path: snapshot.path } : {}),
@@ -232,6 +250,7 @@ export class EditorSessions {
     target: HostTarget,
     read: T,
   ) {
+    this.markReadOnly(target, read.source.readOnly);
     try {
       this.observe?.(target, read.source);
     } catch {
@@ -313,7 +332,13 @@ export class EditorSessions {
     return this.get(target);
   }
   async directExecute(target: HostTarget, input: DirectExecuteInput) {
-    return (await this.attachedWorker(target)).directExecute(input);
+    try {
+      return await (await this.attachedWorker(target)).directExecute(input);
+    } catch (error) {
+      if ((error as { code?: unknown } | null)?.code === 'DOCUMENT_READ_ONLY')
+        this.markReadOnly(target, true);
+      throw error;
+    }
   }
   /** An official read template in an attached document (PLAN-49 T-251): writes nothing. */
   async directRead(target: HostTarget, code: string) {

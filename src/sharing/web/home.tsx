@@ -319,16 +319,24 @@ export function Home({
                   </button>
                   {!shared ? (
                     confirmDelete === project.id ? (
-                      <button
-                        role="menuitem"
-                        className="danger"
-                        onClick={() => void remove(project)}
-                      >
-                        목록에서 삭제 확인
-                      </button>
+                      <>
+                        {/* What the delete removes and keeps (SPEC-01.1 프로젝트 삭제, T-365). */}
+                        <p className="card-menu-note">
+                          지우는 것: 이 PC의 프로젝트 데이터·자료 DB·기록
+                          <br />
+                          남는 것: 사이트의 공유 자료·구성원 노트, 작업 폴더의 파일
+                        </p>
+                        <button
+                          role="menuitem"
+                          className="danger"
+                          onClick={() => void remove(project)}
+                        >
+                          이 PC에서 삭제 확인
+                        </button>
+                      </>
                     ) : (
                       <button role="menuitem" onClick={() => setConfirmDelete(project.id)}>
-                        목록에서 삭제…
+                        이 PC에서 삭제…
                       </button>
                     )
                   ) : null}

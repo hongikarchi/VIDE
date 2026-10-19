@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
 import { iconSvg } from './inspector.ts';
+import { READ_ONLY_STATUS } from '../contracts/direct-refusal.ts';
 
 // The project's linked files (SPEC-01.11, Design §03): files linked from the Rhino/ZWCAD plugins,
 // shown together in one space. Each row: visibility, status, last Sync, forced Sync, removal.
@@ -28,6 +29,8 @@ export const linkRowSchema = z.object({
       units: z.string(),
       modified: z.boolean().nullable(),
       hostBusy: z.boolean(),
+      /** Rhino opened it read-only: '읽기 전용으로 열림 · 저장 불가' (T-362). */
+      readOnly: z.boolean().optional(),
     })
     .nullable(),
   lastSync: z.object({ requestId: z.string(), at: z.string().optional() }).nullable(),
@@ -485,6 +488,7 @@ function LinkList(props: Props) {
                     ? ` · 동기화 ${time(link.lastSync.at)}`
                     : ' · 동기화 전'}
                 {connection ? ` · ${connection.objectCount.toLocaleString()}개` : ''}
+                {connection?.readOnly && !file ? ` · ${READ_ONLY_STATUS}` : ''}
                 {note ? ` · ${note}` : link.lastError ? ` · 동기화 실패` : ''}
               </span>
             </button>

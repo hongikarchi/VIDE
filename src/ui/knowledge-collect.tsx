@@ -29,6 +29,7 @@ interface CollectState {
     unread: Record<string, number>;
     data?: number;
     capped?: { files: number; excerpts: number };
+    unreachable?: { folders: number; documents: number };
     statements: number;
     issues: number;
     proposals: number;
@@ -51,7 +52,16 @@ interface Survey {
     other: number;
     excluded: number;
   };
-  estimate: { excerpts: number; filterCalls: number; minutes: number };
+  estimate: {
+    excerpts: number;
+    filterCalls: number;
+    minutes: number;
+    /** By stage and in all (T-363); an older engine sends only the filter calls. */
+    calls?: number;
+    stages?: { select: number; statements: number; issues: number; proposals: number };
+    /** False: no run measured yet (first-run constants). */
+    measured?: boolean;
+  };
   heavy: { path: string; files: number; excerpts: number }[];
   exclude: string[];
 }
@@ -82,9 +92,22 @@ const kindsOf = (survey: Survey) =>
   joined(KINDS.map(([kind, label]) => [label, survey.read.byKind[kind] ?? 0]));
 const skippedOf = (survey: Survey) =>
   joined(SKIPPED.map(([key, label]) => [label, survey.skipped[key]]));
-const estimateOf = (survey: Survey) =>
-  `발췌 약 ${num(survey.estimate.excerpts)}개 · 걸러내기 AI 호출 약 ${num(survey.estimate.filterCalls)}번` +
-  (survey.estimate.filterCalls ? ` · 약 ${num(Math.max(1, survey.estimate.minutes))}분` : '');
+/** '발췌 약 n개 · 약 N분 · AI 호출 약 M회(단계: 고르기 a · 문장 b · 이슈 c)' (SPEC-08.9 6, T-363). */
+const estimateOf = ({ estimate }: Pick<Survey, 'estimate'>) => {
+  const stages = estimate.stages;
+  const calls = estimate.calls ?? estimate.filterCalls;
+  const excerpts = `발췌 약 ${num(estimate.excerpts)}개`;
+  if (!calls) return `${excerpts} · AI 호출 없음`;
+  const parts = stages
+    ? `(단계: 고르기 ${num(stages.select)} · 문장 ${num(stages.statements)} · 이슈 ${num(stages.issues)}` +
+      (stages.proposals ? ` · 할 일 ${num(stages.proposals)}` : '') +
+      ')'
+    : '';
+  return (
+    `${excerpts} · 약 ${num(Math.max(1, estimate.minutes))}분 · AI 호출 약 ${num(calls)}회${parts}` +
+    (estimate.measured === false ? ' · 첫 정리라 오차가 큼' : '')
+  );
+};
 
 const STAGES: Record<string, string> = {
   list: '파일 목록 확인',
@@ -365,6 +388,12 @@ export function KnowledgeCollect({
           {state.counts.capped?.files
             ? ` · 상한으로 뺀 발췌 ${num(state.counts.capped.excerpts)}(파일 ${num(state.counts.capped.files)})`
             : ''}
+        </p>
+      ) : null}
+      {state.counts?.unreachable?.folders && !isRunning ? (
+        <p className="dash-collect-counts" role="status">
+          폴더 {num(state.counts.unreachable.folders)}개에 닿지 못해 그 아래 문서{' '}
+          {num(state.counts.unreachable.documents)}개는 지난 상태 그대로입니다.
         </p>
       ) : null}
       {state.state === 'stopped' ? <p className="dash-collect-counts">중단했습니다.</p> : null}

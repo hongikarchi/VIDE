@@ -167,6 +167,8 @@ try {
           executionMode: 'direct',
           appliedDirectly: false,
           text: '문서가 읽기 전용이라 실행하지 않았습니다.',
+          // T-362: Rhino opened the document read-only; the card says how to save it.
+          documentReadOnly: true,
           executions: [],
           refused: {
             code: 'DOCUMENT_READ_ONLY',
@@ -484,6 +486,10 @@ try {
     /CAD 프로그램 결과 확인 필요|확인되지 않았습니다/,
   );
   assert.equal(await work().locator('.direct-execution').count(), 0);
+  assert.equal(
+    await work().locator('.direct-read-only').textContent(),
+    '이 문서는 읽기 전용으로 열려 있어 Rhino에서 저장할 수 없습니다. 다른 이름으로 저장하거나 Rhino를 완전히 닫고 다시 여세요.',
+  );
 
   // 계획: the AI plans without writing; [진행] continues in 자동 and opens that work.
   await modeButton('plan').click();

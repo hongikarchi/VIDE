@@ -772,6 +772,9 @@ export class ClaudeCli {
     firstOutputAt?: number;
     /** The turn ran in a process kept from an earlier turn (ADR-028). */
     processReused?: boolean;
+    /** When a stop (cancel, time-out, failure) was asked, and how long the process took to exit after it (T-366). */
+    stopAt?: number;
+    stopExitMs?: number;
   } = {};
   constructor({
     executable,
@@ -1240,6 +1243,7 @@ export class ClaudeCli {
           clock.stop();
           asking.abort();
           progress({ state: 'stopping', reason });
+          this.timing.stopAt = Date.now();
           void killOwnedProcess(processChild);
           grace = setTimeout(() => {
             // Preserve the working directory if an unconfirmed process may still use it.
@@ -1385,6 +1389,8 @@ export class ClaudeCli {
           if (stopReason) progress({ state: 'stopped', reason: stopReason });
         });
         processChild.once('close', (code) => {
+          if (this.timing.stopAt !== undefined)
+            this.timing.stopExitMs = Math.max(0, Date.now() - this.timing.stopAt);
           const tail = buffer + decoder.end();
           if (!stopReason && tail.trim()) parse(tail);
           if (stopReason) return finish(error(stopReason));

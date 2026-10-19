@@ -4286,7 +4286,8 @@ body[data-workspace='context'] .workspace > .jig-dialog {
   color: var(--warn);
 }
 /* An execute the host refused before running (read-only document, busy host): nothing changed. */
-.direct-refused {
+.direct-refused,
+.direct-read-only {
   margin: 6px 0 0;
   padding: 6px 8px;
   border: var(--hairline) solid var(--warn);

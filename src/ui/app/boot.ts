@@ -8,6 +8,7 @@ import {
   hostSelectionSchema,
 } from '../../contracts/host-documents.ts';
 import { setTheme } from '../theme.ts';
+import { READ_ONLY_STATUS } from '../../contracts/direct-refusal.ts';
 import { renderLinkCard, renderPanelHeader } from '../host-panel.tsx';
 import { element as $, readableError } from '../elements.ts';
 import { api, connect, errors, projectSchema, sharedProjectList } from '../gateway.ts';
@@ -291,6 +292,8 @@ export async function pollHostLink() {
             })
           : '동기화 필요',
         `${item.objectCount.toLocaleString()}개`,
+        // T-362: Rhino opened the document read-only (only Rhino reports it).
+        ...(item.readOnly ? [READ_ONLY_STATUS] : []),
       ].join(' · ');
       // Rhino reports its selection with the document; CAD is asked separately.
       const selection =

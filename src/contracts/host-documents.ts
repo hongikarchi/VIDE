@@ -21,6 +21,8 @@ export const hostDocumentsSchema = z.object({
       units: z.string(),
       objectCount: z.number().int().nonnegative(),
       modified: z.boolean().nullable(),
+      /** Rhino opened it read-only: it cannot be saved in place (T-362, SPEC-01.11 3). */
+      readOnly: z.boolean().optional(),
       host: z.enum(['rhino', 'zwcad']).optional(),
       connection: z.enum(['attached-editor', 'owned-editor']).optional(),
       generation: z.number().int().nonnegative().optional(),

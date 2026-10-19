@@ -186,6 +186,11 @@ export interface Listed {
 export interface Walked {
   files: Listed[];
   skipped: { generated: string[]; env: string[]; excluded: string[] };
+  /**
+   * Folders that could not be listed (T-364): access denied, a share that dropped, a busy folder,
+   * or a project folder that is not there. Their files keep their last state.
+   */
+  unreachable: string[];
 }
 /** True for a path inside (or equal to) one of the folders the person left out of 자료 정리. */
 export const excludedBy = (folders: readonly string[]) => {
@@ -207,8 +212,12 @@ async function walk(
   let entries;
   try {
     entries = await readdir(folder, { withFileTypes: true });
-  } catch {
-    return; // An unreadable folder is skipped.
+  } catch (err) {
+    // A folder its parent just listed but that is gone now was deleted: its files are removed.
+    // Any other failure (and a project folder itself not found) means "not reached" (T-364).
+    if (top || (err as NodeJS.ErrnoException)?.code !== 'ENOENT')
+      out.unreachable.push(recordedPath(root, folder));
+    return;
   }
   if (!top && isEnvironment(entries.map((e) => e.name))) {
     out.skipped.env.push(recordedPath(root, folder));
@@ -237,13 +246,17 @@ export async function listFiles(
   exclude: readonly string[] = [],
   signal?: AbortSignal,
 ): Promise<Walked> {
-  const out: Walked = { files: [], skipped: { generated: [], env: [], excluded: [] } };
+  const out: Walked = {
+    files: [],
+    skipped: { generated: [], env: [], excluded: [] },
+    unreachable: [],
+  };
   const excluded = excludedBy(exclude);
   const seen = new Set<string>();
   for (const folder of roots.folders) {
     // A folder under the root is named from the root; one outside it from itself.
     const base = isInside(roots.root, folder) ? roots.root : folder;
-    const one: Walked = { files: [], skipped: out.skipped };
+    const one: Walked = { files: [], skipped: out.skipped, unreachable: out.unreachable };
     await walk(roots.root, base, folder, denied, excluded, one, true, signal);
     for (const item of one.files)
       if (!seen.has(fold(item.rel))) {
@@ -271,13 +284,18 @@ export interface InventoryResult {
   returned: number;
   /** Folders not walked, by reason. */
   skipped: { generated: number; env: number; excluded: number };
+  /**
+   * Folders that could not be listed (recorded paths) and the documents below them that kept their
+   * last state instead of being removed (T-364).
+   */
+  unreachable: { folders: string[]; documents: number };
 }
 
 /**
  * Lists the folders into `source`. A file whose size and time are unchanged keeps its hash; a new
  * or changed file is hashed (its extraction runs again when the hash differs). Files not seen get
  * `skip = 'removed'` and their statements `status = 'removed'`; a file that came back is shown
- * again.
+ * again. Files below a folder that could not be listed are left as they were (T-364).
  */
 export async function inventory(
   db: KnowledgeDb,
@@ -358,6 +376,19 @@ export async function inventory(
   const episode = db.prepare(
     'insert or ignore into episode(day, counterpart, rel_folder) values(?, null, ?)',
   );
+  // Files not seen this run below a folder that was not reached keep their last state.
+  const unreachable = walked.unreachable.map((rel) => sourceFile(roots.root, rel));
+  const held = new Set<string>();
+  let heldDocuments = 0;
+  const seen = new Set(rows.map((r) => r.rel));
+  if (unreachable.length)
+    for (const [rel, row] of known) {
+      if (seen.has(rel)) continue;
+      const full = sourceFile(roots.root, rel);
+      if (!unreachable.some((folder) => isInside(folder, full))) continue;
+      held.add(rel);
+      if (row.skip !== 'generated' && KINDS[extname(rel).slice(1).toLowerCase()]) heldDocuments++;
+    }
   let returned = 0,
     removed = 0;
   tx(db, () => {
@@ -382,13 +413,13 @@ export async function inventory(
       for (const [key, value] of Object.entries(parsed)) meta.run(id, key, value);
       if (parsed.episode) episode.run(parsed.day, parsed.episode);
     }
-    removed = Number(
-      db
-        .prepare(
-          "update source set skip = 'removed' where seen_run <> ? and coalesce(skip, '') <> 'removed'",
-        )
-        .run(runId).changes,
-    );
+    const gone = db.prepare("update source set skip = 'removed' where rel_path = ?");
+    for (const { rel_path } of db
+      .prepare(
+        "select rel_path from source where seen_run <> ? and coalesce(skip, '') <> 'removed'",
+      )
+      .all(runId) as { rel_path: string }[])
+      if (!held.has(rel_path)) removed += Number(gone.run(rel_path).changes);
     // Statements follow their file: hidden while it is gone, shown again when it is back. Hidden
     // means support_prob -1 too, so every reader of the DB (the 자료 tab, the AI tools, the site
     // copy) leaves them out without knowing `status`; the earlier value waits in `held_prob`.
@@ -409,6 +440,7 @@ export async function inventory(
       env: walked.skipped.env.length,
       excluded: walked.skipped.excluded.length,
     },
+    unreachable: { folders: walked.unreachable, documents: heldDocuments },
   };
 }
 

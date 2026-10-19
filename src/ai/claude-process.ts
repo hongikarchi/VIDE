@@ -84,6 +84,8 @@ class Kept {
   readonly token?: string;
   busy = true;
   closed = false;
+  /** When the process was seen to exit (epoch ms). */
+  closedAt?: number;
   /** A turn failed or was ended by force: the process is not used again. */
   broken = false;
   /** An earlier turn's init event passed the tool check (same key, same tools). */
@@ -136,6 +138,7 @@ class Kept {
     child.on('error', () => this.fail('CLI_UNAVAILABLE'));
     child.on('close', (code: number | null) => {
       this.closed = true;
+      this.closedAt = Date.now();
       this.listener?.({ closed: code });
       if (!this.busy) void dispose(this);
     });
@@ -171,12 +174,24 @@ class Kept {
 }
 
 const live = new Map<string, Kept>();
+/** Waits (at most `ms`) for an ended process's exit to be seen: taskkill returns before it. */
+function closedWithin(entry: Kept, ms: number) {
+  if (entry.closed) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    timer.unref?.();
+    entry.child.once('close', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
 async function dispose(entry: Kept) {
   clearTimeout(entry.idle);
   if (live.get(entry.sessionId) === entry) live.delete(entry.sessionId);
   if (entry.token) unbindAgentRelay(entry.token);
   entry.listen(undefined);
-  if (!entry.closed) await entry.kill(entry.child);
+  if (!entry.closed && (await entry.kill(entry.child))) await closedWithin(entry, 1000);
   // Windows keeps the folder busy for a moment after the process tree is ended.
   await rm(entry.cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }).catch(
     () => {},
@@ -289,13 +304,17 @@ export class KeptClaudeCli extends ClaudeCli {
       keep = true;
       return value;
     } catch (cause) {
-      // A turn the CLI ended itself on a stop keeps its process; anything else does not.
+      // A turn the CLI ended itself on a time-out keeps its process; a cancel does not (T-366:
+      // the cancelled turn's process is ended at once, not left for the idle time, and the next
+      // turn resumes the session in a new one); anything else does not either.
       const code = (cause as { code?: unknown })?.code;
-      keep = !entry.broken && (code === 'CANCELLED' || code === 'TIMEOUT');
+      keep = !entry.broken && code === 'TIMEOUT';
       throw cause;
     } finally {
       if (entry.token) unbindAgentRelay(entry.token);
       await this.release(entry, keep);
+      if (this.timing.stopAt !== undefined && entry.closedAt !== undefined)
+        this.timing.stopExitMs = Math.max(0, entry.closedAt - this.timing.stopAt);
     }
   }
   /** The session's kept process when its key matches, else a new one (resuming the session). */
@@ -414,6 +433,7 @@ export class KeptClaudeCli extends ClaudeCli {
       const halt = (reason: string) => {
         if (settled || stopReason) return false;
         stopReason = reason;
+        this.timing.stopAt = Date.now();
         asking.abort();
         clock.stop();
         clearTimeout(settle);
@@ -549,8 +569,9 @@ export class KeptClaudeCli extends ClaudeCli {
         }
       };
       if (signal?.aborted) {
-        // Nothing was sent: the process is as the last turn left it.
+        // Nothing was sent: the process is as the last turn left it (and is ended on release).
         stopReason = 'CANCELLED';
+        this.timing.stopAt = Date.now();
         progress({ state: 'stopped', reason: stopReason });
         return finish(error(stopReason));
       }

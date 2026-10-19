@@ -1957,6 +1957,8 @@ export async function startServer({
                       units: doc.units,
                       modified: doc.modified,
                       hostBusy: doc.hostBusy ?? false,
+                      // Rhino opened it read-only: '읽기 전용으로 열림 · 저장 불가' (T-362).
+                      ...('readOnly' in doc && doc.readOnly ? { readOnly: true } : {}),
                     }
                   : null,
               lastSync: last ? { requestId: last.id, at: last.createdAt } : null,

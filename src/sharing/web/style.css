@@ -571,6 +571,13 @@ button.ghost {
   color: #b3261e;
   font-weight: 600;
 }
+.card-menu-note {
+  max-width: 260px;
+  margin: 4px 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
 .review-page {
   height: calc(100dvh - 56px);
   display: grid;

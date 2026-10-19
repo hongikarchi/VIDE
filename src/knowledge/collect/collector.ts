@@ -55,6 +55,8 @@ export interface CollectState {
     data: number;
     /** Files past the per-file excerpt cap and the excerpts left out. */
     capped: { files: number; excerpts: number };
+    /** The last run's folders it could not list and the documents below them kept as they were (T-364). */
+    unreachable: { folders: number; documents: number };
     statements: number;
     issues: number;
     proposals: number;
@@ -87,6 +89,19 @@ interface Job {
 }
 
 const error = (code: string) => new DomainError(code);
+
+/** The last run's unreached folders (meta `unreachable`, T-364); none when never recorded. */
+function unreachableOf(db: KnowledgeDb): { folders: number; documents: number } {
+  try {
+    const value = JSON.parse(getMeta(db, 'unreachable') ?? '{}') as {
+      folders?: number;
+      documents?: number;
+    };
+    return { folders: Number(value.folders) || 0, documents: Number(value.documents) || 0 };
+  } catch {
+    return { folders: 0, documents: 0 };
+  }
+}
 
 export class KnowledgeCollector {
   private readonly options: CollectorOptions;
@@ -130,6 +145,7 @@ export class KnowledgeCollector {
       unread,
       data: n("select count(*) as n from source where skip is null and status = 'data'"),
       capped: { files: Number(capped.files), excerpts: Number(capped.excerpts) },
+      unreachable: unreachableOf(db),
       statements: n(`select count(*) as n from statement st where ${VISIBLE}`),
       issues: n('select count(*) as n from issue'),
       proposals: n(
@@ -346,6 +362,14 @@ export class KnowledgeCollector {
         exclude: this.shown(roots.root, exclude),
       };
       const listed = await inventory(db, roots, this.options.denied, signal, exclude);
+      setMeta(
+        db,
+        'unreachable',
+        JSON.stringify({
+          folders: listed.unreachable.folders.length,
+          documents: listed.unreachable.documents,
+        }),
+      );
       logRun(db, 'inventory', t, { items: listed.files, note: listed });
 
       t = stage('read');

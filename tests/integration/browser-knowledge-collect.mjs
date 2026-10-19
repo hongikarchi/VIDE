@@ -112,7 +112,11 @@ try {
   const survey = collect.getByRole('group', { name: '정리할 자료' });
   await survey.getByText('이번에 읽을 파일 2개 — 글 2').waitFor();
   await survey.getByText('건너뜀: 데이터 파일 1 · 환경·캐시 폴더 1').waitFor();
-  await survey.getByText(/발췌 약 2개 · 걸러내기 AI 호출 약 1번 · 약 1분/).waitFor();
+  await survey
+    .getByText(
+      /발췌 약 2개 · 약 1분 · AI 호출 약 4회\(단계: 고르기 1 · 문장 1 · 이슈 1 · 할 일 1\) · 첫 정리라 오차가 큼/,
+    )
+    .waitFor();
   await survey
     .getByRole('list', { name: '발췌가 많은 폴더' })
     .getByRole('button', { name: '참고 빼기' })

@@ -90,7 +90,7 @@ function scripted(tools, script) {
   return { providerFactory, seen };
 }
 
-function setup(t, script, { conversations: withConversations = false } = {}) {
+function setup(t, script, { conversations: withConversations = false, documentReadOnly } = {}) {
   const store = new Store(':memory:'),
     workspace = new Workspace(store),
     project = store.createProject('direct');
@@ -102,6 +102,7 @@ function setup(t, script, { conversations: withConversations = false } = {}) {
     tools,
     providerFactory,
     conversations,
+    documentReadOnly,
     directDriver: (kind, source) =>
       kind === 'rhino' && source && typeof source === 'object' ? host.driver : undefined,
   });
@@ -580,6 +581,37 @@ test('a read-only document is not run: reason recorded, later executes answered 
   assert.equal(host.calls.execute.length, 1);
   const lines = done.result.activity.filter((entry) => entry.text.startsWith('실행하지 않음 · '));
   assert.equal(lines.length, 1);
+});
+
+// T-362: Rhino opened the document read-only (the plugin's snapshot said so). VIDE does not stop the
+// edit; the result card says the document cannot be saved in Rhino and how to get out of it.
+test('a direct edit in a document Rhino opened read-only carries the save notice; plan does not', async (t) => {
+  let readOnly = true;
+  const { send, settled, state } = setup(
+    t,
+    async ({ call }) => {
+      await call('execute', { code: 'add wall' });
+      return { text: '추가' };
+    },
+    {
+      documentReadOnly: (target) =>
+        readOnly && target.instance === sourceDocument.instance && target.documentId === 7,
+    },
+  );
+  send('ro-auto', { mode: 'auto' });
+  await settled();
+  const done = state('ro-auto');
+  assert.equal(done.state, 'succeeded');
+  assert.equal(done.result.appliedDirectly, true);
+  assert.equal(done.result.documentReadOnly, true);
+  send('ro-plan', { mode: 'plan' });
+  await settled();
+  assert.equal(state('ro-plan').result.documentReadOnly, undefined);
+  // Writable again (Rhino reopened it): no notice on the next edit.
+  readOnly = false;
+  send('ro-after', { mode: 'auto' });
+  await settled();
+  assert.equal(state('ro-after').result.documentReadOnly, undefined);
 });
 
 test('a passing refusal (host busy) lets the next execute run and is not reported at the end', async (t) => {

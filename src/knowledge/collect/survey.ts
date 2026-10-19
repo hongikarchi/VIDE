@@ -2,8 +2,9 @@
 // read by kind, what is skipped and why (data files, environment and generated folders, images and
 // models, folders the person left out), and a rough count of excerpts and filter calls. Read only:
 // folder listing, file sizes and the first 64 KB of .txt/.csv files; the knowledge DB is opened
-// read-only to tell new and changed files from unchanged ones and to count excerpts already read
-// but not yet filtered (a stopped or failed run leaves them; the next run sends them).
+// read-only to tell new and changed files from unchanged ones, to count excerpts already read
+// but not yet filtered (a stopped or failed run leaves them; the next run sends them), and for the
+// cost of the last run by stage (`run` table) and each kind's bytes per excerpt (T-363).
 import { open, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { basename, extname } from 'node:path';
@@ -27,20 +28,47 @@ export const MODEL_EXTENSIONS = new Set(
   '3dm 3dmbak rvt rfa rte skp ifc fbx obj stl dxf dgn nwd nwc max blend gh ghx'.split(' '),
 );
 
-/** Rough bytes of a file per excerpt, by kind (the estimate only; the run counts real ones). */
+/**
+ * Rough bytes of a file per excerpt, by kind, before any file of that kind was read (the estimate
+ * only; the run counts real ones). A first real run (T-363) read 6,434 excerpts where the older
+ * ratios (pdf 40,000 · office and hwp 10,000 bytes) guessed 73,574: drawings and images make those
+ * files large, so their ratios are ten times larger now; text kept its ratio (an incremental run
+ * guessed 136 for 130). Once the knowledge DB holds read files of a kind, that kind's own bytes per
+ * excerpt are used instead (`measured`).
+ */
 export const BYTES_PER_EXCERPT: Record<string, number> = {
   text: 2000,
-  pdf: 40_000,
-  office: 10_000,
-  hwp: 10_000,
+  pdf: 400_000,
+  office: 100_000,
+  hwp: 100_000,
 };
 /** Rough excerpts per mail and per drawing. */
 export const MAIL_EXCERPTS = 2;
 export const DRAWING_EXCERPTS = 5;
-/** The filter stage: texts per call, calls at once, and seconds per call seen in a real run. */
+/** The filter stage: texts per call (stages.ts selectExcerpts). */
 export const FILTER_BATCH = 40;
-export const FILTER_PARALLEL = 4;
-export const FILTER_SECONDS_PER_CALL = 25;
+/** The AI stages of a run, in order (collector.ts logs each in the `run` table). */
+export const AI_STAGES = ['select', 'statements', 'issues', 'proposals'] as const;
+export type AiStage = (typeof AI_STAGES)[number];
+export interface StageRatio {
+  /** AI calls per excerpt read in the run. */
+  callsPerExcerpt: number;
+  /** Wall seconds per call (calls run several at once). */
+  secondsPerCall: number;
+}
+/**
+ * Before any measured run (the first one is off the most): rounded up from the first real run
+ * (6,434 excerpts: select 107 calls in 1,292 s · statements 217 in 1,464 s · issues 1,384 in
+ * 2,735 s · proposals 20 in 69 s). `select` is one call per `FILTER_BATCH` texts.
+ */
+export const STAGE_DEFAULTS: Record<AiStage, StageRatio> = {
+  select: { callsPerExcerpt: 1 / FILTER_BATCH, secondsPerCall: 12 },
+  statements: { callsPerExcerpt: 0.04, secondsPerCall: 7 },
+  issues: { callsPerExcerpt: 0.25, secondsPerCall: 2 },
+  proposals: { callsPerExcerpt: 0.004, secondsPerCall: 4 },
+};
+/** Files of a kind read before, at least this many, to use that kind's own bytes per excerpt. */
+const MEASURED_FILES = 3;
 /** Folders listed as the heaviest ones (by estimated excerpts), at most this many. */
 const HEAVY_FOLDERS = 8;
 
@@ -72,7 +100,18 @@ export interface CollectSurvey {
     /** Folders the person left out. */
     excluded: number;
   };
-  estimate: { excerpts: number; filterCalls: number; minutes: number };
+  estimate: {
+    excerpts: number;
+    /** The select stage's calls (also `stages.select`). */
+    filterCalls: number;
+    /** AI calls of every stage. */
+    calls: number;
+    minutes: number;
+    /** AI calls by stage. */
+    stages: Record<AiStage, number>;
+    /** The ratios come from the last run in the knowledge DB (false: first-run constants). */
+    measured: boolean;
+  };
   /** The folders with the most estimated excerpts (to leave one out). */
   heavy: { path: string; files: number; excerpts: number }[];
   /** The folders left out, relative to the root ('/'-separated; absolute when outside it). */
@@ -97,7 +136,13 @@ function sampleText(bytes: Buffer) {
 }
 
 /** Estimated excerpts of one changed readable file (0 for a data file). */
-async function estimate(path: string, ext: string, kind: string, size: number) {
+async function estimate(
+  path: string,
+  ext: string,
+  kind: string,
+  size: number,
+  bytes: Record<string, number>,
+) {
   if (kind === 'legacy' || ext === 'msg') return { excerpts: 0, data: false };
   if (kind === 'mail') return { excerpts: MAIL_EXCERPTS, data: false };
   if (kind === 'dwg') return { excerpts: DRAWING_EXCERPTS, data: false };
@@ -112,7 +157,7 @@ async function estimate(path: string, ext: string, kind: string, size: number) {
         await handle.close();
       }
   }
-  const per = BYTES_PER_EXCERPT[kind] ?? BYTES_PER_EXCERPT.text;
+  const per = bytes[kind] ?? BYTES_PER_EXCERPT[kind] ?? BYTES_PER_EXCERPT.text;
   return { excerpts: Math.min(excerptCap(ext), Math.max(1, Math.ceil(size / per))), data: false };
 }
 
@@ -192,6 +237,111 @@ function knownRows(file: string | undefined) {
   return known;
 }
 
+export interface Measured {
+  /** Bytes per excerpt of the kinds read before. */
+  bytes: Record<string, number>;
+  /** By stage, from the last run that read excerpts (none: `STAGE_DEFAULTS`). */
+  stages?: Record<AiStage, StageRatio>;
+}
+interface RunRow {
+  stage: string;
+  ms: number;
+  items: number;
+  llm_calls: number;
+}
+/**
+ * What the knowledge DB tells about cost: each kind's bytes per excerpt, and the stages of the last
+ * run that read excerpts (its `extract` row, then select, statements and issues; proposals may be
+ * missing). A stage's ratio is its AI calls per excerpt read in that run.
+ */
+export function measured(file: string | undefined): Measured {
+  const out: Measured = { bytes: {} };
+  if (!file || !existsSync(file)) return out;
+  try {
+    const db = new DatabaseSync(file, { readOnly: true });
+    try {
+      const tables = new Set(
+        (
+          db.prepare("select name from sqlite_master where type = 'table'").all() as {
+            name: string;
+          }[]
+        ).map((t) => t.name),
+      );
+      const columns = (table: string) =>
+        new Set(
+          (db.prepare(`pragma table_info(${table})`).all() as { name: string }[]).map(
+            (c) => c.name,
+          ),
+        );
+      if (tables.has('source') && tables.has('excerpt')) {
+        const status = columns('source').has('status')
+          ? "and coalesce(s.status, 'done') = 'done'"
+          : '';
+        const notData = columns('excerpt').has('kind') ? "where coalesce(kind, '') <> 'data'" : '';
+        for (const r of db
+          .prepare(
+            `select s.kind, sum(s.size) as bytes, sum(x.n) as excerpts, count(*) as files from source s
+              join (select source_id, count(*) as n from excerpt ${notData} group by source_id) x
+                on x.source_id = s.id
+              where s.skip is null ${status} group by s.kind`,
+          )
+          .all() as { kind: string; bytes: number; excerpts: number; files: number }[])
+          if (r.kind in BYTES_PER_EXCERPT && Number(r.files) >= MEASURED_FILES && r.excerpts > 0)
+            out.bytes[r.kind] = Math.max(1, Number(r.bytes) / Number(r.excerpts));
+      }
+      if (tables.has('run')) {
+        const rows = db
+          .prepare('select stage, ms, items, llm_calls from run order by id')
+          .all() as unknown as RunRow[];
+        for (let i = rows.length - 1; i >= 0 && !out.stages; i--) {
+          if (rows[i].stage !== 'extract' || !(Number(rows[i].items) > 0)) continue;
+          const after: Partial<Record<string, RunRow>> = {};
+          for (let j = i + 1; j < rows.length && rows[j].stage !== 'inventory'; j++)
+            after[rows[j].stage] ??= rows[j];
+          // A stopped or failed run did not reach its later stages: it tells nothing.
+          if (!after.select || !after.statements || !after.issues) continue;
+          const excerpts = Number(rows[i].items);
+          out.stages = Object.fromEntries(
+            AI_STAGES.map((stage) => {
+              const calls = Number(after[stage]?.llm_calls ?? 0);
+              const ms = Number(after[stage]?.ms ?? 0);
+              return [
+                stage,
+                {
+                  callsPerExcerpt: calls / excerpts,
+                  secondsPerCall: calls ? ms / 1000 / calls : STAGE_DEFAULTS[stage].secondsPerCall,
+                },
+              ];
+            }),
+          ) as Record<AiStage, StageRatio>;
+        }
+      }
+    } finally {
+      db.close();
+    }
+  } catch {
+    /* An unreadable DB: first-run constants. */
+  }
+  return out;
+}
+
+/** AI calls and minutes of a run that reads `excerpts`, by stage. */
+export function estimateCost(excerpts: number, ratios?: Record<AiStage, StageRatio>) {
+  const stages = { select: 0, statements: 0, issues: 0, proposals: 0 };
+  let seconds = 0;
+  for (const stage of AI_STAGES) {
+    const { callsPerExcerpt, secondsPerCall } = (ratios ?? STAGE_DEFAULTS)[stage];
+    stages[stage] = excerpts > 0 ? Math.ceil(excerpts * callsPerExcerpt) : 0;
+    seconds += stages[stage] * secondsPerCall;
+  }
+  return {
+    stages,
+    calls: AI_STAGES.reduce((sum, stage) => sum + stages[stage], 0),
+    minutes: Math.ceil(seconds / 60),
+    measured: !!ratios,
+  };
+}
+
 /** Surveys the project folders: what the next run reads, skips, and roughly costs. */
 export async function surveyFolders(
   roots: Roots,
@@ -202,6 +352,7 @@ export async function surveyFolders(
 ): Promise<CollectSurvey> {
   const walked = await listFiles(roots, denied, exclude, signal);
   const known = knownRows(dbFile);
+  const cost = measured(dbFile);
   const out: CollectSurvey = {
     root: roots.root,
     read: { files: 0, byKind: {} },
@@ -216,7 +367,14 @@ export async function surveyFolders(
       other: 0,
       excluded: walked.skipped.excluded.length,
     },
-    estimate: { excerpts: 0, filterCalls: 0, minutes: 0 },
+    estimate: {
+      excerpts: 0,
+      filterCalls: 0,
+      calls: 0,
+      minutes: 0,
+      stages: { select: 0, statements: 0, issues: 0, proposals: 0 },
+      measured: false,
+    },
     heavy: [],
     exclude: [],
   };
@@ -262,7 +420,7 @@ export async function surveyFolders(
         }
         return;
       }
-      const guess = await estimate(sourceFile(roots.root, rel), ext, kind, info.size);
+      const guess = await estimate(sourceFile(roots.root, rel), ext, kind, info.size, cost.bytes);
       if (guess.data) {
         out.skipped.data++;
         return;
@@ -275,10 +433,8 @@ export async function surveyFolders(
     signal,
   );
   if (signal?.aborted) throw new Error('STOPPED');
-  out.estimate.filterCalls = Math.ceil(out.estimate.excerpts / FILTER_BATCH);
-  out.estimate.minutes = Math.ceil(
-    (out.estimate.filterCalls / FILTER_PARALLEL) * (FILTER_SECONDS_PER_CALL / 60),
-  );
+  const priced = estimateCost(out.estimate.excerpts, cost.stages);
+  out.estimate = { ...out.estimate, ...priced, filterCalls: priced.stages.select };
   // The heaviest folders; a folder whose one subfolder holds all of it gives way to that subfolder.
   const list = [...groups].map(([path, g]) => ({ path, ...g }));
   out.heavy = list

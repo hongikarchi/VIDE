@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { isDwgSdkEditMode } from '../contracts/dwg-edit-mode.ts';
 import { requestMode, storedAttachments } from '../contracts/workspace.ts';
 import { attachmentPreview } from './attachments.ts';
-import { undoReason } from '../contracts/direct-refusal.ts';
+import { READ_ONLY_SAVE_NOTICE, undoReason } from '../contracts/direct-refusal.ts';
 import { ActivityLog, activityEntries } from './activity.tsx';
 import { Markdown } from './kit/markdown.tsx';
 import { LegalTurnCards, legalCheckOf } from './legal-turn.tsx';
@@ -927,6 +927,10 @@ function WorkView({
           ))}
           {plan ? (
             <PlanCard message={message} plan={plan} continued={continued} actions={actions} />
+          ) : null}
+          {(result as { documentReadOnly?: unknown } | null | undefined)?.documentReadOnly ===
+          true ? (
+            <p className="direct-read-only">{READ_ONLY_SAVE_NOTICE}</p>
           ) : null}
           {refused ? (
             <p className="direct-refused">

@@ -297,6 +297,8 @@ export interface RunMarks {
     firstOutputAt?: number;
     /** The turn ran in a kept Claude process (ADR-028): spawnAt is when the turn was written. */
     processReused?: boolean;
+    /** How long the CLI process took to exit after the run was stopped (cancel, time-out; T-366). */
+    stopExitMs?: number;
   };
 }
 const MODEL_NOTES = new Set(['thinking', 'message', 'model']);
@@ -336,6 +338,7 @@ export function requestStages(
     spawnMs: since(marks.provider?.spawnAt),
     firstOutputMs: since(marks.provider?.firstOutputAt),
     processReused: marks.provider?.processReused,
+    stopExitMs: marks.provider?.stopExitMs,
     firstNoteMs: since(firstNote),
     firstToolMs: since(tools[0]?.at),
     lastToolMs: since(lastTool),

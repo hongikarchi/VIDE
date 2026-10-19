@@ -173,7 +173,7 @@ test('a kept process ends after its idle time and on engine shutdown', async () 
   assert.deepEqual(liveClaudeSessions(), []);
 });
 
-test('a stopped turn is interrupted in its process, which stays for the next turn', async () => {
+test('a cancelled turn is interrupted, then its process is ended (T-366: not kept for the idle time)', async () => {
   const fake = fakeCli((message, child) => {
     if (message.type === 'user') {
       child.send(init());
@@ -196,7 +196,14 @@ test('a stopped turn is interrupted in its process, which stays for the next tur
   setTimeout(() => controller.abort(), 20);
   await assert.rejects(running, { code: 'CANCELLED' });
   assert.ok(states.includes('stopped'));
-  assert.deepEqual(liveClaudeSessions(), [SESSION], 'the process is kept');
+  assert.ok(fake.runs[0].lines.some((line) => line.request?.subtype === 'interrupt'));
+  // The kill is issued before run() rejects; under load (the commit hook runs suites side by side)
+  // the child's exit can land a moment later, so wait for it instead of asserting at once.
+  const started = Date.now();
+  while (fake.runs[0].child.exitCode === null && Date.now() - started < 5000)
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.equal(fake.runs[0].child.exitCode, 143, 'the process is ended');
+  assert.deepEqual(liveClaudeSessions(), [], 'the process is not kept');
 });
 
 test('a process that ignores the interrupt is ended; an unconfirmed end is not reported as stopped', async () => {

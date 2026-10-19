@@ -47,7 +47,7 @@ test('모드마다 공통 지침 뒤에 그 모드의 지침을 붙인다', () =
     // ADR-014's safety sentences live in the common rules.
     assert.match(text, /신뢰하지 않는 자료/);
     assert.match(text, /도구 결과가 확인할 때뿐/);
-    assert.match(text, /후보를 반영\(apply\)할 때만/);
+    assert.match(text, /열린 문서에 바로 적용되고 실행 단위로 되돌릴 수 있다/);
   }
   assert.match(texts.modeling, /# 모델링 지침/);
   assert.doesNotMatch(texts.modeling, /# jig 만들기 지침|# 자료 · jig 결과 지침/);
@@ -57,6 +57,23 @@ test('모드마다 공통 지침 뒤에 그 모드의 지침을 붙인다', () =
   assert.match(texts.review, /# 자료 · jig 결과 지침/);
   assert.doesNotMatch(texts.review, /# jig 만들기 지침/);
   assert.throws(() => bundleFor('shell'), /INVALID_INSTRUCTION_MODE/);
+});
+
+test('공통 지침: 바로 적용 전제이고 도구 권한 줄은 한 문장으로 닫힌다 (T-377)', () => {
+  for (const mode of instructionModes) {
+    const text = bundleFor(mode);
+    // ADR-022: AI edits go into the open document; the copy/candidate premise is gone.
+    assert.doesNotMatch(text, /작업 실행본\(사본\)/);
+    assert.doesNotMatch(text, /후보를 반영/);
+    assert.doesNotMatch(text, /ORBIDDEN/);
+  }
+  const lines = bundleFor('modeling').split(/\r?\n/);
+  const rule = lines.find((line) => line.startsWith('- `turn-rules`가 허용한 도구만 쓰고'));
+  assert.ok(rule, 'tool permission line exists');
+  assert.ok(rule.endsWith('줄 때만 쓴다).'));
+  assert.equal((rule.match(/\(/g) ?? []).length, (rule.match(/\)/g) ?? []).length);
+  assert.ok(!rule.includes('- 프로젝트 파일은'), 'the next rule is not spliced into this line');
+  assert.ok(lines.some((line) => line.startsWith('- 프로젝트 파일은 공급자 기본 도구')));
 });
 
 test('모델링 지침의 호스트별 조각은 그 호스트에만 붙는다', (t) => {
