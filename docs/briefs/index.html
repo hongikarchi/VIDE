@@ -4,31 +4,39 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>결정 브리프</title>
+<link rel="stylesheet" href="_base.css">
 <style>
-:root{--bg:#fafaf8;--fg:#1c1c1a;--mute:#6b6b66;--line:#e2e2dd;--card:#fff;--wait:#c98a00;--done:#2e8b57;--info:#4a6fa5}
-@media (prefers-color-scheme:dark){:root{--bg:#161614;--fg:#ecebe6;--mute:#9a9a93;--line:#2c2c29;--card:#1f1f1c}}
-*{box-sizing:border-box}
-body{margin:0;padding:32px 16px 60px;background:var(--bg);color:var(--fg);font:16px/1.55 "Pretendard","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif}
-main{max-width:720px;margin:0 auto}
-h1{font-size:26px;margin:0 0 4px}
-p.sub{color:var(--mute);margin:0 0 22px;font-size:14px}
-ul{list-style:none;padding:0;margin:0;display:grid;gap:10px}
-li{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center}
-li a{color:inherit;text-decoration:none;font-weight:600;font-size:17px}
-li a:hover{text-decoration:underline}
-li .d{color:var(--mute);font-size:14px;grid-column:1}
-.st{font-size:12px;padding:2px 9px;border-radius:999px;color:#fff;grid-row:1/3;align-self:center}
-.old{background:var(--mute)}.wait{background:var(--wait)}.done{background:var(--done)}.info{background:var(--info)}
+/* 목록 행: 제목 링크 · 날짜·설명 · 상태 칩 */
+.list>li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px 24px;align-items:baseline;padding:20px 0}
+.list>li:first-child{border-top:1px solid var(--ink)}
+.list a{font-size:19px;font-weight:500;letter-spacing:-.04em;text-decoration:none}
+.list a:hover{text-decoration:underline}
+.list .d{font-size:12px;color:var(--muted);letter-spacing:0;white-space:nowrap}
+@media(max-width:860px){.list>li{grid-template-columns:minmax(0,1fr) auto}.list a{grid-column:1/-1;font-size:17px}.list .d{white-space:normal}}
 </style>
 </head>
 <body>
-<main>
-<h1>결정 브리프</h1>
-<p class="sub">최신이 위. 열어서 선택지를 누르고 [답장 복사]·[피드백 복사]한 문장을 채팅에 붙이면 됩니다. 양식 원칙은 README.md.</p>
-<ul>
-  <li><a href="2026-10-19-vide-one-page.html">VIDE 한 장 — 건축가가 AI를 만나는 자리</a><span class="d">2026-10-19 · 방향을 가르는 질문 둘</span><span class="st wait">검토 대기</span></li>
-  <li><a href="2026-10-19-storyboard-color-request.html">한 요청의 실제 화면 — 기둥 색 바꾸기</a><span class="d">2026-10-19 · 스토리보드</span><span class="st wait">검토 대기</span></li>
-</ul>
+<header>
+  <a class="brand" href="#top"><b>VIDE</b><span>브리프</span></a>
+</header>
+<main id="top">
+
+<div class="intro">
+  <div>
+    <div class="eyebrow">docs/briefs / 최신이 위</div>
+    <h1>답을 기다리는 브리프 2장.</h1>
+    <p>최신이 위. 열어서 선택지를 누르고 [답장 복사]·[피드백 복사]한 문장을 채팅에 붙이면 됩니다. 양식 원칙은 README.md.</p>
+  </div>
+</div>
+
+<section style="padding-top:8px">
+  <ul class="qs list">
+    <li><a href="2026-10-19-vide-one-page.html">VIDE 한 장 — 건축가가 AI를 만나는 자리</a><span class="d">2026-10-19 · 방향을 가르는 질문 둘</span><span class="chip coral">검토 대기</span></li>
+    <li><a href="2026-10-19-storyboard-color-request.html">한 요청의 실제 화면 — 기둥 색 바꾸기</a><span class="d">2026-10-19 · 스토리보드</span><span class="chip coral">검토 대기</span></li>
+  </ul>
+</section>
+
+<footer><span>VIDE 결정 브리프 · 정본은 PRD·ADR·SPEC·PLAN · 상태: 검토 대기 · 결정 대기 · 보고</span><span>2026-10-19</span></footer>
 </main>
 </body>
 </html>

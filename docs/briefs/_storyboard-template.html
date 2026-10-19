@@ -6,182 +6,189 @@
 <title>스토리보드 제목</title>
 <!--
   스토리보드 틀(docs/briefs/README.md「스토리보드 브리프」). 복사해서 YYYY-MM-DD-storyboard-<slug>.html로 쓴다.
-  - 카드는 8장 이하를 권장한다. 넘으면 흐름을 나눠 두 문서로 만든다.
-  - 카드 하나 = 한 단계. 근거 SPEC 항목 ID 하나(.ref)를 단다. 스토리보드는 검토용 보기이고 정본은 SPEC·Design이다.
-  - 이미 만든 기능: 실제 화면 캡처 <img class="shot" src="assets/<slug>/01.png">(tools/briefs/capture.mjs).
-  - 아직 안 만든 기능: 합성 캡처. 실제 UI의 그 자리에 기존 컴포넌트 CSS로 카드를 끼워 넣고 찍어 '합성' 태그를 단다.
+  - 공통 스타일은 _base.css. 문서별 추가분만 아래 <style>. 외부 의존 없음.
+  - 왼쪽 그림(.stick 안 figure.shot[data-s])과 오른쪽 단계(.step[data-s])는 같은 번호끼리 짝이다. [이전]/[다음]·← →·아래 작은 그림으로 넘긴다.
+  - 카드(단계)는 8장 이하. 그림은 실제 화면 캡처(tools/briefs/capture.mjs) 또는 실제 UI에 끼워 찍은 '합성' 캡처.
     둘 다 안 되면 <div class="frame missing">화면 없음</div>. 상자 와이어프레임은 쓰지 않는다(README 원칙 10).
-  - data-choices: 피드백 단추 목록(기본 "좋음,수정"). 기능 지도는 "유지,줄임,빼기,모름" 등.
-  - 외부 의존(CDN·웹폰트) 없음. 밝은/어두운 자동.
+  - .step의 data-choices: 피드백 단추(기본 "좋음,수정"). 결정이 함께 있으면 .decide(data-id="D1")에 .ans 선택지를 둔다.
+  - 바닥 [피드백 복사]가 "S1 좋음 / S3 수정: 메모 / D1 ③ / 메모: …"를 만든다.
 -->
+<link rel="stylesheet" href="_base.css">
 <style>
-:root{--bg:#fafaf8;--fg:#1c1c1a;--mute:#6b6b66;--line:#e2e2dd;--card:#fff;--rec:#1f6f5f;--rec-bg:#e6f3ef;--on:#1c1c1a;--on-fg:#fff;--ok:#2e8b57;--warn:#c98a00;--bad:#c0392b;
-  --accent:#d0664a;--accent-bg:#f9ece9;--grid:#0000000d;--frame-bg:#f5f4f0;--box-bg:#ffffff;--box-line:#c9c8c3}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161614;--fg:#ecebe6;--mute:#9a9a93;--line:#2c2c29;--card:#1f1f1c;--rec:#7fcbb6;--rec-bg:#1d2e2a;--on:#ecebe6;--on-fg:#161614;
-  --accent:#e48a6c;--accent-bg:#3c2f28;--grid:#ffffff0d;--frame-bg:#1b1b19;--box-bg:#262623;--box-line:#45453f}}
-:root[data-theme="dark"]{--bg:#161614;--fg:#ecebe6;--mute:#9a9a93;--line:#2c2c29;--card:#1f1f1c;--rec:#7fcbb6;--rec-bg:#1d2e2a;--on:#ecebe6;--on-fg:#161614;
-  --accent:#e48a6c;--accent-bg:#3c2f28;--grid:#ffffff0d;--frame-bg:#1b1b19;--box-bg:#262623;--box-line:#45453f}
-*{box-sizing:border-box}
-body{margin:0;padding:32px 16px 220px;background:var(--bg);color:var(--fg);font:16px/1.55 "Pretendard","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif}
-main{max-width:720px;margin:0 auto}
-h1{font-size:26px;line-height:1.3;margin:0 0 6px}
-.meta{color:var(--mute);font-size:14px;margin:0 0 14px}
-.meta a{color:inherit}
-.why{font-size:17px;margin:0 0 28px;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-radius:10px}
-.status{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);vertical-align:middle}
-ol.list{list-style:none;padding:0;margin:0;display:grid;gap:18px}
-li.s{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 18px 14px;min-width:0}
-h2{font-size:18px;margin:0 0 12px;line-height:1.4}
-.id{display:inline-block;min-width:34px;margin-right:8px;padding:0 7px;border-radius:6px;background:var(--bg);border:1px solid var(--line);font-size:13px;color:var(--mute);text-align:center;vertical-align:2px}
-/* .frame: 그림 자리(16:10). 지금은 '화면 없음' 표식(.frame.missing)에만 쓴다. 상자 와이어프레임 금지(README 원칙 10). */
-.frame{position:relative;width:100%;aspect-ratio:16/10;margin:0 0 12px;border:1px solid var(--line);border-radius:8px;overflow:hidden;
-  background-color:var(--frame-bg);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:5% 8%}
-.box{position:absolute;display:flex;align-items:center;justify-content:center;padding:2px 4px;text-align:center;font-size:12px;line-height:1.3;color:var(--mute);
-  background:var(--box-bg);border:1px solid var(--box-line);border-radius:5px;overflow:hidden}
-.box.hl{color:var(--fg);font-weight:600;border:2px solid var(--accent);background:var(--accent-bg)}
-.box.ghost{background:transparent;border-style:dashed}
-.frame.missing{display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:14px;padding:12px;text-align:center}
-img.shot{display:block;width:100%;height:auto;margin:0 0 12px;border:1px solid var(--line);border-radius:8px}
-.who,.shows,.ref{margin:4px 0;font-size:15px}
-.who::before,.shows::before{display:inline-block;min-width:66px;color:var(--mute);font-weight:600;margin-right:6px}
-.who::before{content:"사용자"}
-.shows::before{content:"화면"}
-.ref{color:var(--mute);font-size:13px}
-.decide{margin:12px 0 4px;padding:12px;border:1px dashed var(--line);border-radius:10px}
-.decide h3{font-size:16px;margin:0 0 10px}
-.options{display:grid;gap:8px;margin:0}
-.opt{display:block;width:100%;text-align:left;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--fg);font:inherit;cursor:pointer}
-.opt b{font-weight:600}
-.opt small{display:block;color:var(--mute);font-size:14px;margin-top:2px}
-.opt.rec{border-color:var(--rec);background:var(--rec-bg)}
-.opt.rec b::after{content:"추천";margin-left:8px;font-size:11px;padding:1px 6px;border-radius:999px;background:var(--rec);color:var(--bg);font-weight:600;vertical-align:2px}
-.opt.on{background:var(--on);color:var(--on-fg);border-color:var(--on)}
-.opt.on small{color:inherit;opacity:.8}
-.opt.on.rec b::after{background:var(--on-fg);color:var(--on)}
-.fb{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
-.tg{padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--fg);font:inherit;font-size:14px;cursor:pointer}
-.tg.on{background:var(--on);color:var(--on-fg);border-color:var(--on)}
-.note{flex:1 1 180px;min-width:0;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit;font-size:14px}
-.reply{position:sticky;bottom:0;margin-top:28px;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 -6px 24px rgba(0,0,0,.06)}
-.reply .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.btn{padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--fg);font:inherit;cursor:pointer}
-.btn.primary{background:var(--on);color:var(--on-fg);border-color:var(--on)}
-textarea{width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit;font-size:14px;resize:vertical;min-height:40px}
-#out{margin:10px 0 0;padding:10px 12px;border-radius:8px;background:var(--bg);font-size:14px;white-space:pre-wrap;color:var(--mute);max-height:96px;overflow:auto}
-@media (max-width:480px){.box{font-size:10px}h1{font-size:22px}.reply{padding:10px 12px}textarea{min-height:32px;margin-top:6px}#out{max-height:56px;margin-top:6px}}
+/* 문서별 추가분 */
 </style>
 </head>
 <body>
-<main>
-<h1>스토리보드 제목</h1>
-<p class="meta">2026-00-00 · <span class="status">검토 대기</span> · 근거: <a href="../../human/docs/specs/SPEC-00-common.html">SPEC-00</a> · <a href="../../human/Design.html">Design</a></p>
-<p class="why">흐름 한 줄: 사용자가 무엇을 해서 어떤 결과까지 가는지.</p>
+<header>
+  <a class="brand" href="#top"><b>VIDE</b><span>스토리보드 · 짧은 제목</span></a>
+  <nav><a href="#s">01 흐름</a><a href="#q">02 결정</a></nav>
+  <button type="button" class="noprint" onclick="window.print()">인쇄 / PDF ↗</button>
+</header>
+<main id="top">
 
-<!-- 카드는 8장 이하 권장 -->
-<ol class="list">
+<div class="intro">
+  <div>
+    <div class="eyebrow">2026-00-00 / 검토 대기 / 근거 <a href="../../human/docs/specs/SPEC-00-common.html">SPEC-00</a> · <a href="../../human/Design.html">Design</a></div>
+    <h1>흐름 한 줄을 제목으로.<br>무엇을 해서 어디까지 가는지.</h1>
+    <p>그림은 개발 엔진의 실제 화면 캡처. 그림 위 표시: <b>합성</b> = 아직 없는 요소를 실제 UI에 끼움 · <b>AI 응답 주입</b> = AI를 부르지 않고 결과 상태를 넣어 찍음.</p>
+  </div>
+  <div class="study-mark">단계 3 · 실제 캡처 2 · 합성 1<br>답은 바닥의 [피드백 복사]로</div>
+</div>
 
-<!-- 예 1: 합성 캡처(아직 안 만든 요소). 실제 UI에 카드를 끼워 넣고 찍은 그림에 '합성' 태그를 단다. -->
-<li class="s" data-id="S1" data-choices="좋음,수정">
-  <h2><span class="id">S1</span>요청을 적는다 <span class="status">합성</span></h2>
-  <img class="shot" src="assets/example/00-composite.png" alt="실제 작업 화면에 새 카드를 끼워 넣은 합성 캡처">
-  <p class="who">작성기에 한 문장으로 요청을 적는다.</p>
-  <p class="shows">대화 칸 아래 작성기가 강조되고, 무대에는 열린 모델이 보인다.</p>
-  <p class="ref">근거 SPEC-00.1</p>
-</li>
-
-<!-- 예 2: 실제 화면 캡처(이미 만든 기능). 그림이 없으면 '캡처 없음'이 대신 보인다. -->
-<li class="s" data-id="S2" data-choices="좋음,수정">
-  <h2><span class="id">S2</span>결과를 확인한다</h2>
-  <img class="shot" src="assets/example/01.png" alt="요청 결과가 무대에 반영된 실제 화면">
-  <p class="who">바뀐 부분을 무대에서 본다.</p>
-  <p class="shows">바뀐 객체가 강조되고, 대화에 한 줄 결과가 남는다.</p>
-  <p class="ref">근거 SPEC-00.2</p>
-</li>
-
-<!-- 예 3: 결정이 함께 있는 카드. 기능 지도처럼 다른 선택지도 쓸 수 있다. -->
-<li class="s" data-id="S3" data-choices="유지,줄임,빼기,모름">
-  <h2><span class="id">S3</span>되돌리기</h2>
-  <!-- 캡처도 합성도 안 될 때만 점선 '화면 없음' -->
-  <div class="frame missing" style="border-style:dashed">화면 없음</div>
-  <p class="who">마음에 안 들면 [되돌리기]를 누른다.</p>
-  <p class="shows">요청 하나 단위로 모델이 앞 상태로 돌아간다.</p>
-  <p class="ref">근거 SPEC-00.3</p>
-  <div class="decide" data-id="D1">
-    <h3><span class="id">D1</span>되돌리기 단추를 어디에 둘까?</h3>
-    <div class="options">
-      <button class="opt rec" data-v="①"><b>① 결과 카드 안</b><small>요청마다 바로 옆에서 되돌린다</small></button>
-      <button class="opt" data-v="②"><b>② 무대 위 도구줄</b><small>마지막 요청만 되돌린다</small></button>
-      <button class="opt" data-v="③"><b>③ 둘 다</b><small>단추가 두 군데라 헷갈릴 수 있다</small></button>
+<section id="s">
+  <div class="section-head">
+    <div><div class="eyebrow">01 / STORY</div><h2>단계마다 화면 하나.</h2></div>
+    <p>오른쪽 단추(또는 ← →)로 단계를 넘기면 왼쪽 그림이 바뀐다. 단계마다 좋음·수정과 한 줄 메모.</p>
+  </div>
+  <div class="story">
+    <div class="stick">
+      <!-- 예 1: 합성 캡처. 실제 파일이 있으면 아래 주석의 꼴로 쓴다.
+           <figure class="shot" data-s="1"><button type="button" class="zoom" data-full="assets/<slug>/00-composite.png"><img src="assets/<slug>/00-composite.png" alt="실제 작업 화면에 새 카드를 끼워 넣은 합성 캡처"></button><span class="tags"><span class="chip coral">합성</span></span></figure> -->
+      <figure class="shot" data-s="1"><div class="frame missing">합성 캡처 자리(assets/&lt;slug&gt;/00-composite.png)</div><span class="tags"><span class="chip coral">합성</span></span></figure>
+      <!-- 예 2: 실제 화면 캡처.
+           <figure class="shot" data-s="2"><button type="button" class="zoom" data-full="assets/<slug>/01.png"><img src="assets/<slug>/01.png" alt="요청 결과가 무대에 반영된 실제 화면"></button></figure> -->
+      <figure class="shot" data-s="2"><div class="frame missing">실제 캡처 자리(assets/&lt;slug&gt;/01.png)</div></figure>
+      <!-- 예 3: 캡처도 합성도 안 될 때 -->
+      <figure class="shot" data-s="3"><div class="frame missing">화면 없음</div></figure>
+    </div>
+    <div class="steps-col">
+      <div class="ctl"><button type="button" class="prev">‹ 이전</button><span class="pos"></span><button type="button" class="next">다음 ›</button></div>
+      <div class="dots"></div>
+      <div class="step" data-s="1" data-id="S1" data-choices="좋음,수정">
+        <small>01</small><h3>요청을 적는다</h3>
+        <p><b>사용자</b> 작성기에 한 문장으로 요청을 적는다.</p>
+        <p><b>화면</b> 대화 칸 아래 작성기가 강조되고, 무대에는 열린 모델이 보인다.</p>
+        <span class="ref">근거 SPEC-00.1</span>
+      </div>
+      <div class="step" data-s="2" data-id="S2" data-choices="좋음,수정">
+        <small>02</small><h3>결과를 확인한다</h3>
+        <p><b>사용자</b> 바뀐 부분을 무대에서 본다.</p>
+        <p><b>화면</b> 바뀐 객체가 강조되고, 대화에 한 줄 결과가 남는다.</p>
+        <span class="gate">의심: 바뀐 객체 목록이 이름 대신 ID로 보인다.</span>
+        <span class="ref">근거 SPEC-00.2</span>
+      </div>
+      <div class="step" data-s="3" data-id="S3" data-choices="유지,줄임,빼기,모름">
+        <small>03</small><h3>되돌리기</h3>
+        <p><b>사용자</b> 마음에 안 들면 [되돌리기]를 누른다.</p>
+        <p><b>화면</b> 요청 하나 단위로 모델이 앞 상태로 돌아간다.</p>
+        <span class="ref">근거 SPEC-00.3</span>
+        <div class="decide" data-id="D1">
+          <p class="q" style="margin-top:14px"><b class="id">D1</b><b>되돌리기 단추를 어디에 둘까?</b></p>
+          <div class="ans" style="padding-left:0">
+            <button type="button" class="rec" data-v="①"><b>① 결과 카드 안</b><small>요청마다 바로 옆에서 되돌린다</small></button>
+            <button type="button" data-v="②"><b>② 무대 위 도구줄</b><small>마지막 요청만 되돌린다</small></button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
-</li>
+  <div class="thumbs" aria-label="단계 바로 가기"></div>
+</section>
 
-</ol>
+<!-- 흐름 밖의 결정이 있으면 여기. 없으면 절을 지운다. -->
+<section id="q">
+  <div class="section-head">
+    <div><div class="eyebrow">02 / DECISIONS</div><h2>흐름 밖에서 정할 것.</h2></div>
+  </div>
+  <ul class="qs">
+    <li class="d decide" data-id="D2">
+      <p class="q"><b class="id">D2</b><b>질문 한 문장?</b></p>
+      <div class="ans">
+        <button type="button" class="rec" data-v="①"><b>① 추천</b><small>설명</small></button>
+        <button type="button" data-v="②"><b>② 다른 것</b><small>설명</small></button>
+      </div>
+      <p class="line"><b>이유</b>한 줄.</p>
+    </li>
+  </ul>
+</section>
+
+<footer><span>VIDE 스토리보드 · 검토용 보기이며 정본은 SPEC·Design</span><span>2026-00-00</span></footer>
 
 <div class="reply">
   <div class="row">
-    <button class="btn primary" id="copy">피드백 복사</button>
-    <span id="msg" style="color:var(--mute);font-size:14px"></span>
+    <button type="button" class="primary" id="copy">피드백 복사</button>
+    <input type="text" id="memo" placeholder="전체 메모(선택)">
+    <span id="msg"></span>
   </div>
-  <textarea id="memo" placeholder="전체 메모(선택)"></textarea>
-  <pre id="out">카드의 단추를 누르거나 메모를 적으면 여기에 피드백이 만들어집니다.</pre>
+  <pre id="out">단계의 단추를 누르거나 메모를 적으면 여기에 피드백이 만들어집니다.</pre>
 </div>
 </main>
+<div id="lb" role="dialog" aria-modal="true" aria-label="크게 보기"><img src="data:," alt=""><p></p></div>
 <script>
 (function(){
-  var EMPTY='카드의 단추를 누르거나 메모를 적으면 여기에 피드백이 만들어집니다.';
-  var cards=[].slice.call(document.querySelectorAll('li.s'));
+  var EMPTY='단계의 단추를 누르거나 메모를 적으면 여기에 피드백이 만들어집니다.';
+  function $$(q,r){return [].slice.call((r||document).querySelectorAll(q));}
   function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text)e.textContent=text;return e;}
+  var story=document.querySelector('.story'),steps=$$('.step',story),shots=$$('.stick .shot',story),N=steps.length;
+  var prev=story.querySelector('.prev'),next=story.querySelector('.next'),pos=story.querySelector('.pos'),dotsBox=story.querySelector('.dots'),thumbs=document.querySelector('.thumbs');
+  var dots=[],tbs=[],k=1;
+  function pad(v){return String(v).padStart(2,'0');}
+  steps.forEach(function(s,i){
+    var d=el('button','dot');d.type='button';d.setAttribute('aria-label',(i+1)+'단계');d.addEventListener('click',function(){set(i+1);});dotsBox.appendChild(d);dots.push(d);
+    if(thumbs){var t=el('button');t.type='button';var sh=shots[i],img=sh&&sh.querySelector('img');
+      var ph=el('div','frame missing','화면 없음');ph.style.fontSize='11px';
+      if(img){var im=document.createElement('img');im.alt='';im.addEventListener('error',function(){im.replaceWith(ph);});im.src=img.getAttribute('src');t.appendChild(im);}else t.appendChild(ph);
+      t.appendChild(el('small',null,pad(i+1)+' '+(s.querySelector('h3')||{}).textContent));t.addEventListener('click',function(){set(i+1);});thumbs.appendChild(t);tbs.push(t);}
+  });
+  function set(v){
+    k=Math.max(1,Math.min(N,v));story.dataset.step=k;
+    steps.forEach(function(s,i){s.classList.toggle('on',i+1===k);});
+    shots.forEach(function(s,i){s.classList.toggle('on',i+1===k);});
+    dots.forEach(function(d,i){d.classList.toggle('on',i+1===k);d.classList.toggle('done',i+1<k);});
+    tbs.forEach(function(t,i){t.classList.toggle('on',i+1===k);});
+    pos.textContent=pad(k)+' / '+pad(N);prev.disabled=k===1;next.disabled=k===N;
+  }
+  prev.addEventListener('click',function(){set(k-1);});next.addEventListener('click',function(){set(k+1);});
+  document.addEventListener('keydown',function(ev){
+    if(/INPUT|SELECT|TEXTAREA/.test(ev.target.tagName))return;
+    var r=story.getBoundingClientRect();if(r.top>innerHeight||r.bottom<0)return;
+    if(ev.key==='ArrowRight'){set(k+1);ev.preventDefault();}if(ev.key==='ArrowLeft'){set(k-1);ev.preventDefault();}
+  });
   function render(){
     var parts=[];
-    cards.forEach(function(c){
-      var on=c.querySelector('.tg.on'),note=c.querySelector('.note').value.trim();
+    steps.forEach(function(c){
+      var on=c.querySelector('.tg.on'),note=c.querySelector('.fb input').value.trim();
       if(on||note)parts.push(c.dataset.id+(on?' '+on.textContent:'')+(note?': '+note:''));
-      [].slice.call(c.querySelectorAll('.decide')).forEach(function(d){
-        var o=d.querySelector('.opt.on');if(o)parts.push(d.dataset.id+' '+o.dataset.v);
-      });
     });
+    $$('.decide').forEach(function(d){var o=d.querySelector('.ans button.on');if(o)parts.push(d.dataset.id+' '+o.dataset.v);});
     var memo=document.getElementById('memo').value.trim();
-    var t=parts.join(' / ')+(memo?(parts.length?' · ':'')+'메모: '+memo:'');
+    var t=parts.join(' / ')+(memo?(parts.length?' / ':'')+'메모: '+memo:'');
     document.getElementById('out').textContent=t||EMPTY;
     return t;
   }
-  cards.forEach(function(c){
+  steps.forEach(function(c){
     var fb=el('div','fb');
     (c.dataset.choices||'좋음,수정').split(',').forEach(function(v){
       v=v.trim();if(!v)return;
       var b=el('button','tg',v);b.type='button';
-      b.addEventListener('click',function(){
-        var was=b.classList.contains('on');
-        fb.querySelectorAll('.tg').forEach(function(x){x.classList.remove('on');});
-        if(!was)b.classList.add('on');
-        render();
-      });
+      b.addEventListener('click',function(){var was=b.classList.contains('on');$$('.tg',fb).forEach(function(x){x.classList.remove('on');});if(!was)b.classList.add('on');render();});
       fb.appendChild(b);
     });
-    var n=el('input','note');n.type='text';n.placeholder='한 줄 메모';n.addEventListener('input',render);
-    fb.appendChild(n);c.appendChild(fb);
-    [].slice.call(c.querySelectorAll('.decide')).forEach(function(d){
-      [].slice.call(d.querySelectorAll('.opt')).forEach(function(b){
-        b.addEventListener('click',function(){
-          var was=b.classList.contains('on');
-          d.querySelectorAll('.opt').forEach(function(x){x.classList.remove('on');});
-          if(!was)b.classList.add('on');
-          render();
-        });
-      });
+    var n=el('input');n.type='text';n.placeholder='한 줄 메모';n.addEventListener('input',render);fb.appendChild(n);
+    c.appendChild(fb);
+  });
+  $$('.decide').forEach(function(d){
+    $$('.ans button',d).forEach(function(b){
+      b.addEventListener('click',function(){var was=b.classList.contains('on');$$('.ans button',d).forEach(function(x){x.classList.remove('on');});if(!was)b.classList.add('on');render();});
     });
   });
-  [].slice.call(document.querySelectorAll('img.shot')).forEach(function(img){
-    function miss(){var f=el('div','frame missing','캡처 없음: '+img.getAttribute('src'));img.replaceWith(f);}
+  $$('img').forEach(function(img){
+    if(img.closest('#lb'))return;
+    function miss(){var f=el('div','frame missing','캡처 없음: '+img.getAttribute('src'));var z=img.closest('.zoom');(z||img).replaceWith(f);}
     if(img.complete&&img.naturalWidth===0)miss();else img.addEventListener('error',miss);
   });
+  var lb=document.getElementById('lb'),lbi=lb.querySelector('img'),lbp=lb.querySelector('p');
+  function closeLb(){lb.classList.remove('on');lbi.src='data:,';}
+  $$('.zoom').forEach(function(b){b.addEventListener('click',function(){var i=b.querySelector('img');if(!i)return;lbi.src=b.dataset.full||i.src;lbi.alt=i.alt;lbp.textContent=i.alt;lb.classList.add('on');});});
+  lb.addEventListener('click',closeLb);
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')closeLb();});
   document.getElementById('memo').addEventListener('input',render);
   document.getElementById('copy').addEventListener('click',function(){
     var t=render(),m=document.getElementById('msg');
     if(!t){m.textContent='먼저 단추를 누르거나 메모를 적으세요.';return;}
     (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){m.textContent='복사됨. 채팅에 붙여 넣으세요.';},function(){m.textContent='아래 문장을 직접 복사하세요.';});
   });
+  set(1);
 })();
 </script>
 </body>
