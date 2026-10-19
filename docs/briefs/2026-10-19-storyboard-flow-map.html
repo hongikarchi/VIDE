@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>전체 흐름 지도</title>
+<!-- 스토리보드 브리프(docs/briefs/README.md). 검토용 보기이며 정본은 SPEC·Design이다. 행 ID F01~F40은 이 문서 안에서만 쓰는 번호다. -->
+<style>
+:root{--bg:#fafaf8;--fg:#1c1c1a;--mute:#6b6b66;--line:#e2e2dd;--card:#fff;--rec:#1f6f5f;--rec-bg:#e6f3ef;--on:#1c1c1a;--on-fg:#fff;--ok:#2e8b57;--warn:#c98a00;--bad:#c0392b;
+  --accent:#d0664a;--accent-bg:#f9ece9;--grid:#0000000d;--frame-bg:#f5f4f0;--box-bg:#ffffff;--box-line:#c9c8c3;--b-used-bg:#dff1e6;--b-used-fg:#1e6b40;--b-new-bg:#fbefc8;--b-new-fg:#7a5600;--b-part-bg:#e9e9e5;--b-part-fg:#55554f;}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161614;--fg:#ecebe6;--mute:#9a9a93;--line:#2c2c29;--card:#1f1f1c;--rec:#7fcbb6;--rec-bg:#1d2e2a;--on:#ecebe6;--on-fg:#161614;
+  --accent:#e48a6c;--accent-bg:#3c2f28;--grid:#ffffff0d;--frame-bg:#1b1b19;--box-bg:#262623;--box-line:#45453f;--b-used-bg:#1f3a2a;--b-used-fg:#8fd6aa;--b-new-bg:#3d3216;--b-new-fg:#ecc766;--b-part-bg:#2e2e2b;--b-part-fg:#b5b5ae;}}
+:root[data-theme="dark"]{--bg:#161614;--fg:#ecebe6;--mute:#9a9a93;--line:#2c2c29;--card:#1f1f1c;--rec:#7fcbb6;--rec-bg:#1d2e2a;--on:#ecebe6;--on-fg:#161614;
+  --accent:#e48a6c;--accent-bg:#3c2f28;--grid:#ffffff0d;--frame-bg:#1b1b19;--box-bg:#262623;--box-line:#45453f;--b-used-bg:#1f3a2a;--b-used-fg:#8fd6aa;--b-new-bg:#3d3216;--b-new-fg:#ecc766;--b-part-bg:#2e2e2b;--b-part-fg:#b5b5ae;}
+*{box-sizing:border-box}
+body{margin:0;padding:32px 16px 220px;background:var(--bg);color:var(--fg);font:16px/1.55 "Pretendard","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif}
+main{max-width:720px;margin:0 auto}
+h1{font-size:26px;line-height:1.3;margin:0 0 6px}
+.meta{color:var(--mute);font-size:14px;margin:0 0 14px}
+.meta a{color:inherit}
+.why{font-size:17px;margin:0 0 28px;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-radius:10px}
+.status{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);vertical-align:middle}
+ol.list{list-style:none;padding:0;margin:0;display:grid;gap:18px}
+li.s{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 18px 14px;min-width:0}
+h2{font-size:18px;margin:0 0 12px;line-height:1.4}
+.id{display:inline-block;min-width:34px;margin-right:8px;padding:0 7px;border-radius:6px;background:var(--bg);border:1px solid var(--line);font-size:13px;color:var(--mute);text-align:center;vertical-align:2px}
+/* 와이어프레임: 16:10, 연한 격자. 자식 .box는 % 좌표로 둔다. */
+.frame{position:relative;width:100%;aspect-ratio:16/10;margin:0 0 12px;border:1px solid var(--line);border-radius:8px;overflow:hidden;
+  background-color:var(--frame-bg);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:5% 8%}
+.box{position:absolute;display:flex;align-items:center;justify-content:center;padding:2px 4px;text-align:center;font-size:12px;line-height:1.3;color:var(--mute);
+  background:var(--box-bg);border:1px solid var(--box-line);border-radius:5px;overflow:hidden}
+.box.hl{color:var(--fg);font-weight:600;border:2px solid var(--accent);background:var(--accent-bg)}
+.box.ghost{background:transparent;border-style:dashed}
+.frame.missing{display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:14px;padding:12px;text-align:center}
+img.shot{display:block;width:100%;height:auto;margin:0 0 12px;border:1px solid var(--line);border-radius:8px}
+.who,.shows,.ref{margin:4px 0;font-size:15px}
+.who::before,.shows::before{display:inline-block;min-width:66px;color:var(--mute);font-weight:600;margin-right:6px}
+.who::before{content:"사용자"}
+.shows::before{content:"화면"}
+.ref{color:var(--mute);font-size:13px}
+.decide{margin:12px 0 4px;padding:12px;border:1px dashed var(--line);border-radius:10px}
+.decide h3{font-size:16px;margin:0 0 10px}
+.options{display:grid;gap:8px;margin:0}
+.opt{display:block;width:100%;text-align:left;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--fg);font:inherit;cursor:pointer}
+.opt b{font-weight:600}
+.opt small{display:block;color:var(--mute);font-size:14px;margin-top:2px}
+.opt.rec{border-color:var(--rec);background:var(--rec-bg)}
+.opt.rec b::after{content:"추천";margin-left:8px;font-size:11px;padding:1px 6px;border-radius:999px;background:var(--rec);color:#fff;font-weight:600;vertical-align:2px}
+.opt.on{background:var(--on);color:var(--on-fg);border-color:var(--on)}
+.opt.on small{color:inherit;opacity:.8}
+.opt.on.rec b::after{background:var(--on-fg);color:var(--on)}
+.fb{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
+.tg{padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--fg);font:inherit;font-size:14px;cursor:pointer}
+.tg.on{background:var(--on);color:var(--on-fg);border-color:var(--on)}
+.note{flex:1 1 180px;min-width:0;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit;font-size:14px}
+.reply{position:sticky;bottom:0;margin-top:28px;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 -6px 24px rgba(0,0,0,.06)}
+.reply .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--fg);font:inherit;cursor:pointer}
+.btn.primary{background:var(--on);color:var(--on-fg);border-color:var(--on)}
+textarea{width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit;font-size:14px;resize:vertical;min-height:40px}
+#out{margin:10px 0 0;padding:10px 12px;border-radius:8px;background:var(--bg);font-size:14px;white-space:pre-wrap;color:var(--mute);max-height:96px;overflow:auto}
+@media (max-width:480px){.box{font-size:10px}h1{font-size:22px}.reply{padding:10px 12px}textarea{min-height:32px;margin-top:6px}#out{max-height:56px;margin-top:6px}}
+
+main{max-width:920px}
+.howto{margin:-16px 0 28px;padding:0 4px;font-size:14px;color:var(--mute)}
+.howto p{margin:2px 0}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.badge{display:inline-block;flex:none;padding:0 7px;border-radius:999px;font-size:12px;line-height:20px;border:1px solid transparent;white-space:nowrap;text-align:center;min-width:52px}
+.badge.used{background:var(--b-used-bg);color:var(--b-used-fg)}
+.badge.new{background:var(--b-new-bg);color:var(--b-new-fg)}
+.badge.part{background:var(--b-part-bg);color:var(--b-part-fg)}
+.badge.plan{background:transparent;color:var(--mute);border:1px dashed var(--mute)}
+.decide.fmap{padding:8px 10px}
+.decide.fmap h3{font-size:14px;margin:2px 2px 6px;color:var(--mute);font-weight:600}
+.decide.fmap h3 small{font-weight:400;margin-left:6px;font-size:12px}
+.frow{display:grid;grid-template-columns:34px 11.5em 56px minmax(0,1fr) auto;align-items:center;gap:8px;padding:5px 2px;border-top:1px solid var(--line);font-size:14px;white-space:nowrap;cursor:default}
+.frow:first-of-type{border-top:0}
+.frow .fid{font-size:12px;color:var(--mute)}
+.frow .fname{overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.frow .fdoubt{overflow:hidden;text-overflow:ellipsis;color:var(--mute);font-size:13px}
+.frow .rtg{display:flex;gap:4px;align-items:center}
+.frow .tg{padding:2px 8px;font-size:12px}
+.frow .tg.m{color:var(--mute)}
+.frow .tg.m.has{color:var(--fg);border-color:var(--fg)}
+.frow .tg.cut.on{background:var(--bad);border-color:var(--bad);color:#fff}
+.rnote{display:none;grid-column:2 / -1;margin:2px 0 2px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;font-size:13px;min-width:0}
+.frow.open .rnote{display:block}
+.frow .fid,.frow .fname{cursor:pointer}
+.frow .fname::after{content:"▾";margin-left:4px;font-size:10px;font-weight:400;color:var(--mute)}
+.frow.desc .fname::after{content:"▴"}
+.fdesc{display:none;grid-column:2 / -1;margin:2px 0 4px;padding:6px 8px;border-radius:6px;background:var(--bg);color:var(--fg);font-size:13px;line-height:1.5;white-space:pre-line;min-width:0;overflow-wrap:anywhere}
+.frow.desc .fdesc{display:block}
+@media (max-width:640px){
+  .frow{grid-template-columns:30px minmax(0,1fr) 52px;row-gap:4px}
+  .frow .fdoubt{grid-column:2 / -1}
+  .frow .rtg{grid-column:2 / -1}
+}
+</style>
+</head>
+<body>
+<main>
+<h1>전체 흐름 지도 — 어떤 기능을 둘지</h1>
+<p class="meta">2026-10-19 · <span class="status">검토 대기</span> · 근거: <a href="../../human/docs/specs/README.html">SPEC 색인</a> · <a href="../../human/Design.html">Design</a> · <a href="../../human/docs/research/RESEARCH-18-environment-not-model.html">RESEARCH-18</a> · 개략도 · 실제 화면 아님(실제 캡처는 <a href="2026-10-19-storyboard-color-request.html">기둥 색 바꾸기 스토리보드</a>)</p>
+<p class="why">흐름 한 줄: 프로젝트 열기·폴더·설정 · 호스트 연결·Sync · 요청(대화·핀·스케치·첨부) · 결과·개입·되돌리기 · 전문 작업 도구 · 자료·기록 · 공유·산출물 · 설정·AI 환경. 여덟 단계에 기능 묶음 40개가 있다. 다 만들기 전에 무엇을 남길지 정한다.</p>
+<div class="howto">
+  <p>보는 법 ① 초록(써봄)만 믿는다. 노랑·회색·점선은 아직 써 본 적이 없는 것이다.</p>
+  <p>보는 법 ② '빼기'를 눌러도 코드는 지우지 않는다. 다음 계획에서 뺀다.</p>
+  <div class="legend"><span class="badge used">써봄</span><span class="badge new">미검증</span><span class="badge part">일부</span><span class="badge plan">계획만</span></div>
+</div>
+
+<ol class="list">
+
+<li class="s" data-id="S1" data-choices="좋음,수정">
+  <h2><span class="id">S1</span>프로젝트 열기·폴더·설정</h2>
+  <div class="frame" role="img" aria-label="대시보드 와이어프레임: 왼쪽 레일, 가운데 큰 달력, 오른쪽 할 일과 연결 파일">
+    <div class="box" style="left:0%;top:0%;width:5%;height:94%">레일</div>
+    <div class="box" style="left:6%;top:0%;width:93%;height:8%">프로젝트 이름</div>
+    <div class="box hl" style="left:6%;top:10%;width:62%;height:84%">큰 달력 · 일정 끌어 놓기</div>
+    <div class="box hl" style="left:69%;top:10%;width:24%;height:34%">할 일 · 퇴근하기</div>
+    <div class="box" style="left:69%;top:46%;width:24%;height:22%">연결 파일</div>
+    <div class="box" style="left:69%;top:70%;width:24%;height:24%">프로젝트 폴더 · 파일 지도</div>
+    <div class="box ghost" style="left:94%;top:10%;width:5%;height:84%">AI 열(접힘)</div>
+    <div class="box" style="left:0%;top:95%;width:99%;height:5%">상태줄</div>
+  </div>
+  <p class="who">로그인하고 프로젝트를 고른다.</p>
+  <p class="shows">큰 달력과 할 일이 있는 대시보드가 열린다.</p>
+  <p class="ref">근거 SPEC-01.14</p>
+  <div class="decide fmap">
+    <h3>이 단계의 기능 묶음 <small>이름을 누르면 설명이 펼쳐진다</small></h3>
+      <div class="frow" data-id="F01" data-choices="유지,줄임,빼기,모름" title="첫 실행·로그인·프로젝트 고르기 — 설치하고 로그인한 뒤 AI 연결 상태를 확인하고 프로젝트를 고르거나 만든다.
+의심: 홈의 '목록에서 삭제'가 실제로는 이 PC 데이터까지 지우는데 문구가 그렇게 말하지 않았다(검증 발견 35, 웨이브 6에서 고쳤으나 설치본에는 아직 없음).
+근거 SPEC-05.7 · 티켓 10개"><span class="fid">F01</span><span class="fname">첫 실행·로그인·고르기</span><span class="badge used">써봄</span><span class="fdoubt">“목록에서 삭제” 문구가 실제와 달랐다</span></div>
+      <div class="frow" data-id="F02" data-choices="유지,줄임,빼기,모름" title="대시보드 달력·할 일·퇴근하기 — 큰 달력에 일정을 끌어다 놓고, 할 일을 관리하고, 하루 기록을 남긴다. 글이나 파일에서 할 일을 뽑을 수도 있다.
+의심: 2026-10-06 사용자 피드백 14건으로 한 번 크게 고쳤다. 고친 뒤 실제로 매일 쓰는지는 확인하지 않았다.
+근거 SPEC-01.14 · 티켓 15개"><span class="fid">F02</span><span class="fname">달력·할 일·퇴근하기</span><span class="badge used">써봄</span><span class="fdoubt">고친 뒤 매일 쓰는지 모른다</span></div>
+      <div class="frow" data-id="F03" data-choices="유지,줄임,빼기,모름" title="작업 폴더 만들기·회사 서버 폴더 연결·파일 지도 — 01~09 폴더 틀로 작업 폴더를 만들고, 서버 폴더는 AI가 역할을 제안한다. 파일 사이 관계와 요청 전 영향을 지도로 본다.
+의심: 오프라인 시험만 거쳤다. 실호스트·설치본 확인과 DWG를 서버에서 바로 여는지(OQ-18) 결정이 남아 있다.
+근거 SPEC-01.13 · 티켓 14개"><span class="fid">F03</span><span class="fname">작업 폴더·서버·파일 지도</span><span class="badge new">미검증</span><span class="fdoubt">오프라인 시험만 했다</span></div>
+  </div>
+</li>
+
+<li class="s" data-id="S2" data-choices="좋음,수정">
+  <h2><span class="id">S2</span>호스트 연결·Sync</h2>
+  <div class="frame" role="img" aria-label="모델 화면 와이어프레임: 왼쪽 연결 파일, 가운데 3D 보기, 오른쪽 AI 열">
+    <div class="box" style="left:0%;top:0%;width:5%;height:94%">레일</div>
+    <div class="box hl" style="left:6%;top:0%;width:20%;height:50%">연결 파일 · 켜기/끄기</div>
+    <div class="box" style="left:6%;top:52%;width:20%;height:42%">레이어</div>
+    <div class="box" style="left:27%;top:0%;width:46%;height:7%">열린 탭</div>
+    <div class="box hl" style="left:27%;top:9%;width:46%;height:60%">3D 보기 · Rhino 모델 + ZWCAD 도면</div>
+    <div class="box ghost" style="left:50%;top:52%;width:21%;height:14%">단면선 · 차이 표시</div>
+    <div class="box" style="left:27%;top:71%;width:46%;height:23%">객체 검사기</div>
+    <div class="box" style="left:74%;top:0%;width:25%;height:94%">AI 열</div>
+    <div class="box hl" style="left:0%;top:95%;width:99%;height:5%">상태줄 · 연결됨 2 / 끊김 1</div>
+  </div>
+  <p class="who">Rhino·ZWCAD에서 연 문서를 프로젝트에 연결한다.</p>
+  <p class="shows">모델과 도면이 3D 보기에 뜨고 바뀐 것만 따라온다.</p>
+  <p class="ref">근거 SPEC-01.9</p>
+  <div class="decide fmap">
+    <h3>이 단계의 기능 묶음 <small>이름을 누르면 설명이 펼쳐진다</small></h3>
+      <div class="frow" data-id="F04" data-choices="유지,줄임,빼기,모름" title="Rhino 창 연결·모델 불러오기 — 작업 중인 Rhino 문서를 연결하면 객체·레이어·속성이 VIDE 3D 화면에 뜨고, 바뀐 것만 따라 갱신된다.
+의심: Rhino가 문서를 읽기 전용으로 열어 저장에 실패해도 화면에 알리지 않았다(검증 발견 32, 고쳤으나 설치본에는 없음). 문서당 객체 상한은 20,000개다.
+근거 SPEC-01.9 · 티켓 20개"><span class="fid">F04</span><span class="fname">Rhino 연결·불러오기</span><span class="badge used">써봄</span><span class="fdoubt">읽기 전용 저장 실패를 알리지 않았다</span></div>
+      <div class="frow" data-id="F05" data-choices="유지,줄임,빼기,모름" title="ZWCAD 도면 연결 — 열린 ZWCAD 도면을 연결해 선·블록·외부참조를 화면에서 본다.
+의심: 첫 불러오기에 74초가 걸려 경보선(20초)의 3.7배다(T-285). 실제 기본도면은 3,841개 중 3,369개만 보인다.
+근거 SPEC-01.11 · 티켓 10개"><span class="fid">F05</span><span class="fname">ZWCAD 도면 연결</span><span class="badge part">일부</span><span class="fdoubt">첫 불러오기 74초, 일부만 보인다</span></div>
+      <div class="frow" data-id="F06" data-choices="유지,줄임,빼기,모름" title="여러 파일을 한 공간에서 보기 — 한 프로젝트에 모델과 도면 여러 개를 연결해 목록에서 켜고 끄며 함께 본다.
+의심: 검증 라운드에서 P0가 이어졌다. 끊긴 파일이 '연결됨'으로 보였고(T-287), 닫힌 파일의 옛 데이터가 쓰였고(T-298·T-302), 다른 프로젝트 연결이 섞였다(T-284).
+근거 SPEC-01.1 · 티켓 12개"><span class="fid">F06</span><span class="fname">여러 파일 한 공간</span><span class="badge part">일부</span><span class="fdoubt">연결 상태·옛 데이터 P0가 이어졌다</span></div>
+      <div class="frow" data-id="F07" data-choices="유지,줄임,빼기,모름" title="도면과 모델 맞추기(차이 비교) — CAD 도면과 Rhino 모델을 겹쳐 서로 대응하는 것과 어긋난 것을 찾는다.
+의심: Rhino 쪽 객체가 0개로 비교된 P0(T-283)가 있었다. 솔리드는 평면 단면 외곽선으로 비교하기로 정했지만, 닫힌 도면 데이터 표시(T-302)는 확인하지 않았다.
+근거 SPEC-05.8 · 티켓 6개"><span class="fid">F07</span><span class="fname">도면·모델 차이 비교</span><span class="badge part">일부</span><span class="fdoubt">Rhino 쪽이 0개로 비교된 P0</span></div>
+      <div class="frow" data-id="F08" data-choices="유지,줄임,빼기,모름" title="단면 보기 — 평면에서 두 점을 찍어 그 선으로 자른 단면을 본다.
+의심: 실호스트에서 확인하기 전이다.
+근거 SPEC-01.15 · 티켓 1개"><span class="fid">F08</span><span class="fname">단면 보기</span><span class="badge new">미검증</span><span class="fdoubt">실호스트에서 확인 전</span></div>
+  </div>
+</li>
+
+<li class="s" data-id="S3" data-choices="좋음,수정">
+  <h2><span class="id">S3</span>요청(대화·핀·스케치·첨부)</h2>
+  <div class="frame" role="img" aria-label="요청 화면 와이어프레임: 가운데 3D에 핀과 스케치, 오른쪽 대화와 작성기">
+    <div class="box" style="left:0%;top:0%;width:5%;height:94%">레일</div>
+    <div class="box" style="left:6%;top:0%;width:20%;height:94%">작업 이력</div>
+    <div class="box" style="left:27%;top:0%;width:46%;height:7%">대화 탭 · 목적별</div>
+    <div class="box" style="left:27%;top:9%;width:46%;height:60%">3D 보기</div>
+    <div class="box hl" style="left:30%;top:13%;width:16%;height:14%">핀 꽂은 기둥</div>
+    <div class="box hl" style="left:51%;top:47%;width:20%;height:18%">스케치한 경계선</div>
+    <div class="box" style="left:27%;top:71%;width:46%;height:23%">객체 검사기</div>
+    <div class="box" style="left:74%;top:0%;width:25%;height:62%">대화 기록</div>
+    <div class="box hl" style="left:74%;top:64%;width:25%;height:20%">작성기 · “이 보만 남겨줘” + 핀</div>
+    <div class="box" style="left:74%;top:86%;width:25%;height:8%">첨부 칩 · 참고 이미지</div>
+  </div>
+  <p class="who">문장에 객체 핀을 꽂고 선을 그려 AI에게 맡긴다.</p>
+  <p class="shows">작성기에 핀·첨부 칩이 붙고 3D에 스케치가 보인다.</p>
+  <p class="ref">근거 SPEC-01.10</p>
+  <div class="decide fmap">
+    <h3>이 단계의 기능 묶음 <small>이름을 누르면 설명이 펼쳐진다</small></h3>
+      <div class="frow" data-id="F09" data-choices="유지,줄임,빼기,모름" title="대화로 맡기기·목적별 여러 대화 — 대화 탭을 목적마다 열어 앞 대화를 이어 가고, 서로 다른 일은 동시에 진행한다.
+의심: 사용자의 다리 모델링 요청이 문장 속 '구조 검토'라는 말 때문에 구조 도구로 4번 강제로 들어갔다(P0 T-360, 핫픽스 반영).
+근거 SPEC-02.19 · 티켓 15개"><span class="fid">F09</span><span class="fname">대화·목적별 여러 대화</span><span class="badge used">써봄</span><span class="fdoubt">낱말 하나로 구조 도구에 강제로 들어갔다</span></div>
+      <div class="frow" data-id="F10" data-choices="유지,줄임,빼기,모름" title="객체 핀·스케치로 가리키기 — 바꿀 객체와 남길 객체를 문장에 핀으로 넣고, 작업평면에 방향이나 경계를 그려 함께 보낸다.
+의심: 단순한 돌출 정도만 확인했다. 실무에서 쓰는 복잡한 입력은 검증하지 않았다.
+근거 SPEC-01.10 · 티켓 6개"><span class="fid">F10</span><span class="fname">객체 핀·스케치</span><span class="badge used">써봄</span><span class="fdoubt">단순한 돌출만 확인했다</span></div>
+      <div class="frow" data-id="F11" data-choices="유지,줄임,빼기,모름" title="파일·폴더 경로 첨부 — 파일을 붙이거나 탐색기 경로를 붙여넣으면 칩이 되어 AI가 그 파일을 읽는다.
+의심: 실제 사용자 창에서 붙여넣기와 AI 읽기를 확인하는 일이 남아 있다.
+근거 SPEC-01.12 · 티켓 5개"><span class="fid">F11</span><span class="fname">파일·경로 첨부</span><span class="badge new">미검증</span><span class="fdoubt">실제 창에서 확인 전</span></div>
+      <div class="frow" data-id="F12" data-choices="유지,줄임,빼기,모름" title="참고 이미지에서 원하는 부분 짚기 — 참고 사진에 영역을 표시하면 AI가 이해한 내용을 말풍선으로 확인받고 모델에 반영한다.
+의심: 가짜 공급자와 합성 장면으로만 시험했다. 이미지 작업 한 번에 33~44초가 걸린다.
+근거 SPEC-09.1 · 티켓 2개"><span class="fid">F12</span><span class="fname">참고 이미지 영역 짚기</span><span class="badge new">미검증</span><span class="fdoubt">가짜 AI로만 시험, 한 번 33~44초</span></div>
+      <div class="frow" data-id="F13" data-choices="유지,줄임,빼기,모름" title="화면만 바꾸는 요청(숨기기·보기) — '보만 남기고 숨겨줘' 같은 말은 AI 없이 VIDE가 바로 화면을 바꾼다.
+의심: P0가 났었다. 대상이 비어 AI 파일 편집으로 넘어갔고(T-270), '보'를 SB/SG 약호로 찾지 못했다. 라운드 6에서는 P2까지 내려왔다.
+근거 SPEC-02.17 · 티켓 4개"><span class="fid">F13</span><span class="fname">화면만 바꾸는 요청</span><span class="badge part">일부</span><span class="fdoubt">“보”를 약호로 못 찾던 P0</span></div>
+  </div>
+</li>
+
+<li class="s" data-id="S4" data-choices="좋음,수정">
+  <h2><span class="id">S4</span>결과·개입·되돌리기</h2>
+  <div class="frame" role="img" aria-label="결과 화면 와이어프레임: 가운데 바뀐 객체 강조, 오른쪽 진행과 결과, 되돌리기">
+    <div class="box" style="left:0%;top:0%;width:5%;height:94%">레일</div>
+    <div class="box" style="left:6%;top:0%;width:20%;height:94%">작업 이력 · 요청 목록</div>
+    <div class="box" style="left:27%;top:0%;width:46%;height:69%">3D 보기</div>
+    <div class="box hl" style="left:45%;top:44%;width:25%;height:20%">바뀐 객체 12개</div>
+    <div class="box" style="left:27%;top:71%;width:46%;height:23%">바뀐 객체 목록</div>
+    <div class="box hl" style="left:74%;top:0%;width:25%;height:40%">진행 · 결과</div>
+    <div class="box" style="left:74%;top:42%;width:25%;height:18%">확인 카드 · 대량 삭제?</div>
+    <div class="box hl" style="left:74%;top:62%;width:25%;height:10%">되돌리기</div>
+    <div class="box" style="left:74%;top:74%;width:25%;height:20%">작성기 · 끼어들기 / 취소</div>
+  </div>
+  <p class="who">결과를 보고 더 지시하거나 끼어들거나 되돌린다.</p>
+  <p class="shows">바뀐 객체가 강조되고 실행 하나가 되돌리기 한 번이다.</p>
+  <p class="ref">근거 SPEC-02.13</p>
+  <div class="decide fmap">
+    <h3>이 단계의 기능 묶음 <small>이름을 누르면 설명이 펼쳐진다</small></h3>
+      <div class="frow" data-id="F14" data-choices="유지,줄임,빼기,모름" title="열린 문서를 바로 고치고 되돌리기 — AI가 Rhino·ZWCAD 문서를 바로 바꾸고 바뀐 객체 목록을 보여 준다. 실행 하나가 되돌리기 한 번이다. 원하면 계획부터 받는다.
+의심: Codex CLI가 혼자 판 업데이트되자 모든 Codex 요청이 즉시 실패했다(P0 T-361, 고쳤으나 설치본에는 없음). ZWCAD 바로 실행은 실호스트에서 아직 확인하지 않았다(T-071).
+근거 SPEC-02.13 · 티켓 10개"><span class="fid">F14</span><span class="fname">바로 고치기·되돌리기</span><span class="badge used">써봄</span><span class="fdoubt">CLI 판이 바뀌자 Codex가 모두 실패</span></div>
+      <div class="frow" data-id="F15" data-choices="유지,줄임,빼기,모름" title="도면과 모델을 한 요청으로 함께 고치기 — 한 요청으로 여러 파일을 고치고, 하나라도 실패하면 모두 자동으로 되돌린다.
+의심: 두 파일에 걸친 요청과 Rhino 창 두 개를 실제로 확인하지 않았다.
+근거 SPEC-02.14 · 티켓 5개"><span class="fid">F15</span><span class="fname">여러 파일 한 요청</span><span class="badge new">미검증</span><span class="fdoubt">두 파일 요청을 실제로 확인 전</span></div>
+      <div class="frow" data-id="F16" data-choices="유지,줄임,빼기,모름" title="도중에 끼어들기·취소 — 실행 중에 지시를 덧붙이거나 쌓아 두고, 필요하면 취소한다.
+의심: 취소한 요청의 AI 프로세스가 606초 동안 살아 있었다(검증 발견 36, 고쳤으나 설치본에는 없음).
+근거 SPEC-02.4 · 티켓 3개"><span class="fid">F16</span><span class="fname">끼어들기·취소</span><span class="badge part">일부</span><span class="fdoubt">취소 뒤 AI가 10분 살아 있었다</span></div>
+      <div class="frow" data-id="F17" data-choices="유지,줄임,빼기,모름" title="위험한 동작 확인 카드 — 대량 삭제·레이어 삭제·저장·내보내기처럼 되돌리기 어려운 동작은 카드로 묻고 나서 실행한다.
+의심: 대량 삭제 기준이 문서마다 500과 50으로 다르다(RESEARCH-18 §4.3 d).
+근거 SPEC-00.6 · 티켓 3개"><span class="fid">F17</span><span class="fname">위험 동작 확인 카드</span><span class="badge new">미검증</span><span class="fdoubt">대량 삭제 기준이 500·50으로 엇갈린다</span></div>
+      <div class="frow" data-id="F18" data-choices="유지,줄임,빼기,모름" title="AI의 Rhino 명령·Python·Grasshopper 다루기 — AI가 Rhino 명령과 Python을 실행하고 Grasshopper 캔버스를 읽고 고친다.
+의심: Grasshopper를 사용자 Rhino 창에서 확인하지 않았다(T-133). 외부 MCP와 비교한 것은 속도뿐이고 자유도 기준은 없다.
+근거 SPEC-02.12 · 티켓 6개"><span class="fid">F18</span><span class="fname">Rhino 명령·Python·GH</span><span class="badge new">미검증</span><span class="fdoubt">Grasshopper를 사용자 창에서 확인 전</span></div>
+  </div>
+</li>
+
+<li class="s" data-id="S5" data-choices="좋음,수정">
+  <h2><span class="id">S5</span>전문 작업 도구</h2>
+  <div class="frame" role="img" aria-label="작업 도구 화면 와이어프레임: 왼쪽 설정값, 가운데 단계와 결과 표, 오른쪽 질문 카드">
+    <div class="box" style="left:0%;top:0%;width:5%;height:94%">레일</div>
+    <div class="box hl" style="left:6%;top:0%;width:20%;height:94%">설정값 · 건폐율·높이…</div>
+    <div class="box hl" style="left:27%;top:0%;width:46%;height:7%">문맥 탭 · 규모검토</div>
+    <div class="box" style="left:27%;top:9%;width:46%;height:14%">단계 1→7 진행판</div>
+    <div class="box" style="left:27%;top:25%;width:46%;height:40%">3D 미리보기 · 매스 대안</div>
+    <div class="box hl" style="left:27%;top:67%;width:46%;height:27%">결과 표 · 건축개요</div>
+    <div class="box" style="left:74%;top:0%;width:25%;height:40%">근거 · 조항</div>
+    <div class="box" style="left:74%;top:42%;width:25%;height:30%">질문 카드 · 답하면 다시 계산</div>
+    <div class="box" style="left:74%;top:74%;width:25%;height:20%">작성기</div>
+  </div>
+  <p class="who">설정값을 바꿔 가며 AI 없이 다시 계산한다.</p>
+  <p class="shows">단계 진행과 결과 표, 근거가 함께 뜨고 Rhino·CAD에 만든다.</p>
+  <p class="ref">근거 SPEC-12.1</p>
+  <div class="decide fmap">
+    <h3>이 단계의 기능 묶음 <small>이름을 누르면 설명이 펼쳐진다</small></h3>
+      <div class="frow" data-id="F19" data-choices="유지,줄임,빼기,모름" title="규모검토(주소에서 건축개요까지) — 주소로 대지와 주변을 모델링하고, 건축 가능 영역과 매스 대안을 거쳐 건축개요 표를 낸다.
+의심: 합성 사슬은 통과했지만 라운드에서 P0가 났다. 주소 출처가 없었고(T-273), 4~7단계가 멈췄다(T-288). 진행판 UX는 사용자가 다른 세션에서 작업 중이다.
+근거 SPEC-12.1 · 티켓 12개"><span class="fid">F19</span><span class="fname">규모검토</span><span class="badge part">일부</span><span class="fdoubt">4~7단계가 멈춘 P0</span></div>
+      <div class="frow" data-id="F20" data-choices="유지,줄임,빼기,모름" title="법규 질문에 근거와 함께 답받기 — 대충 물어도 결론, 근거 조항, 해석, 확인할 것 순으로 답한다.
+의심: 법규 서비스 서버가 배포되지 않아 가짜 서버로만 시험했다.
+근거 SPEC-13.1 · 티켓 11개"><span class="fid">F20</span><span class="fname">법규 질문 답</span><span class="badge new">미검증</span><span class="fdoubt">서버 미배포, 가짜 서버로만 시험</span></div>
+      <div class="frow" data-id="F21" data-choices="유지,줄임,빼기,모름" title="지금 모델이 법규를 넘는지 체크 — [법규 체크]를 누르면 건폐율·용적률·높이·일조·주차를 모델에서 읽어 항목마다 판정한다.
+의심: 라운드에서 결과 표까지 가지 못한 P0(T-271)와 모델 읽기 실패(T-282)가 났다. 숨은 Rhino 합성 문서로만 통과했다.
+근거 SPEC-15.1 · 티켓 6개"><span class="fid">F21</span><span class="fname">법규 체크</span><span class="badge part">일부</span><span class="fdoubt">결과 표까지 못 간 P0</span></div>
+      <div class="frow" data-id="F22" data-choices="유지,줄임,빼기,모름" title="구조 골조 배치·검토 — 손으로 그린 기둥·거더를 읽어 고치고, 보를 배치하고 단면을 고르고 일람표를 만들어 Rhino에 올린다.
+의심: 라운드 6에서 P0였다. 축선·배치 실패(T-305), 질문 카드 답이 반영되지 않음(T-293), 입력 칸을 찾지 못함(T-289). 사용자의 모델링 요청이 이 도구로 강제로 들어간 일도 있었다.
+근거 SPEC-06.10 · 티켓 25개"><span class="fid">F22</span><span class="fname">구조 골조 배치</span><span class="badge part">일부</span><span class="fdoubt">라운드 6에도 P0, 강제 진입 원인</span></div>
+      <div class="frow" data-id="F23" data-choices="유지,줄임,빼기,모름" title="곡면 패널링 — 곡면을 패널로 나눠 미리 보고, 두께와 줄눈이 있는 부재로 만들고, 타입으로 묶어 일람표와 함께 만든다.
+의심: 숨은 Rhino 합성 면으로만 시험했다. 사용자가 쓴 적은 없다.
+근거 SPEC-16.1 · 티켓 12개"><span class="fid">F23</span><span class="fname">곡면 패널링</span><span class="badge new">미검증</span><span class="fdoubt">사용자가 쓴 적이 없다</span></div>
+      <div class="frow" data-id="F24" data-choices="유지,줄임,빼기,모름" title="모델 변경을 기존 도면에 반영·도곽 미리보기 — 모델이 바뀐 만큼 기존 CAD 도면을 형식 그대로 고치고, 손으로 고친 곳은 충돌로 남긴다. 도곽을 CTB로 미리 본다.
+의심: 합성 도면과 실도면 사본 일부로만 확인했다. Rhino에서 도면을 만드는 방향은 사용자가 폐기했다.
+근거 SPEC-14.1 · 티켓 9개"><span class="fid">F24</span><span class="fname">도면 역반영·도곽</span><span class="badge new">미검증</span><span class="fdoubt">합성·사본 일부로만 확인</span></div>
+  </div>
+</li>
+
+<li class="s" data-id="S6" data-choices="좋음,수정">
+  <h2><span class="id">S6</span>자료·기록</h2>
+  <div class="frame" role="img" aria-label="자료 화면 와이어프레임: 왼쪽 검색과 필터, 가운데 원장과 기록 차트, 오른쪽 근거 원문">
+    <div class="box" style="left:0%;top:0%;width:5%;height:94%">레일</div>
+    <div class="box" style="left:6%;top:0%;width:20%;height:94%">검색 · 분야·상태 필터</div>
+    <div class="box" style="left:27%;top:0%;width:46%;height:7%">보기 전환 · 자료 / 기록</div>
+    <div class="box hl" style="left:27%;top:9%;width:46%;height:40%">현황 · 이슈 · 원장</div>
+    <div class="box hl" style="left:27%;top:51%;width:46%;height:43%">기록 차트 · 부위×시간</div>
+    <div class="box" style="left:74%;top:0%;width:25%;height:62%">근거 원문 · 확정 / 오염</div>
+    <div class="box" style="left:74%;top:64%;width:25%;height:30%">AI 열 · 작성기</div>
+    <div class="box hl" style="left:0%;top:95%;width:99%;height:5%">상태줄 · 자료 정리 3/5단계 · 남은 시간</div>
+  </div>
+  <p class="who">폴더 문서를 AI에게 정리시키고 두세 글자로 찾는다.</p>
+  <p class="shows">자료 원장과 부위×시간 기록 차트, 근거 원문이 보인다.</p>
+  <p class="ref">근거 SPEC-08.9</p>
+  <div class="decide fmap">
+    <h3>이 단계의 기능 묶음 <small>이름을 누르면 설명이 펼쳐진다</small></h3>
+      <div class="frow" data-id="F25" data-choices="유지,줄임,빼기,모름" title="프로젝트 폴더 자료 정리(자동 DB) — 폴더의 문서·도면 글자·메일을 AI가 읽어 문장과 이슈로 정리하고 일정 후보를 낸다.
+의심: 192분으로 예고했지만 실제로는 103분이 걸려 사용자가 중간에 멈췄다(검증 발견 33). 닿지 않는 폴더의 문장 509개가 숨었다(검증 발견 34). AI 비용의 절반이 이슈 단계에 든다.
+근거 SPEC-08.9 · 티켓 5개"><span class="fid">F25</span><span class="fname">폴더 자료 정리</span><span class="badge used">써봄</span><span class="fdoubt">예고 192분에 실제 103분, 비용 큼</span></div>
+      <div class="frow" data-id="F26" data-choices="유지,줄임,빼기,모름" title="자료 찾기·사람이 확정 — 두세 글자로 자료를 찾고, 사람이 확정하거나 오염으로 표시한 진술만 근거로 쓴다.
+의심: 실제 자료 DB로 화면을 확인하는 일이 남아 있다.
+근거 SPEC-08.1 · 티켓 3개"><span class="fid">F26</span><span class="fname">자료 찾기·사람이 확정</span><span class="badge new">미검증</span><span class="fdoubt">실제 자료 DB로 확인 전</span></div>
+      <div class="frow" data-id="F27" data-choices="유지,줄임,빼기,모름" title="기록 타임라인(부위×시간, 모델 위) — 요구·의도·결정을 부위와 시간 차트로 보고, 객체를 골라 '왜 이 형상인가'를 거슬러 찾는다.
+의심: 실제 프로젝트에서 기록이 0건이었다. 설치본 15분 동승 확인은 끝까지 가지 못했다. 쓸모가 확인되기 전에 세 웨이브를 출하했다.
+근거 SPEC-17.4 · 티켓 23개"><span class="fid">F27</span><span class="fname">기록 타임라인</span><span class="badge new">미검증</span><span class="fdoubt">실제 기록 0건, 쓸모 미확인</span></div>
+      <div class="frow" data-id="F28" data-choices="유지,줄임,빼기,모름" title="카톡·메일 가져오기와 정리 — 카톡·메일을 가져와 기록 후보로 만들고, 사람이 거른 것만 남긴다.
+의심: 가져오기만 구현했다. 이 PC 안 AI가 후보를 정리하는 부분(T-369)은 계획만 있다.
+근거 SPEC-17.3 · 티켓 4개"><span class="fid">F28</span><span class="fname">카톡·메일 가져오기</span><span class="badge part">일부</span><span class="fdoubt">가져오기만 됨, 정리는 계획만</span></div>
+      <div class="frow" data-id="F29" data-choices="유지,줄임,빼기,모름" title="공유 노트·회의록·일지 — 구성원과 같은 노트를 실시간으로 함께 고치고, 체크 항목을 할 일로 보낸다.
+의심: 사이트 배포와 두 기기 확인이 남아 있다. PRD 요구(FR-26)는 아직 첨삭 제안 상태다.
+근거 SPEC-10.1 · 티켓 7개"><span class="fid">F29</span><span class="fname">공유 노트·일지</span><span class="badge part">일부</span><span class="fdoubt">배포·두 기기 확인 전</span></div>
+  </div>
+</li>
+
+<li class="s" data-id="S7" data-choices="좋음,수정">
+  <h2><span class="id">S7</span>공유·산출물</h2>
+  <div class="frame" role="img" aria-label="산출물 화면 와이어프레임: 왼쪽 보고서 목록, 가운데 미리보기와 비교, 오른쪽 받은 의견">
+    <div class="box" style="left:0%;top:0%;width:5%;height:94%">레일</div>
+    <div class="box" style="left:6%;top:0%;width:20%;height:94%">보고서 · 표 목록</div>
+    <div class="box hl" style="left:27%;top:0%;width:46%;height:52%">보고서 미리보기</div>
+    <div class="box" style="left:27%;top:54%;width:22%;height:40%">수량표 · 마감표</div>
+    <div class="box" style="left:51%;top:54%;width:22%;height:40%">검토본 A / B 비교</div>
+    <div class="box hl" style="left:74%;top:0%;width:25%;height:14%">게시 · 비밀번호 링크</div>
+    <div class="box hl" style="left:74%;top:16%;width:25%;height:46%">받은 웹 의견 · 핀</div>
+    <div class="box" style="left:74%;top:64%;width:25%;height:30%">의견 → 수정 요청</div>
+  </div>
+  <p class="who">표·검토본·보고서를 만들어 밖에 공유한다.</p>
+  <p class="shows">보고서 미리보기와 게시 단추, 받은 의견이 보인다.</p>
+  <p class="ref">근거 SPEC-07.11</p>
+  <div class="decide fmap">
+    <h3>이 단계의 기능 묶음 <small>이름을 누르면 설명이 펼쳐진다</small></h3>
+      <div class="frow" data-id="F30" data-choices="유지,줄임,빼기,모름" title="웹 검토 의견을 설계 수정으로 — 외부 검토자가 설치 없이 웹에서 핀과 문장으로 의견을 남기면, 그 의견을 수정 요청으로 잇는다.
+의심: 로컬에서만 왕복했다. 원격 모델 게시는 저장소 무료 한도 때문에 막혀 있다.
+근거 SPEC-04.7 · 티켓 3개"><span class="fid">F30</span><span class="fname">웹 검토 의견→수정</span><span class="badge part">일부</span><span class="fdoubt">로컬 왕복만, 원격 게시 막힘</span></div>
+      <div class="frow" data-id="F31" data-choices="유지,줄임,빼기,모름" title="수량표·검토본 비교·내보내기 — 수량을 묶어 표로 보고, 수정 전후 검토본을 A/B로 비교하고, CSV로 낸다.
+의심: 합성 자료로만 확인했다. 실무 전문 표는 없다.
+근거 SPEC-03.8 · 티켓 3개"><span class="fid">F31</span><span class="fname">수량표·검토본 비교</span><span class="badge new">미검증</span><span class="fdoubt">합성 자료로만 확인</span></div>
+      <div class="frow" data-id="F32" data-choices="유지,줄임,빼기,모름" title="보고서 만들기·보고용 게시 — 검토용·보고용 보고서를 만들고 비밀번호 링크나 내 GitHub·Cloudflare 계정으로 게시한다.
+의심: 가짜 서비스로만 시험했다. 실제 계정 배포는 한 번도 하지 않았다. 회사 로고·회사명 머리는 계획만 있다.
+근거 SPEC-07.11 · 티켓 10개"><span class="fid">F32</span><span class="fname">보고서·게시</span><span class="badge new">미검증</span><span class="fdoubt">실계정 배포를 한 번도 안 했다</span></div>
+      <div class="frow" data-id="F33" data-choices="유지,줄임,빼기,모름" title="마감 코드 고르기·실 마감표 — 마감 코드를 고르고 실마다 배정해 실 마감표와 마감 일람표를 낸다.
+의심: 브라우저 시험만 했다. 사용자가 쓴 기록이 없다.
+근거 SPEC-11.1 · 티켓 1개"><span class="fid">F33</span><span class="fname">마감 코드·마감표</span><span class="badge new">미검증</span><span class="fdoubt">사용자가 쓴 기록이 없다</span></div>
+      <div class="frow" data-id="F34" data-choices="유지,줄임,빼기,모름" title="팀 공유 프로젝트·PC 꺼져도 열기·대화 기록 공유 — 구성원과 프로젝트·AI 지침·대화 기록을 공유하고, 작업 PC가 꺼져 있어도 사이트에서 할 일과 이력을 본다. iPad로 원격 접속도 한다.
+의심: 사이트 배포 뒤 두 PC·두 계정 확인과 실제 iPad 확인이 남아 있다.
+근거 SPEC-04.10 · 티켓 20개"><span class="fid">F34</span><span class="fname">팀 공유·PC 꺼져도 열기</span><span class="badge new">미검증</span><span class="fdoubt">두 PC·iPad 확인 전</span></div>
+  </div>
+</li>
+
+<li class="s" data-id="S8" data-choices="좋음,수정">
+  <h2><span class="id">S8</span>설정·AI 환경</h2>
+  <div class="frame" role="img" aria-label="설정 화면 와이어프레임: 왼쪽 설정 메뉴, 가운데 AI 연결과 모델, 점선은 계획만 있는 칸">
+    <div class="box" style="left:0%;top:0%;width:5%;height:94%">레일</div>
+    <div class="box" style="left:6%;top:0%;width:20%;height:94%">설정 메뉴</div>
+    <div class="box hl" style="left:27%;top:0%;width:46%;height:22%">AI 연결 · Claude / Codex</div>
+    <div class="box hl" style="left:27%;top:24%;width:46%;height:16%">모델 · 대화마다 고정</div>
+    <div class="box ghost" style="left:27%;top:42%;width:22%;height:24%">AI 지침 보기</div>
+    <div class="box ghost" style="left:51%;top:42%;width:22%;height:24%">이번 턴에 본 것</div>
+    <div class="box ghost" style="left:27%;top:68%;width:46%;height:26%">외부 도구 · 폴더 규칙</div>
+    <div class="box ghost" style="left:74%;top:0%;width:25%;height:40%">작업 도구 제안 카드</div>
+    <div class="box" style="left:74%;top:42%;width:25%;height:52%">AI 열 · 작성기</div>
+  </div>
+  <p class="who">AI 모델과 지침·문맥·도구를 정하고 본다.</p>
+  <p class="shows">AI 연결과 모델만 있고, 지침·문맥 보기는 아직 빈 자리다.</p>
+  <p class="ref">근거 SPEC-05.2</p>
+  <div class="decide fmap">
+    <h3>이 단계의 기능 묶음 <small>이름을 누르면 설명이 펼쳐진다</small></h3>
+      <div class="frow" data-id="F35" data-choices="유지,줄임,빼기,모름" title="AI 연결·모델 고르기(대화마다 고정) — Claude·Codex 구독을 연결하고, 대화의 첫 턴에 모델을 정한다. 모델을 바꾸면 새 대화로 넘겨 이어 간다.
+의심: CLI가 혼자 판 업데이트되자 Codex 요청이 모두 막혔다(P0 T-361). 판이 바뀔 때 다시 검증하는 정책이 없다(RESEARCH-18 §4.2 6).
+근거 SPEC-05.2 · 티켓 8개"><span class="fid">F35</span><span class="fname">AI 연결·모델 고정</span><span class="badge used">써봄</span><span class="fdoubt">판이 바뀔 때 다시 검증하는 정책 없음</span></div>
+      <div class="frow" data-id="F36" data-choices="유지,줄임,빼기,모름" title="AI 지침 보기 — 매 턴 AI에게 붙는 VIDE 지침을 모드별로 읽기 전용으로 보여 준다.
+의심: 매 턴 붙는 지침 파일에 깨진 줄과 옛 규칙이 있었다(코드는 고침). 지금은 사용자가 지침을 전혀 볼 수 없다.
+근거 SPEC-18.2 · 티켓 2개"><span class="fid">F36</span><span class="fname">AI 지침 보기</span><span class="badge plan">계획만</span><span class="fdoubt">지금은 지침을 전혀 볼 수 없다</span></div>
+      <div class="frow" data-id="F37" data-choices="유지,줄임,빼기,모름" title="이번 턴에 AI가 본 것 보기 — 한 요청에 어떤 핀·모델 요약·자료·대화가 들어갔고 무엇이 잘렸는지 보여 준다.
+의심: 보낸 문맥을 사용자가 볼 수 없고, 상한이 문서마다 흩어져 서로 다르다(RESEARCH-18 §4.2 2).
+근거 SPEC-18.3 · 티켓 2개"><span class="fid">F37</span><span class="fname">이번 턴에 AI가 본 것</span><span class="badge plan">계획만</span><span class="fdoubt">보낸 문맥이 안 보이고 상한이 엇갈린다</span></div>
+      <div class="frow" data-id="F38" data-choices="유지,줄임,빼기,모름" title="외부 도구·작업 폴더 규칙 켜기 — 설정에서 고른 외부 MCP와 작업 폴더의 AGENTS.md만 AI 턴에 넣는다. 권한은 넓히지 않는다.
+의심: 지금은 사용자가 쓰는 rhinomcp·cordyceps를 VIDE AI가 볼 수 없다.
+근거 SPEC-18.5 · 티켓 2개"><span class="fid">F38</span><span class="fname">외부 도구·폴더 규칙</span><span class="badge plan">계획만</span><span class="fdoubt">쓰던 외부 MCP를 VIDE AI가 못 본다</span></div>
+      <div class="frow" data-id="F39" data-choices="유지,줄임,빼기,모름" title="작업 도구 제안 카드·프로젝트 시작 두 길 — 기본은 대화로 하고, 맞는 작업 도구는 카드로 제안만 한다. 새 프로젝트는 대화로 시작하거나 절차로 시작하는 두 길 중에 고른다.
+의심: 지금은 판정기가 문장 속 낱말로 작업 도구를 강제로 연다(T-360). 프로젝트 시작 두 길은 사용자 수락 전이다.
+근거 SPEC-18.6 · 티켓 2개"><span class="fid">F39</span><span class="fname">제안 카드·시작 두 길</span><span class="badge plan">계획만</span><span class="fdoubt">지금은 낱말로 도구를 강제로 연다</span></div>
+      <div class="frow" data-id="F40" data-choices="유지,줄임,빼기,모름" title="작업 도구 직접 만들기 — 채팅과 시작 양식으로 목적·입력·설정값·단계를 정해 나만의 작업 도구를 만들고 시험한다.
+의심: 실제 Codex로 만든 기록이 없다. 도구 설명서 본문이 AI에 전달되지 않고, 별도 절차 지식 층도 없다(RESEARCH-18 §3.7·§5.1).
+근거 SPEC-07.16 · 티켓 8개"><span class="fid">F40</span><span class="fname">작업 도구 직접 만들기</span><span class="badge part">일부</span><span class="fdoubt">실제 Codex로 만든 기록이 없다</span></div>
+  </div>
+</li>
+
+</ol>
+
+<div class="reply">
+  <div class="row">
+    <button class="btn primary" id="copy">피드백 복사</button>
+    <span id="cnt" style="color:var(--mute);font-size:14px"></span>
+    <span id="msg" style="color:var(--mute);font-size:14px"></span>
+  </div>
+  <textarea id="memo" placeholder="전체 메모(선택)"></textarea>
+  <pre id="out"></pre>
+</div>
+</main>
+<script>
+(function(){
+  var EMPTY='카드나 행의 단추를 누르거나 메모를 적으면 여기에 피드백이 만들어집니다.';
+  var cards=[].slice.call(document.querySelectorAll('li.s'));
+  function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text)e.textContent=text;return e;}
+  function group(box,btns){
+    btns.forEach(function(b){
+      b.addEventListener('click',function(){
+        var was=b.classList.contains('on');
+        btns.forEach(function(x){x.classList.remove('on');});
+        if(!was)b.classList.add('on');
+        render();
+      });
+    });
+  }
+  function line(id,on,note){return (on||note)?id+(on?' '+on.textContent:'')+(note?': '+note:''):'';}
+  function render(){
+    var parts=[];
+    cards.forEach(function(c){
+      [].slice.call(c.querySelectorAll('.frow')).forEach(function(r){
+        var t=line(r.dataset.id,r.querySelector('.tg.on'),r.querySelector('.rnote').value.trim());
+        if(t)parts.push(t);
+      });
+      var fb=c.querySelector(':scope > .fb');
+      var t=line(c.dataset.id,fb.querySelector('.tg.on'),fb.querySelector('.note').value.trim());
+      if(t)parts.push(t);
+    });
+    var memo=document.getElementById('memo').value.trim();
+    var t=parts.join(' / ')+(memo?(parts.length?' · ':'')+'메모: '+memo:'');
+    document.getElementById('out').textContent=t||EMPTY;
+    document.getElementById('cnt').textContent=countText();
+    return t;
+  }
+  function countText(){
+    var c={};[].slice.call(document.querySelectorAll('.frow .tg.on')).forEach(function(b){c[b.textContent]=(c[b.textContent]||0)+1;});
+    var all=document.querySelectorAll('.frow').length,done=document.querySelectorAll('.frow .tg.on').length;
+    return '고른 행 '+done+'/'+all+(done?' · '+Object.keys(c).map(function(k){return k+' '+c[k];}).join(' · '):'');
+  }
+  cards.forEach(function(c){
+    [].slice.call(c.querySelectorAll('.frow')).forEach(function(r){
+      var box=el('span','rtg'),btns=[];
+      (r.dataset.choices||'유지,줄임,빼기,모름').split(',').forEach(function(v){
+        v=v.trim();if(!v)return;
+        var b=el('button','tg'+(v==='빼기'?' cut':''),v);b.type='button';btns.push(b);box.appendChild(b);
+      });
+      group(box,btns);
+      var m=el('button','tg m','메모');m.type='button';m.title='이 행에 한 줄 메모';box.appendChild(m);
+      var n=el('input','rnote');n.type='text';n.placeholder=r.dataset.id+' 메모';
+      n.addEventListener('input',function(){m.classList.toggle('has',!!n.value.trim());render();});
+      m.addEventListener('click',function(){r.classList.toggle('open');if(r.classList.contains('open'))n.focus();});
+      n.addEventListener('click',function(e){e.stopPropagation();});
+      r.appendChild(box);r.appendChild(n);
+      var tip=r.getAttribute('title');
+      if(tip){
+        var d=el('div','fdesc',tip);r.removeAttribute('title');r.insertBefore(d,n);
+        var nm=r.querySelector('.fname');nm.setAttribute('role','button');nm.tabIndex=0;nm.setAttribute('aria-expanded','false');
+        var flip=function(){var o=r.classList.toggle('desc');nm.setAttribute('aria-expanded',o?'true':'false');};
+        r.querySelector('.fid').addEventListener('click',flip);
+        nm.addEventListener('click',flip);
+        nm.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();flip();}});
+      }
+    });
+    var fb=el('div','fb'),btns=[];
+    (c.dataset.choices||'좋음,수정').split(',').forEach(function(v){
+      v=v.trim();if(!v)return;
+      var b=el('button','tg',v);b.type='button';btns.push(b);fb.appendChild(b);
+    });
+    group(fb,btns);
+    var n=el('input','note');n.type='text';n.placeholder=c.dataset.id+' 카드 전체에 한 줄 메모';n.addEventListener('input',render);
+    fb.appendChild(n);c.appendChild(fb);
+  });
+  document.getElementById('memo').addEventListener('input',render);
+  document.getElementById('copy').addEventListener('click',function(){
+    var t=render(),m=document.getElementById('msg');
+    if(!t){m.textContent='먼저 단추를 누르거나 메모를 적으세요.';return;}
+    (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){m.textContent='복사됨. 채팅에 붙여 넣으세요.';},function(){m.textContent='아래 문장을 직접 복사하세요.';});
+  });
+  render();
+})();
+</script>
+</body>
+</html>

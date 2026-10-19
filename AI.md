@@ -35,6 +35,7 @@ VIDE/
 ├─ .claude/settings.json          Claude Code 프로젝트 훅: .md 편집 후 human/ 재생성 (settings.local.json은 개인 설정)
 ├─ .githooks/pre-commit           커밋 전 문서 검사(렌더·링크·front matter). `git config core.hooksPath .githooks`
 ├─ tools/docs/                    md→html 렌더러 (build.mjs, docs.config.json, theme.css, review.css, reader.js, review.js, hook-postedit.mjs)
+├─ tools/briefs/                  브리프용 실제 화면 캡처 도구(capture.mjs)
 ├─ tools/spikes/<date>-<slug>/     필요한 기술 실험 코드만, 첫 실험 때 생성
 ├─ tools/mockups/<slug>/           필요한 임시 목업 코드만, 첫 목업 때 생성
 └─ docs/
@@ -55,6 +56,7 @@ VIDE/
    │   └─ VERIFY-YYYY-MM-DD-<scope>.md  실호스트·목업·MVP 수용 검수 기록
    ├─ decisions/                  ADR-NNN-<slug>.md — OQ-xx·스택 결정 기록 (첫 ADR 때 생성)
    ├─ briefs/                     결정 브리프: 사용자가 열어 보고 바로 결정하는 한 장짜리 HTML(원본, §4의 유일한 예외). 양식 원칙은 briefs/README.md
+   │   └─ assets/<slug>/          브리프의 실제 화면 캡처(PNG ≤300 KB)
    └─ assets/<scope>/             문서·검수의 이미지 등 증거 자산 (필요할 때 생성)
 ```
 

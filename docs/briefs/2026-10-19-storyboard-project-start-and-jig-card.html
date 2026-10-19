@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>프로젝트 시작 두 길</title>
+<!--
+  스토리보드 틀(docs/briefs/README.md「스토리보드 브리프」). 복사해서 YYYY-MM-DD-storyboard-<slug>.html로 쓴다.
+  - 카드는 8장 이하를 권장한다. 넘으면 흐름을 나눠 두 문서로 만든다.
+  - 카드 하나 = 한 단계. 근거 SPEC 항목 ID 하나(.ref)를 단다. 스토리보드는 검토용 보기이고 정본은 SPEC·Design이다.
+  - 아직 안 만든 기능: <div class="frame"> 와이어프레임. 이미 만든 기능: <img class="shot" src="assets/<slug>/01.png">(tools/briefs/capture.mjs).
+  - data-choices: 피드백 단추 목록(기본 "좋음,수정"). 기능 지도는 "유지,줄임,빼기,모름" 등.
+  - 외부 의존(CDN·웹폰트) 없음. 밝은/어두운 자동.
+-->
+<style>
+:root{--bg:#fafaf8;--fg:#1c1c1a;--mute:#6b6b66;--line:#e2e2dd;--card:#fff;--rec:#1f6f5f;--rec-bg:#e6f3ef;--on:#1c1c1a;--on-fg:#fff;--ok:#2e8b57;--warn:#c98a00;--bad:#c0392b;
+  --accent:#d0664a;--accent-bg:#f9ece9;--grid:#0000000d;--frame-bg:#f5f4f0;--box-bg:#ffffff;--box-line:#c9c8c3}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161614;--fg:#ecebe6;--mute:#9a9a93;--line:#2c2c29;--card:#1f1f1c;--rec:#7fcbb6;--rec-bg:#1d2e2a;--on:#ecebe6;--on-fg:#161614;
+  --accent:#e48a6c;--accent-bg:#3c2f28;--grid:#ffffff0d;--frame-bg:#1b1b19;--box-bg:#262623;--box-line:#45453f}}
+:root[data-theme="dark"]{--bg:#161614;--fg:#ecebe6;--mute:#9a9a93;--line:#2c2c29;--card:#1f1f1c;--rec:#7fcbb6;--rec-bg:#1d2e2a;--on:#ecebe6;--on-fg:#161614;
+  --accent:#e48a6c;--accent-bg:#3c2f28;--grid:#ffffff0d;--frame-bg:#1b1b19;--box-bg:#262623;--box-line:#45453f}
+*{box-sizing:border-box}
+body{margin:0;padding:32px 16px 220px;background:var(--bg);color:var(--fg);font:16px/1.55 "Pretendard","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif}
+main{max-width:720px;margin:0 auto}
+h1{font-size:26px;line-height:1.3;margin:0 0 6px}
+.meta{color:var(--mute);font-size:14px;margin:0 0 14px}
+.meta a{color:inherit}
+.why{font-size:17px;margin:0 0 28px;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-radius:10px}
+.status{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);vertical-align:middle}
+ol.list{list-style:none;padding:0;margin:0;display:grid;gap:18px}
+li.s{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 18px 14px;min-width:0}
+h2{font-size:18px;margin:0 0 12px;line-height:1.4}
+.id{display:inline-block;min-width:34px;margin-right:8px;padding:0 7px;border-radius:6px;background:var(--bg);border:1px solid var(--line);font-size:13px;color:var(--mute);text-align:center;vertical-align:2px}
+/* 와이어프레임: 16:10, 연한 격자. 자식 .box는 % 좌표로 둔다. */
+.frame{position:relative;width:100%;aspect-ratio:16/10;margin:0 0 12px;border:1px solid var(--line);border-radius:8px;overflow:hidden;
+  background-color:var(--frame-bg);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:5% 8%}
+.box{position:absolute;display:flex;align-items:center;justify-content:center;padding:2px 4px;text-align:center;font-size:12px;line-height:1.3;color:var(--mute);
+  background:var(--box-bg);border:1px solid var(--box-line);border-radius:5px;overflow:hidden}
+.box.hl{color:var(--fg);font-weight:600;border:2px solid var(--accent);background:var(--accent-bg)}
+.box.ghost{background:transparent;border-style:dashed}
+.frame.missing{display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:14px;padding:12px;text-align:center}
+img.shot{display:block;width:100%;height:auto;margin:0 0 12px;border:1px solid var(--line);border-radius:8px}
+.who,.shows,.ref{margin:4px 0;font-size:15px}
+.who::before,.shows::before{display:inline-block;min-width:66px;color:var(--mute);font-weight:600;margin-right:6px}
+.who::before{content:"사용자"}
+.shows::before{content:"화면"}
+.ref{color:var(--mute);font-size:13px}
+.decide{margin:12px 0 4px;padding:12px;border:1px dashed var(--line);border-radius:10px}
+.decide h3{font-size:16px;margin:0 0 10px}
+.options{display:grid;gap:8px;margin:0}
+.opt{display:block;width:100%;text-align:left;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--fg);font:inherit;cursor:pointer}
+.opt b{font-weight:600}
+.opt small{display:block;color:var(--mute);font-size:14px;margin-top:2px}
+.opt.rec{border-color:var(--rec);background:var(--rec-bg)}
+.opt.rec b::after{content:"추천";margin-left:8px;font-size:11px;padding:1px 6px;border-radius:999px;background:var(--rec);color:#fff;font-weight:600;vertical-align:2px}
+.opt.on{background:var(--on);color:var(--on-fg);border-color:var(--on)}
+.opt.on small{color:inherit;opacity:.8}
+.opt.on.rec b::after{background:var(--on-fg);color:var(--on)}
+.fb{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
+.tg{padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--fg);font:inherit;font-size:14px;cursor:pointer}
+.tg.on{background:var(--on);color:var(--on-fg);border-color:var(--on)}
+.note{flex:1 1 180px;min-width:0;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit;font-size:14px}
+.reply{position:sticky;bottom:0;margin-top:28px;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 -6px 24px rgba(0,0,0,.06)}
+.reply .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--fg);font:inherit;cursor:pointer}
+.btn.primary{background:var(--on);color:var(--on-fg);border-color:var(--on)}
+textarea{width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit;font-size:14px;resize:vertical;min-height:40px}
+#out{margin:10px 0 0;padding:10px 12px;border-radius:8px;background:var(--bg);font-size:14px;white-space:pre-wrap;color:var(--mute);max-height:96px;overflow:auto}
+@media (max-width:480px){.box{font-size:10px}h1{font-size:22px}.reply{padding:10px 12px}textarea{min-height:32px;margin-top:6px}#out{max-height:56px;margin-top:6px}}
+</style>
+</head>
+<body>
+<main>
+<h1>프로젝트 시작 두 길 + jig 제안 카드</h1>
+<p class="meta">2026-10-19 · <span class="status">검토 대기</span> · 와이어프레임(아직 안 만든 기능) · 근거: <a href="../../human/docs/specs/SPEC-18-ai-environment.html">SPEC-18 §6·§7</a> · <a href="../../human/docs/decisions/ADR-045-working-modes-and-project-start.html">ADR-045</a> · <a href="../../human/Design.html">Design SCR-15</a></p>
+<p class="why">새 프로젝트를 '차근차근' 또는 '바로 시작'으로 열고, 말로 요청하면 대화 AI가 받되 jig가 어울리면 제안 카드만 붙는다. 이 흐름이 쓸모 있는지, 뺄 것이 있는지 봐 주세요.</p>
+
+<ol class="list">
+
+<li class="s" data-id="S1" data-choices="좋음,수정,빼기">
+  <h2><span class="id">S1</span>새 프로젝트 — 어떻게 시작할지 고른다</h2>
+  <div class="frame" role="img" aria-label="새 프로젝트 창: 차근차근과 바로 시작 두 길">
+    <div class="box" style="left:2%;top:3%;width:6%;height:94%">레일</div>
+    <div class="box ghost" style="left:10%;top:3%;width:88%;height:94%;align-items:flex-start;justify-content:flex-start;padding:4px 8px">대시보드(흐리게)</div>
+    <div class="box" style="left:22%;top:12%;width:56%;height:10%">새 프로젝트 · 어떻게 시작할까요?</div>
+    <div class="box" style="left:22%;top:26%;width:27%;height:40%">차근차근<br>폴더·서버·AI 지시 등<br>6가지를 먼저 정함</div>
+    <div class="box" style="left:51%;top:26%;width:27%;height:40%">바로 시작<br>지금은 묻지 않고<br>필요할 때 한 번 물음</div>
+    <div class="box hl" style="left:22%;top:70%;width:56%;height:10%">기본으로 골라 둘 길 = ? (D1)</div>
+    <div class="box" style="left:58%;top:84%;width:20%;height:9%">[만들기]</div>
+  </div>
+  <p class="who">새 프로젝트를 만들 때 두 길 중 하나를 누른다.</p>
+  <p class="shows">한 번만 묻는다. 이미 있는 폴더를 다시 열 때는 묻지 않는다.</p>
+  <p class="ref">근거 SPEC-18.7 1</p>
+  <div class="decide" data-id="D1">
+    <h3><span class="id">D1</span>창이 뜰 때 미리 골라 둘 길은?</h3>
+    <div class="options">
+      <button class="opt rec" data-v="①"><b>① 바로 시작</b><small>늘 하던 대로 바로 요청. 설정은 필요할 때만</small></button>
+      <button class="opt" data-v="②"><b>② 차근차근</b><small>처음 6가지를 놓치지 않음. 시작이 느려짐</small></button>
+      <button class="opt" data-v="③"><b>③ 매번 물음</b><small>미리 골라 두지 않음. 매번 한 번 더 누름</small></button>
+    </div>
+  </div>
+</li>
+
+<li class="s" data-id="S2" data-choices="좋음,수정,빼기">
+  <h2><span class="id">S2</span>차근차근 — 여섯 장을 한 장씩</h2>
+  <div class="frame" role="img" aria-label="설정 체크리스트: 왼쪽 6항목 목록, 가운데 현재 장">
+    <div class="box" style="left:2%;top:3%;width:6%;height:94%">레일</div>
+    <div class="box" style="left:10%;top:3%;width:26%;height:8%">프로젝트 설정 · 2/6</div>
+    <div class="box" style="left:10%;top:14%;width:26%;height:11%">✓ 1 작업 폴더 트리</div>
+    <div class="box" style="left:10%;top:27%;width:26%;height:11%">✓ 2 서버 폴더 연결</div>
+    <div class="box" style="left:10%;top:40%;width:26%;height:11%">3 프로젝트 AI 지시</div>
+    <div class="box" style="left:10%;top:53%;width:26%;height:11%">4 역할 경로</div>
+    <div class="box" style="left:10%;top:66%;width:26%;height:11%">5 자료 정리 범위</div>
+    <div class="box" style="left:10%;top:79%;width:26%;height:11%">6 기본 대화 모델</div>
+    <div class="box hl" style="left:40%;top:14%;width:56%;height:56%">3/6 프로젝트 AI 지시<br>"이 프로젝트에서 AI가 늘 지킬 것"<br>(예: 단위 mm, 도면 번호 규칙)</div>
+    <div class="box" style="left:40%;top:76%;width:18%;height:10%">[건너뛰기]</div>
+    <div class="box" style="left:78%;top:76%;width:18%;height:10%">[다음]</div>
+  </div>
+  <p class="who">한 장씩 정하거나 [건너뛰기]로 넘어간다.</p>
+  <p class="shows">왼쪽에 여섯 항목과 진행 n/6, 가운데에 지금 장 하나.</p>
+  <p class="ref">근거 SPEC-18.7 2</p>
+  <div class="decide" data-id="D2">
+    <h3><span class="id">D2</span>여섯 항목 중 뺄 것이 있나?</h3>
+    <div class="options">
+      <button class="opt rec" data-v="①"><b>① 여섯 다 둔다</b><small>건너뛰기가 있으니 빼지 않아도 됨</small></button>
+      <button class="opt" data-v="②"><b>② 뺄 것이 있다</b><small>이 카드 메모에 번호를 적기(예: 4, 5)</small></button>
+    </div>
+  </div>
+</li>
+
+<li class="s" data-id="S3" data-choices="좋음,수정,빼기">
+  <h2><span class="id">S3</span>바로 시작 — 처음 필요할 때만 묻는다</h2>
+  <div class="frame" role="img" aria-label="작업 화면: 오른쪽 대화에 서버 폴더 질문 카드">
+    <div class="box" style="left:2%;top:3%;width:6%;height:94%">레일</div>
+    <div class="box" style="left:10%;top:3%;width:50%;height:94%">무대(3D 보기)</div>
+    <div class="box" style="left:62%;top:3%;width:36%;height:7%">대화 칩 · 새 대화</div>
+    <div class="box" style="left:70%;top:13%;width:28%;height:11%">"최신 평면도 찾아 줘"</div>
+    <div class="box hl" style="left:62%;top:28%;width:36%;height:44%">질문 1/1 · 서버 폴더<br>서버 폴더가 아직 없습니다.<br>지금 연결할까요?<br>[폴더 고르기] [나중에]</div>
+    <div class="box" style="left:62%;top:80%;width:36%;height:17%">작성기</div>
+  </div>
+  <p class="who">첫 요청을 보내고, 뜬 질문에 답하거나 [나중에]를 누른다.</p>
+  <p class="shows">질문 카드는 그 항목이 처음 필요할 때 한 번. [나중에]면 이 대화에서 다시 안 묻는다.</p>
+  <p class="ref">근거 SPEC-18.7 3</p>
+</li>
+
+<li class="s" data-id="S4" data-choices="좋음,수정,빼기">
+  <h2><span class="id">S4</span>대시보드 — '프로젝트 설정 3/6' 이어 하기</h2>
+  <div class="frame" role="img" aria-label="대시보드: 머리 아래 프로젝트 설정 진행 줄, 달력과 할 일">
+    <div class="box" style="left:2%;top:3%;width:6%;height:94%">레일</div>
+    <div class="box" style="left:10%;top:3%;width:88%;height:9%">프로젝트 이름</div>
+    <div class="box hl" style="left:10%;top:15%;width:88%;height:10%">프로젝트 설정 3/6 · 남은 것: AI 지시·역할 경로·모델 · [이어 하기]</div>
+    <div class="box" style="left:10%;top:29%;width:54%;height:68%">일정(달력)</div>
+    <div class="box" style="left:66%;top:29%;width:32%;height:26%">할 일</div>
+    <div class="box" style="left:66%;top:58%;width:32%;height:18%">연결 파일</div>
+    <div class="box" style="left:66%;top:79%;width:32%;height:18%">프로젝트 폴더</div>
+  </div>
+  <p class="who">[이어 하기]를 눌러 남은 항목부터 정한다.</p>
+  <p class="shows">어느 길로 시작했든 끝낸 수/여섯이 남는다. 다 끝내면 줄이 사라진다.</p>
+  <p class="ref">근거 SPEC-18.7 4</p>
+</li>
+
+<li class="s" data-id="S5" data-choices="좋음,수정,빼기">
+  <h2><span class="id">S5</span>jig가 어울리는 요청 — 제안 카드만 붙는다</h2>
+  <div class="frame" role="img" aria-label="대화에 AI 답이 시작되고 jig 제안 카드가 붙음, 무대 위 띠 자리는 점선">
+    <div class="box" style="left:2%;top:3%;width:6%;height:94%">레일</div>
+    <div class="box ghost" style="left:10%;top:3%;width:50%;height:9%">(D3 ② 자리: 무대 위 띠)</div>
+    <div class="box" style="left:10%;top:14%;width:50%;height:83%">무대(3D 보기)</div>
+    <div class="box" style="left:62%;top:3%;width:36%;height:7%">대화 칩 · 구조 검토하고…</div>
+    <div class="box" style="left:72%;top:13%;width:26%;height:9%">"구조 검토하고 싶어"</div>
+    <div class="box" style="left:62%;top:25%;width:36%;height:14%">AI 답 시작: "어느 부분을…"</div>
+    <div class="box hl" style="left:62%;top:42%;width:36%;height:34%">jig 제안 · 구조 검토<br>왜: '구조 검토'가 이 jig 부름말과 맞음<br>[열기] [AI로 계속]</div>
+    <div class="box" style="left:62%;top:80%;width:36%;height:17%">작성기</div>
+  </div>
+  <p class="who">jig로 하고 싶으면 [열기], 아니면 무시한다.</p>
+  <p class="shows">AI는 카드와 상관없이 답을 시작한다. 한 턴에 카드 하나. jig는 누를 때만 열린다.</p>
+  <p class="ref">근거 SPEC-18.6 2</p>
+  <div class="decide" data-id="D3">
+    <h3><span class="id">D3</span>제안 카드를 어디에 둘까?</h3>
+    <div class="options">
+      <button class="opt rec" data-v="①"><b>① 대화 열 안</b><small>요청 바로 아래. 대화와 함께 기록에 남음</small></button>
+      <button class="opt" data-v="②"><b>② 무대 위 띠</b><small>눈에 잘 띄나 모델을 일부 가림</small></button>
+    </div>
+  </div>
+</li>
+
+<li class="s" data-id="S6" data-choices="좋음,수정,빼기">
+  <h2><span class="id">S6</span>카드를 무시하면 — AI가 그대로 진행</h2>
+  <div class="frame" role="img" aria-label="접힌 제안 카드 한 줄, AI 답이 이어짐">
+    <div class="box" style="left:2%;top:3%;width:6%;height:94%">레일</div>
+    <div class="box" style="left:10%;top:3%;width:50%;height:94%">무대(그대로)</div>
+    <div class="box" style="left:62%;top:3%;width:36%;height:7%">대화 칩 · 구조 검토하고…</div>
+    <div class="box" style="left:72%;top:13%;width:26%;height:9%">"구조 검토하고 싶어"</div>
+    <div class="box" style="left:62%;top:25%;width:36%;height:8%">▸ jig 제안 · 구조 검토 (접힘)</div>
+    <div class="box hl" style="left:62%;top:36%;width:36%;height:40%">AI 답: 기둥 간격·보 크기를<br>대화로 같이 봅니다<br>(결과·[되돌리기])</div>
+    <div class="box" style="left:62%;top:80%;width:36%;height:17%">작성기</div>
+  </div>
+  <p class="who">[AI로 계속]을 누르거나 그냥 다음 말을 한다.</p>
+  <p class="shows">카드는 한 줄로 접히고, 대화 AI가 끝까지 처리한다.</p>
+  <p class="ref">근거 SPEC-18.6 1</p>
+</li>
+
+<li class="s" data-id="S7" data-choices="좋음,수정,빼기">
+  <h2><span class="id">S7</span>예외 — jig 이름으로 부르면 바로 열린다</h2>
+  <div class="frame" role="img" aria-label="가운데에 구조 검토 jig 탭이 열리고 대화가 묶임">
+    <div class="box" style="left:2%;top:3%;width:6%;height:94%">레일</div>
+    <div class="box" style="left:10%;top:3%;width:50%;height:7%">탭: 구조 검토 jig</div>
+    <div class="box hl" style="left:10%;top:13%;width:50%;height:84%">구조 검토 jig 화면<br>(첫 확인 단계까지 계산)</div>
+    <div class="box" style="left:62%;top:3%;width:36%;height:7%">대화 칩 · 구조 · 검토</div>
+    <div class="box" style="left:72%;top:13%;width:26%;height:9%">"구조 검토 jig 열어"</div>
+    <div class="box" style="left:62%;top:25%;width:36%;height:14%">jig를 열고 이 대화를 묶음</div>
+    <div class="box" style="left:62%;top:80%;width:36%;height:17%">작성기</div>
+  </div>
+  <p class="who">jig 이름을 말하거나 레일의 [JIG]에서 고른다.</p>
+  <p class="shows">제안 카드 없이 jig 탭이 바로 열린다. "jig 열지 말고"라고 하면 카드도 안 붙는다.</p>
+  <p class="ref">근거 SPEC-18.6 3</p>
+</li>
+
+<li class="s" data-id="S8" data-choices="좋음,수정,빼기">
+  <h2><span class="id">S8</span>'계획부터'가 켜진 요청 — 계획 카드</h2>
+  <div class="frame" role="img" aria-label="대화에 계획 카드, 작성기 아래 계획부터 토글 켜짐">
+    <div class="box" style="left:2%;top:3%;width:6%;height:94%">레일</div>
+    <div class="box" style="left:10%;top:3%;width:50%;height:94%">무대(바뀌지 않음)</div>
+    <div class="box" style="left:62%;top:3%;width:36%;height:7%">대화 칩</div>
+    <div class="box" style="left:72%;top:13%;width:26%;height:9%">"3층 슬래브 개구부 내 줘"</div>
+    <div class="box hl" style="left:62%;top:25%;width:36%;height:44%">계획 · 문서를 바꾸지 않음<br>1 개구부 위치 확인<br>2 슬래브 잘라 내기<br>[진행] [고치기]</div>
+    <div class="box" style="left:62%;top:73%;width:36%;height:13%">작성기</div>
+    <div class="box" style="left:62%;top:88%;width:36%;height:9%">계획부터 ● 켜짐 · 모델 · effort</div>
+  </div>
+  <p class="who">계획을 보고 [진행]이나 [고치기]를 누른다.</p>
+  <p class="shows">토글은 사람이 켠다. AI는 계획을 제안할 수는 있어도 스스로 켜지 않는다.</p>
+  <p class="ref">근거 SPEC-18.6 4</p>
+</li>
+
+</ol>
+
+<div class="reply">
+  <div class="row">
+    <button class="btn primary" id="copy">피드백 복사</button>
+    <span id="msg" style="color:var(--mute);font-size:14px"></span>
+  </div>
+  <textarea id="memo" placeholder="전체 메모(선택)"></textarea>
+  <pre id="out">카드의 단추를 누르거나 메모를 적으면 여기에 피드백이 만들어집니다.</pre>
+</div>
+</main>
+<script>
+(function(){
+  var EMPTY='카드의 단추를 누르거나 메모를 적으면 여기에 피드백이 만들어집니다.';
+  var cards=[].slice.call(document.querySelectorAll('li.s'));
+  function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text)e.textContent=text;return e;}
+  function render(){
+    var parts=[];
+    cards.forEach(function(c){
+      var on=c.querySelector('.tg.on'),note=c.querySelector('.note').value.trim();
+      if(on||note)parts.push(c.dataset.id+(on?' '+on.textContent:'')+(note?': '+note:''));
+      [].slice.call(c.querySelectorAll('.decide')).forEach(function(d){
+        var o=d.querySelector('.opt.on');if(o)parts.push(d.dataset.id+' '+o.dataset.v);
+      });
+    });
+    var memo=document.getElementById('memo').value.trim();
+    var t=parts.join(' / ')+(memo?(parts.length?' · ':'')+'메모: '+memo:'');
+    document.getElementById('out').textContent=t||EMPTY;
+    return t;
+  }
+  cards.forEach(function(c){
+    var fb=el('div','fb');
+    (c.dataset.choices||'좋음,수정').split(',').forEach(function(v){
+      v=v.trim();if(!v)return;
+      var b=el('button','tg',v);b.type='button';
+      b.addEventListener('click',function(){
+        var was=b.classList.contains('on');
+        fb.querySelectorAll('.tg').forEach(function(x){x.classList.remove('on');});
+        if(!was)b.classList.add('on');
+        render();
+      });
+      fb.appendChild(b);
+    });
+    var n=el('input','note');n.type='text';n.placeholder='한 줄 메모';n.addEventListener('input',render);
+    fb.appendChild(n);c.appendChild(fb);
+    [].slice.call(c.querySelectorAll('.decide')).forEach(function(d){
+      [].slice.call(d.querySelectorAll('.opt')).forEach(function(b){
+        b.addEventListener('click',function(){
+          var was=b.classList.contains('on');
+          d.querySelectorAll('.opt').forEach(function(x){x.classList.remove('on');});
+          if(!was)b.classList.add('on');
+          render();
+        });
+      });
+    });
+  });
+  [].slice.call(document.querySelectorAll('img.shot')).forEach(function(img){
+    function miss(){var f=el('div','frame missing','캡처 없음: '+img.getAttribute('src'));img.replaceWith(f);}
+    if(img.complete&&img.naturalWidth===0)miss();else img.addEventListener('error',miss);
+  });
+  document.getElementById('memo').addEventListener('input',render);
+  document.getElementById('copy').addEventListener('click',function(){
+    var t=render(),m=document.getElementById('msg');
+    if(!t){m.textContent='먼저 단추를 누르거나 메모를 적으세요.';return;}
+    (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){m.textContent='복사됨. 채팅에 붙여 넣으세요.';},function(){m.textContent='아래 문장을 직접 복사하세요.';});
+  });
+})();
+</script>
+</body>
+</html>
