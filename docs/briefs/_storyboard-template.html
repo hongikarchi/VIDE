@@ -8,7 +8,9 @@
   스토리보드 틀(docs/briefs/README.md「스토리보드 브리프」). 복사해서 YYYY-MM-DD-storyboard-<slug>.html로 쓴다.
   - 카드는 8장 이하를 권장한다. 넘으면 흐름을 나눠 두 문서로 만든다.
   - 카드 하나 = 한 단계. 근거 SPEC 항목 ID 하나(.ref)를 단다. 스토리보드는 검토용 보기이고 정본은 SPEC·Design이다.
-  - 아직 안 만든 기능: <div class="frame"> 와이어프레임. 이미 만든 기능: <img class="shot" src="assets/<slug>/01.png">(tools/briefs/capture.mjs).
+  - 이미 만든 기능: 실제 화면 캡처 <img class="shot" src="assets/<slug>/01.png">(tools/briefs/capture.mjs).
+  - 아직 안 만든 기능: 합성 캡처. 실제 UI의 그 자리에 기존 컴포넌트 CSS로 카드를 끼워 넣고 찍어 '합성' 태그를 단다.
+    둘 다 안 되면 <div class="frame missing">화면 없음</div>. 상자 와이어프레임은 쓰지 않는다(README 원칙 10).
   - data-choices: 피드백 단추 목록(기본 "좋음,수정"). 기능 지도는 "유지,줄임,빼기,모름" 등.
   - 외부 의존(CDN·웹폰트) 없음. 밝은/어두운 자동.
 -->
@@ -31,7 +33,7 @@ ol.list{list-style:none;padding:0;margin:0;display:grid;gap:18px}
 li.s{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 18px 14px;min-width:0}
 h2{font-size:18px;margin:0 0 12px;line-height:1.4}
 .id{display:inline-block;min-width:34px;margin-right:8px;padding:0 7px;border-radius:6px;background:var(--bg);border:1px solid var(--line);font-size:13px;color:var(--mute);text-align:center;vertical-align:2px}
-/* 와이어프레임: 16:10, 연한 격자. 자식 .box는 % 좌표로 둔다. */
+/* .frame: 그림 자리(16:10). 지금은 '화면 없음' 표식(.frame.missing)에만 쓴다. 상자 와이어프레임 금지(README 원칙 10). */
 .frame{position:relative;width:100%;aspect-ratio:16/10;margin:0 0 12px;border:1px solid var(--line);border-radius:8px;overflow:hidden;
   background-color:var(--frame-bg);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:5% 8%}
 .box{position:absolute;display:flex;align-items:center;justify-content:center;padding:2px 4px;text-align:center;font-size:12px;line-height:1.3;color:var(--mute);
@@ -52,7 +54,7 @@ img.shot{display:block;width:100%;height:auto;margin:0 0 12px;border:1px solid v
 .opt b{font-weight:600}
 .opt small{display:block;color:var(--mute);font-size:14px;margin-top:2px}
 .opt.rec{border-color:var(--rec);background:var(--rec-bg)}
-.opt.rec b::after{content:"추천";margin-left:8px;font-size:11px;padding:1px 6px;border-radius:999px;background:var(--rec);color:#fff;font-weight:600;vertical-align:2px}
+.opt.rec b::after{content:"추천";margin-left:8px;font-size:11px;padding:1px 6px;border-radius:999px;background:var(--rec);color:var(--bg);font-weight:600;vertical-align:2px}
 .opt.on{background:var(--on);color:var(--on-fg);border-color:var(--on)}
 .opt.on small{color:inherit;opacity:.8}
 .opt.on.rec b::after{background:var(--on-fg);color:var(--on)}
@@ -78,15 +80,10 @@ textarea{width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--line
 <!-- 카드는 8장 이하 권장 -->
 <ol class="list">
 
-<!-- 예 1: 와이어프레임(아직 안 만든 기능) -->
+<!-- 예 1: 합성 캡처(아직 안 만든 요소). 실제 UI에 카드를 끼워 넣고 찍은 그림에 '합성' 태그를 단다. -->
 <li class="s" data-id="S1" data-choices="좋음,수정">
-  <h2><span class="id">S1</span>요청을 적는다</h2>
-  <div class="frame" role="img" aria-label="작업 화면 와이어프레임: 왼쪽 대화, 오른쪽 무대">
-    <div class="box" style="left:2%;top:3%;width:6%;height:94%">레일</div>
-    <div class="box" style="left:10%;top:3%;width:34%;height:76%">대화 기록</div>
-    <div class="box hl" style="left:10%;top:82%;width:34%;height:15%">작성기: "기둥 색을 바꿔 줘"</div>
-    <div class="box" style="left:46%;top:3%;width:52%;height:94%">무대(3D 보기)</div>
-  </div>
+  <h2><span class="id">S1</span>요청을 적는다 <span class="status">합성</span></h2>
+  <img class="shot" src="assets/example/00-composite.png" alt="실제 작업 화면에 새 카드를 끼워 넣은 합성 캡처">
   <p class="who">작성기에 한 문장으로 요청을 적는다.</p>
   <p class="shows">대화 칸 아래 작성기가 강조되고, 무대에는 열린 모델이 보인다.</p>
   <p class="ref">근거 SPEC-00.1</p>
@@ -104,11 +101,8 @@ textarea{width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--line
 <!-- 예 3: 결정이 함께 있는 카드. 기능 지도처럼 다른 선택지도 쓸 수 있다. -->
 <li class="s" data-id="S3" data-choices="유지,줄임,빼기,모름">
   <h2><span class="id">S3</span>되돌리기</h2>
-  <div class="frame" role="img" aria-label="결과 카드와 되돌리기 단추 와이어프레임">
-    <div class="box" style="left:10%;top:10%;width:80%;height:30%">결과 카드: 기둥 12개 색 바꿈</div>
-    <div class="box hl" style="left:62%;top:46%;width:28%;height:14%">되돌리기</div>
-    <div class="box ghost" style="left:10%;top:66%;width:80%;height:24%">다음 요청</div>
-  </div>
+  <!-- 캡처도 합성도 안 될 때만 점선 '화면 없음' -->
+  <div class="frame missing" style="border-style:dashed">화면 없음</div>
   <p class="who">마음에 안 들면 [되돌리기]를 누른다.</p>
   <p class="shows">요청 하나 단위로 모델이 앞 상태로 돌아간다.</p>
   <p class="ref">근거 SPEC-00.3</p>
