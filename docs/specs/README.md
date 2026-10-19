@@ -2,7 +2,7 @@
 id: INDEX-SPECS
 title: VIDE 기능 명세 · 사용자 작업과 기능 목록
 status: review
-version: 0.23
+version: 0.24
 updated: 2026-10-19
 owner: user
 related: []
@@ -75,7 +75,7 @@ VIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 �
 | FR-24 | [SPEC-07](SPEC-07-jig-platform.md) · [SPEC-05](SPEC-05-extensions-install.md)(SPEC-05.8) · [SPEC-08](SPEC-08-project-facts.md)(SPEC-08.6) · [SPEC-02](SPEC-02-execution-candidates.md)(SPEC-02.13·17·19) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-11](SPEC-11-finish-schedule.md) · [SPEC-12](SPEC-12-site-and-massing.md) · [SPEC-15](SPEC-15-compliance-check.md) · [SPEC-16](SPEC-16-paneling.md) | jig 플랫폼: 작업본·형식·실행·Rhino에 만들기·만들기 대화 |
 | FR-25 | [SPEC-02](SPEC-02-execution-candidates.md)(SPEC-02.9·17·19·20) · [SPEC-07](SPEC-07-jig-platform.md)(SPEC-07.18) · [SPEC-08](SPEC-08-project-facts.md)(SPEC-08.7) · [SPEC-18](SPEC-18-ai-environment.md)(SPEC-18.6) | 대화 세션·동시 진행·말로 하는 경로 판정. SPEC-18.6이 진행 방식(기본은 대화, jig는 제안 카드)을 소유하고 SPEC-02.17·SPEC-07.18은 PLAN-55에서 정렬 |
 | <ins>FR-26</ins> | <ins>[SPEC-10](SPEC-10-shared-notes.md)</ins> | <ins>공유 노트·협의 사항·일지 — PRD 첨삭 제안(R-77) 수락 전</ins> |
-| <ins>FR-27</ins> | <ins>[SPEC-18](SPEC-18-ai-environment.md)(SPEC-18.2·3·5·8)</ins> | <ins>AI 작업 환경의 표시(전역 지침 읽기 전용·이번 턴 문맥·외부 MCP 켬·끔 표시·판·범위 표시) — PRD 첨삭 제안 수락 전</ins> |
+| FR-27 | [SPEC-18](SPEC-18-ai-environment.md)(SPEC-18.2·3·5·8) | AI 작업 환경의 표시(전역 지침 읽기 전용·이번 턴 문맥·외부 MCP 켬·끔 표시·판·범위 표시) |
 
 호스트 계약·실험 범위: [Rhino](hosts/rhino.md) · [ZWCAD](hosts/zwcad.md).
 
