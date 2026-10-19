@@ -136,6 +136,8 @@ section:last-of-type{border-bottom:0}
 /* 실제 화면 캡처 */
 img.shot,.shot img{display:block;width:100%;height:auto;border:1px solid var(--line)}
 .shot{position:relative;margin:0}
+.shot .print-cap{display:none}
+#lb:focus{outline:none}
 .shot .tags{position:absolute;top:8px;right:8px;display:flex;gap:4px}
 .shot .tags .chip{background:#fffffff2}
 .frame.missing{display:flex;align-items:center;justify-content:center;aspect-ratio:16/10;border:1px dashed #9aa09c;color:var(--muted);font-size:13px;text-align:center;padding:12px;background:#fff}
@@ -249,4 +251,4 @@ section{padding:42px 0}.section-head{flex-direction:column;align-items:flex-star
 @media print{header,#lb,.reply,.ctl,.dots,button.noprint{display:none!important}main{padding:0;max-width:none}.intro{padding-top:0}.intro h1{font-size:28px}
 section{padding:22px 0;break-inside:avoid}.closed-section details{break-inside:avoid}details{display:block}details>summary{display:none}.details-body{padding-top:8px}
 .table-wrap{max-height:none;overflow:visible}.two{gap:22px}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.story{grid-template-columns:1fr}.stick,.steps-col{position:static}.step,.stick .shot{display:block!important;break-inside:avoid;margin-bottom:18px}}
+.story{grid-template-columns:1fr}.stick,.steps-col{position:static}.step,.stick .shot{display:block!important;break-inside:avoid;margin-bottom:18px}.shot .print-cap{display:block;font-size:12px;margin:6px 0 0;letter-spacing:0}}

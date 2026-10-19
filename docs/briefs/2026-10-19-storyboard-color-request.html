@@ -6,14 +6,13 @@
 <title>기둥 색 바꾸기</title>
 <link rel="stylesheet" href="_base.css">
 <style>
-/* 문서별 추가분 */
-.intro .caption{max-width:62ch}
+/* 문서별 추가분 없음 */
 </style>
 </head>
 <body>
 <header>
   <a class="brand" href="#top"><b>VIDE</b><span>스토리보드 · 기둥 색 바꾸기</span></a>
-  <nav><a href="#s">01 흐름</a><a href="#p">02 본 문제</a></nav>
+  <nav><a href="#s">01 흐름</a></nav>
   <button type="button" class="noprint" onclick="window.print()">인쇄 / PDF ↗</button>
 </header>
 <main id="top">
@@ -22,16 +21,15 @@
   <div>
     <div class="eyebrow">2026-10-19 / 검토 대기 / 근거 <a href="../../human/docs/specs/SPEC-01-project-input-sync.html">SPEC-01</a> · <a href="../../human/docs/specs/SPEC-02-execution-candidates.html">SPEC-02</a> · <a href="../../human/Design.html">Design</a></div>
     <h1>기둥 하나를 골라 빨갛게.<br>보내고, 바뀌고, 되돌린다.</h1>
-    <p>프로젝트를 열고 Rhino 파일을 연결해, 기둥 하나를 골라 "빨간색으로 바꿔줘"라고 요청하고 되돌리기까지. 지금 만들어진 실제 화면입니다.</p>
-    <p class="caption">8장 모두 개발 엔진의 실제 화면 캡처. 모델·프로젝트 이름은 시험용. <b>AI 응답 주입</b> 표시 카드는 AI를 부르지 않고 결과 상태를 넣어 찍었다. <b>대체</b>는 요청한 화면 대신 가까운 화면.</p>
+    <p>프로젝트를 열고 Rhino 파일을 연결해 기둥 하나를 빨갛게 바꾸고 되돌리기까지, 지금 만들어진 실제 화면 8장.</p>
   </div>
-  <div class="study-mark">단계 8 · 실제 캡처 8(AI 응답 주입 3)<br>답은 바닥의 [피드백 복사]로</div>
+  <div class="study-mark">단계 8 · 실제 캡처<br>답은 바닥의 [피드백 복사]</div>
 </div>
 
 <section id="s">
   <div class="section-head">
     <div><div class="eyebrow">01 / STORY</div><h2>단계마다 화면 하나.</h2></div>
-    <p>오른쪽 단추(또는 ← →)로 단계를 넘기면 왼쪽 그림이 바뀐다. 단계마다 좋음·수정과 한 줄 메모.</p>
+    <p>사진 위 <b>AI 응답 주입</b> = AI를 부르지 않고 결과 상태를 넣어 찍음 · <b>대체</b> = 가까운 화면 · 코랄 줄 = 캡처 중 본 문제.</p>
   </div>
   <div class="story">
     <div class="stick">
@@ -51,7 +49,6 @@
         <small>01</small><h3>프로젝트를 연다</h3>
         <p><b>사용자</b> 프로젝트를 골라 홈을 연다.</p>
         <p><b>화면</b> 일정과 할 일, 연결 파일 수가 보인다. 아직 연결 파일 0.</p>
-        <span class="gate">프로젝트 목록은 이름 칸의 펼침 목록이라 찍히지 않아 대시보드로 대신했다.</span>
         <span class="ref">근거 SPEC-01.14</span>
       </div>
       <div class="step" data-s="2" data-id="S2" data-choices="좋음,수정">
@@ -76,7 +73,6 @@
         <small>05</small><h3>요청이 진행된다</h3>
         <p><b>사용자</b> 보내고 기다린다. 필요하면 [추가 지시].</p>
         <p><b>화면</b> 대상·핀·모드, 진행 단계(요청 이해 → 실행)와 AI 한 줄 설명.</p>
-        <span class="gate">AI를 부르지 않고 진행 상태를 시험용으로 넣었다.</span>
         <span class="ref">근거 SPEC-02.11</span>
       </div>
       <div class="step" data-s="6" data-id="S6" data-choices="좋음,수정">
@@ -104,16 +100,6 @@
   <div class="thumbs" aria-label="단계 바로 가기"></div>
 </section>
 
-<section id="p">
-  <div class="section-head">
-    <div><div class="eyebrow">02 / ISSUES</div><h2>캡처 중 본 문제.</h2></div>
-    <p>단계 카드에 표시한 의심을 모았다.</p>
-  </div>
-  <ul class="decided">
-    <li><b>S6</b> 변경 객체 목록이 이름 대신 긴 ID로 보인다.</li>
-    <li><b>S8</b> Sync 줄이 요청 사이에 섞여 요청을 찾기 어렵다.</li>
-  </ul>
-</section>
 
 <footer><span>VIDE 스토리보드 · 한 요청의 실제 화면 — 기둥 색 바꾸기 · 검토용 보기이며 정본은 SPEC·Design</span><span>2026-10-19</span></footer>
 
@@ -154,6 +140,7 @@
   prev.addEventListener('click',function(){set(k-1);});next.addEventListener('click',function(){set(k+1);});
   document.addEventListener('keydown',function(ev){
     if(/INPUT|SELECT|TEXTAREA/.test(ev.target.tagName))return;
+    if(document.getElementById('lb').classList.contains('on'))return;
     var r=story.getBoundingClientRect();if(r.top>innerHeight||r.bottom<0)return;
     if(ev.key==='ArrowRight'){set(k+1);ev.preventDefault();}if(ev.key==='ArrowLeft'){set(k-1);ev.preventDefault();}
   });
@@ -173,8 +160,8 @@
     var fb=el('div','fb');
     (c.dataset.choices||'좋음,수정').split(',').forEach(function(v){
       v=v.trim();if(!v)return;
-      var b=el('button','tg',v);b.type='button';
-      b.addEventListener('click',function(){var was=b.classList.contains('on');$$('.tg',fb).forEach(function(x){x.classList.remove('on');});if(!was)b.classList.add('on');render();});
+      var b=el('button','tg',v);b.type='button';b.setAttribute('aria-pressed','false');
+      b.addEventListener('click',function(){var was=b.classList.contains('on');$$('.tg',fb).forEach(function(x){x.classList.remove('on');x.setAttribute('aria-pressed','false');});if(!was){b.classList.add('on');b.setAttribute('aria-pressed','true');}render();});
       fb.appendChild(b);
     });
     var n=el('input');n.type='text';n.placeholder='한 줄 메모';n.addEventListener('input',render);fb.appendChild(n);
@@ -182,7 +169,7 @@
   });
   $$('.decide').forEach(function(d){
     $$('.ans button',d).forEach(function(b){
-      b.addEventListener('click',function(){var was=b.classList.contains('on');$$('.ans button',d).forEach(function(x){x.classList.remove('on');});if(!was)b.classList.add('on');render();});
+      b.addEventListener('click',function(){var was=b.classList.contains('on');$$('.ans button',d).forEach(function(x){x.classList.remove('on');x.setAttribute('aria-pressed','false');});if(!was){b.classList.add('on');b.setAttribute('aria-pressed','true');}render();});
     });
   });
   $$('img').forEach(function(img){
@@ -191,16 +178,17 @@
     if(img.complete&&img.naturalWidth===0)miss();else img.addEventListener('error',miss);
   });
   var lb=document.getElementById('lb'),lbi=lb.querySelector('img'),lbp=lb.querySelector('p');
-  function closeLb(){lb.classList.remove('on');lbi.src='data:,';}
-  $$('.zoom').forEach(function(b){b.addEventListener('click',function(){var i=b.querySelector('img');if(!i)return;lbi.src=b.dataset.full||i.src;lbi.alt=i.alt;lbp.textContent=i.alt;lb.classList.add('on');});});
+  var lbFrom=null;lb.tabIndex=-1;function closeLb(){if(!lb.classList.contains('on'))return;lb.classList.remove('on');lbi.src='data:,';if(lbFrom){lbFrom.focus();lbFrom=null;}}
+  $$('.zoom').forEach(function(b){b.addEventListener('click',function(){var i=b.querySelector('img');if(!i)return;lbi.src=b.dataset.full||i.src;lbi.alt=i.alt;lbp.textContent=i.alt;lbFrom=b;lb.classList.add('on');lb.focus();});});
   lb.addEventListener('click',closeLb);
-  document.addEventListener('keydown',function(e){if(e.key==='Escape')closeLb();});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')closeLb();else if(e.key==='Tab'&&lb.classList.contains('on'))e.preventDefault();});
   document.getElementById('memo').addEventListener('input',render);
   document.getElementById('copy').addEventListener('click',function(){
     var t=render(),m=document.getElementById('msg');
     if(!t){m.textContent='먼저 단추를 누르거나 메모를 적으세요.';return;}
     (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){m.textContent='복사됨. 채팅에 붙여 넣으세요.';},function(){m.textContent='아래 문장을 직접 복사하세요.';});
   });
+  shots.forEach(function(sh,i){var h=steps[i]&&steps[i].querySelector('h3');if(h){var c=el('figcaption','print-cap',pad(i+1)+' '+h.textContent);sh.appendChild(c);}});
   set(1);
 })();
 </script>

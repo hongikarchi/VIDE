@@ -53,9 +53,9 @@
       <p class="q"><b class="id">D1</b><b>질문 한 문장?</b></p>
       <span class="sub">보충 설명 한 줄(선택). 전제나 범위.</span>
       <div class="ans">
-        <button type="button" class="rec" data-v="①"><b>① 추천 선택지</b><small>40자 안의 설명</small></button>
-        <button type="button" data-v="②"><b>② 다른 선택지</b><small>설명</small></button>
-        <button type="button" data-v="③"><b>③ 또 다른 선택지</b><small>설명</small></button>
+        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 추천 선택지</b><small>40자 안의 설명</small></button>
+        <button type="button" data-v="②" aria-pressed="false"><b>② 다른 선택지</b><small>설명</small></button>
+        <button type="button" data-v="③" aria-pressed="false"><b>③ 또 다른 선택지</b><small>설명</small></button>
       </div>
       <p class="line"><b>이유</b>추천하는 이유 한 줄.</p>
       <p class="line"><b>틀리면</b>잘못 골랐을 때 치르는 비용 한 줄.</p>
@@ -64,8 +64,8 @@
     <li class="d" data-id="D2">
       <p class="q"><b class="id">D2</b><b>두 번째 질문?</b></p>
       <div class="ans">
-        <button type="button" class="rec" data-v="①"><b>① 추천</b><small>설명</small></button>
-        <button type="button" data-v="②"><b>② 다른 것</b><small>설명</small></button>
+        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 추천</b><small>설명</small></button>
+        <button type="button" data-v="②" aria-pressed="false"><b>② 다른 것</b><small>설명</small></button>
       </div>
       <p class="line"><b>이유</b>한 줄.</p>
       <p class="line"><b>틀리면</b>한 줄.</p>
@@ -135,14 +135,14 @@
     [].slice.call(d.querySelectorAll('.ans button')).forEach(function(b){
       b.addEventListener('click',function(){
         var was=b.classList.contains('on');
-        d.querySelectorAll('.ans button').forEach(function(x){x.classList.remove('on');});
-        if(!was)b.classList.add('on');
+        d.querySelectorAll('.ans button').forEach(function(x){x.classList.remove('on');x.setAttribute('aria-pressed','false');});
+        if(!was){b.classList.add('on');b.setAttribute('aria-pressed','true');}
         render();
       });
     });
   });
   document.getElementById('all').addEventListener('click',function(){
-    ds.forEach(function(d){d.querySelectorAll('.ans button').forEach(function(x){x.classList.remove('on');});var r=d.querySelector('.ans button.rec');if(r)r.classList.add('on');});
+    ds.forEach(function(d){d.querySelectorAll('.ans button').forEach(function(x){x.classList.remove('on');x.setAttribute('aria-pressed','false');});var r=d.querySelector('.ans button.rec');if(r){r.classList.add('on');r.setAttribute('aria-pressed','true');}});
     render();
   });
   document.getElementById('memo').addEventListener('input',render);
