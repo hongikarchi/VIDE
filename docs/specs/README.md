@@ -2,8 +2,8 @@
 id: INDEX-SPECS
 title: VIDE 기능 명세 · 사용자 작업과 기능 목록
 status: review
-version: 0.21
-updated: 2026-10-15
+version: 0.23
+updated: 2026-10-19
 owner: user
 related: []
 ---
@@ -37,6 +37,7 @@ VIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 �
 | 지금 Rhino 모델이 건폐율·용적률·높이·층수, 가능 외피(일조·건축선·이격), 주차·조경·공개공지를 넘는지 근거와 함께 보기 | [SPEC-15](SPEC-15-compliance-check.md) · SPEC-15.1 | [법규 체크]를 누를 때만 돌고, 한계 값이 모두 규제 조건(사람 입력·법규 Q&A 결과)에서 오며, 정할 수 없는 항목이 '판단 필요'·'사람 입력 필요'로 남고, AI는 객체 역할을 제안만 하는가 |
 | Rhino 곡면을 패널로 나눠 미리 보고, 두께·줄눈을 더한 부재로 만들고, 평면화·타입·결합부 일람표와 함께 Rhino에 만들기 | [SPEC-16](SPEC-16-paneling.md) · SPEC-16.1 | 빠진 입력을 되묻고 추천값을 '가정'으로 표시하며, 부재·타입 만들기는 사람이 확인한 값으로만 하고, 실패 패널을 빼거나 메우지 않고 보고하는가 |
 | 프로젝트의 요구·의도·앎·근거·결정을 부위와 시간 위에 놓고, 객체를 골라 "왜 이 형상인가"로 거슬러 가기 | [SPEC-17](SPEC-17-project-records.md) · SPEC-17.1 | 자동 후보가 사람이 거르기 전에 사실로 쓰이지 않고, 기록이 요청·노트·검토본을 대신하지 않고 가리키며, 가져온 원문이 이 PC 밖으로 나가지 않는가 |
+| AI가 일하는 환경(붙는 지침·한 턴의 문맥·도구와 권한·내 CLI 설정의 격리·대화와 jig 제안) 이해하고 조정하기 | [SPEC-18](SPEC-18-ai-environment.md) · SPEC-18.1 | 전역 지침을 모드별로 읽기 전용으로 보고, 이번 턴 문맥과 잘린 항목이 보이며, 고른 외부 MCP·작업 폴더 `AGENTS.md`만 들어가 권한을 넓히지 못하고, 말로 한 요청이 jig를 강제로 열지 않고 제안 카드로 보이는가 |
 
 ## 구체적인 첫 지원안과 확인된 사실
 
@@ -55,7 +56,7 @@ VIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 �
 | FR-05 | [SPEC-00](SPEC-00-common.md) · [SPEC-01](SPEC-01-project-input-sync.md) | — |
 | FR-06 | [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-04](SPEC-04-web-review.md) | — |
 | FR-07 | [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-10](SPEC-10-shared-notes.md) | SPEC-10은 공유 노트·일지(2026-10-06 요청, PRD FR-26 제안 R-77) |
-| FR-08 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-05](SPEC-05-extensions-install.md) | — |
+| FR-08 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-18](SPEC-18-ai-environment.md) | SPEC-18은 AI 작업 환경(지침 층·문맥 조립·격리·판 변경) |
 | FR-09 | [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-08](SPEC-08-project-facts.md) · [SPEC-17](SPEC-17-project-records.md) | SPEC-08은 프로젝트 자료(C-02): 검색·검토·근거·AI 자료 도구; SPEC-17은 프로젝트 기록(C-09, 2026-10-15 후보): 결정·근거·영향을 부위×시간에 놓음 |
 | FR-10 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) · [SPEC-17](SPEC-17-project-records.md) | SPEC-17 기록은 요청·바뀐 객체를 가리키는 역추적 |
 | FR-11 | [SPEC-00](SPEC-00-common.md) · [SPEC-02](SPEC-02-execution-candidates.md) | — |
@@ -65,15 +66,16 @@ VIDE에서 설계자는 Rhino·ZWCAD의 모델과 도면을 보고, 객체를 �
 | FR-15 | [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
 | FR-16 | [SPEC-00](SPEC-00-common.md) · [SPEC-01](SPEC-01-project-input-sync.md) · [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) · [SPEC-10](SPEC-10-shared-notes.md)(SPEC-10.6) | — |
 | FR-17 | [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
-| FR-18 | [SPEC-00](SPEC-00-common.md) · [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-08](SPEC-08-project-facts.md)(SPEC-08.5·7) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) | — |
+| FR-18 | [SPEC-00](SPEC-00-common.md) · [SPEC-02](SPEC-02-execution-candidates.md) · [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-05](SPEC-05-extensions-install.md) · [SPEC-08](SPEC-08-project-facts.md)(SPEC-08.5·7) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) · [SPEC-18](SPEC-18-ai-environment.md)(SPEC-18.4·5·9) | SPEC-18은 도구 발급·격리·외부 MCP 승인 |
 | FR-19 | [SPEC-00](SPEC-00-common.md) · [SPEC-04](SPEC-04-web-review.md) · [SPEC-10](SPEC-10-shared-notes.md) | — |
 | FR-20 | 후속 확장 | PRD §14의 이번 범위 밖 |
 | FR-21 | 후속 확장 | PRD §14의 이번 범위 밖(구조 분석은 FR-23). 마감 일람표 jig [SPEC-11](SPEC-11-finish-schedule.md)은 2026-10-07 사용자가 고른 한정 범위이며 FR-21의 범위 판단은 PRD가 소유한다. 규모검토 jig [SPEC-12](SPEC-12-site-and-massing.md)는 C-05 채택 제안(SPEC-12 R-01) 수락 전이다 |
 | FR-22 | [SPEC-03](SPEC-03-data-history-export.md) · [SPEC-07](SPEC-07-jig-platform.md) · [SPEC-15](SPEC-15-compliance-check.md) · [SPEC-16](SPEC-16-paneling.md) | — |
 | FR-23 | [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-07](SPEC-07-jig-platform.md) | 구조 분석 jig와 프로젝트 구조 jig(입력 조립·진단·배치·간섭·단면·일람표·Rhino에 만들기) |
 | FR-24 | [SPEC-07](SPEC-07-jig-platform.md) · [SPEC-05](SPEC-05-extensions-install.md)(SPEC-05.8) · [SPEC-08](SPEC-08-project-facts.md)(SPEC-08.6) · [SPEC-02](SPEC-02-execution-candidates.md)(SPEC-02.13·17·19) · [SPEC-06](SPEC-06-structure-analysis.md) · [SPEC-11](SPEC-11-finish-schedule.md) · [SPEC-12](SPEC-12-site-and-massing.md) · [SPEC-15](SPEC-15-compliance-check.md) · [SPEC-16](SPEC-16-paneling.md) | jig 플랫폼: 작업본·형식·실행·Rhino에 만들기·만들기 대화 |
-| FR-25 | [SPEC-02](SPEC-02-execution-candidates.md)(SPEC-02.9·17·19·20) · [SPEC-07](SPEC-07-jig-platform.md)(SPEC-07.18) · [SPEC-08](SPEC-08-project-facts.md)(SPEC-08.7) | 대화 세션·동시 진행·말로 하는 경로 판정 |
+| FR-25 | [SPEC-02](SPEC-02-execution-candidates.md)(SPEC-02.9·17·19·20) · [SPEC-07](SPEC-07-jig-platform.md)(SPEC-07.18) · [SPEC-08](SPEC-08-project-facts.md)(SPEC-08.7) · [SPEC-18](SPEC-18-ai-environment.md)(SPEC-18.6) | 대화 세션·동시 진행·말로 하는 경로 판정. SPEC-18.6이 진행 방식(기본은 대화, jig는 제안 카드)을 소유하고 SPEC-02.17·SPEC-07.18은 PLAN-55에서 정렬 |
 | <ins>FR-26</ins> | <ins>[SPEC-10](SPEC-10-shared-notes.md)</ins> | <ins>공유 노트·협의 사항·일지 — PRD 첨삭 제안(R-77) 수락 전</ins> |
+| <ins>FR-27</ins> | <ins>[SPEC-18](SPEC-18-ai-environment.md)(SPEC-18.2·3·5·8)</ins> | <ins>AI 작업 환경의 표시(전역 지침 읽기 전용·이번 턴 문맥·외부 MCP 켬·끔 표시·판·범위 표시) — PRD 첨삭 제안 수락 전</ins> |
 
 호스트 계약·실험 범위: [Rhino](hosts/rhino.md) · [ZWCAD](hosts/zwcad.md).
 

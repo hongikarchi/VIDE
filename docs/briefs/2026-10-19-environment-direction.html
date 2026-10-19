@@ -44,7 +44,8 @@ textarea{width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--line
 <body>
 <main>
 <h1>환경 방향 결정 5건 + 진행 여부</h1>
-<p class="meta">2026-10-19 · <span class="status">결정 대기</span> · 근거: <a href="../../human/docs/research/RESEARCH-18-environment-not-model.html">RESEARCH-18</a> §8</p>
+<p class="meta">2026-10-19 · <span class="status">결정됨</span> · 근거: <a href="../../human/docs/research/RESEARCH-18-environment-not-model.html">RESEARCH-18</a> §8</p>
+<p class="line"><b>결정</b>D1 ③ / D2 ③ / D3 ② / D4 ② / D5 ① / P1 ① · 메모: 프로젝트를 처음 열 때 '세팅 먼저'와 '바로 시작' 중 고르게 하자 → ADR-045·PRD·SPEC-18에 [제안]으로 넣음</p>
 <p class="why">"VIDE = 순정 CLI + 건축 환경 + 호스트 다리"로 PRD·SPEC을 고치려면 이 다섯을 먼저 정해야 합니다. 이전 Q1·Q2는 D2·D1에 들어 있습니다.</p>
 
 <ol class="list">
@@ -52,7 +53,7 @@ textarea{width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--line
 <li class="d" data-id="D1">
   <h2><span class="id">D1</span>사용자 본인의 CLI 설정(개인 CLAUDE.md·전역 MCP·스킬)을 VIDE 턴에서 어떻게 할까?</h2>
   <div class="options">
-    <button class="opt rec" data-v="③"><b>③ 선택형</b><small>설정에서 고른 MCP와 작업 폴더의 AGENTS.md만 켬. 개인 CLAUDE.md·플러그인은 계속 끔</small></button>
+    <button class="opt rec on" data-v="③"><b>③ 선택형</b><small>설정에서 고른 MCP와 작업 폴더의 AGENTS.md만 켬. 개인 CLAUDE.md·플러그인은 계속 끔</small></button>
     <button class="opt" data-v="①"><b>① 전부 끔 (지금)</b><small>VIDE가 환경을 통째로 대체</small></button>
     <button class="opt" data-v="②"><b>② 전부 켬</b><small>터미널과 똑같이, 사용자 설정이 그대로 들어감</small></button>
   </div>
@@ -64,7 +65,7 @@ textarea{width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--line
 <li class="d" data-id="D2">
   <h2><span class="id">D2</span>진행 방식(대화·jig·계획)을 사람이 고르게 할까, 판정기가 고르게 할까?</h2>
   <div class="options">
-    <button class="opt rec" data-v="③"><b>③ 기본은 대화</b><small>jig는 제안 카드로만, '계획부터' 토글은 유지</small></button>
+    <button class="opt rec on" data-v="③"><b>③ 기본은 대화</b><small>jig는 제안 카드로만, '계획부터' 토글은 유지</small></button>
     <button class="opt" data-v="②"><b>② 사람이 모드 선택</b><small>Kiro처럼 대화/작업/계획을 먼저 고름</small></button>
     <button class="opt" data-v="①"><b>① 판정기 (지금)</b><small>규칙·Jev가 jig·계획을 고름</small></button>
   </div>
@@ -76,7 +77,7 @@ textarea{width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--line
 <li class="d" data-id="D3">
   <h2><span class="id">D3</span>매 턴 붙는 전역 건축 지침(8개 파일)을 사용자에게 보여 줄까?</h2>
   <div class="options">
-    <button class="opt rec" data-v="②"><b>② 읽기 전용 공개</b><small>설정 → AI에서 모드별 묶음을 열람, 판 표시</small></button>
+    <button class="opt rec on" data-v="②"><b>② 읽기 전용 공개</b><small>설정 → AI에서 모드별 묶음을 열람, 판 표시</small></button>
     <button class="opt" data-v="③"><b>③ 공개 + 덮어쓰기</b><small>PC·프로젝트별로 고칠 수 있게</small></button>
     <button class="opt" data-v="①"><b>① 숨김 유지 (지금)</b><small>프로젝트 추가 지침만 고칠 수 있음</small></button>
   </div>
@@ -88,7 +89,7 @@ textarea{width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--line
 <li class="d" data-id="D4">
   <h2><span class="id">D4</span>Claude·Codex CLI 판이 바뀔 때 무엇을 다시 검증할까?</h2>
   <div class="options">
-    <button class="opt rec" data-v="②"><b>② 범위 + 회귀 묶음</b><small>판 범위 문은 두고, SPIKE 0·④·⑧ + route-only를 '판 갱신 절차'로 문서화</small></button>
+    <button class="opt rec on" data-v="②"><b>② 범위 + 회귀 묶음</b><small>판 범위 문은 두고, SPIKE 0·④·⑧ + route-only를 '판 갱신 절차'로 문서화</small></button>
     <button class="opt" data-v="①"><b>① 범위 문만 (지금)</b><small>갱신 때마다 그때그때 판단</small></button>
     <button class="opt" data-v="③"><b>③ 범위 문 제거</b><small>실행 신호 분류만으로 버팀</small></button>
   </div>
@@ -100,7 +101,7 @@ textarea{width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--line
 <li class="d" data-id="D5">
   <h2><span class="id">D5</span>PRD 정체성 문장과 "작업 환경의 구성 요소" 절을 지금 넣을까?</h2>
   <div class="options">
-    <button class="opt rec" data-v="①"><b>① 지금 첨삭</b><small>§1.1에 한 문단, §4에 표 하나. FR·범위는 그대로</small></button>
+    <button class="opt rec on" data-v="①"><b>① 지금 첨삭</b><small>§1.1에 한 문단, §4에 표 하나. FR·범위는 그대로</small></button>
     <button class="opt" data-v="②"><b>② OQ-15와 나중에</b><small>세 기둥 재구성까지 한 번에</small></button>
   </div>
   <p class="line"><b>이유</b>문장 둘과 표 하나로 끝나고, 세 기둥 재구성은 OQ-15에 그대로 두면 됨.</p>
@@ -111,7 +112,7 @@ textarea{width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--line
 <li class="d" data-id="P1">
   <h2><span class="id">P1</span>위 결정과 무관한 일은 바로 진행할까?</h2>
   <div class="options">
-    <button class="opt rec" data-v="①"><b>① 바로 진행</b><small>지침 결함·낡은 문장·문서 충돌 정정, T-362~T-366, 0.2.41 릴리스</small></button>
+    <button class="opt rec on" data-v="①"><b>① 바로 진행</b><small>지침 결함·낡은 문장·문서 충돌 정정, T-362~T-366, 0.2.41 릴리스</small></button>
     <button class="opt" data-v="②"><b>② 결정 뒤 함께</b><small>D1~D5 답을 받은 뒤 한 묶음으로</small></button>
   </div>
   <p class="line"><b>이유</b>설치본 0.2.40은 Codex가 막혀 있어 0.2.41이 빨리 필요함.</p>
