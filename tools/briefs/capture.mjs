@@ -7,7 +7,7 @@
 //
 // 예:
 //   node tools/briefs/capture.mjs --url http://127.0.0.1:48123 --token <임시데이터>/launch.json \
-//     --out docs/briefs/assets/color-request --steps <scratch>/steps.json
+//     --out docs/briefs/assets/<slug> --steps <scratch>/steps.json
 //
 // --token: launch.json(url에 #token) 또는 토큰 64자 한 줄 파일. --url을 빼면 launch.json의 주소를 쓴다.
 // --steps: JSON 배열. 단계 하나 = { "name": "01-compose", "path"?: "/", "actions"?: [...], "clip"?: "<선택자>" }
