@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>결정 브리프</title>
+<style>
+:root{--bg:#fafaf8;--fg:#1c1c1a;--mute:#6b6b66;--line:#e2e2dd;--card:#fff;--wait:#c98a00;--done:#2e8b57;--info:#4a6fa5}
+@media (prefers-color-scheme:dark){:root{--bg:#161614;--fg:#ecebe6;--mute:#9a9a93;--line:#2c2c29;--card:#1f1f1c}}
+*{box-sizing:border-box}
+body{margin:0;padding:32px 16px 60px;background:var(--bg);color:var(--fg);font:16px/1.55 "Pretendard","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif}
+main{max-width:720px;margin:0 auto}
+h1{font-size:26px;margin:0 0 4px}
+p.sub{color:var(--mute);margin:0 0 22px;font-size:14px}
+ul{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+li{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center}
+li a{color:inherit;text-decoration:none;font-weight:600;font-size:17px}
+li a:hover{text-decoration:underline}
+li .d{color:var(--mute);font-size:14px;grid-column:1}
+.st{font-size:12px;padding:2px 9px;border-radius:999px;color:#fff;grid-row:1/3;align-self:center}
+.wait{background:var(--wait)}.done{background:var(--done)}.info{background:var(--info)}
+</style>
+</head>
+<body>
+<main>
+<h1>결정 브리프</h1>
+<p class="sub">최신이 위. 열어서 선택지를 누르고 [답장 복사]한 문장을 채팅에 붙이면 됩니다. 양식 원칙은 README.md.</p>
+<ul>
+  <li><a href="2026-10-19-environment-direction.html">환경 방향 결정 5건 + 진행 여부</a><span class="d">2026-10-19 · D1~D5·P1 · 근거 RESEARCH-18</span><span class="st wait">결정 대기</span></li>
+  <li><a href="2026-10-19-small-decisions.html">남은 작은 결정 5건</a><span class="d">2026-10-19 · Q3~Q5·B1·M1 · 10-16 요청 묶음</span><span class="st wait">결정 대기</span></li>
+</ul>
+</main>
+</body>
+</html>

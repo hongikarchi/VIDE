@@ -1,6 +1,6 @@
 # AI.md — 에이전트 공통 규약 (형식)
 
-버전 0.21 · 2026-10-02 · 소유: user
+버전 0.22 · 2026-10-19 · 소유: user
 
 이 파일은 이 저장소에서 일하는 모든 에이전트(Claude Code, Codex, Gemini CLI 등)와 사람이 공유하는 **형식 규약**이다. 문서별 판단 기준과 진입 경로, 폴더·파일·ID·상태·첨삭·생성물의 공통 규칙을 정한다.
 제품이 무엇인지·범위·요구는 `docs/PRD.md`가 정하고, 작업 절차는 `DEVELOPMENT_GUIDE.md`가 정한다. 가이드 전체를 매번 읽을 필요는 없지만 현재 단계에 해당하는 절은 따른다. 이 파일은 기술 스택·화면·기능 범위를 결정하지 않는다.
@@ -54,6 +54,7 @@ VIDE/
    │   ├─ SPIKE-YYYY-MM-DD-<slug>.md    기술 실험 기록 (질문·방법·환경·결과·한계)
    │   └─ VERIFY-YYYY-MM-DD-<scope>.md  실호스트·목업·MVP 수용 검수 기록
    ├─ decisions/                  ADR-NNN-<slug>.md — OQ-xx·스택 결정 기록 (첫 ADR 때 생성)
+   ├─ briefs/                     결정 브리프: 사용자가 열어 보고 바로 결정하는 한 장짜리 HTML(원본, §4의 유일한 예외). 양식 원칙은 briefs/README.md
    └─ assets/<scope>/             문서·검수의 이미지 등 증거 자산 (필요할 때 생성)
 ```
 
@@ -74,7 +75,7 @@ VIDE/
 
 ## 4. md / html
 
-- `.md`만 원본이며 저장소에는 MD만 둔다. 열람용 HTML은 `tools/docs/build.mjs`가 루트 `human/` 한 폴더에 원본과 같은 상대 경로로 만든다(예: `docs/plans/PLAN.md` → `human/docs/plans/PLAN.html`, 문서 목록 `human/index.html`). `human/`은 `.gitignore` 대상이라 커밋하지 않고 각 PC에서 만든다. 손으로 편집하지 않으며 생성물 머리에는 `GENERATED FILE` 주석이 있다. MD 옆에 `.html`을 두지 않는다.
+- `.md`만 원본이며 저장소에는 MD만 둔다. 열람용 HTML은 `tools/docs/build.mjs`가 루트 `human/` 한 폴더에 원본과 같은 상대 경로로 만든다(예: `docs/plans/PLAN.md` → `human/docs/plans/PLAN.html`, 문서 목록 `human/index.html`). `human/`은 `.gitignore` 대상이라 커밋하지 않고 각 PC에서 만든다. 손으로 편집하지 않으며 생성물 머리에는 `GENERATED FILE` 주석이 있다. MD 옆에 `.html`을 두지 않는다. 유일한 예외는 `docs/briefs/`다(2026-10-19 사용자 지시): 사용자가 보고 바로 결정하는 한 장짜리 HTML을 원본으로 두며, 양식 원칙과 수명은 `docs/briefs/README.md`가 소유하고 렌더러는 이 폴더를 건드리지 않는다.
 - 보기: `npm --prefix tools/docs run build`(최초 1회 `npm --prefix tools/docs install`) 뒤 `human/index.html`을 브라우저로 연다. `docs/assets/**` 이미지는 `human/`에 함께 복사된다. 사람이 편집할 때는 `run watch`.
 - 검사: `npm run docs:check`(= `npm --prefix tools/docs run check`)는 파일을 쓰지 않고 모든 MD를 렌더해 깨진 상대 링크·이미지와 front matter(§6) 오류가 있으면 exit 1이다. `verify`와 CI가 이를 돈다.
 - 자동 생성·검사: Claude Code가 `.md`를 Edit/Write 하면 `.claude/settings.json`의 PostToolUse 훅이 `human/`을 다시 만든다. `git commit` 때는 `.githooks/pre-commit`이 문서 검사만 하고 HTML을 커밋에 넣지 않는다. 실제 커밋은 사용자 지시가 있을 때만 수행한다.
