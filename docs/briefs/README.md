@@ -2,7 +2,7 @@
 id: INDEX-BRIEFS
 title: 결정 브리프 — 사용자가 열어 보고 바로 결정하는 한 장짜리 HTML
 status: approved
-version: 0.5
+version: 0.6
 updated: 2026-10-19
 owner: user
 related: []
@@ -50,6 +50,7 @@ related: []
 
 - 아직 안 만든 기능 → **합성 캡처**. 실제 UI의 그 자리에 기존 컴포넌트 CSS로 카드를 끼워 넣고 찍는다(`<img class="shot">`, 머리나 카드 태그에 '합성' 표시). 합성도 안 되면 점선 '화면 없음' 표식(`<div class="frame missing">`)만 둔다. 상자 와이어프레임은 쓰지 않는다(원칙 10).
 - 이미 만든 기능 → **실제 화면 캡처**(`<img class="shot">`). 목업을 새로 그리지 않는다(2026-10-01 "목업 말고 실제 UI" 원칙).
+- 화면 체계 자체를 새로 설계할 때(2026-10-19 "실제 기능이 붙기 전에 목업 프론트를 보고 싶다") → **살아 있는 HTML 목업**. `assets/<slug>/`에 공통 `app.css`·`app.js`·`_shell.html`과 장별 HTML을 두고, 스토리보드는 `figure.shot` 안에 `<div class="live"><iframe …>`로 그 화면을 그대로 끼운다(1440×900을 폭에 맞춰 축소, [새 창 ↗] 링크). 목업도 실제 제품처럼 보이게 만들고(레퍼런스: collectui 등 캡처해 토큰을 정함), 회색 상자 와이어프레임은 쓰지 않는다. 작은 그림 띠용 썸네일은 `assets/<slug>/thumbs/NN.png`. 목업은 제품 코드가 아니며 구도가 정해지면 Design·SPEC에 옮기고 목업 폴더는 지운다.
 
 **카드 하나 = 한 단계.** `_storyboard-template.html`을 복사한다. 카드는 8장 이하(넘으면 흐름을 나눈다). 왼쪽 그림(`.stick` 안 `figure.shot[data-s]`)과 오른쪽 단계(`.step[data-s]`)가 같은 번호끼리 짝이며, [이전]/[다음]·← →·아래 작은 그림 띠로 넘긴다. 단계 구성:
 
