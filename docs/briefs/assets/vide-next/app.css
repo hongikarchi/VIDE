@@ -1,4 +1,4 @@
-/* VIDE Next 목업 공통 스타일 v6 — 2026-10-20 (v6: 탐색기 트리 · 한/영 · + 폴더 · 검색/이력 패널 · .party · .flag · .rep) (검토용 목업, 제품 코드 아님)
+/* VIDE Next 목업 공통 스타일 v7 — 2026-10-20 (v7: 레일 묶음 5 · 탐색기 묶음별 트리 · 머리 검색칸 · UI 언어 · body.site(11 랜딩) · .signin(12 로그인); v6: + 폴더 · .party · .flag · .rep) (검토용 목업, 제품 코드 아님)
    레퍼런스: 사용자의 기록 아티팩트 3장(Threads Through the Building · Interconnected Judgements v1·v2).
    그 토큰과 조각을 그대로 쓴다: 흰 바탕 · 따뜻한 회색 선 1px · 모서리 3px · 탠 강조 하나 · 글리프 · 22×12 스위치 ·
    10.5px 대문자 묶음 제목 · 그림자·알약·색 배지 없음. 어두운 테마는 아티팩트의 따뜻한 다크.
@@ -153,7 +153,7 @@ svg .m-axis{font-size:9px;fill:var(--mute)}
 .tabpane{display:none}
 .tabpane.on{display:block}
 
-/* rail: 위 탐색, 아래 피드백·테마·설정·계정(현행 제품 순서) */
+/* rail v7: 위 묶음 5(a[data-sec]), 아래 피드백·언어·밝기·설정·계정 */
 .rail{border-right:1px solid var(--rule);display:flex;flex-direction:column;align-items:center;padding:10px 0 8px;gap:2px;background:var(--bg)}
 .rail .logo{font-size:13px;font-weight:600;height:28px;display:grid;place-items:center;margin-bottom:8px;letter-spacing:-.02em}
 .rail a,.rail button{width:30px;height:30px;border-radius:3px;display:grid;place-items:center;color:var(--mute);position:relative}
@@ -197,10 +197,16 @@ svg .m-axis{font-size:9px;fill:var(--mute)}
 .explorer .row.new{background:var(--panel)}
 .explorer input.newf{flex:1;min-width:0;height:20px;border:1px solid var(--fg);border-radius:3px;background:var(--bg);padding:0 5px;font-size:12px;outline:none}
 .explorer input.newf::placeholder{color:var(--mute)}
-.explorer .proj .lang{height:18px;min-width:22px;padding:0 5px;border:1px solid var(--rule);border-radius:3px;font-size:10.5px;font-weight:500;color:var(--mute);line-height:16px}
-.explorer .proj .lang:hover{color:var(--fg);border-color:var(--fg)}
+/* explorer v7: 머리 검색칸 · 묶음별 트리 블록(.tree[data-sec], 하나만 보임) · 이력 글리프 · 검색 결과 줄(09) */
+.explorer .proj{flex-wrap:wrap;row-gap:8px}
+.explorer .proj .q{flex:1 0 100%;height:24px;border:1px solid var(--rule);border-radius:3px;background:var(--bg);padding:0 8px;font-size:11px;font-weight:400;outline:none}
+.explorer .proj .q:focus{border-color:var(--fg)}
+.explorer .proj .q::placeholder{color:var(--mute)}
+.explorer .tree[hidden]{display:none}
+.explorer .row .gly{width:12px;flex:none;text-align:center;color:var(--mute);font-size:11px}
+.explorer .hit{font-size:11px;color:var(--mute);padding:0 6px 4px 27px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:-3px}
 
-/* 사이드바 패널(검색 · 이력): .explorer와 같은 자리·폭·여백, 행은 .explorer .row 그대로 */
+/* 사이드바 패널(검색 · 이력) — v6 전용. v7부터 쓰지 않음(검색은 탐색기 머리 검색칸, 이력은 설계 트리). 남은 장 호환용으로만 둔다 */
 .app>.panel{grid-column:2;min-height:0}
 .app.explorer-closed .panel{display:none}
 .panel{border-right:1px solid var(--rule);overflow:auto;padding:10px 10px 20px;font-size:12px;background:var(--bg)}
@@ -305,6 +311,8 @@ svg .m-axis{font-size:9px;fill:var(--mute)}
 /* 선택 창(01 시작) */
 .scrim{position:fixed;inset:0;background:rgba(17,17,17,.18);display:grid;place-items:center;z-index:10}
 [data-theme=dark] .scrim{background:rgba(0,0,0,.45)}
+/* 선택 창이 열려도 언어 단추는 누를 수 있게(01) */
+.app:has(~ .scrim) .rail [data-lang-toggle]{z-index:11}
 .dialog{width:560px;max-width:calc(100vw - 32px);background:var(--bg);border:1px solid var(--rule);border-radius:3px;padding:20px 22px 16px;display:flex;flex-direction:column;gap:14px}
 .dialog h1{font-size:16px;font-weight:500}
 .dialog>p{font-size:12px;color:var(--mute)}
@@ -331,6 +339,52 @@ svg .m-axis{font-size:9px;fill:var(--mute)}
 .demo-nav b{font-weight:500;color:var(--fg);padding:0 2px;font-variant-numeric:tabular-nums}
 .app.agent-closed~.demo-nav{right:12px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* ── 11 랜딩(body.site): 한 열 페이지, 토큰만 ── */
+body.site{overflow:auto;height:auto;min-height:100%}
+.site .wrap{max-width:960px;margin:0 auto;padding:0 24px}
+.site-head{display:flex;align-items:center;gap:10px;height:48px;border-bottom:1px solid var(--rule)}
+.site-head .mark,.signin .mark{font-size:13px;font-weight:600;letter-spacing:-.02em}
+.site-head .grow{flex:1}
+.site .hero{padding:72px 0 28px;display:flex;flex-direction:column;gap:24px}
+.site .hero h1{font-size:28px;font-weight:500;letter-spacing:-.01em;line-height:1.25}
+.site .hero svg{display:block;width:100%;max-width:640px;height:auto}
+.site .hero svg text{font-size:11px;fill:var(--fg);font-family:var(--sans)}
+.site .hero svg .box{fill:var(--bg);stroke:var(--rule);stroke-width:1}
+.site .hero svg .box.on{stroke:var(--accent)}
+.site .hero svg .arr{stroke:var(--mute);stroke-width:1;fill:none}
+.site .shots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:20px 0 28px}
+.site .shots figure:first-child{grid-column:1/-1}
+.site .shots figure{margin:0;min-width:0}
+.site .shots img{display:block;width:100%;height:auto;border:1px solid var(--rule);border-radius:3px}
+.site .shots figcaption{font-size:11px;color:var(--mute);margin-top:6px}
+.site .nums{display:flex;flex-wrap:wrap;gap:16px 48px;padding:20px 0;border-top:1px solid var(--rule)}
+.site .nums div{display:flex;flex-direction:column;gap:2px}
+.site .nums b{font-size:22px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1.2}
+.site .nums span{font-size:11px;color:var(--mute)}
+.site-foot{display:flex;align-items:center;gap:12px;height:44px;border-top:1px solid var(--rule);font-size:11px;color:var(--mute);margin-top:32px}
+.site-foot .grow{flex:1}
+.site .demo-nav{right:12px}
+@media(max-width:720px){.site .shots{grid-template-columns:1fr}.site .shots figure:first-child{grid-column:auto}.site .hero{padding-top:40px}}
+
+/* ── 12 로그인(.signin): 가운데 카드 320 + 오른쪽 프로젝트 목록 카드 ── */
+.signin{min-height:100vh;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:24px;padding:32px 16px}
+.signin .card{width:320px;max-width:100%;border:1px solid var(--rule);border-radius:3px;background:var(--bg);padding:24px;display:flex;flex-direction:column;gap:12px}
+.signin label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--mute)}
+.signin input{height:30px;border:1px solid var(--rule);border-radius:3px;background:var(--bg);padding:0 8px;font-size:13px;color:var(--fg);outline:none}
+.signin input:focus{border-color:var(--fg)}
+.signin .btn{justify-content:center;height:30px;font-size:12px}
+.signin .links{display:flex;gap:12px;font-size:11px;color:var(--mute)}
+.signin .links a:hover{color:var(--fg)}
+.signin .links .grow{flex:1}
+.signin .rule{border-top:1px solid var(--rule);margin:2px 0}
+.signin h3{font-size:10.5px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.signin .list{display:flex;flex-direction:column;gap:2px}
+.signin .list .row{display:flex;align-items:center;gap:8px;height:30px;padding:0 6px;border-radius:3px;font-size:12px}
+.signin .list .row:hover,.signin .list .row.sel{background:var(--panel)}
+.signin .list .row svg.i{color:var(--mute)}
+.signin .list .row .meta{font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums}
+.signin .list .row .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 @media(max-width:1280px){:root{--agent:340px;--explorer:210px}.two{grid-template-columns:1fr}}
 @media(max-width:1000px){.app{grid-template-columns:var(--rail) 0 minmax(0,1fr) var(--agent)}.explorer,.panel{display:none}}

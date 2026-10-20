@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VIDE Next 목업</title>
-<!-- 스토리보드 브리프(docs/briefs/README.md). 2026-10-20 4판: 3차 메모(폴더 탐색기·레일 셋·협의 대장). 화면 10장은 assets/vide-next/*.html 살아 있는 HTML. 정본은 PRD·SPEC·Design. -->
+<!-- 스토리보드 브리프(docs/briefs/README.md). 2026-10-20 5판: 4차 메모(레일 묶음 다섯·UI 언어·랜딩·로그인). 화면 12장은 assets/vide-next/*.html 살아 있는 HTML. 정본은 PRD·SPEC·Design. -->
 <link rel="stylesheet" href="_base.css">
 <style>
 .live{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;border:1px solid var(--line);background:#fff}
@@ -12,7 +12,7 @@
 .live .open{position:absolute;right:10px;bottom:10px;font-size:11px;background:#fff;border:1px solid var(--ink);padding:4px 9px;text-decoration:none;letter-spacing:0}
 .stick .shot{margin:0}
 .stick .cap{font-size:11px;color:var(--muted);margin-top:8px;letter-spacing:0}
-.thumbs{grid-template-columns:repeat(5,minmax(0,1fr))}
+.thumbs{grid-template-columns:repeat(6,minmax(0,1fr))}
 .thumbs button{aspect-ratio:16/10}
 .thumbs img{aspect-ratio:16/10;object-fit:cover}
 .chg td:first-child{color:var(--muted);width:34%}
@@ -33,6 +33,9 @@
 .rails{display:flex;flex-wrap:wrap;gap:20px;max-width:720px}
 .rails figure{margin:0;flex:1 1 200px;max-width:220px}
 .rails svg{display:block;width:100%;height:auto}
+.railv{max-width:220px}
+.shells{margin-top:14px}
+.shells figure{max-width:200px}
 .rails figcaption{font-size:12px;margin-top:6px;letter-spacing:0}
 .rails figcaption em{font-style:normal;font-size:10px;color:var(--coral-deep);border:1px solid var(--coral);border-radius:2px;padding:1px 5px;margin-left:6px}
 @media print{.live iframe{display:none}.live:after{content:"인쇄 불가 · 아래 작은 그림";position:absolute;inset:0;display:grid;place-items:center;color:#777}}
@@ -48,42 +51,46 @@
 
 <div class="intro">
   <div>
-    <div class="eyebrow">2026-10-20 4판 / 검토 대기 / 근거 <a href="../../human/docs/PRD.html">PRD</a> §1.1·§4.5 · <a href="../research/RESEARCH-19-db-engine.md">RESEARCH-19</a></div>
-    <h1>탐색기는 폴더 그대로, 레일은 보기 세 개.</h1>
+    <div class="eyebrow">2026-10-20 5판 / 검토 대기 / 근거 <a href="../../human/docs/PRD.html">PRD</a> §1.1·§4.5 · <a href="../research/RESEARCH-19-db-engine.md">RESEARCH-19</a> §9 · <a href="../research/RESEARCH-20-shell.md">RESEARCH-20</a></div>
+    <h1>레일은 묶음 다섯, 말은 어느 쪽이든.</h1>
   </div>
   <div class="study-mark">살아 있는 HTML<br>답 = [피드백 복사]</div>
 </div>
 
 <section id="s">
   <div class="section-head">
-    <div><div class="eyebrow">01 / SCREENS</div><h2>화면 10장.</h2></div>
+    <div><div class="eyebrow">01 / SCREENS</div><h2>화면 12장.</h2></div>
   </div>
   <div class="story">
     <div class="stick">
-      <figure class="shot" data-s="1"><div class="live"><iframe src="assets/vide-next/01-start.html" title="S1 시작" loading="lazy"></iframe><a class="open" href="assets/vide-next/01-start.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="2"><div class="live"><iframe data-src="assets/vide-next/02-records-db.html" title="S2 기록 표" loading="lazy"></iframe><a class="open" href="assets/vide-next/02-records-db.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="3"><div class="live"><iframe data-src="assets/vide-next/10-threads.html" title="S10 협의 대장" loading="lazy"></iframe><a class="open" href="assets/vide-next/10-threads.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="4"><div class="live"><iframe data-src="assets/vide-next/03-spec.html" title="S3 조건·결정" loading="lazy"></iframe><a class="open" href="assets/vide-next/03-spec.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="5"><div class="live"><iframe data-src="assets/vide-next/04-apply.html" title="S4 변경·이력" loading="lazy"></iframe><a class="open" href="assets/vide-next/04-apply.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="6"><div class="live"><iframe data-src="assets/vide-next/05-review-structure.html" title="S5 구조 검토" loading="lazy"></iframe><a class="open" href="assets/vide-next/05-review-structure.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="7"><div class="live"><iframe data-src="assets/vide-next/06-parts-model.html" title="S6 부위×모델" loading="lazy"></iframe><a class="open" href="assets/vide-next/06-parts-model.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="8"><div class="live"><iframe data-src="assets/vide-next/07-records-graph.html" title="S7 그래프" loading="lazy"></iframe><a class="open" href="assets/vide-next/07-records-graph.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="9"><div class="live"><iframe data-src="assets/vide-next/08-report.html" title="S8 주간 보고" loading="lazy"></iframe><a class="open" href="assets/vide-next/08-report.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="10"><div class="live"><iframe data-src="assets/vide-next/09-search.html" title="S9 검색" loading="lazy"></iframe><a class="open" href="assets/vide-next/09-search.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="1"><div class="live"><iframe src="assets/vide-next/11-landing.html" title="S11 랜딩" loading="lazy"></iframe><a class="open" href="assets/vide-next/11-landing.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="2"><div class="live"><iframe data-src="assets/vide-next/12-signin.html" title="S12 로그인" loading="lazy"></iframe><a class="open" href="assets/vide-next/12-signin.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="3"><div class="live"><iframe data-src="assets/vide-next/01-start.html" title="S1 시작" loading="lazy"></iframe><a class="open" href="assets/vide-next/01-start.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="4"><div class="live"><iframe data-src="assets/vide-next/02-records-db.html" title="S2 기록 표" loading="lazy"></iframe><a class="open" href="assets/vide-next/02-records-db.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="5"><div class="live"><iframe data-src="assets/vide-next/10-threads.html" title="S10 협의 대장" loading="lazy"></iframe><a class="open" href="assets/vide-next/10-threads.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="6"><div class="live"><iframe data-src="assets/vide-next/03-spec.html" title="S3 조건·결정" loading="lazy"></iframe><a class="open" href="assets/vide-next/03-spec.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="7"><div class="live"><iframe data-src="assets/vide-next/04-apply.html" title="S4 변경·이력" loading="lazy"></iframe><a class="open" href="assets/vide-next/04-apply.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="8"><div class="live"><iframe data-src="assets/vide-next/05-review-structure.html" title="S5 구조 검토" loading="lazy"></iframe><a class="open" href="assets/vide-next/05-review-structure.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="9"><div class="live"><iframe data-src="assets/vide-next/06-parts-model.html" title="S6 부위×모델" loading="lazy"></iframe><a class="open" href="assets/vide-next/06-parts-model.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="10"><div class="live"><iframe data-src="assets/vide-next/07-records-graph.html" title="S7 그래프" loading="lazy"></iframe><a class="open" href="assets/vide-next/07-records-graph.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="11"><div class="live"><iframe data-src="assets/vide-next/08-report.html" title="S8 주간 보고" loading="lazy"></iframe><a class="open" href="assets/vide-next/08-report.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="12"><div class="live"><iframe data-src="assets/vide-next/09-search.html" title="S9 검색" loading="lazy"></iframe><a class="open" href="assets/vide-next/09-search.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
     </div>
     <div class="steps-col">
       <div class="ctl"><button type="button" class="prev">‹ 이전</button><span class="pos"></span><button type="button" class="next">다음 ›</button></div>
       <div class="dots"></div>
-      <div class="step" data-s="1" data-n="01" data-id="S1" data-choices="좋음,수정"><small>01</small><h3>S1 시작</h3></div>
-      <div class="step" data-s="2" data-n="02" data-id="S2" data-choices="좋음,수정"><small>02</small><h3>S2 기록 표</h3></div>
-      <div class="step" data-s="3" data-n="10" data-id="S10" data-choices="좋음,수정"><small>10</small><h3>S10 협의 대장</h3></div>
-      <div class="step" data-s="4" data-n="03" data-id="S3" data-choices="좋음,수정"><small>03</small><h3>S3 조건·결정</h3></div>
-      <div class="step" data-s="5" data-n="04" data-id="S4" data-choices="좋음,수정"><small>04</small><h3>S4 변경·이력</h3></div>
-      <div class="step" data-s="6" data-n="05" data-id="S5" data-choices="좋음,수정"><small>05</small><h3>S5 구조 검토</h3></div>
-      <div class="step" data-s="7" data-n="06" data-id="S6" data-choices="좋음,수정"><small>06</small><h3>S6 부위×모델</h3></div>
-      <div class="step" data-s="8" data-n="07" data-id="S7" data-choices="좋음,수정"><small>07</small><h3>S7 그래프</h3></div>
-      <div class="step" data-s="9" data-n="08" data-id="S8" data-choices="좋음,수정"><small>08</small><h3>S8 주간 보고</h3></div>
-      <div class="step" data-s="10" data-n="09" data-id="S9" data-choices="좋음,수정"><small>09</small><h3>S9 검색</h3></div>
+      <div class="step" data-s="1" data-n="11" data-id="S11" data-choices="좋음,수정"><small>11</small><h3>S11 랜딩</h3></div>
+      <div class="step" data-s="2" data-n="12" data-id="S12" data-choices="좋음,수정"><small>12</small><h3>S12 로그인</h3></div>
+      <div class="step" data-s="3" data-n="01" data-id="S1" data-choices="좋음,수정"><small>01</small><h3>S1 시작</h3></div>
+      <div class="step" data-s="4" data-n="02" data-id="S2" data-choices="좋음,수정"><small>02</small><h3>S2 기록 표</h3></div>
+      <div class="step" data-s="5" data-n="10" data-id="S10" data-choices="좋음,수정"><small>10</small><h3>S10 협의 대장</h3></div>
+      <div class="step" data-s="6" data-n="03" data-id="S3" data-choices="좋음,수정"><small>03</small><h3>S3 조건·결정</h3></div>
+      <div class="step" data-s="7" data-n="04" data-id="S4" data-choices="좋음,수정"><small>04</small><h3>S4 변경·이력</h3></div>
+      <div class="step" data-s="8" data-n="05" data-id="S5" data-choices="좋음,수정"><small>05</small><h3>S5 구조 검토</h3></div>
+      <div class="step" data-s="9" data-n="06" data-id="S6" data-choices="좋음,수정"><small>06</small><h3>S6 부위×모델</h3></div>
+      <div class="step" data-s="10" data-n="07" data-id="S7" data-choices="좋음,수정"><small>07</small><h3>S7 그래프</h3></div>
+      <div class="step" data-s="11" data-n="08" data-id="S8" data-choices="좋음,수정"><small>08</small><h3>S8 주간 보고</h3></div>
+      <div class="step" data-s="12" data-n="09" data-id="S9" data-choices="좋음,수정"><small>09</small><h3>S9 검색</h3></div>
     </div>
   </div>
   <div class="thumbs" aria-label="단계 바로 가기"></div>
@@ -93,76 +100,63 @@
   <div class="section-head">
     <div><div class="eyebrow">FOLDERS</div><h2>폴더 ↔ 탐색기.</h2></div>
   </div>
-  <svg class="map" viewBox="0 0 720 196" role="img" aria-label="디스크의 영어 폴더 다섯이 탐색기에 한글 라벨로 보임">
+  <svg class="map" viewBox="0 0 720 210" role="img" aria-label="디스크의 영어 폴더 다섯이 레일 묶음 다섯이 되고 탐색기는 고른 묶음의 하위 트리">
     <defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1L7 4L1 7"/></marker></defs>
-    <rect x=".5" y=".5" width="250" height="195"/><text class="r" x="14" y="20">디스크</text>
-    <rect x="460.5" y=".5" width="259" height="195"/><text class="r" x="474" y="20">탐색기</text>
-    <path d="M280 104H440" marker-end="url(#ar)"/><text class="r" x="330" y="94">EN ⇄ 한</text>
-    <text class="m h" x="14" y="42">BaseData/</text><text class="h" x="474" y="42">자료</text>
-    <text class="m r" x="28" y="57">minutes/</text><text class="r" x="488" y="57">회의록</text>
-    <text class="m r" x="28" y="72">threads/</text><text class="r" x="488" y="72">협의</text>
-    <text class="m h" x="14" y="87">DB/</text><text class="h" x="474" y="87">기록</text>
-    <text class="m r" x="28" y="102">project.sqlite</text><text class="r" x="488" y="102">전체 · 협의 대장</text>
-    <text class="m h" x="14" y="117">Design/</text><text class="h" x="474" y="117">설계</text>
-    <text class="m r" x="28" y="132">예시 모델.3dm</text><text class="r" x="488" y="132">예시 모델.3dm</text>
-    <text class="m h" x="14" y="147">Output/</text><text class="h" x="474" y="147">보고</text>
-    <text class="m r" x="28" y="162">weekly/</text><text class="r" x="488" y="162">주간</text>
-    <text class="m h" x="14" y="177">Extensions/</text><text class="h" x="474" y="177">도구</text>
-    <text class="acc" x="690" y="42">+</text><text class="acc" x="690" y="117">+</text>
+    <rect x=".5" y=".5" width="250" height="209"/><text class="r" x="14" y="20">디스크</text>
+    <text class="m h" x="14" y="42">BaseData/</text>
+    <text class="m r" x="28" y="57">minutes/</text><text class="m r" x="28" y="72">mail/</text><text class="m r" x="28" y="87">reports/</text>
+    <text class="m r" x="28" y="102">threads/</text><text class="m r" x="28" y="117">laws/</text><text class="m r" x="28" y="132">site/</text>
+    <text class="m h" x="14" y="147">DB/</text><text class="m h" x="14" y="162">Design/</text><text class="m h" x="14" y="177">Output/</text><text class="m h" x="14" y="192">Extensions/</text>
+    <path d="M276 110H404" marker-end="url(#ar)"/><text class="r" x="312" y="100">EN ⇄ 한</text>
+    <rect x="420.5" y=".5" width="299" height="209"/><path d="M472 1V209"/>
+    <text class="r" x="428" y="20">레일</text>
+    <rect class="on" x="428.5" y="30.5" width="12" height="12"/><text class="h" x="446" y="41">자료</text>
+    <rect x="428.5" y="54.5" width="12" height="12"/><text class="r" x="446" y="65">기록</text>
+    <rect x="428.5" y="78.5" width="12" height="12"/><text class="r" x="446" y="89">설계</text>
+    <rect x="428.5" y="102.5" width="12" height="12"/><text class="r" x="446" y="113">보고</text>
+    <rect x="428.5" y="126.5" width="12" height="12"/><text class="r" x="446" y="137">도구</text>
+    <rect class="box" x="482.5" y="8.5" width="160" height="16"/><text class="r" x="488" y="20">⌕ 검색</text>
+    <text x="484" y="42">회의록 7</text><text class="r" x="498" y="57">2025 3</text><text class="r" x="498" y="72">2026 4</text>
+    <text x="484" y="87">메일 41</text><text x="484" y="102">업무 보고 9</text><text x="484" y="117">협의 1</text>
+    <text x="484" y="132">법규 12</text><text x="484" y="147">대지 3</text>
+    <text class="acc" x="700" y="42">+</text><text class="acc" x="700" y="87">+</text>
   </svg>
-  <p class="words">디스크 영어 · 화면 한/영 · + 폴더</p>
+  <p class="words">디스크 영어 · 화면 한/EN · 레일 = 묶음 · 탐색기 = 하위</p>
 </section>
 
 <section id="r">
   <div class="section-head">
-    <div><div class="eyebrow">RAIL</div><h2>레일 선택지 셋.</h2></div>
+    <div><div class="eyebrow">RAIL</div><h2>레일 v7.</h2></div>
   </div>
-  <div class="rails">
-    <figure>
-      <svg class="map" viewBox="0 0 220 140" role="img" aria-label="① 탐색기 검색 이력">
-        <rect x=".5" y=".5" width="219" height="139"/><path d="M28 1V139M100 1V139"/>
-        <rect class="on" x="8.5" y="10.5" width="12" height="12"/><rect x="8.5" y="34.5" width="12" height="12"/><rect x="8.5" y="58.5" width="12" height="12"/>
-        <text x="36" y="21">탐색기</text><text class="r" x="36" y="45">검색</text><text class="r" x="36" y="69">이력</text>
-        <path class="dash" d="M110 18H200M110 34H190M110 50H180M110 66H170M110 82H160"/>
-      </svg>
-      <figcaption>① 보기 셋<em>추천</em></figcaption>
-    </figure>
-    <figure>
-      <svg class="map" viewBox="0 0 220 140" role="img" aria-label="② 탐색기 위 검색칸">
-        <rect x=".5" y=".5" width="219" height="139"/><path d="M28 1V139M100 1V139"/>
-        <rect class="box" x="34.5" y="8.5" width="58" height="16"/><text class="r" x="40" y="20">⌕</text>
-        <path class="dash" d="M36 38H90M36 52H86M36 66H82M36 80H78M36 94H74"/>
-        <path class="dash" d="M110 18H200M110 34H190M110 50H180M110 66H170M110 82H160"/>
-      </svg>
-      <figcaption>② 검색칸</figcaption>
-    </figure>
-    <figure>
-      <svg class="map" viewBox="0 0 220 140" role="img" aria-label="③ 묶음 단추 다섯">
-        <rect x=".5" y=".5" width="219" height="139"/><path d="M28 1V139M100 1V139"/>
-        <rect x="8.5" y="8.5" width="12" height="12"/><rect class="on" x="8.5" y="28.5" width="12" height="12"/><rect x="8.5" y="48.5" width="12" height="12"/><rect x="8.5" y="68.5" width="12" height="12"/><rect x="8.5" y="88.5" width="12" height="12"/>
-        <text class="r" x="36" y="19">자료</text><text x="36" y="39">기록</text><text class="r" x="36" y="59">설계</text><text class="r" x="36" y="79">보고</text><text class="r" x="36" y="99">도구</text>
-        <text class="acc" x="36" y="128">= 트리</text>
-        <path class="dash" d="M110 18H200M110 34H190M110 50H180M110 66H170M110 82H160"/>
-      </svg>
-      <figcaption>③ 묶음 5</figcaption>
-    </figure>
-  </div>
+  <svg class="map railv" viewBox="0 0 220 300" role="img" aria-label="레일 위 다섯 묶음 아래 다섯 단추">
+    <rect x=".5" y=".5" width="219" height="299"/><path d="M32 1V299"/><path class="dash" d="M4 148H216"/>
+    <rect class="on" x="10.5" y="12.5" width="12" height="12"/><text class="h" x="44" y="23">자료</text><text class="r" x="104" y="23">BaseData</text>
+    <rect x="10.5" y="38.5" width="12" height="12"/><text x="44" y="49">기록</text><text class="r" x="104" y="49">DB</text>
+    <rect x="10.5" y="64.5" width="12" height="12"/><text x="44" y="75">설계</text><text class="r" x="104" y="75">Design</text>
+    <rect x="10.5" y="90.5" width="12" height="12"/><text x="44" y="101">보고</text><text class="r" x="104" y="101">Output</text>
+    <rect x="10.5" y="116.5" width="12" height="12"/><text x="44" y="127">도구</text><text class="r" x="104" y="127">Extensions</text>
+    <rect x="10.5" y="164.5" width="12" height="12"/><text x="44" y="175">피드백</text><text class="r" x="104" y="175">Feedback</text>
+    <rect x="10.5" y="190.5" width="12" height="12"/><text class="acc" x="44" y="201">언어</text><text class="acc" x="104" y="201">Language</text>
+    <rect x="10.5" y="216.5" width="12" height="12"/><text x="44" y="227">밝기</text><text class="r" x="104" y="227">Theme</text>
+    <rect x="10.5" y="242.5" width="12" height="12"/><text x="44" y="253">설정</text><text class="r" x="104" y="253">Settings</text>
+    <rect x="10.5" y="268.5" width="12" height="12"/><text x="44" y="279">계정</text><text class="r" x="104" y="279">Account</text>
+  </svg>
+  <p class="words">검색 → 탐색기 칸 · 이력 → 설계 트리</p>
 </section>
 
 <section id="c">
   <div class="section-head">
-    <div><div class="eyebrow">02 / CHANGES</div><h2>3차 메모 7개.</h2></div>
+    <div><div class="eyebrow">02 / CHANGES</div><h2>4차 메모 6개.</h2></div>
   </div>
   <div class="table-wrap" style="max-height:none">
     <table class="txt chg">
       <tbody>
-        <tr><td>1 묶음 다섯</td><td>유지 · 트리 하나</td></tr>
-        <tr><td>1.1 한/영</td><td>EN ⇄ 한 단추</td></tr>
-        <tr><td>1.2 영어 이름</td><td>BaseData 등 5개</td></tr>
-        <tr><td>1.3 로컬 폴더</td><td>디스크 폴더 그대로</td></tr>
-        <tr><td>1.4 폴더 추가</td><td>폴더 행마다 +</td></tr>
-        <tr><td>2 레일 의미</td><td>탐색기·검색·이력</td></tr>
-        <tr><td>3.1 PDF 3장</td><td>협의 대장·주간 보고 장</td></tr>
+        <tr><td>1 한/EN</td><td>레일 아래 · UI 전체</td></tr>
+        <tr><td>2 레일</td><td>묶음 5 · 검색칸</td></tr>
+        <tr><td>3 동시 수정</td><td>Q2 · 행 먼저</td></tr>
+        <tr><td>4 셸 뜻</td><td>Q3 그림 3</td></tr>
+        <tr><td>5 랜딩·가입</td><td>S11 · S12</td></tr>
+        <tr><td>6 자동화</td><td>노드 편집기 제외</td></tr>
       </tbody>
     </table>
   </div>
@@ -170,38 +164,60 @@
 
 <section id="q">
   <div class="section-head">
-    <div><div class="eyebrow">03 / QUESTIONS</div><h2>레일 · 공동 편집 · 셸.</h2></div>
+    <div><div class="eyebrow">03 / QUESTIONS</div><h2>5판 · 공동 편집 · 셸.</h2></div>
   </div>
   <ul class="qs after">
     <li class="d decide" data-id="Q1">
-      <p class="q"><b class="id">Q1</b><b>레일은?</b></p>
+      <p class="q"><b class="id">Q1</b><b>5판은?</b></p>
       <div class="ans">
-        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 탐색기·검색·이력</b><small>사이드바 셋</small></button>
-        <button type="button" data-v="②" aria-pressed="false"><b>② 탐색기+검색칸</b><small>레일은 아래 4개</small></button>
-        <button type="button" data-v="③" aria-pressed="false"><b>③ 묶음 단추 5</b><small>트리 범위 전환</small></button>
+        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 그대로</b><small>다음 = 정본 반영</small></button>
+        <button type="button" data-v="②" aria-pressed="false"><b>② 고친다</b><small>메모에</small></button>
       </div>
-      <p class="line"><b>이유</b>단추마다 다른 사이드바, 탐색기와 중복 없음.</p>
-      <p class="line"><b>틀리면</b>검색·이력 패널 자리만 옮김.</p>
+      <p class="line"><b>이유</b>메모 6개 반영.</p>
+      <p class="line"><b>틀리면</b>메모만큼 6판.</p>
     </li>
     <li class="d decide" data-id="Q2">
-      <p class="q"><b class="id">Q2</b><b>여럿이 동시에 고치는 구조는?</b> <a href="../research/RESEARCH-19-db-engine.md">RESEARCH-19 §9</a></p>
+      <p class="q"><b class="id">Q2</b><b>실시간 공동 편집, 어디부터?</b> <a href="../research/RESEARCH-19-db-engine.md">RESEARCH-19 §9</a></p>
       <div class="ans">
-        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 서버 원본 + 푸시</b><small>엔진은 측정 뒤</small></button>
-        <button type="button" data-v="②" aria-pressed="false"><b>② 서버 PostgreSQL</b><small>행 권한 · 벡터</small></button>
-        <button type="button" data-v="③" aria-pressed="false"><b>③ 지금대로</b><small>PC 원본 · 2분 교환</small></button>
+        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 협의 대장·기록 행</b><small>필드 LWW · 편집 중 표시</small></button>
+        <button type="button" data-v="②" aria-pressed="false"><b>② 회의록·메모 글</b><small>CRDT · 노트 방 확장</small></button>
+        <button type="button" data-v="③" aria-pressed="false"><b>③ 둘 다 한 번에</b><small>행 + 글</small></button>
       </div>
-      <p class="line"><b>이유</b>동시 편집 조건은 서버 원본 + 푸시, 엔진 무관.</p>
-      <p class="line"><b>틀리면</b>행 권한 필요 시 PostgreSQL로.</p>
+      <p class="line"><b>이유</b>함께 고치는 것 대부분이 행, 노트 방 패턴 재사용.</p>
+      <p class="line"><b>틀리면</b>글 CRDT를 뒤에 붙임, 행은 그대로.</p>
     </li>
     <li class="d decide" data-id="Q3">
-      <p class="q"><b class="id">Q3</b><b>셸은 무엇으로?</b></p>
+      <p class="q"><b class="id">Q3</b><b>VIDE 창을 무엇 위에?</b> <a href="../research/RESEARCH-20-shell.md">RESEARCH-20</a></p>
       <div class="ans">
-        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 환경 분리 뒤 1주 실험</b><small>MCP 다리 · 터미널</small></button>
-        <button type="button" data-v="②" aria-pressed="false"><b>② 전용 앱</b><small>이 목업대로</small></button>
-        <button type="button" data-v="③" aria-pressed="false"><b>③ VS Code 확장</b><small>가운데 = 웹뷰</small></button>
+        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 자체 셸</b><small>WebView2 + 웹 UI · VS Code는 개념만</small></button>
+        <button type="button" data-v="②" aria-pressed="false"><b>② VS Code 포크</b><small>Cursor·Kiro 방식</small></button>
+        <button type="button" data-v="③" aria-pressed="false"><b>③ VS Code 확장</b><small>사이드바 한 칸</small></button>
       </div>
-      <p class="line"><b>이유</b>셸보다 환경이 먼저, 1주면 판가름.</p>
-      <p class="line"><b>틀리면</b>1주 늦게 ②로 감.</p>
+      <div class="rails shells">
+        <figure>
+          <svg class="map" viewBox="0 0 200 110" role="img" aria-label="① 자체 창">
+            <rect x=".5" y=".5" width="199" height="109"/><path d="M14 1V109M58 1V109M150 1V109"/>
+            <text class="h" x="88" y="60">VIDE</text><text class="r" x="156" y="60">AI</text>
+          </svg>
+          <figcaption>① 자체 창<em>추천</em></figcaption>
+        </figure>
+        <figure>
+          <svg class="map" viewBox="0 0 200 110" role="img" aria-label="② VS Code 창 안에 VIDE">
+            <rect x=".5" y=".5" width="199" height="109"/><path d="M1 20H199M14 20V109M58 20V109"/>
+            <text class="r" x="8" y="14">VS Code</text><text class="h" x="112" y="68">VIDE</text>
+          </svg>
+          <figcaption>② 포크</figcaption>
+        </figure>
+        <figure>
+          <svg class="map" viewBox="0 0 200 110" role="img" aria-label="③ VS Code 사이드바 한 칸">
+            <rect x=".5" y=".5" width="199" height="109"/><path d="M1 20H199M14 20V109M70 20V109"/>
+            <text class="r" x="8" y="14">VS Code</text><text class="acc" x="26" y="68">VIDE</text><text class="r" x="120" y="68">코드</text>
+          </svg>
+          <figcaption>③ 확장</figcaption>
+        </figure>
+      </div>
+      <p class="line"><b>이유</b>중심은 아티팩트 창·호스트 다리, 코드 편집기 아님.</p>
+      <p class="line"><b>틀리면</b>편집기·확장 생태계가 중심이 되면 포크로.</p>
     </li>
   </ul>
 </section>
@@ -214,12 +230,12 @@
     <input type="text" id="memo" placeholder="전체 메모(선택)">
     <span id="msg"></span>
   </div>
-  <pre id="out">Q1~Q3 · S1~S10 선택</pre>
+  <pre id="out">Q1~Q3 · S1~S12 선택</pre>
 </div>
 </main>
 <script>
 (function(){
-  var EMPTY='Q1~Q3 · S1~S10 선택';
+  var EMPTY='Q1~Q3 · S1~S12 선택';
   function $$(q,r){return [].slice.call((r||document).querySelectorAll(q));}
   function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text)e.textContent=text;return e;}
   function pad(v){return String(v).padStart(2,'0');}

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-en="VIDE — Home">VIDE — 첫 화면</title>
+<!-- VIDE Next 목업 v7 · 11 랜딩(웹사이트 첫 화면). .app 격자 없음: body.site 한 열 페이지. 토큰은 app.css 그대로. 설명 문장 없음. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500&family=IBM+Plex+Mono&display=swap">
+<link rel="stylesheet" href="app.css">
+<style>
+/* 장별: 배치와 SVG 크기만 */
+.site-head nav{display:flex;align-items:center;gap:8px}
+.site-head .ghost{font-size:11px;color:var(--mute);height:24px;min-width:24px;padding:0 6px;border-radius:3px;display:inline-grid;place-items:center}
+.site-head .ghost:hover{background:var(--panel);color:var(--fg)}
+.site-head .moon{display:none}
+[data-theme=dark] .site-head .sun{display:none}
+[data-theme=dark] .site-head .moon{display:block}
+.site-foot a:hover{color:var(--fg)}
+</style>
+</head>
+<body class="site">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-lang" viewBox="0 0 24 24"><path d="M2.5 20 6.5 9l4 11M4 16.5h5"/><path d="M12.5 4.5h5c0 4.6-1.9 8.1-5 10.5"/><path d="M20.5 3v13M20.5 9.5h2"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+</svg>
+
+<div class="wrap">
+  <header class="site-head">
+    <span class="mark">VIDE</span>
+    <span class="grow"></span>
+    <nav aria-label="머리">
+      <button type="button" class="ghost" data-lang-toggle aria-pressed="false" title="언어 · EN" data-en-title="Language · 한" aria-label="언어" data-en-label="Language"><svg class="i xs"><use href="#i-lang"/></svg></button>
+      <button type="button" class="ghost" data-theme-toggle title="밝게 / 어둡게" data-en-title="Light / Dark"><svg class="i xs sun"><use href="#i-sun"/></svg><svg class="i xs moon"><use href="#i-moon"/></svg></button>
+      <a class="btn" href="12-signin.html" data-en="Sign in">로그인</a>
+      <a class="btn primary" href="12-signin.html" data-en="Start">시작</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1 data-en="From files to design.">자료에서 설계까지.</h1>
+      <svg viewBox="0 0 640 56" role="img" aria-label="자료 → 기록 → 설계 → 보고">
+        <rect class="box" x="0.5" y="12.5" width="112" height="31" rx="3"/>
+        <rect class="box" x="175.5" y="12.5" width="112" height="31" rx="3"/>
+        <rect class="box on" x="350.5" y="12.5" width="112" height="31" rx="3"/>
+        <rect class="box" x="527.5" y="12.5" width="112" height="31" rx="3"/>
+        <path class="arr" d="M120 28h48m-5-4 5 4-5 4"/>
+        <path class="arr" d="M295 28h48m-5-4 5 4-5 4"/>
+        <path class="arr" d="M470 28h50m-5-4 5 4-5 4"/>
+        <text x="56.5" y="32" text-anchor="middle" data-en="Files">자료</text>
+        <text x="231.5" y="32" text-anchor="middle" data-en="Records">기록</text>
+        <text x="406.5" y="32" text-anchor="middle" data-en="Design">설계</text>
+        <text x="583.5" y="32" text-anchor="middle" data-en="Report">보고</text>
+      </svg>
+    </section>
+
+    <section class="shots" aria-label="화면">
+      <figure><img src="thumbs/02-l.png" data-dark-src="thumbs/02-l-dark.png" alt="기록 표" width="960" height="600"><figcaption data-en="Records">기록 표</figcaption></figure>
+      <figure><img src="thumbs/10.png" data-dark-src="thumbs/10-dark.png" alt="협의 대장" width="480" height="300"><figcaption data-en="Threads">협의 대장</figcaption></figure>
+      <figure><img src="thumbs/08.png" data-dark-src="thumbs/08-dark.png" alt="보고" width="480" height="300"><figcaption data-en="Report">보고</figcaption></figure>
+    </section>
+
+    <section class="nums" aria-label="숫자">
+      <div><b>180</b><span data-en="Records">기록</span></div>
+      <div><b>196</b><span data-en="Thread rows">협의 행</span></div>
+      <div><b>2</b><span data-en="Hosts">호스트</span></div>
+    </section>
+  </main>
+
+  <footer class="site-foot">
+    <span>VIDE</span>
+    <span class="grow"></span>
+    <a href="#" data-en="Contact">문의</a>
+  </footer>
+</div>
+
+<nav class="demo-nav" aria-label="데모 넘기기"><a class="prev off" href="#" title="이전">‹</a><b>1 / 12</b><a class="next" href="12-signin.html" title="다음">›</a></nav>
+<script src="app.js"></script>
+</body>
+</html>

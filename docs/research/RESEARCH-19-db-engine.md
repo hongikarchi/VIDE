@@ -2,10 +2,10 @@
 id: RESEARCH-19
 title: DB 엔진(SQLite·PostgreSQL)·수집 시간·동시 편집 — 2026-10-20 사용자 메모
 status: review
-version: 0.2
+version: 0.3
 updated: 2026-10-20
 owner: agent:claude
-related: [PLAN-42, PLAN-35, SPEC-08, SPEC-17, SPEC-18, ADR-018, ADR-032, ADR-037, RESEARCH-06]
+related: [PLAN-42, PLAN-35, SPEC-08, SPEC-17, SPEC-18, ADR-018, ADR-022, ADR-027, ADR-032, ADR-034, ADR-037, RESEARCH-06, RESEARCH-20]
 ---
 
 # RESEARCH-19 — DB 엔진과 수집 시간
@@ -151,7 +151,7 @@ related: [PLAN-42, PLAN-35, SPEC-08, SPEC-17, SPEC-18, ADR-018, ADR-032, ADR-037
 | 사이트 할 일 수정 | 서버 대기열 → PC 하트비트 때 반영, 시간 LWW + 충돌 표시 | `summary.ts:417-485`, `offline-view.ts:19-22`, `:530-535` |
 | 파일 작업 중 | 누가 어떤 서버 파일을 쓰는지 표시(PLAN-52) | `summary.ts:374-378` |
 | D1 내용 | 지시·자료·판정·할 일과 대기열·이력 요약·기록 사본 | 위 행들 |
-| 푸시(WebSocket) | 공유 노트(Yjs)만 | `src/sharing/note-room.ts:6` |
+| 푸시(WebSocket) | 공유 노트(Yjs)만 | `src/sharing/note-room.ts:7-13` |
 | 오프라인 큐 | outbox JSON, 다음 교환 때 | `shared-project.ts:354` |
 | 인증 | 브라우저 세션 · PC Bearer | `worker.ts:143`, `hosts.ts:108` |
 | 권한 | 멤버면 역할 무관 읽기·쓰기, 자료 업로드는 PC만(DEVICE_ONLY) | `shared-layer.ts:409`, `:319`, `projects.ts:12-22` |
@@ -211,19 +211,54 @@ CRDT 문서는 바이너리로 저장하므로 DO·PG 어느 쪽에도 둘 수 �
 
 ### (d) PostgreSQL로 하면 웹에서 실시간으로 고칠 수 있나
 
-된다. 다만 조건은 PostgreSQL이 아니라 **모두가 쓰는 서버 원본과 고친 즉시 밀어 주는 푸시 층**이다(지금 푸시: §9(a) 「푸시」 행). VIDE 화면은 이미 브라우저 UI라 서버에 올린 웹 화면으로도 열 수 있지만, Rhino·CAD 객체와 잇는 호스트 브리지는 각 PC에 남는다(웹 화면에서 쓸 수 있는 장 범위는 측정 필요).
+PostgreSQL만으로는 아니다. 조건은 엔진과 무관하게 **모두가 쓰는 서버 원본과 고친 즉시 밀어 주는 푸시 층**이며(§9(b)), PostgreSQL·D1+DO 어느 쪽으로도 된다(지금 푸시: §9(a) 「푸시」 행). VIDE 화면은 이미 브라우저 UI라 서버에 올린 웹 화면으로도 열 수 있지만, Rhino·CAD 객체와 잇는 호스트 브리지는 각 PC에 남는다(웹 화면에서 쓸 수 있는 장 범위는 측정 필요).
 
 ### (e) 추천이 바뀌는 방식
 
 - **추천(§7):** 서버가 기록·협의 원본이 되고 각 PC의 SQLite는 읽기 캐시·오프라인 큐·지오메트리 연결·AI 직접 읽기를 맡는다(§4 「설치·AI 직접 읽기」 행). 서버 엔진은 1단계 측정과 행 권한 결정 뒤 고른다: 행 권한·벡터 JOIN이 요구되면 PostgreSQL(§7 ③), 아니면 D1+DO(대가는 행 권한 검사를 Worker가 모두 맡고 벡터가 따로 놓이는 것, §9(c)).
 - **①이 남는 조건:** 한 사람·한 PC가 쓰고 나머지는 보기만 할 때, 또는 1단계 실측에서 덮어쓴 행이 거의 없을 때.
-- **브리프 Q2 대응:** ① 서버 원본 + 푸시 = 위 추천(엔진 미정) · ② 서버 PostgreSQL 바로 = §7 ③ · ③ 지금대로 = §7 ①.
+- **엔진 선택지:** 서버 원본 + 푸시(엔진 미정) = 위 추천 · 서버 PostgreSQL 바로 = §7 ③ · 지금대로 = §7 ①. 브리프 5판 Q2는 이 선택이 아니라 실시간 공동 편집의 순서를 묻는다(§9(f) 끝).
 
 이행 3단계:
 
 1. **측정:** 지금 LWW에서 덮어쓴 행 수와 반영 지연을 기록한다(§8 「검토 덮어쓰기 기록」 행).
 2. **서버 원본 스키마:** 엔진을 고르고 §10 엔티티를 서버 표로 만든다. PC는 받아 쓰는 캐시가 된다.
-3. **푸시:** 프로젝트마다 변경 채널(NOTIFY·Realtime 또는 DO)을 열고 필드 LWW + 진 값 보존을 붙인다.
+3. **푸시:** 프로젝트마다 변경 채널(NOTIFY·Realtime 또는 DO)을 열고 충돌 단위는 §9(b) 표대로 붙인다.
+
+### (f) Google Docs·Figma처럼 되려면
+
+| 도구 | 방식 | 충돌 단위 | 근거 |
+|---|---|---|---|
+| Google Docs | OT(Jupiter 계열, 중앙 서버), 충돌은 Docs 서버가 해소 | 글자 | [OT][ot], [batchUpdate][gd-api] |
+| Figma | 서버 권위 + 속성 LWW, 진짜 CRDT 아님. 한 글 값 안의 동시 입력은 병합하지 않음(다른 객체는 동시에 고침). 오프라인 편집은 다시 받은 문서 위에 재적용 | 객체 속성 | [Figma][fig] |
+| Yjs | CRDT 자동 병합. awareness(커서·접속)는 저장 안 함 | 글자·목록 | [Yjs][yjs], [awareness][yjs-aw] |
+| Automerge | CRDT. 같은 속성 동시 수정은 모든 노드가 같은 승자, 진 값은 conflicts에 보존 | 속성 | [Automerge][am] |
+| VIDE 공유 노트 | Yjs NoteRoom: 노트당 SQLite DO + Hibernation WebSocket, 갱신 즉시 중계, awareness는 중계만, 1분 HMAC 표 인증 | 글자 | `note-room.ts:7-13`, `:23`, `:179-187`, 표 인증 `src/sharing/notes.ts:13`, `:52-60`, `:72-97`, 노트당 DO `notes.ts:101`, ADR-034 |
+
+[ot]: https://en.wikipedia.org/wiki/Operational_transformation
+[gd-api]: https://developers.google.com/workspace/docs/api/reference/rest/v1/documents/batchUpdate
+[fig]: https://www.figma.com/blog/how-figmas-multiplayer-technology-works/
+[yjs-aw]: https://docs.yjs.dev/getting-started/adding-awareness
+
+NoteRoom 저장: DO SQLite에 약 1초마다 한 행, 100행 넘으면 압축, D1 Markdown은 ≤5초마다와 마지막 퇴장 때(`note-room.ts:14-17`, `:53-110`, `:190-199`). 동기화 형식은 y-websocket(`src/contracts/note-sync.ts:6-14`).
+
+왜 지금 안 되나:
+
+- **쓰기·편집 주체가 PC:** 기록·판정은 각 PC SQLite에 먼저 쓰고 D1은 사본(§2 「쓰기 주체」 열, §9(a) 「D1 내용」 행).
+- **기록·판정 행 푸시 없음:** PC가 ≥120 s마다 당겨 옴(§9(a) 「방향」·「공유 층 교환」·「푸시」 행).
+- **행 LWW:** 진 쪽은 알림 없이 덮임(§9(a) 표 아래 첫 항목).
+
+되게 하려면:
+
+| 데이터 | 충돌 단위 | 서버 조각 | 재사용 | 측정 |
+|---|---|---|---|---|
+| ① 협의 대장·기록 행 | §9(b) 「필드 LWW + 진 값 보존」 행 + 편집 중 표시(Figma 속성 LWW, 칸은 원자 값) | 서버 원본 표 + 프로젝트당 DO 푸시 | NoteRoom의 DO·소켓·표 인증·awareness 중계 | 필드 충돌 빈도·반영 지연 측정 필요(§8 「동시 편집 손실 실측」) |
+| ② 회의록·메모 글 | §9(b) 「CRDT 글」 행(Figma도 한 글 값 안의 동시 입력은 병합하지 않음) | NoteRoom 그대로 | 지금 코드 | 동시 접속 수·DO 요금 측정 필요(§9(c) 「지금 플랜」 행) |
+| ③ 모델·도면 | 대상 아님(호스트 문서) | 없음 | 실행 단위 되돌리기만([ADR-022](../decisions/ADR-022-direct-apply-plan-auto.md) 결정 1, 작업 단위는 [ADR-027](../decisions/ADR-027-multi-file-coordination.md) 결정 2) | — |
+
+작업 규모는 PLAN에서 산정한다. 서버 엔진 선택은 §9(e)를 따른다.
+
+- **브리프 Q2 대응:** ① = 위 표 ① · ② = 위 표 ② · ③ 둘 다 = ①+②. 모델·도면(표 ③)은 선택지 밖.
 
 ## 10. 기록의 실제 모양 (사용자 PDF 3장)
 
