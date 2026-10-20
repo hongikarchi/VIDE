@@ -1,4 +1,4 @@
-/* VIDE Next 목업 공통 스타일 v7 — 2026-10-20 (v7: 레일 묶음 5 · 탐색기 묶음별 트리 · 머리 검색칸 · UI 언어 · body.site(11 랜딩) · .signin(12 로그인); v6: + 폴더 · .party · .flag · .rep) (검토용 목업, 제품 코드 아님)
+/* VIDE Next 목업 공통 스타일 v8 — 2026-10-20 (v8: 대화 패널 세션 머리·.meta·.sessions·.ghost; v7: 레일 묶음 5 · 탐색기 묶음별 트리 · 머리 검색칸 · UI 언어 · body.site(11 랜딩) · .signin(12 로그인); v6: + 폴더 · .party · .flag · .rep) (검토용 목업, 제품 코드 아님)
    레퍼런스: 사용자의 기록 아티팩트 3장(Threads Through the Building · Interconnected Judgements v1·v2).
    그 토큰과 조각을 그대로 쓴다: 흰 바탕 · 따뜻한 회색 선 1px · 모서리 3px · 탠 강조 하나 · 글리프 · 22×12 스위치 ·
    10.5px 대문자 묶음 제목 · 그림자·알약·색 배지 없음. 어두운 테마는 아티팩트의 따뜻한 다크.
@@ -385,6 +385,47 @@ body.site{overflow:auto;height:auto;min-height:100%}
 .signin .list .row svg.i{color:var(--mute)}
 .signin .list .row .meta{font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums}
 .signin .list .row .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* agent v8: 머리 = 세션 제목 단추(.sess) · .meta 한 줄 · + · 목록(.dot-run) · » / 세션 목록(.sessions, .flow·.term 자리) / 유령 칩(.eps .ghost) */
+.agent .head .sess{display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:220px;height:26px;padding:0 6px;margin-left:-6px;border-radius:3px;font-size:12px;font-weight:500;color:var(--fg)}
+.agent .head .sess:hover,.agent .head .sess[aria-expanded="true"]{background:var(--panel)}
+.agent .head .sess .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.agent .head .sess svg.i{color:var(--mute)}
+.agent .head .sess .st,.srow .st{width:10px;flex:none;font-size:10px;line-height:1;text-align:center;color:var(--fg)}
+.agent .head .sess .st:empty{display:none}
+.st .g-new{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);vertical-align:1px}
+.agent .head:has(+.meta){border-bottom:0}
+.agent .meta{display:block;line-height:20px;height:24px;text-overflow:ellipsis;padding:0 16px 4px;border-bottom:1px solid var(--rule);font-size:11px;color:var(--mute);white-space:nowrap;overflow:hidden;font-variant-numeric:tabular-nums}
+.agent .meta svg.i{width:12px;height:12px;vertical-align:-2px;margin:0 2px}
+.agent .head .hist{position:relative}
+.dot-run{position:absolute;top:5px;right:5px;width:4px;height:4px;border-radius:50%;background:var(--accent)}
+.dot-run[hidden]{display:none}
+.agent .flow[hidden]{display:none}
+.agent .sessions{flex:1;min-height:0;overflow:auto;padding:10px 8px 16px;display:flex;flex-direction:column;gap:14px}
+.agent .sessions[hidden]{display:none}
+.agent .sessions:not([hidden])~.flow,.agent .sessions:not([hidden])~.term,.agent.term-on .sessions:not([hidden])~.term{display:none}
+.sessions .top{display:flex;align-items:center;gap:6px;padding:0 0 0 6px}
+.sessions .q{flex:1;min-width:0;height:24px;border:1px solid var(--rule);border-radius:3px;background:var(--bg);padding:0 8px;font-size:11px;outline:none}
+.sessions .q:focus{border-color:var(--fg)}
+.sessions .q::placeholder{color:var(--mute)}
+.sessions .grp{gap:1px}
+.sessions .grp[hidden]{display:none}
+.sessions .grp h3{display:flex;align-items:center;gap:4px;padding:0 6px;text-transform:none;letter-spacing:0}
+.sessions .grp h3[role=button]{cursor:pointer;user-select:none}
+.sessions .grp:not(.shut) h3 svg.i{transform:rotate(90deg)}
+.sessions:not(.filtering) .grp.shut .srow,.sessions .srow[hidden]{display:none}
+.srow{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:8px;align-items:center;padding:5px 6px;border-radius:3px;cursor:pointer;font-size:12px}
+.srow:hover,.srow.sel{background:var(--panel)}
+.srow .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow time{font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums}
+.srow .sub{grid-column:2/4;display:flex;align-items:center;gap:4px;font-size:11px;color:var(--mute);white-space:nowrap;overflow:hidden;font-variant-numeric:tabular-nums}
+.srow .sub svg.i{width:11px;height:11px;margin-left:2px}
+.srow .x{position:absolute;right:6px;top:4px;display:none;width:16px;height:16px;place-items:center;border-radius:3px;color:var(--mute);background:var(--panel);font-size:13px;line-height:1}
+.srow:hover .x{display:grid}
+.srow:hover time{visibility:hidden}
+.srow .x:hover{color:var(--fg);background:var(--bg)}
+.eps .ghost{border-style:dashed;color:var(--mute);cursor:pointer}
+.eps .ghost:hover{color:var(--fg)}
 
 @media(max-width:1280px){:root{--agent:340px;--explorer:210px}.two{grid-template-columns:1fr}}
 @media(max-width:1000px){.app{grid-template-columns:var(--rail) 0 minmax(0,1fr) var(--agent)}.explorer,.panel{display:none}}

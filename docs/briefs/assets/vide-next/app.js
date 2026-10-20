@@ -1,4 +1,4 @@
-/* VIDE Next 목업 공통 동작 v7 — 테마(밝음 기본), 탭, 대화/터미널, 접기, 레일 묶음 5 → 탐색기 블록, 검색칸 거르기, UI 언어 전체 전환(applyLang), 폴더 접기·+ 폴더, 선택 창, 데모 넘기기. 제품 코드 아님. */
+/* VIDE Next 목업 공통 동작 v8 — 대화 세션(목록·새 세션), 테마(밝음 기본), 탭, 대화/터미널, 접기, 레일 묶음 5 → 탐색기 블록, 검색칸 거르기, UI 언어 전체 전환(applyLang), 폴더 접기·+ 폴더, 선택 창, 데모 넘기기. 제품 코드 아님. */
 (function () {
   function $$(q, r) { return [].slice.call((r || document).querySelectorAll(q)); }
   var root = document.documentElement, key = 'vide-next-theme';
@@ -163,6 +163,74 @@
     showSec(selT ? selT.closest('.tree').dataset.sec : saved || 'base');
   }
   try { if (localStorage.getItem(langKey) === 'en') applyLang('en'); } catch (e) {}
+  /* 대화 v8: 제목·i-history → .sessions 토글 · 검색 거르기 · 지난 접기 · 행 → 세션 바꿈(.flow[data-sess], 메타 = AI · 모델 · 요청 · 연결) · × 닫기(묶음 수 -1) · + → 새 세션(목록 '새 대화' 행 · 유령 칩) · 칩 → 문맥 n · Enter → 제목 앞 16자 · AI 고정 · 칩을 보낸 말로. .dot-run = 04 세션(s04) 진행 중, 지금 세션이 s04가 아니면 보임 */
+  $$('.agent').forEach(function (ag) {
+    var ss = ag.querySelector('.sessions'), hd = ag.querySelector('.head .sess'), meta = ag.querySelector('.meta'); if (!ss || !hd) return;
+    var tt = hd.querySelector('.t'), st = hd.querySelector('.st'), sq = ss.querySelector('.q'), ta = ag.querySelector('.composer textarea'), eps = ag.querySelector('.composer .eps'), dot = ag.querySelector('.head .dot-run');
+    var CTX = '<bdi data-en="Context">문맥</bdi> ', REQ = '<bdi data-en="Req">요청</bdi> ', MODEL = { Claude: 'Sonnet', Codex: 'Codex' };
+    var s0 = ss.querySelector('.srow.sel'), cur = s0 ? s0.dataset.sess : '';
+    function list(on) { ss.hidden = !on; hd.setAttribute('aria-expanded', String(on)); }
+    function title(t, en) { tt.textContent = t; tt.removeAttribute('data-ko'); if (en) tt.setAttribute('data-en', en); else tt.removeAttribute('data-en'); applyLang(lang); }
+    function running() { if (dot) dot.hidden = cur === 's04' || !ss.querySelector('.srow[data-sess=s04]'); }
+    function bump(g, d) { var b = g && g.querySelector('h3 bdi'); if (b && b.nextSibling) b.nextSibling.nodeValue = b.nextSibling.nodeValue.replace(/\d+/, function (n) { return Math.max(0, +n + d); }); }
+    function chips() { return eps ? $$('button:not(.ghost)', eps).length : 0; }
+    function sel(r) { $$('.srow', ss).forEach(function (x) { x.classList.toggle('sel', x === r); }); }
+    function flow(id, reset) { /* 짝 .flow가 없으면 첫 .flow를 대신 보임(목업), 'new'는 빈 .flow를 만들거나(reset이면) 비움 */
+      var fs = $$('.flow', ag), f = fs.filter(function (x) { return x.dataset.sess === id; })[0];
+      if (id === 'new') { if (!f) { f = document.createElement('div'); f.className = 'flow'; f.dataset.sess = 'new'; ag.insertBefore(f, ag.querySelector('.term')); fs.push(f); } if (reset) f.innerHTML = ''; }
+      f = f || fs.filter(function (x) { return x.dataset.sess !== 'new'; })[0];
+      fs.forEach(function (x) { x.hidden = x !== f; });
+    }
+    function newRow() { /* 목록 '오늘' 맨 위 '새 대화' 행(없으면 만든다) */
+      var r = ss.querySelector('.srow[data-sess=new]'), g = $$('.grp', ss).filter(function (x) { return x.querySelector('h3 bdi[data-en=Today]'); })[0];
+      if (!r && g) { r = document.createElement('div'); r.className = 'srow'; r.setAttribute('role', 'button'); r.tabIndex = 0; r.dataset.sess = 'new'; g.insertBefore(r, g.querySelector('.srow')); bump(g, 1); }
+      if (r) r.innerHTML = '<span class="st"></span><span class="t" data-en="New chat">새 대화</span><time>16:24</time><span class="x" title="닫기" data-en-title="Close">×</span><span class="sub">Claude · ' + CTX + '0</span>';
+      return r;
+    }
+    hd.addEventListener('click', function () { list(ss.hidden); });
+    $$('[data-agent-list]', ag).forEach(function (b) { b.addEventListener('click', function () { list(ss.hidden); }); });
+    sq.addEventListener('input', function () {
+      var v = sq.value.trim().toLowerCase(); ss.classList.toggle('filtering', !!v);
+      $$('.grp', ss).forEach(function (g) { var n = 0; $$('.srow', g).forEach(function (r) { r.hidden = !!v && r.querySelector('.t').textContent.toLowerCase().indexOf(v) < 0; if (!r.hidden) n++; }); g.hidden = !!v && !n; });
+    });
+    ss.addEventListener('click', function (e) {
+      var h = e.target.closest('h3[role=button]'); if (h) { h.parentNode.classList.toggle('shut'); return; }
+      var r = e.target.closest('.srow'); if (!r) return;
+      if (e.target.closest('.x')) { bump(r.parentNode, -1); r.remove(); running(); return; }
+      var rs = r.querySelector('.st'), rt = r.querySelector('.t'), fresh = r.dataset.sess === 'new' && rt.hasAttribute('data-en');
+      if (rs.querySelector('.g-new')) rs.innerHTML = ''; /* 읽지 않은 답 → 열면 읽음 */
+      sel(r); cur = r.dataset.sess; ag.classList.toggle('new-sess', fresh);
+      title(rt.getAttribute('data-ko') || rt.textContent, rt.getAttribute('data-en')); st.innerHTML = rs.innerHTML;
+      meta.innerHTML = fresh ? CTX + chips() : r.querySelector('.sub').innerHTML.replace(/^(Claude|Codex) · /, function (m, p) { return p + ' · ' + MODEL[p] + ' · '; });
+      flow(cur); list(false); running(); applyLang(lang);
+    });
+    $$('[data-agent-new]', ag).forEach(function (b) {
+      b.addEventListener('click', function () {
+        ag.classList.add('new-sess'); cur = 'new'; sel(newRow());
+        st.textContent = ''; title('새 대화', 'New chat'); flow('new', true); list(false); running();
+        meta.innerHTML = CTX + '0';
+        if (eps) eps.innerHTML = '<button type="button" class="ghost"><bdi data-en="Selected">선택</bdi> 1</button><button type="button" class="ghost" data-en="Records">기록</button><button type="button" class="ghost" data-en="@Data">@자료</button>';
+        applyLang(lang); if (ta) { ta.value = ''; ta.focus(); }
+      });
+    });
+    if (eps) eps.addEventListener('click', function (e) {
+      var g = e.target.closest('.ghost'); if (!g) return; g.classList.remove('ghost');
+      if (ag.classList.contains('new-sess')) { meta.innerHTML = CTX + chips(); applyLang(lang); }
+    });
+    if (ta) ta.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || e.shiftKey || !ag.classList.contains('new-sess')) return;
+      var v = ta.value.trim(); e.preventDefault(); if (!v) return;
+      var t = v.slice(0, 16).trimEnd(), on = eps ? $$('button:not(.ghost)', eps) : [], n = on.length;
+      title(t); st.textContent = '●'; ag.classList.remove('new-sess');
+      meta.innerHTML = 'Claude · Sonnet · ' + REQ + '1 · ' + CTX + n;
+      var m = document.createElement('div'); m.className = 'msg user'; m.innerHTML = '<div class="who" data-en="Me">나</div><div class="body">' + (n ? '<div class="ctx eps">' + on.map(function (c) { return '<span>' + c.innerHTML + '</span>'; }).join('') + '</div>' : '') + '<p></p></div>';
+      m.querySelector('p').textContent = v; ag.querySelector('.flow[data-sess=new]').appendChild(m); ta.value = '';
+      if (eps) eps.innerHTML = '';
+      var r = ss.querySelector('.srow[data-sess=new]');
+      if (r) { var x = r.querySelector('.t'); x.textContent = t; x.removeAttribute('data-en'); x.removeAttribute('data-ko'); r.querySelector('.st').textContent = '●'; r.querySelector('.sub').innerHTML = 'Claude · ' + REQ + '1 · ' + CTX + n; }
+      applyLang(lang);
+    });
+  });
   /* 선택 창 닫기 */
   $$('[data-dialog-close]').forEach(function (b) { b.addEventListener('click', function () { var s = b.closest('.scrim'); if (s) s.remove(); }); });
   var dlgFirst = document.querySelector('.scrim .dialog [aria-pressed="true"]');

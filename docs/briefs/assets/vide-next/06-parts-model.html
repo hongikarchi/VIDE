@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VIDE — 부위별 기록 × 모델</title>
-<!-- VIDE Next 목업 v7 공통 셸(정본). 각 장은 이 파일을 복사해 (1) <title> (2) rail:start~rail:end 블록(그 장 묶음의 a[data-sec].on) (3) explorer:start~explorer:end 블록(.tree[data-sec] 5블록 그대로, 그 장의 .row.sel 하나·펼침만; 09는 검색칸 value와 결과 묶음) (4) .center 안 tabs-bar·.art (5) .agent 안 .flow·.term (6) demo-nav 번호·링크 만 바꾼다. 순서 11 12 01 02 10 03 04 05 06 07 08 09 (n / 12). UI 글자는 글자만 든 요소에 data-en(필요하면 data-ko), placeholder는 data-en-ph, 툴팁은 data-en-tip, title은 data-en-title. 데이터(파일명·기록 문장·날짜·셀·말풍선 본문)에는 달지 않는다. 셸 마크업·클래스·토큰은 고치지 않는다. 색은 app.css 변수만 쓴다. -->
+<!-- VIDE Next 목업 v8 공통 셸(정본). 각 장은 이 파일을 복사해 (1) <title> (2) rail:start~rail:end 블록(그 장 묶음의 a[data-sec].on) (3) explorer:start~explorer:end 블록(.tree[data-sec] 5블록 그대로, 그 장의 .row.sel 하나·펼침만; 09는 검색칸 value와 결과 묶음) (4) .center 안 tabs-bar·.art (5) .agent 안 agent-head:start~agent-head:end(제목·글리프·메타·.dot-run) · .flow[data-sess]·.term (.sessions 블록은 그대로, 12만 hidden 뺌) (6) demo-nav 번호·링크 만 바꾼다. 순서 11 01 02 10 03 04 05 06 07 08 09 12 13 (n / 13). UI 글자는 글자만 든 요소에 data-en(필요하면 data-ko), placeholder는 data-en-ph, 툴팁은 data-en-tip, title은 data-en-title. 데이터(파일명·기록 문장·날짜·셀·말풍선 본문)에는 달지 않는다. 셸 마크업·클래스·토큰은 고치지 않는다. 색은 app.css 변수만 쓴다. -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500&family=IBM+Plex+Mono&display=swap">
 <link rel="stylesheet" href="app.css">
 <style>
@@ -233,15 +233,45 @@
 
   <!-- agent -->
   <aside class="agent" aria-label="에이전트" data-en-label="Agent">
+    <!-- agent-head:start (장마다 .sess .t 제목·.st 글리프·.meta 만 바꾼다. 04·05 외 장은 .dot-run의 hidden을 뺀다) -->
     <div class="head">
-      <b data-en="Chat">대화</b>
+      <button type="button" class="sess" aria-expanded="false" title="세션 바꾸기" data-en-title="Switch"><span class="st"></span><span class="t">지난주 기록 부위</span><svg class="i xs"><use href="#i-chevd"/></svg></button>
       <div class="grow"></div>
       <div class="bar"><button type="button" data-agent-view="term" aria-pressed="false" data-en="Terminal">터미널</button></div>
-      <button type="button" class="iconbtn" title="새 대화" data-en-title="New chat"><svg class="i sm"><use href="#i-plus"/></svg></button>
+      <button type="button" class="iconbtn" data-agent-new title="새 세션" data-en-title="New chat"><svg class="i sm"><use href="#i-plus"/></svg></button>
+      <button type="button" class="iconbtn hist" data-agent-list title="세션 목록" data-en-title="History"><svg class="i sm"><use href="#i-history"/></svg><i class="dot-run"></i></button>
       <button type="button" class="iconbtn" data-agent-toggle title="접기" data-en-title="Collapse"><svg class="i sm"><use href="#i-collapse"/></svg></button>
     </div>
+    <div class="meta">Claude · Sonnet · <bdi data-en="Req">요청</bdi> 3 · <svg class="i xs"><use href="#i-table"/></svg>9 <svg class="i xs"><use href="#i-cube"/></svg>2</div>
+    <!-- agent-head:end -->
 
-    <div class="flow">
+    <!-- sessions: 목록(hidden 빼면 열린 꼴, .flow·.term 자리). 행 data-sess = .flow[data-sess] 짝. 제목·시각은 데이터 -->
+    <div class="sessions" hidden>
+      <div class="top"><input class="q" placeholder="검색" data-en-ph="Search" spellcheck="false"><button type="button" class="iconbtn" data-agent-new title="새 세션" data-en-title="New chat"><svg class="i sm"><use href="#i-plus"/></svg></button></div>
+      <div class="grp"><h3><bdi data-en="Running">진행 중</bdi> 1</h3>
+        <div class="srow" role="button" tabindex="0" data-sess="s04"><span class="st">●</span><span class="t">기둥 C2A 600 동쪽</span><time>16:12</time><span class="x" title="닫기" data-en-title="Close">×</span><span class="sub">Claude · <bdi data-en="Req">요청</bdi> 3 · <svg class="i xs"><use href="#i-table"/></svg>2 <svg class="i xs"><use href="#i-cube"/></svg>1</span></div>
+      </div>
+      <div class="grp"><h3><bdi data-en="Today">오늘</bdi> 4</h3>
+        <div class="srow" role="button" tabindex="0" data-sess="s05"><span class="st"><i class="g-new"></i></span><span class="t">12 m 초과 보</span><time>15:40</time><span class="x" title="닫기" data-en-title="Close">×</span><span class="sub">Claude · <bdi data-en="Req">요청</bdi> 2 · <svg class="i xs"><use href="#i-cube"/></svg>4</span></div>
+        <div class="srow" role="button" tabindex="0" data-sess="s02"><span class="st"></span><span class="t">기록 180</span><time>15:40</time><span class="x" title="닫기" data-en-title="Close">×</span><span class="sub">Claude · <bdi data-en="Req">요청</bdi> 1 · <svg class="i xs"><use href="#i-table"/></svg>180</span></div>
+        <div class="srow" role="button" tabindex="0" data-sess="s09"><span class="st"></span><span class="t">유수지 기둥 어디까지</span><time>15:02</time><span class="x" title="닫기" data-en-title="Close">×</span><span class="sub">Claude · <bdi data-en="Req">요청</bdi> 4 · <svg class="i xs"><use href="#i-table"/></svg>6 <svg class="i xs"><use href="#i-doc"/></svg>1</span></div>
+        <div class="srow" role="button" tabindex="0" data-sess="s04b"><span class="st"></span><span class="t">↳ 기둥 C2A 600 동쪽</span><time>14:31</time><span class="x" title="닫기" data-en-title="Close">×</span><span class="sub">Codex · <bdi data-en="Req">요청</bdi> 1 · <svg class="i xs"><use href="#i-cube"/></svg>1</span></div>
+      </div>
+      <div class="grp"><h3><bdi data-en="Past 7 days">7일</bdi> 5</h3>
+        <div class="srow" role="button" tabindex="0" data-sess="s08"><span class="st"></span><span class="t">이번 주 보고</span><time data-en="Yest.">어제</time><span class="x" title="닫기" data-en-title="Close">×</span><span class="sub">Claude · <bdi data-en="Req">요청</bdi> 5 · <svg class="i xs"><use href="#i-table"/></svg>12 <svg class="i xs"><use href="#i-doc"/></svg>1</span></div>
+        <div class="srow" role="button" tabindex="0" data-sess="s10"><span class="st"></span><span class="t">구조 협의 미답</span><time data-en="Yest.">어제</time><span class="x" title="닫기" data-en-title="Close">×</span><span class="sub">Claude · <bdi data-en="Req">요청</bdi> 1 · <svg class="i xs"><use href="#i-mail"/></svg>3</span></div>
+        <div class="srow" role="button" tabindex="0" data-sess="s07"><span class="st"></span><span class="t">가새는 왜 바뀌었어</span><time data-en="Yest.">어제</time><span class="x" title="닫기" data-en-title="Close">×</span><span class="sub">Claude · <bdi data-en="Req">요청</bdi> 2 · <svg class="i xs"><use href="#i-table"/></svg>3</span></div>
+        <div class="srow sel" role="button" tabindex="0" data-sess="s06"><span class="st"></span><span class="t">지난주 기록 부위</span><time>10.18</time><span class="x" title="닫기" data-en-title="Close">×</span><span class="sub">Claude · <bdi data-en="Req">요청</bdi> 3 · <svg class="i xs"><use href="#i-table"/></svg>9 <svg class="i xs"><use href="#i-cube"/></svg>2</span></div>
+        <div class="srow" role="button" tabindex="0" data-sess="s03"><span class="st"></span><span class="t">D-04 근거</span><time>10.17</time><span class="x" title="닫기" data-en-title="Close">×</span><span class="sub">Claude · <bdi data-en="Req">요청</bdi> 2 · <svg class="i xs"><use href="#i-table"/></svg>4 <svg class="i xs"><use href="#i-doc"/></svg>2</span></div>
+      </div>
+      <div class="grp shut"><h3 role="button" tabindex="0"><bdi data-en="Older">지난</bdi> 12 <svg class="i xs"><use href="#i-chev"/></svg></h3>
+        <div class="srow" role="button" tabindex="0" data-sess="s20"><span class="st">○</span><span class="t">심의 도서 목록</span><time>10.16</time><span class="x" title="닫기" data-en-title="Close">×</span><span class="sub">Claude · <bdi data-en="Req">요청</bdi> 3 · <svg class="i xs"><use href="#i-doc"/></svg>8</span></div>
+        <div class="srow" role="button" tabindex="0" data-sess="s21"><span class="st">○</span><span class="t">코어 폭 4.8</span><time>10.15</time><span class="x" title="닫기" data-en-title="Close">×</span><span class="sub">Claude · <bdi data-en="Req">요청</bdi> 2 · <svg class="i xs"><use href="#i-cube"/></svg>1</span></div>
+        <div class="srow" role="button" tabindex="0" data-sess="s01"><span class="st">○</span><span class="t">시작 · 자료 412</span><time>10.14</time><span class="x" title="닫기" data-en-title="Close">×</span><span class="sub">Claude · <bdi data-en="Req">요청</bdi> 1 · <svg class="i xs"><use href="#i-folder"/></svg>412</span></div>
+      </div>
+    </div>
+
+    <div class="flow" data-sess="s06">
       <div class="msg user">
         <div class="who" data-en="Me">나</div>
         <div class="body"><p>지난주 기록 어느 부위?</p></div>
@@ -275,7 +305,7 @@
     </div>
   </aside>
 </div>
-<nav class="demo-nav" aria-label="데모 넘기기"><a class="prev" href="05-review-structure.html" title="이전">‹</a><b>8 / 11</b><a class="next" href="07-records-graph.html" title="다음">›</a></nav>
+<nav class="demo-nav" aria-label="데모 넘기기"><a class="prev" href="05-review-structure.html" title="이전">‹</a><b>8 / 13</b><a class="next" href="07-records-graph.html" title="다음">›</a></nav>
 <div class="tip" id="tip" hidden></div>
 <script src="app.js"></script>
 <script>

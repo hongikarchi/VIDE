@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VIDE Next 목업</title>
-<!-- 스토리보드 브리프(docs/briefs/README.md). 2026-10-20 5판: 4차 메모(레일 묶음 다섯·UI 언어·로그인). 화면 11장은 assets/vide-next/*.html 살아 있는 HTML. 정본은 PRD·SPEC·Design. -->
+<!-- 스토리보드 브리프(docs/briefs/README.md). 2026-10-20 6판: 5차 메모(대화 패널 세션·목록·새 대화·이어 받기). 화면 13장은 assets/vide-next/*.html 살아 있는 HTML. 정본은 PRD·SPEC·Design. -->
 <link rel="stylesheet" href="_base.css">
 <style>
 .live{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;border:1px solid var(--line);background:#fff}
@@ -12,7 +12,7 @@
 .live .open{position:absolute;right:10px;bottom:10px;font-size:11px;background:#fff;border:1px solid var(--ink);padding:4px 9px;text-decoration:none;letter-spacing:0}
 .stick .shot{margin:0}
 .stick .cap{font-size:11px;color:var(--muted);margin-top:8px;letter-spacing:0}
-.thumbs{grid-template-columns:repeat(6,minmax(0,1fr))}
+.thumbs{grid-template-columns:repeat(7,minmax(0,1fr))}
 .thumbs button{aspect-ratio:16/10}
 .thumbs img{aspect-ratio:16/10;object-fit:cover}
 .chg td:first-child{color:var(--muted);width:34%}
@@ -44,22 +44,22 @@
 <body>
 <header>
   <a class="brand" href="#top"><b>VIDE</b><span>목업 · 전체 흐름</span></a>
-  <nav><a href="#s">01 화면</a><a href="#e">폴더</a><a href="#r">레일</a><a href="#c">02 바뀐 점</a><a href="#q">03 질문</a></nav>
+  <nav><a href="#s">01 화면</a><a href="#a">대화</a><a href="#e">폴더</a><a href="#r">레일</a><a href="#c">02 바뀐 점</a><a href="#q">03 질문</a></nav>
   <button type="button" class="noprint" onclick="window.print()">인쇄 / PDF ↗</button>
 </header>
 <main id="top">
 
 <div class="intro">
   <div>
-    <div class="eyebrow">2026-10-20 5판 / 검토 대기 / 근거 <a href="../../human/docs/PRD.html">PRD</a> §1.1·§4.5 · <a href="../research/RESEARCH-19-db-engine.md">RESEARCH-19</a> §9 · <a href="../research/RESEARCH-20-shell.md">RESEARCH-20</a></div>
-    <h1>레일은 묶음 다섯, 말은 어느 쪽이든.</h1>
+    <div class="eyebrow">2026-10-20 6판 / 검토 대기 / 근거 SPEC-02.19 · SCR-15 · <a href="../research/RESEARCH-18-environment-not-model.md">RESEARCH-18</a> §세션</div>
+    <h1>대화는 세션, 목록은 패널 안.</h1>
   </div>
   <div class="study-mark">살아 있는 HTML<br>답 = [피드백 복사]</div>
 </div>
 
 <section id="s">
   <div class="section-head">
-    <div><div class="eyebrow">01 / SCREENS</div><h2>화면 11장.</h2></div>
+    <div><div class="eyebrow">01 / SCREENS</div><h2>화면 13장.</h2></div>
   </div>
   <div class="story">
     <div class="stick">
@@ -74,6 +74,8 @@
       <figure class="shot" data-s="9"><div class="live"><iframe data-src="assets/vide-next/07-records-graph.html" title="S7 그래프" loading="lazy"></iframe><a class="open" href="assets/vide-next/07-records-graph.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
       <figure class="shot" data-s="10"><div class="live"><iframe data-src="assets/vide-next/08-report.html" title="S8 주간 보고" loading="lazy"></iframe><a class="open" href="assets/vide-next/08-report.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
       <figure class="shot" data-s="11"><div class="live"><iframe data-src="assets/vide-next/09-search.html" title="S9 검색" loading="lazy"></iframe><a class="open" href="assets/vide-next/09-search.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="12"><div class="live"><iframe data-src="assets/vide-next/12-sessions.html" title="S12 세션 목록" loading="lazy"></iframe><a class="open" href="assets/vide-next/12-sessions.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="13"><div class="live"><iframe data-src="assets/vide-next/13-new-chat.html" title="S13 새 대화" loading="lazy"></iframe><a class="open" href="assets/vide-next/13-new-chat.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
     </div>
     <div class="steps-col">
       <div class="ctl"><button type="button" class="prev">‹ 이전</button><span class="pos"></span><button type="button" class="next">다음 ›</button></div>
@@ -89,9 +91,38 @@
       <div class="step" data-s="9" data-n="07" data-id="S7" data-choices="좋음,수정"><small>07</small><h3>S7 그래프</h3></div>
       <div class="step" data-s="10" data-n="08" data-id="S8" data-choices="좋음,수정"><small>08</small><h3>S8 주간 보고</h3></div>
       <div class="step" data-s="11" data-n="09" data-id="S9" data-choices="좋음,수정"><small>09</small><h3>S9 검색</h3></div>
+      <div class="step" data-s="12" data-n="12" data-id="S12" data-choices="좋음,수정"><small>12</small><h3>S12 세션 목록</h3></div>
+      <div class="step" data-s="13" data-n="13" data-id="S13" data-choices="좋음,수정"><small>13</small><h3>S13 새 대화</h3></div>
     </div>
   </div>
   <div class="thumbs" aria-label="단계 바로 가기"></div>
+</section>
+
+<section id="a">
+  <div class="section-head">
+    <div><div class="eyebrow">CHAT PANEL</div><h2>대화 패널.</h2></div>
+  </div>
+  <svg class="map" viewBox="0 0 720 220" role="img" aria-label="패널 머리, 세션 모형, 목록 묶음과 새 대화·이어 받기">
+    <defs><marker id="ar2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1L7 4L1 7"/></marker></defs>
+    <text class="r" x="0" y="14">머리</text>
+    <rect x=".5" y="24.5" width="219" height="30"/>
+    <text class="acc" x="10" y="44">●</text><text class="h" x="24" y="44">기둥 C2A 600 ▾</text>
+    <text x="150" y="44">+</text><text x="172" y="44">≡</text><text x="198" y="44">»</text>
+    <text class="r" x="10" y="72">Claude · 요청 3 · 기록 2</text>
+    <path class="dash" d="M60 58V96M153 58V96M175 58V96M201 58V96"/>
+    <text class="r" x="44" y="110">제목</text><text class="r" x="140" y="110">새</text><text class="r" x="164" y="126">목록</text><text class="r" x="194" y="110">접기</text>
+    <text class="r" x="250" y="14">모형</text>
+    <text x="250" y="44">프로젝트</text><path d="M302 40H318" marker-end="url(#ar2)"/><text class="h" x="324" y="44">세션 n</text><path d="M366 40H382" marker-end="url(#ar2)"/><text x="388" y="44">요청 n</text>
+    <rect class="box" x="250.5" y="60.5" width="200" height="88"/>
+    <text x="262" y="80">모델 고정</text><text x="262" y="98">문맥 칩</text><text x="262" y="116">터미널</text><text x="262" y="134">되돌리기</text>
+    <text class="r" x="490" y="14">목록</text>
+    <rect x="490.5" y="24.5" width="229" height="110"/>
+    <text class="r" x="500" y="44">⌕ 검색</text><text x="700" y="44">+</text>
+    <text class="h" x="500" y="66">진행 중 1</text><text x="500" y="84">오늘 4</text><text x="500" y="102">7일 5</text><text class="r" x="500" y="120">지난 12 ▸</text>
+    <text x="490" y="168">+</text><path d="M504 164H560" marker-end="url(#ar2)"/><text class="h" x="568" y="168">새 대화</text>
+    <text x="490" y="198">모델 바꿈</text><path d="M548 194H596" marker-end="url(#ar2)"/><text class="acc" x="604" y="198">↳ 이어 받기</text>
+  </svg>
+  <p class="words">세션 = 첫 요청 · 모델 고정 · 진행 중 ●</p>
 </section>
 
 <section id="e">
@@ -144,8 +175,9 @@
 
 <section id="c">
   <div class="section-head">
-    <div><div class="eyebrow">02 / CHANGES</div><h2>4차 메모 6개.</h2></div>
+    <div><div class="eyebrow">02 / CHANGES</div><h2>메모 4차 6 · 5차 1.</h2></div>
   </div>
+  <p class="words">5판 구조는 유지</p>
   <div class="table-wrap" style="max-height:none">
     <table class="txt chg">
       <tbody>
@@ -155,6 +187,7 @@
         <tr><td>4 셸 뜻</td><td>Q3 그림 3</td></tr>
         <tr><td>5 랜딩·가입</td><td>로그인 S11만</td></tr>
         <tr><td>6 자동화</td><td>노드 편집기 제외</td></tr>
+        <tr><td>7 대화 패널</td><td>세션 제목·목록·+·이어 받기</td></tr>
       </tbody>
     </table>
   </div>
@@ -162,17 +195,18 @@
 
 <section id="q">
   <div class="section-head">
-    <div><div class="eyebrow">03 / QUESTIONS</div><h2>5판 · 공동 편집 · 셸.</h2></div>
+    <div><div class="eyebrow">03 / QUESTIONS</div><h2>대화 목록 · 공동 편집 · 셸.</h2></div>
   </div>
   <ul class="qs after">
     <li class="d decide" data-id="Q1">
-      <p class="q"><b class="id">Q1</b><b>5판은?</b></p>
+      <p class="q"><b class="id">Q1</b><b>대화 목록, 어디에?</b></p>
       <div class="ans">
-        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 그대로</b><small>다음 = 정본 반영</small></button>
-        <button type="button" data-v="②" aria-pressed="false"><b>② 고친다</b><small>메모에</small></button>
+        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 패널 안 목록</b><small>Claude 확장 꼴</small></button>
+        <button type="button" data-v="②" aria-pressed="false"><b>② 탐색기 '대화'</b><small>레일 묶음</small></button>
+        <button type="button" data-v="③" aria-pressed="false"><b>③ 가운데 탭</b><small>문서처럼</small></button>
       </div>
-      <p class="line"><b>이유</b>메모 6개 반영.</p>
-      <p class="line"><b>틀리면</b>메모만큼 6판.</p>
+      <p class="line"><b>이유</b>가운데 작업 그대로, 대화는 오른쪽에서 끝.</p>
+      <p class="line"><b>틀리면</b>목록을 탐색기로 옮김, 세션 모형은 그대로.</p>
     </li>
     <li class="d decide" data-id="Q2">
       <p class="q"><b class="id">Q2</b><b>실시간 공동 편집, 어디부터?</b> <a href="../research/RESEARCH-19-db-engine.md">RESEARCH-19 §9</a></p>
@@ -228,12 +262,12 @@
     <input type="text" id="memo" placeholder="전체 메모(선택)">
     <span id="msg"></span>
   </div>
-  <pre id="out">Q1~Q3 · S1~S11 선택</pre>
+  <pre id="out">Q1~Q3 · S1~S13 선택</pre>
 </div>
 </main>
 <script>
 (function(){
-  var EMPTY='Q1~Q3 · S1~S11 선택';
+  var EMPTY='Q1~Q3 · S1~S13 선택';
   function $$(q,r){return [].slice.call((r||document).querySelectorAll(q));}
   function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text)e.textContent=text;return e;}
   function pad(v){return String(v).padStart(2,'0');}

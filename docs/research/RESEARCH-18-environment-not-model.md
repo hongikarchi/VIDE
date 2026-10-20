@@ -2,8 +2,8 @@
 id: RESEARCH-18
 title: 환경으로서의 VIDE — 같은 모델, 건축에 맞춘 작업 환경 (Claude Code·Cursor·Kiro 대조와 현행 인벤토리)
 status: draft
-version: 0.1
-updated: 2026-10-19
+version: 0.2
+updated: 2026-10-20
 owner: user
 related: [OQ-15, FR-08, FR-13, FR-18, FR-24, FR-25, ADR-011, ADR-021, ADR-022, ADR-028, ADR-031, ADR-037, SPEC-01, SPEC-02, SPEC-05, SPEC-07, SPEC-08, ARCH-01, ARCH-03, RESEARCH-10, RESEARCH-11, RESEARCH-14, PLAN-24, PLAN-28, PLAN-51]
 ---
@@ -284,3 +284,29 @@ PRD가 지금 VIDE를 정의하는 문장은 셋이다. 머리 "여러 설계 �
 - 외부 조사는 공식 문서를 요약 모델을 거쳐 읽은 것이고 접속일은 2026-10-19 하루다. 세 제품 모두 빠르게 바뀐다.
 - 코드 인벤토리의 행 번호는 `main` c3368b22 기준이며 일부는 보조 조사자가 읽은 값을 재확인하지 않았다. §6.1의 두 결함은 직접 확인했다.
 - 이 문서는 사용자 체감(라운드 1~7의 P0)과 코드·문서 대조로 빈 곳을 찾았을 뿐, 어느 축이 결과 품질에 얼마나 기여하는지는 측정하지 않았다. RESEARCH-11 §4의 A/B 방법이 그 측정에 쓸 수 있다.
+
+## 세션 목록 UI — Claude Code VS Code 확장 · Cursor · Kiro (2026-10-20) [사실]
+
+2026-10-20 사용자 메모 "대화를 추가하면 어떤 방식이 되나, 세션별로 볼 수 있게"에 대한 1차 문서 조사다. Kiro의 날짜 묶음·보관·이름 바꾸기는 Kiro Crew 문서에만 있다.
+
+| 축 | Claude Code VS Code | Cursor | Kiro |
+|---|---|---|---|
+| (a) 새 대화 | 패널 + · Ctrl+N · 새 탭/새 창 | 사이드바 New Agent · Cmd+I | 채팅 패널 + 아이콘 |
+| (b) 목록·검색 | Session history · 검색 · 그룹·필터 | Today/7일/Older 묶음 · Cmd+K | History · 검색 · 날짜 묶음 |
+| (b) 보관 | 14일 무활동 → Archived 묶음 | Older 처음 접힘 | 7일 뒤 Dormant 접힘 |
+| (c) 제목 | 첫 메시지 AI 요약 · hover Rename | 우클릭·탭 더블클릭 Rename | 문서 없음 · Crew는 이름 바꾸기 |
+| (d) 동시 열기 | 에디터 탭·창 · 탭 점 파랑/주황 | Agent Tabs 나란히·격자 | 대화 위 탭 · 탭마다 상태 |
+| (e) 재개 | 행 클릭 · CLI --resume | 목록에서 다시 열기 · 명령 문서 없음 | History 복원 · CLI --resume-id |
+| (f) 진행 표시 | 문맥 사용량 · 에이전트 수 · 터미널 모드 | 메시지 대기열 · 표시 밀도 3단 | Task list · CLI 경과 시간 |
+| (f) 되돌리기 | 메시지 단위 분기·코드 되감기 | 체크포인트 복원(파일만) | Restore 코드+문맥 · Revert |
+
+- [분석] 세 도구 모두 새 대화는 패널 머리의 `+`, 과거 세션은 같은 패널(또는 옆 막대)의 목록 단추 + 검색 + 시간 묶음이다. 행에는 제목·경과 시간·상태 점만 둔다.
+- VIDE 현행 대응: `src/ui/conversations.tsx` 대화 탭(SCR-15, SPEC-02.19) — `+` 새 대화, 첫 요청이 제목·AI 고정(T-097), 상태 ● ◌ '대기 n', 모델 바꾸면 새 대화로 이어 받기. 목록·검색·시간 묶음·보관은 없다.
+- 목업 v8이 가져온 것: 머리 제목 클릭 → 패널 안 목록(검색 · 진행 중/오늘/이번 주/지난 묶음, 지난은 접힘), 첫 요청 앞 16자 제목, 행 = 상태 점·제목·시각·연결 수, `↳` 이어 받기 행.
+
+근거(접속 2026-10-20):
+
+- https://code.claude.com/docs/en/vs-code (#resume-past-conversations · #organize-sessions-into-groups · #filter-the-sessions-list · #rewind-with-checkpoints · #continue-conversations-after-a-reload)
+- https://code.claude.com/docs/en/sessions (#name-your-sessions · #resume-a-session · #use-the-session-picker)
+- https://cursor.com/docs/agent/overview · https://cursor.com/docs/release-notes · https://cursor.com/changelog/3-0 · https://cursor.com/changelog/3-4
+- https://kiro.dev/docs/ide/chat/ · https://kiro.dev/docs/crew/chat/sessions/ · https://kiro.dev/docs/checkpoints/ · https://kiro.dev/docs/cli/terminal-ui/
