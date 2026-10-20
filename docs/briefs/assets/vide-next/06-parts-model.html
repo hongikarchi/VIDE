@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VIDE — 부위별 기록 × 모델</title>
+<!-- VIDE Next 목업 v4 공통 셸(정본). 각 장은 이 파일을 복사해 (1) <title> (2) explorer의 .sel·'아티팩트' 묶음 (3) .center 안 tabs-bar·.art (4) .agent 안 .flow·.term (5) demo-nav 번호·링크 만 바꾼다. 셸 마크업·클래스·토큰은 고치지 않는다. 색은 app.css 변수만 쓴다. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500&family=IBM+Plex+Mono&display=swap">
+<link rel="stylesheet" href="app.css">
+<style>
+/* 06 부위별 기록 × 모델 — 배치·SVG 크기만. 색은 토큰. */
+.ctrl{padding:8px 20px;border-bottom:1px solid var(--rule)}
+.ctrl .eps{margin-left:auto}
+.art-body{padding-top:0}
+#model{display:block;width:100%;height:auto;border-bottom:1px solid var(--rule)}
+/* SVG가 viewBox 폭 1000보다 좁게 그려지므로 --k(=1000/실제 폭)로 글자를 실제 11px에 맞춘다 */
+#model .m-lab{font-size:calc(11px * var(--k,1));cursor:pointer}
+#model .m-lab.part{font-size:calc(11px * var(--k,1))}
+#model g[data-part="core"].ghost .m-face{fill-opacity:.55;stroke-dasharray:4 3}
+#model g[data-part="core"].ghost .m-face:not(.lit){fill-opacity:0}
+#model g[data-part]{cursor:pointer}
+#model g[data-part="glass"] .m-face{fill-opacity:.45}
+#model g[data-part="ctx"]{cursor:default}
+#model g[data-part="ctx"] .m-face,#model g[data-part="ground"] .m-face{fill:var(--bg)}
+#model .anc{fill:var(--rule)}
+.tlwrap{padding-top:6px}
+#tl{display:block;width:100%;height:auto;touch-action:none;cursor:crosshair;font-family:var(--sans)}
+#tl text{fill:var(--fg)}
+#tl .part{font-size:calc(11px * var(--k,1))}
+#tl .yr,#tl .ms{font-size:calc(10.5px * var(--k,1))}
+#tl .grp{font-size:calc(10px * var(--k,1))}
+#tl .row{cursor:pointer}
+#tl .row rect{fill:transparent}
+#tl .row.sel rect{fill:var(--panel)}
+#tl .row.sel text{font-weight:500}
+#tl .rowline{stroke-width:.6}
+#tl .link{stroke:var(--accent);stroke-width:1}
+#tl .eplab{font-size:calc(10.5px * var(--k,1));font-weight:500}
+#tl .cursor{stroke-width:1.2}
+#tl .knob{fill:var(--fg)}
+</style>
+</head>
+<body>
+<!-- 아이콘: <svg class="i"><use href="#i-files"/></svg> (stroke 1.5) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-files" viewBox="0 0 24 24"><path d="M4 6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 8v8M8 6.5c5 0 8 2 8 5.5"/></symbol>
+  <symbol id="i-tools" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><path d="M16.5 13v7M13 16.5h7"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-feedback" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></symbol>
+  <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 10h18M9 10v10M15 10v10"/></symbol>
+  <symbol id="i-graph" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2"/><circle cx="12" cy="8" r="2"/><circle cx="18" cy="14" r="2"/><path d="M7.5 16.5 10.5 9.6M13.6 9.2l3 3.6"/></symbol>
+  <symbol id="i-cube" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12 20 7.5M12 12v9M12 12 4 7.5"/></symbol>
+  <symbol id="i-report" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 15v-3M12 15V9M16 15v-5"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="m3 7 9 6 9-6"/></symbol>
+  <symbol id="i-law" viewBox="0 0 24 24"><path d="M12 3v18M5 7h14M7 7l-3 6a3 3 0 0 0 6 0zM17 7l-3 6a3 3 0 0 0 6 0z"/></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24"><path d="m3 6 6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="m21 11-8.5 8.5a5 5 0 0 1-7-7L14 4a3.3 3.3 0 0 1 4.7 4.7L10 17.4a1.7 1.7 0 0 1-2.4-2.4L15.5 7"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-chevd" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-collapse" viewBox="0 0 24 24"><path d="m13 6 6 6-6 6M5 6l6 6-6 6"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
+  <symbol id="i-struct" viewBox="0 0 24 24"><path d="M4 20h16M6 20V9l6-5 6 5v11M10 20v-6h4v6"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 15V3M8 7l4-4 4 4"/></symbol>
+</svg>
+
+<div class="app">
+  <!-- rail: 위 탐색 / 아래 피드백 · 테마 · 설정 · 계정 (현행 제품과 같은 순서) -->
+  <nav class="rail" aria-label="주 메뉴">
+    <div class="logo">V</div>
+    <a href="02-records-db.html" class="on" data-tip="탐색기"><svg class="i"><use href="#i-files"/></svg></a>
+    <a href="#" data-tip="검색"><svg class="i"><use href="#i-search"/></svg></a>
+    <a href="07-records-graph.html" data-tip="기록"><svg class="i"><use href="#i-history"/></svg></a>
+    <a href="05-review-structure.html" data-tip="도구"><svg class="i"><use href="#i-tools"/></svg></a>
+    <div class="spacer"></div>
+    <button type="button" data-tip="피드백 보내기"><svg class="i"><use href="#i-feedback"/></svg></button>
+    <button type="button" data-theme-toggle data-tip="밝게 / 어둡게"><svg class="i sun"><use href="#i-sun"/></svg><svg class="i moon"><use href="#i-moon"/></svg></button>
+    <button type="button" data-tip="설정"><svg class="i"><use href="#i-settings"/></svg></button>
+    <button type="button" class="avatar" data-tip="계정">U</button>
+  </nav>
+
+  <!-- explorer -->
+  <aside class="explorer" aria-label="탐색기">
+    <div class="proj"><span class="grow">예시 사무소 신축</span><svg class="i xs"><use href="#i-chevd"/></svg><button type="button" class="iconbtn" data-explorer-toggle title="접기"><svg class="i sm"><use href="#i-collapse"/></svg></button></div>
+
+    <div class="grp"><h3>설계</h3>
+      <a class="row" href="03-spec.html"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">조건</span><span class="meta">12</span></a>
+      <a class="row" href="03-spec.html"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">결정</span><span class="meta">6</span></a>
+      <a class="row" href="03-spec.html"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">작업</span><span class="meta">8</span></a>
+    </div>
+    <div class="grp"><h3>자료</h3>
+      <a class="row" href="02-records-db.html"><span class="tw">›</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow">01 운영 … 09 보고</span><span class="meta">9</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">회의록</span><span class="meta">7</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-mail"/></svg><span class="grow">메일</span><span class="meta">41</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-list"/></svg><span class="grow">주간·월간 업무</span><span class="meta">9</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-list"/></svg><span class="grow">협의 리스트</span><span class="meta">1</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-law"/></svg><span class="grow">법규</span><span class="meta">12</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-map"/></svg><span class="grow">대지</span><span class="meta">7</span></a>
+    </div>
+    <div class="grp"><h3>연결 문서</h3>
+      <a class="row" href="04-apply.html"><span class="dot"></span><svg class="i sm"><use href="#i-cube"/></svg><span class="grow">예시 모델.3dm</span><span class="meta">Rhino</span></a>
+      <a class="row" href="04-apply.html"><span class="dot off"></span><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">1층 평면.dwg</span><span class="meta">CAD</span></a>
+    </div>
+    <div class="grp"><h3>아티팩트</h3>
+      <a class="row sel" href="06-parts-model.html"><svg class="i sm"><use href="#i-cube"/></svg><span class="grow">부위별 기록 × 모델</span></a>
+    </div>
+    <div class="grp"><h3>도구</h3>
+      <a class="row" href="05-review-structure.html"><svg class="i sm"><use href="#i-struct"/></svg><span class="grow">구조 검토</span></a>
+      <a class="row" href="#"><svg class="i sm"><use href="#i-law"/></svg><span class="grow">법규 체크</span></a>
+      <a class="row" href="#"><svg class="i sm"><use href="#i-map"/></svg><span class="grow">규모검토</span></a>
+      <a class="row" href="06-parts-model.html"><svg class="i sm"><use href="#i-table"/></svg><span class="grow">수량·면적표</span></a>
+    </div>
+  </aside>
+
+  <!-- center: 아티팩트 창 -->
+  <main class="center">
+    <div class="tabs-bar">
+      <a class="tab on" href="06-parts-model.html">부위별 기록 × 모델<span class="x">×</span></a>
+      <a class="tab" href="02-records-db.html">기록 180</a>
+    </div>
+    <section class="art" aria-label="아티팩트">
+      <header class="art-head">
+        <h1>부위별 기록 × 모델</h1>
+        <p>기록이 있는 부위가 켜지고, 아래 줄에서 날짜를 끌면 같이 움직인다</p>
+      </header>
+      <div class="bar ctrl">
+        <button type="button" id="play" aria-pressed="false">재생</button>
+        <span class="date" id="date">2026.10.20</span>
+        <button type="button" id="split" aria-pressed="false">새/기존 나누기</button>
+        <button type="button" id="all">모두</button>
+        <div class="eps" id="eps"></div>
+      </div>
+      <div class="art-body">
+        <svg id="model" class="chart" viewBox="0 0 1000 420" role="img" aria-label="부위 15로 나눈 등각 모델"></svg>
+        <div class="tlwrap"><svg id="tl" class="chart" viewBox="0 0 1000 389" preserveAspectRatio="xMinYMin meet" role="img" aria-label="부위별 기록 타임라인"></svg></div>
+        <p class="note">마이크로파일과 지반은 개략이고, 별동 몸체는 차트 밖이라 흐리게 그렸다.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- agent -->
+  <aside class="agent" aria-label="에이전트">
+    <div class="head">
+      <b>대화</b>
+      <div class="grow"></div>
+      <div class="bar"><button type="button" data-agent-view="term" aria-pressed="false">터미널</button></div>
+      <button type="button" class="iconbtn" title="새 대화"><svg class="i sm"><use href="#i-plus"/></svg></button>
+      <button type="button" class="iconbtn" data-agent-toggle title="접기"><svg class="i sm"><use href="#i-collapse"/></svg></button>
+    </div>
+
+    <div class="flow">
+      <div class="msg user">
+        <div class="who">나</div>
+        <div class="body"><p>지난주 기록은 어느 부위에 붙었어?</p></div>
+      </div>
+      <div class="msg ai">
+        <div class="who">VIDE</div>
+        <div class="body">
+          <p>지난주 기록 3이 기둥·기초에 붙었다.</p>
+          <a class="art-card" href="06-parts-model.html"><span class="grow"><span class="t">부위별 기록 × 모델</span> <span class="s">· 2026.10.20</span></span><svg class="i sm"><use href="#i-chev"/></svg></a>
+          <time>오전 9:20</time>
+        </div>
+      </div>
+    </div>
+
+    <div class="term"><span class="p">❯</span> vide records --since 2026-10-12 --by part
+<span class="d">read  records   180</span>
+<span class="d">match parts     15</span>
+전면 기둥 1 · 기둥 받침 1 · 마이크로파일 1
+<span class="p">❯</span> <span class="cur"></span></div>
+
+    <div class="composer">
+      <div class="ctx eps"><span>부위별 기록 × 모델<span class="x">×</span></span></div>
+      <textarea placeholder="무엇을 할까요? 선택·스케치·자료를 끌어다 놓거나 @로 부른다"></textarea>
+      <div class="foot">
+        <button type="button" class="iconbtn" title="첨부"><svg class="i sm"><use href="#i-clip"/></svg></button>
+        <button type="button" class="model">Claude<svg class="i xs"><use href="#i-chevd"/></svg></button>
+        <div class="grow"></div>
+        <label class="sw2"><input type="checkbox"> 적용 전 확인</label>
+        <button type="button" class="send" title="보내기"><svg class="i sm"><use href="#i-send"/></svg></button>
+      </div>
+    </div>
+  </aside>
+</div>
+<nav class="demo-nav" aria-label="데모 넘기기"><a class="prev" href="05-review-structure.html" title="이전">‹</a><b>6 / 8</b><a class="next" href="07-records-graph.html" title="다음">›</a></nav>
+<div class="tip" id="tip" hidden></div>
+<script src="app.js"></script>
+<script>
+/* 06 부위별 기록 × 모델 — 위 모델(SVG 등각), 아래 타임라인, 커서 하나가 둘을 움직인다. 데이터는 합성. */
+(function () {
+const DATA = {
+  parts: [
+    { id: 'ext', name: '증축층', group: 'new' }, { id: 'glass', name: '유리', group: 'new' }, { id: 'trans', name: '수평재', group: 'new' },
+    { id: 'clad', name: '마감', group: 'new' }, { id: 'col', name: '전면 기둥', group: 'new' }, { id: 'brace', name: '가새', group: 'new' },
+    { id: 'base', name: '기둥 받침', group: 'new' }, { id: 'pile', name: '마이크로파일', group: 'new' }, { id: 'annexf', name: '별동 기초', group: 'new' },
+    { id: 'slab', name: '슬래브', group: 'existing' }, { id: 'frame', name: '보와 기둥', group: 'existing' }, { id: 'core', name: '코어', group: 'existing' },
+    { id: 'bwall', name: '지하벽', group: 'existing' }, { id: 'bslab', name: '지하 바닥', group: 'existing' }, { id: 'ground', name: '지반', group: 'existing' }
+  ],
+  events: [
+    ['e1', 'frame', '2024-02-14', 'E', '기존 구조도 확보'], ['e2', 'slab', '2024-03-05', 'K', '슬래브 두께 실측 250'],
+    ['e3', 'ext', '2024-03-20', 'R', '2개 층 증축 요구'], ['e4', 'col', '2024-05-08', 'I', '전면 기둥을 목재로', '목재 기둥'],
+    ['e5', 'glass', '2024-05-22', 'I', '전면 전체 유리'], ['e6', 'core', '2024-06-11', 'K', '코어 벽 철근 탐사'],
+    ['e7', 'bwall', '2024-07-02', 'E', '지하벽 누수 흔적'], ['e8', 'ext', '2024-08-19', 'I', '증축층은 경량 목구조'],
+    ['e9', 'frame', '2024-09-10', 'K', '기존 보 하중 여유 확인'], ['e10', 'base', '2024-11-04', 'K', '전면에 기초 없음 확인', '기초 없음'],
+    ['e11', 'pile', '2024-11-26', 'E', '마이크로파일 시공 사례'], ['e12', 'bslab', '2024-12-09', 'K', '지하 바닥 레벨 측량'],
+    ['e13', 'pile', '2025-01-15', 'D', '전면 기둥 아래 마이크로파일'], ['e14', 'brace', '2025-03-06', 'E', 'X6 벽 자리에 가새', 'X6 벽 자리'],
+    ['e15', 'frame', '2025-03-27', 'I', '수평력은 가새로'], ['e16', 'trans', '2025-04-17', 'I', '층마다 수평재'],
+    ['e17', 'ground', '2025-05-08', 'E', '지반조사 보고'], ['e18', 'slab', '2025-06-02', 'R', '슬래브 개구부 2곳'],
+    ['e19', 'annexf', '2025-07-10', 'R', '인접 필지 경계 이격', '인접 필지'], ['e20', 'annexf', '2025-08-04', 'K', '별동 기초 깊이 확인'],
+    ['e21', 'ground', '2025-08-25', 'K', '지하수위 -3.8 m'], ['e22', 'core', '2025-09-15', 'D', '코어 유지'],
+    ['e23', 'clad', '2025-10-06', 'I', '증축층 마감 목재'], ['e24', 'col', '2025-11-03', 'K', '목재 기둥 내화 검토'],
+    ['e25', 'brace', '2025-12-01', 'D', '가새 위치 X6 확정'], ['e26', 'col', '2026-02-09', 'D', '전면 기둥 철골로', '철골로'],
+    ['e27', 'base', '2026-02-24', 'I', '받침 플레이트 키움'], ['e28', 'trans', '2026-03-16', 'D', '수평재 철골 각관'],
+    ['e29', 'ext', '2026-04-06', 'D', '증축 2개 층 확정'], ['e30', 'clad', '2026-05-11', 'K', '마감 방화 등급'],
+    ['e31', 'glass', '2026-06-01', 'E', '유리 고정 방식 비교'], ['e32', 'bwall', '2026-06-22', 'D', '지하벽 보수 범위'],
+    ['e33', 'bslab', '2026-07-13', 'I', '지하 바닥 방수 다시'], ['e34', 'slab', '2026-08-03', 'K', '증축 하중 슬래브 검토'],
+    ['e35', 'glass', '2026-09-21', 'D', '유리는 수평재에 건다', '유리 거는 법'], ['e36', 'trans', '2026-09-28', 'K', '수평재 처짐 확인'],
+    ['e37', 'col', '2026-10-12', 'K', '기둥 접합부 상세'], ['e38', 'base', '2026-10-14', 'E', '받침 앵커 시험값'],
+    ['e39', 'pile', '2026-10-16', 'K', '파일 길이 재확인']
+  ].map(([id, part, date, type, label, ep]) => ({ id, part, date, type, label, ep })),
+  links: [['e4', 'e24'], ['e24', 'e26'], ['e10', 'e11'], ['e11', 'e13'], ['e13', 'e27'], ['e14', 'e15'], ['e15', 'e25'], ['e16', 'e28'],
+    ['e28', 'e35'], ['e31', 'e35'], ['e26', 'e27'], ['e3', 'e8'], ['e8', 'e29'], ['e9', 'e15'], ['e19', 'e20'], ['e29', 'e34'], ['e27', 'e38']],
+  milestones: [['설계 착수', '2024-03-01'], ['허가', '2025-06-16'], ['착공', '2026-04-01']]
+};
+const fdate = s => { const [y, m, d] = s.split('-'); return `${y}.${m}.${d}`; };
+const D0 = new Date('2024-01-01'), D1 = new Date('2026-12-31');
+const EV = Object.fromEntries(DATA.events.map(e => [e.id, e]));
+const PART = Object.fromEntries(DATA.parts.map(p => [p.id, p]));
+const evByPart = {}; DATA.events.forEach(e => (evByPart[e.part] ||= []).push(e.id));
+const up = {}, down = {};
+DATA.links.forEach(([u, v]) => { (down[u] ||= []).push(v); (up[v] ||= []).push(u); });
+const reach = (id, m) => { const s = new Set([id]), q = [id]; while (q.length) { const x = q.pop(); (m[x] || []).forEach(y => { if (!s.has(y)) { s.add(y); q.push(y); } }); } return s; };
+const chainOf = id => new Set([...reach(id, up), ...reach(id, down)]);
+const state = { t: new Date('2026-10-20'), split: false, focus: null, part: null };
+let playing = null;
+const tip = document.getElementById('tip');
+
+/* ---------------- 모델: 등각 SVG (x 정면 폭, y 깊이, z 높이; m) ---------------- */
+const model = document.getElementById('model');
+const BOX = [];
+const box = (part, x0, x1, y0, y1, z0, z1) => BOX.push({ part, k: 'box', b: [x0, x1, y0, y1, z0, z1] });
+const strip = (part, a, b, w) => BOX.push({ part, k: 'strip', a, b, w });
+const XC = [0, 5.25, 10.5, 15.5], YC = [0, 5.75, 11.5], FX = [-0.25, 5.1, 10.4, 15.75];
+box('ground', -3, 27, -3, 17, -5.6, -5.2);
+box('bslab', 0, 16, 0, 12, -4.6, -4.2);
+box('bwall', 0, 16, 0, 12, -4.2, -0.35);
+for (let k = 0; k < 3; k++) {
+  box('slab', 0, 16, 0, 12, 3 * k - 0.35, 3 * k);
+  const items = [];
+  XC.forEach(x => YC.forEach(y => items.push({ d: x + y, f: () => box('frame', x, x + 0.5, y, y + 0.5, 3 * k, 3 * k + 2.65) })));
+  items.push({ d: 8.5, f: () => box('core', 6, 10, 1, 4.5, 3 * k, 3 * k + 2.65) });
+  items.sort((a, b) => a.d - b.d).forEach(i => i.f());
+  box('frame', 0, 16, 11.5, 12, 3 * k + 2.15, 3 * k + 2.65);
+}
+box('slab', 0, 16, 0, 12, 8.65, 9);
+for (let k = 0; k < 3; k++) {
+  strip('brace', [16.3, 0.4, 3 * k + 0.3], [16.3, 11.6, 3 * k + 2.5], 0.22);
+  strip('brace', [16.3, 0.4, 3 * k + 2.5], [16.3, 11.6, 3 * k + 0.3], 0.22);
+}
+box('ext', 0, 16, 0, 12, 9, 15);
+box('clad', 16, 16.2, 0, 12, 9.2, 14.8);
+box('glass', 0, 16, 12.3, 12.4, 0, 15);
+FX.forEach(x => box('pile', x + 0.12, x + 0.38, 13.37, 13.63, -5.2, -0.1));
+FX.forEach(x => box('base', x - 0.35, x + 0.85, 12.9, 14.1, -0.1, 0.45));
+[3, 6, 9, 12].forEach(z => box('trans', -0.3, 16.3, 13.3, 13.7, z - 0.18, z + 0.18));
+FX.forEach(x => box('col', x, x + 0.5, 13.25, 13.75, 0.45, 15));
+box('annexf', 19, 25, 3, 10, -1.4, 0);
+box('ctx', 19, 25, 3, 10, 0, 6.5);
+/* 코어는 슬래브·증축층에 가려지므로 지붕 슬래브 윗면에 외곽(점선)을 맨 위에 덧그린다 */
+const CORE_TOP = [[6, 1, 9], [10, 1, 9], [10, 4.5, 9], [6, 4.5, 9]];
+const ANCH = { ext: [16, 6, 13], glass: [15, 12.4, 6], trans: [16.3, 13.5, 12], clad: [16.2, 3, 13], col: [5.35, 13.75, 10],
+  brace: [16.3, 9, 4], base: [10.65, 14.1, 0.2], pile: [0.25, 13.6, -3.5], annexf: [25, 9, -0.7],
+  slab: [0, 3, 8.8], frame: [0.25, 11.7, 4.5], core: [8, 2.75, 9], bwall: [0, 6, -2], bslab: [0, 9, -4.4], ground: [-3, 10, -5.4] };
+const C = Math.cos(Math.PI / 6), SN = 0.5, SHIFT = 26;
+let S = 1, OX = 0, OY = 0;
+const off = p => (state.split && PART[p] && PART[p].group === 'new') ? SHIFT : 0;
+const pr = (x, y, z) => [OX + (x - y) * C * S, OY + ((x + y) * SN - z) * S];
+function faces(it) {
+  const dz = 0, dy = off(it.part), P2 = p => pr(p[0], p[1] + dy, p[2]);
+  if (it.k === 'strip') {
+    const [ax, ay, az] = it.a, [bx, by, bz] = it.b, w = it.w;
+    return [[[ax, ay, az + dz - w], [bx, by, bz + dz - w], [bx, by, bz + dz + w], [ax, ay, az + dz + w]].map(P2)];
+  }
+  const [x0, x1, y0, y1, z0r, z1r] = it.b, z0 = z0r + dz, z1 = z1r + dz;
+  return [
+    [[x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]],
+    [[x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]],
+    [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]]
+  ].map(f => f.map(P2));
+}
+/* 두 상태(합침·나눔)를 다 담도록 맞춤 */
+(function fit() {
+  let a = [1e9, 1e9, -1e9, -1e9];
+  [false, true].forEach(sp => { state.split = sp; BOX.forEach(it => !(sp && it.part === 'ctx') && faces(it).forEach(f => f.forEach(([x, y]) => { a[0] = Math.min(a[0], x); a[1] = Math.min(a[1], y); a[2] = Math.max(a[2], x); a[3] = Math.max(a[3], y); }))); });
+  state.split = false;
+  const W = 560, H = 400; S = Math.min(W / (a[2] - a[0]), H / (a[3] - a[1]));
+  OX = 500 - (a[0] + a[2]) / 2 * S; OY = 10 - a[1] * S;
+})();
+const pts = f => f.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+function seenParts() {
+  const t = state.t, chain = state.focus ? chainOf(state.focus) : null, on = {};
+  DATA.parts.forEach(p => { const ids = evByPart[p.id] || [];
+    let v = ids.some(id => new Date(EV[id].date) <= t);
+    if (chain) v = ids.some(id => chain.has(id));
+    if (state.part) v = p.id === state.part;
+    on[p.id] = v; });
+  return on;
+}
+function drawModel() {
+  const on = seenParts(), q = [];
+  let cur = null;
+  BOX.forEach(it => {
+    if (state.split && it.part === 'ctx') return;
+    if (it.part !== cur) { if (cur) q.push('</g>'); cur = it.part; q.push(`<g data-part="${it.part}">`); }
+    const cls = 'm-face' + (on[it.part] ? ' lit' : '') + (it.part === 'ground' || it.part === 'ctx' ? ' faint' : '') + (state.part === it.part ? ' sel' : '');
+    faces(it).forEach((f, i) => q.push(`<polygon class="${cls}${i === 2 && it.k === 'box' ? ' shade' : ''}" points="${pts(f)}"/>`));
+  });
+  q.push('</g>');
+  q.push(`<g data-part="core" class="ghost"><polygon class="m-face${on.core ? ' lit' : ''}${state.part === 'core' ? ' sel' : ''}" points="${pts(CORE_TOP.map(p => pr(p[0], p[1], p[2])))}"/></g>`);
+  /* 라벨: 새 것 오른쪽, 기존 왼쪽. 앵커 y 순으로 겹치지 않게 */
+  ['new', 'existing'].forEach(gname => {
+    const L = DATA.parts.filter(p => p.group === gname).map(p => { const a = ANCH[p.id]; const [x, y] = pr(a[0], a[1] + off(p.id), a[2]); return { p, x, y }; }).sort((a, b) => a.y - b.y);
+    const gap = 24; let prev = -1e9;
+    L.forEach(l => { l.ly = Math.max(l.y, prev + gap, 16); prev = l.ly; });
+    const n = L.length;
+    if (n && L[n - 1].ly > 410) { L[n - 1].ly = 410; for (let i = n - 2; i >= 0; i--) L[i].ly = Math.min(L[i].ly, L[i + 1].ly - gap); }
+    const right = gname === 'new', lx = right ? 820 : 180;
+    L.forEach(l => {
+      const tx = right ? lx - 6 : lx + 6;
+      q.push(`<line class="leader" x1="${l.x.toFixed(1)}" y1="${l.y.toFixed(1)}" x2="${tx}" y2="${l.ly.toFixed(1)}"/><circle class="anc" cx="${l.x.toFixed(1)}" cy="${l.y.toFixed(1)}" r="1.6"/>`);
+      q.push(`<text class="m-lab${on[l.p.id] ? '' : ' part'}" data-pid="${l.p.id}" x="${lx}" y="${(l.ly + 4).toFixed(1)}" text-anchor="${right ? 'start' : 'end'}">${l.p.name}</text>`);
+    });
+  });
+  model.innerHTML = q.join('');
+}
+
+/* ---------------- 타임라인 (레퍼런스 그대로, 문자열만 한국어) ---------------- */
+const tl = document.getElementById('tl');
+const LX = 168, RX = 988, TOP = 30;
+const rows = []; let g0 = null;
+DATA.parts.forEach(p => { if (p.group !== g0) { g0 = p.group; rows.push({ hdr: g0 }); } rows.push(p); });
+const RY = {}; let yy = TOP;
+rows.forEach(r => { if (r.hdr) { yy += (yy > TOP ? 24 : 12); r.y = yy; yy += 4; } else { yy += 19; RY[r.id] = yy; r.y = yy; } });
+const TH = yy + 30; tl.setAttribute('viewBox', `0 0 1000 ${TH}`);
+const tx = d => LX + (new Date(d) - D0) / (D1 - D0) * (RX - LX);
+const xt = x => new Date(+D0 + Math.max(0, Math.min(1, (x - LX) / (RX - LX))) * (D1 - D0));
+function glyph(t, x, y) { const s = 'stroke="var(--fg)" stroke-width="0.9"';
+  return { R: `<rect x="${x - 3}" y="${y - 3}" width="6" height="6" fill="var(--bg)" ${s}/>`, I: `<path d="M${x},${y - 3.6} L${x + 3.4},${y + 2.6} L${x - 3.4},${y + 2.6}Z" fill="var(--bg)" ${s}/>`,
+    K: `<circle cx="${x}" cy="${y}" r="3" fill="var(--bg)" ${s}/><circle cx="${x}" cy="${y}" r="1" fill="var(--fg)"/>`, E: `<path d="M${x},${y - 3.8} L${x + 3.8},${y} L${x},${y + 3.8} L${x - 3.8},${y}Z" fill="var(--bg)" ${s}/>`,
+    D: `<circle cx="${x}" cy="${y}" r="2.8" fill="var(--fg)"/>` }[t]; }
+const GNAME = { new: '새 것', existing: '기존' };
+function drawTimelineStatic() {
+  const q = [];
+  for (let y = 2024; y <= 2026; y++) for (let m = 1; m <= 12; m++) { if (m === 1) continue; const x = tx(`${y}-${String(m).padStart(2, '0')}-01`); q.push(`<line class="mline" x1="${x}" y1="${TOP}" x2="${x}" y2="${yy + 6}"/>`); }
+  for (let y = 2024; y <= 2026; y++) { const x = tx(`${y}-01-01`); q.push(`<line x1="${x}" y1="${TOP}" x2="${x}" y2="${yy + 6}" stroke="var(--rule)"/><text class="yr" x="${x + 3}" y="${yy + 20}">${y}</text>`); }
+  DATA.milestones.forEach(([n, d]) => { const x = tx(d); q.push(`<line x1="${x}" y1="${TOP - 4}" x2="${x}" y2="${yy + 6}" stroke="var(--rule)" stroke-dasharray="2 2"/><text class="ms" x="${x}" y="${TOP - 9}" text-anchor="middle">${n}</text>`); });
+  rows.forEach(r => { if (r.hdr) q.push(`<text class="grp" x="10" y="${r.y}">${GNAME[r.hdr]}</text><line class="grpline" x1="10" y1="${r.y + 3}" x2="${RX}" y2="${r.y + 3}"/>`);
+    else q.push(`<g class="row${state.part === r.id ? ' sel' : ''}" data-pid="${r.id}"><rect x="0" y="${r.y - 9}" width="${LX - 6}" height="18"/><text class="part" x="10" y="${r.y + 4.5}">${r.name}</text></g><line class="rowline" x1="${LX}" y1="${r.y}" x2="${RX}" y2="${r.y}"/>`); });
+  return q.join('');
+}
+function updateTimeline() {
+  const t = state.t, chain = state.focus ? chainOf(state.focus) : null, q = [drawTimelineStatic()], cx = tx(t.toISOString().slice(0, 10));
+  DATA.links.forEach(([u, v]) => { const a = EV[u], b = EV[v];
+    const x1 = tx(a.date), y1 = RY[a.part], x2 = tx(b.date), y2 = RY[b.part], mx = (x1 + x2) / 2;
+    let op = (new Date(b.date) <= t) ? 0.8 : 0.15; if (chain) op = chain.has(u) && chain.has(v) ? 1 : 0.08; if (state.part) op = (a.part === state.part || b.part === state.part) ? 1 : 0.08;
+    q.push(`<path class="link" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" opacity="${op}"/>`); });
+  DATA.events.forEach(e => { let op = new Date(e.date) <= t ? 1 : 0.25; if (chain) op = chain.has(e.id) ? 1 : 0.15; if (state.part) op = e.part === state.part ? 1 : 0.15;
+    q.push(`<g class="ev" data-id="${e.id}" opacity="${op}" style="cursor:pointer">${glyph(e.type, tx(e.date), RY[e.part])}<circle cx="${tx(e.date)}" cy="${RY[e.part]}" r="7" fill="transparent"/></g>`);
+    if (e.ep && op > 0.5) { const ex = tx(e.date), flip = (ex < cx && ex + 80 > cx) || ex + 80 > RX;
+      q.push(`<text class="eplab" x="${flip ? ex - 6 : ex + 6}" y="${RY[e.part] - 6}" text-anchor="${flip ? 'end' : 'start'}" opacity="${op}">${e.ep}</text>`); } });
+  q.push(`<line class="cursor" x1="${cx}" y1="${TOP - 2}" x2="${cx}" y2="${yy + 6}"/><circle class="knob" cx="${cx}" cy="${yy + 6}" r="3.5"/>`);
+  tl.innerHTML = q.join('');
+  document.getElementById('date').textContent = fdate(t.toISOString().slice(0, 10));
+}
+
+/* ---------------- 상태 → 화면 ---------------- */
+const epsEl = document.getElementById('eps');
+const EPS = DATA.events.filter(e => e.ep).sort((a, b) => a.date < b.date ? -1 : 1);
+epsEl.innerHTML = EPS.map(e => `<button type="button" data-id="${e.id}">${e.ep}</button>`).join('');
+function setEp() {
+  let cur = state.focus; if (!cur) EPS.forEach(e => { if (new Date(e.date) <= state.t) cur = e.id; });
+  epsEl.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.id === cur));
+}
+function update() { drawModel(); updateTimeline(); setEp(); }
+
+let drag = false;
+function svgX(ev) { const r = tl.getBoundingClientRect(); return (ev.clientX - r.left) / r.width * 1000; }
+tl.addEventListener('pointerdown', ev => {
+  const g = ev.target.closest('.ev'), row = ev.target.closest('.row');
+  if (g) { const id = g.dataset.id; state.focus = state.focus === id ? null : id; state.part = null; if (state.focus) state.t = new Date(EV[id].date); update(); return; }
+  if (row) { const pid = row.dataset.pid; state.part = state.part === pid ? null : pid; state.focus = null; update(); return; }
+  drag = true; tl.setPointerCapture(ev.pointerId); state.focus = null; state.part = null; state.t = xt(svgX(ev)); update();
+});
+tl.addEventListener('pointermove', ev => {
+  if (drag) { state.t = xt(svgX(ev)); update(); return; }
+  const g = ev.target.closest('.ev'); if (!g) { tip.hidden = true; return; }
+  const e = EV[g.dataset.id]; showTip(ev, `<b>${fdate(e.date)}</b> · ${PART[e.part].name}<br>${e.label}`);
+});
+tl.addEventListener('pointerup', () => { drag = false; });
+tl.addEventListener('pointerleave', () => { tip.hidden = true; });
+function showTip(ev, html) { tip.innerHTML = html; tip.hidden = false; tip.style.left = Math.min(ev.clientX + 12, innerWidth - 240) + 'px'; tip.style.top = (ev.clientY + 12) + 'px'; }
+model.addEventListener('click', ev => {
+  const el = ev.target.closest('[data-part],[data-pid]'); if (!el) return;
+  const pid = el.dataset.part || el.dataset.pid; if (!PART[pid]) return;
+  state.part = state.part === pid ? null : pid; state.focus = null; update();
+});
+model.addEventListener('pointermove', ev => {
+  const el = ev.target.closest('[data-part]'); if (!el || !PART[el.dataset.part]) { tip.hidden = true; return; }
+  const p = PART[el.dataset.part], n = (evByPart[p.id] || []).filter(id => new Date(EV[id].date) <= state.t).length;
+  showTip(ev, `<b>${p.name}</b> · ${p.group === 'new' ? '새 것' : '기존'} · 기록 ${n}`);
+});
+model.addEventListener('pointerleave', () => { tip.hidden = true; });
+epsEl.addEventListener('click', ev => { const b = ev.target.closest('button'); if (!b) return; const id = b.dataset.id;
+  state.focus = state.focus === id ? null : id; state.part = null; state.t = new Date(EV[id].date); update(); });
+document.getElementById('split').onclick = ev => { state.split = !state.split; ev.currentTarget.setAttribute('aria-pressed', String(state.split)); update(); };
+document.getElementById('all').onclick = () => { state.focus = null; state.part = null; state.t = D1; update(); };
+document.getElementById('play').onclick = ev => {
+  const btn = ev.currentTarget;
+  if (playing) { cancelAnimationFrame(playing); playing = null; btn.textContent = '재생'; btn.setAttribute('aria-pressed', 'false'); return; }
+  state.focus = null; state.part = null; if (state.t >= D1) state.t = D0; btn.textContent = '정지'; btn.setAttribute('aria-pressed', 'true');
+  let last = performance.now();
+  const step = now => { const dt = now - last; last = now; state.t = new Date(Math.min(+D1, +state.t + dt * 864e5 * 12 / 1000 * 2.2));
+    update(); if (state.t < D1) playing = requestAnimationFrame(step); else { playing = null; btn.textContent = '재생'; btn.setAttribute('aria-pressed', 'false'); } };
+  playing = requestAnimationFrame(step);
+};
+/* 글자 보정: --k = viewBox 폭 / 실제 폭 */
+const fitText = () => [model, tl].forEach(el => { const w = el.getBoundingClientRect().width; if (w) el.style.setProperty('--k', (1000 / w).toFixed(3)); });
+if (window.ResizeObserver) new ResizeObserver(fitText).observe(tl.parentNode); fitText();
+update();
+})();
+</script>
+</body>
+</html>

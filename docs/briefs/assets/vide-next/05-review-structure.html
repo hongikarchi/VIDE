@@ -4,31 +4,44 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VIDE — 구조 검토안</title>
-<!-- VIDE Next 목업 05: 검토 후 반영 · 구조 검토안. _shell.html 복사본. -->
+<!-- VIDE Next 목업 v4 공통 셸(정본). 각 장은 이 파일을 복사해 (1) <title> (2) explorer의 .sel·'아티팩트' 묶음 (3) .center 안 tabs-bar·.art (4) .agent 안 .flow·.term (5) demo-nav 번호·링크 만 바꾼다. 셸 마크업·클래스·토큰은 고치지 않는다. 색은 app.css 변수만 쓴다. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500&family=IBM+Plex+Mono&display=swap">
 <link rel="stylesheet" href="app.css">
 <style>
-/* 배치와 SVG 크기만 */
-.r05-body{display:flex;flex-direction:column;gap:16px}
-.r05-low{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px;align-items:start}
+/* 05: 한 열 — 평면 그림 위, 표 아래 */
+.rv{grid-template-columns:minmax(0,1fr)}
+.rv .fig svg{max-height:calc(100vh - 150px)}
+.rv .beam{stroke:var(--fg);stroke-width:1.2}
+.rv .beam.long{stroke:var(--accent);stroke-width:2;stroke-dasharray:4 3}
+.rv .dim{font-size:13px;fill:var(--accent);stroke:var(--bg);stroke-width:8px;paint-order:stroke;stroke-linejoin:round}
+.rv svg .m-axis{font-size:12px}
+.rv svg .m-lab{font-size:14px}
+.rv svg rect.m-face{stroke:var(--mute)}
+.rv .tbl th.n{text-transform:none}
+.rv .tbl td.over{font-weight:500}
 </style>
 </head>
 <body>
-<!-- 아이콘 스프라이트: <svg class="i"><use href="#i-files"/></svg> -->
+<!-- 아이콘: <svg class="i"><use href="#i-files"/></svg> (stroke 1.5) -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-files" viewBox="0 0 24 24"><path d="M4 6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
   <symbol id="i-history" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 8v8M8 6.5c5 0 8 2 8 5.5"/></symbol>
-  <symbol id="i-tools" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><path d="M16.5 13v7M13 16.5h7"/></symbol>
+  <symbol id="i-tools" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><path d="M16.5 13v7M13 16.5h7"/></symbol>
   <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-feedback" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
   <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></symbol>
-  <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10M15 10v10"/></symbol>
+  <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 10h18M9 10v10M15 10v10"/></symbol>
   <symbol id="i-graph" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2"/><circle cx="12" cy="8" r="2"/><circle cx="18" cy="14" r="2"/><path d="M7.5 16.5 10.5 9.6M13.6 9.2l3 3.6"/></symbol>
   <symbol id="i-cube" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12 20 7.5M12 12v9M12 12 4 7.5"/></symbol>
-  <symbol id="i-report" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 15v-3M12 15V9M16 15v-5"/></symbol>
+  <symbol id="i-report" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 15v-3M12 15V9M16 15v-5"/></symbol>
   <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
-  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="m3 7 9 6 9-6"/></symbol>
   <symbol id="i-law" viewBox="0 0 24 24"><path d="M12 3v18M5 7h14M7 7l-3 6a3 3 0 0 0 6 0zM17 7l-3 6a3 3 0 0 0 6 0z"/></symbol>
   <symbol id="i-map" viewBox="0 0 24 24"><path d="m3 6 6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
   <symbol id="i-clip" viewBox="0 0 24 24"><path d="m21 11-8.5 8.5a5 5 0 0 1-7-7L14 4a3.3 3.3 0 0 1 4.7 4.7L10 17.4a1.7 1.7 0 0 1-2.4-2.4L15.5 7"/></symbol>
@@ -36,276 +49,159 @@
   <symbol id="i-chevd" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
   <symbol id="i-collapse" viewBox="0 0 24 24"><path d="m13 6 6 6-6 6M5 6l6 6-6 6"/></symbol>
   <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
-  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3 2 21h20z"/><path d="M12 10v5M12 18h.01"/></symbol>
-  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></symbol>
-  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
-  <symbol id="i-img" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m21 16-5-5-8 8"/></symbol>
   <symbol id="i-struct" viewBox="0 0 24 24"><path d="M4 20h16M6 20V9l6-5 6 5v11M10 20v-6h4v6"/></symbol>
-  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
-  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
   <symbol id="i-share" viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 15V3M8 7l4-4 4 4"/></symbol>
 </svg>
 
 <div class="app">
-  <!-- rail -->
+  <!-- rail: 위 탐색 / 아래 피드백 · 테마 · 설정 · 계정 (현행 제품과 같은 순서) -->
   <nav class="rail" aria-label="주 메뉴">
     <div class="logo">V</div>
-    <a href="02-sources.html" data-tip="탐색기"><svg class="i"><use href="#i-files"/></svg></a>
+    <a href="02-records-db.html" data-tip="탐색기"><svg class="i"><use href="#i-files"/></svg></a>
     <a href="#" data-tip="검색"><svg class="i"><use href="#i-search"/></svg></a>
-    <a href="07-history.html" data-tip="기록"><svg class="i"><use href="#i-history"/></svg></a>
+    <a href="07-records-graph.html" data-tip="기록"><svg class="i"><use href="#i-history"/></svg></a>
     <a href="05-review-structure.html" class="on" data-tip="도구"><svg class="i"><use href="#i-tools"/></svg></a>
     <div class="spacer"></div>
-    <a href="#" data-tip="설정"><svg class="i"><use href="#i-settings"/></svg></a>
-    <button type="button" class="avatar" title="계정">U</button>
+    <button type="button" data-tip="피드백 보내기"><svg class="i"><use href="#i-feedback"/></svg></button>
+    <button type="button" data-theme-toggle data-tip="밝게 / 어둡게"><svg class="i sun"><use href="#i-sun"/></svg><svg class="i moon"><use href="#i-moon"/></svg></button>
+    <button type="button" data-tip="설정"><svg class="i"><use href="#i-settings"/></svg></button>
+    <button type="button" class="avatar" data-tip="계정">U</button>
   </nav>
-
-  <!-- topbar -->
-  <header class="topbar">
-    <div class="crumb"><b>예시 사무소 신축 <svg class="i xs"><use href="#i-chevd"/></svg></b><span class="sep">/</span><span>구조 검토안</span></div>
-    <div class="grow"></div>
-    <div class="search"><svg class="i sm"><use href="#i-search"/></svg>찾기 · 명령<kbd>⌘K</kbd></div>
-    <button type="button" class="conn" data-tip="Claude · Rhino 연결됨 · ZWCAD 꺼짐">연결</button>
-    <button type="button" class="iconbtn" data-theme-toggle title="밝은/어두운 테마"><svg class="i"><use href="#i-sun"/></svg></button>
-    <nav class="demo-nav" aria-label="데모 넘기기"><a class="prev" href="04-apply.html" title="이전">‹</a><b>5 / 8</b><a class="next" href="06-db-3d.html" title="다음">›</a></nav>
-  </header>
 
   <!-- explorer -->
   <aside class="explorer" aria-label="탐색기">
-    <div class="proj"><span class="grow">예시 사무소 신축</span><button type="button" class="iconbtn" data-explorer-toggle title="접기"><svg class="i sm"><use href="#i-collapse"/></svg></button></div>
+    <div class="proj"><span class="grow">예시 사무소 신축</span><svg class="i xs"><use href="#i-chevd"/></svg><button type="button" class="iconbtn" data-explorer-toggle title="접기"><svg class="i sm"><use href="#i-collapse"/></svg></button></div>
 
-    <div class="sec">설계</div>
-    <a class="row" href="03-spec.html"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">조건</span><span class="meta">12</span></a>
-    <a class="row" href="03-spec.html"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">결정</span><span class="meta">6</span></a>
-    <a class="row" href="03-spec.html"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">작업</span><span class="meta">8</span></a>
-
-    <div class="sec">자료 <span class="n">180</span></div>
-    <a class="row" href="02-sources.html"><span class="tw">›</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow">01 운영 · 02 자료 · 03 설계 …</span></a>
-    <a class="row" href="02-sources.html" style="--d:1"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">회의록</span><span class="meta">7</span></a>
-    <a class="row" href="02-sources.html" style="--d:1"><svg class="i sm"><use href="#i-mail"/></svg><span class="grow">메일</span><span class="meta">41</span></a>
-    <a class="row" href="02-sources.html" style="--d:1"><svg class="i sm"><use href="#i-law"/></svg><span class="grow">법규</span><span class="meta">12</span></a>
-    <a class="row" href="02-sources.html" style="--d:1"><svg class="i sm"><use href="#i-map"/></svg><span class="grow">대지 · 공공데이터</span><span class="meta">7</span></a>
-
-    <div class="sec">연결 문서</div>
-    <a class="row" href="04-apply.html"><span class="dot"></span><svg class="i sm"><use href="#i-cube"/></svg><span class="grow">예시 모델.3dm</span><span class="meta">Rhino</span></a>
-    <a class="row" href="04-apply.html"><span class="dot off"></span><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">1층 평면.dwg</span><span class="meta">CAD</span></a>
-
-    <div class="sec">아티팩트 <span class="n">열림 3</span></div>
-    <a class="row sel" href="05-review-structure.html"><svg class="i sm"><use href="#i-struct"/></svg><span class="grow">구조 검토안</span><span class="meta">주의 1</span></a>
-    <a class="row" href="04-apply.html"><svg class="i sm"><use href="#i-cube"/></svg><span class="grow">변경 비교</span></a>
-    <a class="row" href="03-spec.html"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">결정</span></a>
-
-    <div class="sec">도구</div>
-    <a class="row sel" href="05-review-structure.html"><svg class="i sm"><use href="#i-struct"/></svg><span class="grow">구조 검토</span></a>
-    <a class="row" href="#"><svg class="i sm"><use href="#i-law"/></svg><span class="grow">법규 체크</span></a>
-    <a class="row" href="#"><svg class="i sm"><use href="#i-map"/></svg><span class="grow">규모검토</span></a>
-    <a class="row" href="06-db-3d.html"><svg class="i sm"><use href="#i-table"/></svg><span class="grow">수량·면적표</span></a>
+    <div class="grp"><h3>설계</h3>
+      <a class="row" href="03-spec.html"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">조건</span><span class="meta">12</span></a>
+      <a class="row" href="03-spec.html"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">결정</span><span class="meta">6</span></a>
+      <a class="row" href="03-spec.html"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">작업</span><span class="meta">8</span></a>
+    </div>
+    <div class="grp"><h3>자료</h3>
+      <a class="row" href="02-records-db.html"><span class="tw">›</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow">01 운영 … 09 보고</span><span class="meta">9</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">회의록</span><span class="meta">7</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-mail"/></svg><span class="grow">메일</span><span class="meta">41</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-list"/></svg><span class="grow">주간·월간 업무</span><span class="meta">9</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-list"/></svg><span class="grow">협의 리스트</span><span class="meta">1</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-law"/></svg><span class="grow">법규</span><span class="meta">12</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-map"/></svg><span class="grow">대지</span><span class="meta">7</span></a>
+    </div>
+    <div class="grp"><h3>연결 문서</h3>
+      <a class="row" href="04-apply.html"><span class="dot"></span><svg class="i sm"><use href="#i-cube"/></svg><span class="grow">예시 모델.3dm</span><span class="meta">Rhino</span></a>
+      <a class="row" href="04-apply.html"><span class="dot off"></span><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">1층 평면.dwg</span><span class="meta">CAD</span></a>
+    </div>
+    <div class="grp"><h3>아티팩트</h3>
+      <a class="row" href="05-review-structure.html"><svg class="i sm"><use href="#i-struct"/></svg><span class="grow">구조 검토안</span></a>
+    </div>
+    <div class="grp"><h3>도구</h3>
+      <a class="row sel" href="05-review-structure.html"><svg class="i sm"><use href="#i-struct"/></svg><span class="grow">구조 검토</span></a>
+      <a class="row" href="#"><svg class="i sm"><use href="#i-law"/></svg><span class="grow">법규 체크</span></a>
+      <a class="row" href="#"><svg class="i sm"><use href="#i-map"/></svg><span class="grow">규모검토</span></a>
+      <a class="row" href="06-parts-model.html"><svg class="i sm"><use href="#i-table"/></svg><span class="grow">수량·면적표</span></a>
+    </div>
   </aside>
 
   <!-- center: 아티팩트 창 -->
   <main class="center">
     <div class="tabs-bar">
-      <a class="tab on" href="05-review-structure.html"><svg class="i sm"><use href="#i-struct"/></svg>구조 검토안<span class="x">×</span></a>
-      <a class="tab" href="04-apply.html"><svg class="i sm"><use href="#i-cube"/></svg>변경 비교</a>
+      <a class="tab on" href="#">구조 검토안<span class="x">×</span></a>
+      <a class="tab" href="03-spec.html">결정</a>
     </div>
     <section class="art" aria-label="아티팩트">
-      <div class="art-head">
-        <h2><svg class="i"><use href="#i-struct"/></svg>구조 검토안</h2>
-        <small>겹침 · 평면</small>
-        <div class="chips"><span class="chip src">예시 모델.3dm</span><span class="chip src">결정 D-03 (기둥 간격 7.2 m)</span></div>
-        <div class="grow"></div>
-        <span class="pill warn">주의 1</span>
-        <button type="button" class="btn sm">대안 보기</button>
-      </div>
+      <header class="art-head">
+        <h1>X2–X4 보 13.4 m</h1>
+        <p>기둥 +C를 두면 7.2 m · 6.2 m</p>
+        <div class="bar"><button type="button" data-press>대안 보기</button><button type="button" class="btn primary">모델에 반영</button></div>
+      </header>
       <div class="art-body">
-        <div class="r05-body">
+        <div class="two rv">
+          <figure class="fig" style="margin:0"><svg id="plan" viewBox="0 0 640 400" role="img" aria-label="1층 구조 평면"></svg></figure>
           <div>
-            <div class="concl">
-              <h3>스팬 한 곳이 12 m를 넘는다. 기둥 하나를 더하면 모두 통과.</h3>
-              <p>사무소 지침: 삼각 거더 ≤ 12 m · 보 간격 2~3 m</p>
-            </div>
-            <div class="stat-row">
-              <div class="stat"><b>14</b><small>기둥</small></div>
-              <div class="stat"><b>19</b><small>거더</small></div>
-              <div class="stat"><b class="hot">13.4<span class="small"> m</span></b><small>최대 스팬 · X2–X4</small></div>
-              <div class="stat"><b>+1</b><small>제안 기둥 · X3/Y2</small></div>
-            </div>
-          </div>
-
-          <figure class="fig" style="margin:0">
-              <div class="fh"><b>1층 기둥·거더 평면</b><span class="grow"></span><div class="legend"><span><i class="ink"></i>거더</span><span><i class="dash"></i>12 m 초과</span><span><i class="acc"></i>제안 기둥</span></div><span class="mono faint">1 : 200</span></div>
-              <svg class="plan" viewBox="0 0 640 400" role="img" aria-label="1층 기둥과 거더 평면. X2–X4 사이 Y2 거더 13.4 m 초과, X3/Y2에 기둥 추가 제안">
-                <!-- 축 -->
-                <g>
-                  <line class="sv-grid" x1="50" y1="46" x2="50" y2="372"/>
-                  <line class="sv-grid" x1="190" y1="46" x2="190" y2="372"/>
-                  <line class="sv-grid" x1="320" y1="46" x2="320" y2="372"/>
-                  <line class="sv-grid" x1="450" y1="46" x2="450" y2="372"/>
-                  <line class="sv-grid" x1="590" y1="46" x2="590" y2="372"/>
-                  <line class="sv-grid" x1="36" y1="80" x2="612" y2="80"/>
-                  <line class="sv-grid" x1="36" y1="215" x2="612" y2="215"/>
-                  <line class="sv-grid" x1="36" y1="350" x2="612" y2="350"/>
-                </g>
-                <g class="sv-text mono" text-anchor="middle">
-                  <text class="sv-text mono" x="50" y="34">X1</text>
-                  <text class="sv-text mono" x="190" y="34">X2</text>
-                  <text class="sv-text mono" x="320" y="34">X3</text>
-                  <text class="sv-text mono" x="450" y="34">X4</text>
-                  <text class="sv-text mono" x="590" y="34">X5</text>
-                </g>
-                <text class="sv-text mono" x="18" y="84">Y1</text>
-                <text class="sv-text mono" x="18" y="219">Y2</text>
-                <text class="sv-text mono" x="18" y="354">Y3</text>
-                <!-- 치수 -->
-                <g text-anchor="middle">
-                  <text class="sv-text mono" x="120" y="392">7.2</text>
-                  <text class="sv-text mono" x="255" y="392">6.7</text>
-                  <text class="sv-text mono" x="385" y="392">6.7</text>
-                  <text class="sv-text mono" x="520" y="392">7.2</text>
-                  <text class="sv-text mono" x="612" y="150" text-anchor="start">7.2</text>
-                  <text class="sv-text mono" x="612" y="285" text-anchor="start">7.2</text>
-                </g>
-                <text class="sv-text" x="320" y="150" text-anchor="middle">로비</text>
-                <!-- 거더: X 방향 -->
-                <g>
-                  <line class="sv-girder" x1="50" y1="80" x2="190" y2="80"/>
-                  <line class="sv-girder" x1="190" y1="80" x2="320" y2="80"/>
-                  <line class="sv-girder" x1="320" y1="80" x2="450" y2="80"/>
-                  <line class="sv-girder" x1="450" y1="80" x2="590" y2="80"/>
-                  <line class="sv-girder" x1="50" y1="215" x2="190" y2="215"/>
-                  <line class="sv-girder" x1="450" y1="215" x2="590" y2="215"/>
-                  <line class="sv-girder" x1="50" y1="350" x2="190" y2="350"/>
-                  <line class="sv-girder" x1="190" y1="350" x2="320" y2="350"/>
-                  <line class="sv-girder" x1="320" y1="350" x2="450" y2="350"/>
-                  <line class="sv-girder" x1="450" y1="350" x2="590" y2="350"/>
-                  <!-- Y 방향 -->
-                  <line class="sv-girder" x1="50" y1="80" x2="50" y2="350"/>
-                  <line class="sv-girder" x1="190" y1="80" x2="190" y2="350"/>
-                  <line class="sv-girder" x1="450" y1="80" x2="450" y2="350"/>
-                  <line class="sv-girder" x1="590" y1="80" x2="590" y2="350"/>
-                </g>
-                <!-- 초과 스팬 -->
-                <line class="sv-girder over" x1="190" y1="215" x2="450" y2="215"/>
-                <text class="sv-text ink mono" x="255" y="205" text-anchor="middle">13.4 m &gt; 12</text>
-                <!-- 기둥 14 -->
-                <g>
-                  <circle class="sv-col" cx="50" cy="80" r="5"/><circle class="sv-col" cx="190" cy="80" r="5"/><circle class="sv-col" cx="320" cy="80" r="5"/><circle class="sv-col" cx="450" cy="80" r="5"/><circle class="sv-col" cx="590" cy="80" r="5"/>
-                  <circle class="sv-col" cx="50" cy="215" r="5"/><circle class="sv-col" cx="190" cy="215" r="5"/><circle class="sv-col" cx="450" cy="215" r="5"/><circle class="sv-col" cx="590" cy="215" r="5"/>
-                  <circle class="sv-col" cx="50" cy="350" r="5"/><circle class="sv-col" cx="190" cy="350" r="5"/><circle class="sv-col" cx="320" cy="350" r="5"/><circle class="sv-col" cx="450" cy="350" r="5"/><circle class="sv-col" cx="590" cy="350" r="5"/>
-                </g>
-                <!-- 제안 기둥 -->
-                <circle class="sv-col ghost" cx="320" cy="215" r="9"/>
-                <circle class="sv-col hi" cx="320" cy="215" r="4"/>
-                <text class="sv-text ink mono" x="334" y="238">+C</text>
-              </svg>
-            </figure>
-
-          <div class="r05-low">
-              <div class="panel">
-                <div class="ph">스팬 표<span class="grow"></span><span class="small muted">7 구간</span></div>
-                <table class="tbl">
-                  <thead><tr><th>구간</th><th class="n">길이</th><th class="n">보 춤</th><th>판정</th></tr></thead>
-                  <tbody>
-                    <tr><td class="mono">X1–X2</td><td class="n">7.2</td><td class="n">500</td><td><span class="pill ok">통과</span></td></tr>
-                    <tr><td class="mono">X2–X3</td><td class="n">6.7</td><td class="n">450</td><td><span class="pill ok">통과</span></td></tr>
-                    <tr><td class="mono">X3–X4</td><td class="n">6.7</td><td class="n">450</td><td><span class="pill ok">통과</span></td></tr>
-                    <tr class="sel"><td class="mono">X2–X4 <span class="faint">Y2</span></td><td class="n">13.4</td><td class="n">800</td><td><span class="pill bad">초과</span></td></tr>
-                    <tr><td class="mono">X4–X5</td><td class="n">7.2</td><td class="n">500</td><td><span class="pill ok">통과</span></td></tr>
-                    <tr><td class="mono">Y1–Y2</td><td class="n">7.2</td><td class="n">500</td><td><span class="pill ok">통과</span></td></tr>
-                    <tr><td class="mono">Y2–Y3</td><td class="n">7.2</td><td class="n">500</td><td><span class="pill ok">통과</span></td></tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="panel">
-                <div class="ph">기둥 추가 후<span class="grow"></span><span class="pill ok">모두 통과</span></div>
-                <div class="pb">
-                  <dl class="kv" style="margin:0">
-                    <dt>최대 스팬</dt><dd class="num">7.2 m</dd>
-                    <dt>보 춤</dt><dd class="num">800 → 450</dd>
-                    <dt>로비 폭</dt><dd class="num">13.4 → 6.7 + 6.7 m</dd>
-                  </dl>
-                </div>
-              </div>
+            <table class="tbl">
+              <thead><tr><th>보</th><th class="n">경간 m</th><th>판정</th></tr></thead>
+              <tbody>
+                <tr class="sel"><td>X2–X4 · Y2</td><td class="n">13.4</td><td class="over">넘음</td></tr>
+                <tr><td>X1–X2 · Y2</td><td class="n">6.0</td><td>됨</td></tr>
+                <tr><td>X2–X3 · Y1</td><td class="n">7.2</td><td>됨</td></tr>
+                <tr><td>X3 · Y1–Y2</td><td class="n">7.0</td><td>됨</td></tr>
+                <tr><td>X4–X5 · Y3</td><td class="n">6.0</td><td>됨</td></tr>
+              </tbody>
+            </table>
+            <p class="note">기준 12 m, 삼각 거더 기준.</p>
           </div>
         </div>
-      </div>
-      <div class="art-foot">
-        <span class="grow">반영하면 Rhino 모델에 기둥 1개가 추가되고 결정 D-03에 기록됩니다.</span>
-        <button type="button" class="btn">대안 보기</button>
-        <button type="button" class="btn primary">반영</button>
       </div>
     </section>
   </main>
 
   <!-- agent -->
   <aside class="agent" aria-label="에이전트">
-    <div class="pane">
-      <div class="head">
-        <b>기본 대화 <svg class="i xs"><use href="#i-chevd"/></svg></b>
-        <div class="grow"></div>
-        <div class="seg"><button type="button" class="on" data-agent-view="chat">대화</button><button type="button" data-agent-view="term">터미널</button></div>
-        <button type="button" class="iconbtn" title="새 대화"><svg class="i sm"><use href="#i-plus"/></svg></button>
-        <button type="button" class="iconbtn" data-agent-toggle title="접기"><svg class="i sm"><use href="#i-collapse"/></svg></button>
-      </div>
+    <div class="head">
+      <b>대화</b>
+      <div class="grow"></div>
+      <div class="bar"><button type="button" data-agent-view="term" aria-pressed="false">터미널</button></div>
+      <button type="button" class="iconbtn" title="새 대화"><svg class="i sm"><use href="#i-plus"/></svg></button>
+      <button type="button" class="iconbtn" data-agent-toggle title="접기"><svg class="i sm"><use href="#i-collapse"/></svg></button>
+    </div>
 
-      <div class="flow">
-        <div class="msg user">
-          <div class="who">U</div>
-          <div class="body">
-            <div class="ctx"><span class="chip">결정 D-03</span></div>
-            <p>기둥 배치 구조 검토해 줘.</p>
-          </div>
-          <button type="button" class="undo" title="이 요청 되돌리기"><svg class="i xs"><use href="#i-undo"/></svg>되돌리기</button>
-        </div>
-        <div class="msg ai">
-          <div class="who">V</div>
-          <div class="body">
-            <div class="stage-line">구조 검토<div class="progress done"><i></i></div></div>
-            <ul class="steps">
-              <li class="done"><span class="st">✓</span>모델 읽음 · 객체 33</li>
-              <li class="done"><span class="st">✓</span>기둥 14 · 거더 추정 19</li>
-              <li class="done"><span class="st">✓</span>지침 대조 · 거더 ≤ 12 m</li>
-            </ul>
-          </div>
-        </div>
-        <div class="msg ai">
-          <div class="who">V</div>
-          <div class="body">
-            <p>검토안을 가운데에 열었다. Y2의 X2–X4 구간 13.4 m가 12 m를 넘는다. X3/Y2에 기둥 1개 추가를 제안한다.</p>
-            <a class="art-card" href="05-review-structure.html"><span class="ico-type"><svg class="i sm"><use href="#i-struct"/></svg></span><span class="grow"><span class="t">구조 검토안</span><br><span class="s">가운데에 열림 · 주의 1</span></span><svg class="i sm"><use href="#i-chev"/></svg></a>
-            <div class="card">
-              <div class="ch"><svg class="i sm"><use href="#i-struct"/></svg>기둥 1개 추가<span class="small muted">X3/Y2</span></div>
-              <div class="cb">최대 스팬 13.4 → 7.2 m · 보 춤 800 → 450</div>
-              <div class="acts"><button type="button" class="btn sm">반영</button><button type="button" class="btn sm ghost">대안 보기</button></div>
-            </div>
-            <time>오후 4:31</time>
-          </div>
+    <div class="flow">
+      <div class="msg user">
+        <div class="who">나</div>
+        <div class="body">
+          <div class="ctx eps"><span>예시 모델.3dm · 1층</span></div>
+          <p>1층 보 경간 봐줘.</p>
         </div>
       </div>
+      <div class="msg ai">
+        <div class="who">VIDE</div>
+        <div class="body">
+          <p>경간 12 m를 넘는 보 1. 기둥 하나면 된다.</p>
+          <a class="art-card" href="05-review-structure.html"><span class="grow"><span class="t">구조 검토안</span> <span class="s">· 1층 보 21</span></span><svg class="i sm"><use href="#i-chev"/></svg></a>
+          <time>오후 4:20</time>
+        </div>
+      </div>
+    </div>
 
-      <div class="term"><span class="p">❯</span> vide tool 구조검토 --target 예시모델.3dm --rule 거더≤12m --ref D-03
-<span class="d">read  model     33 objects · 14 columns</span>
-<span class="d">infer girders   19 · axes X1–X5 / Y1–Y3</span>
-<span class="d">check span      18 pass · 1 over  X2–X4@Y2 13.4 m</span>
-<span class="d">plan  propose   +1 column  X3/Y2  → max 7.2 m</span>
-<span class="g">open  artifact  구조 검토안 · 주의 1</span>
-<span class="d">wait  반영      Rhino 1 add · D-03 record</span>
+    <div class="term"><span class="p">❯</span> vide run "1층 보 경간 봐줘"
+<span class="d">read  model     beams 21 · columns 14</span>
+<span class="d">check span      limit 12.0 m</span>
+over  X2–X4 Y2  13.4 m
+<span class="d">try   +C at X3 Y2  7.2 / 6.2 m</span>
 <span class="p">❯</span> <span class="cur"></span></div>
 
-      <div class="composer">
-        <div class="ctx"><span class="chip">구조 검토안<span class="x">×</span></span><span class="chip">결정 D-03<span class="x">×</span></span></div>
-        <textarea placeholder="무엇을 할까요? 선택·스케치·자료를 끌어다 놓거나 @로 부릅니다"></textarea>
-        <div class="bar">
-          <button type="button" class="iconbtn" title="첨부"><svg class="i sm"><use href="#i-clip"/></svg></button>
-          <button type="button" class="model"><span class="mark"></span>Claude<svg class="i xs"><use href="#i-chevd"/></svg></button>
-          <span class="toggle"><i></i>계획부터</span>
-          <div class="seg"><button type="button" class="on">자동</button><button type="button">확인</button></div>
-          <div class="grow"></div>
-          <button type="button" class="send" title="보내기"><svg class="i sm"><use href="#i-send"/></svg></button>
-        </div>
+    <div class="composer">
+      <div class="ctx eps"><span>구조 검토안<span class="x">×</span></span></div>
+      <textarea placeholder="무엇을 할까요? 선택·스케치·자료를 끌어다 놓거나 @로 부른다"></textarea>
+      <div class="foot">
+        <button type="button" class="iconbtn" title="첨부"><svg class="i sm"><use href="#i-clip"/></svg></button>
+        <button type="button" class="model">Claude<svg class="i xs"><use href="#i-chevd"/></svg></button>
+        <div class="grow"></div>
+        <label class="sw2"><input type="checkbox"> 적용 전 확인</label>
+        <button type="button" class="send" title="보내기"><svg class="i sm"><use href="#i-send"/></svg></button>
       </div>
     </div>
   </aside>
 </div>
+<nav class="demo-nav" aria-label="데모 넘기기"><a class="prev" href="04-apply.html" title="이전">‹</a><b>5 / 8</b><a class="next" href="06-parts-model.html" title="다음">›</a></nav>
 <script src="app.js"></script>
+<script>
+/* 05 평면: 축선 · 기둥 · 보 · 제안 기둥 +C */
+(function () {
+  var NS = 'http://www.w3.org/2000/svg', svg = document.getElementById('plan');
+  function el(t, a, txt) { var e = document.createElementNS(NS, t); for (var k in a) e.setAttribute(k, a[k]); if (txt) e.textContent = txt; svg.appendChild(e); return e; }
+  var X = [70, 187, 327, 448, 565], Y = [84, 218, 352];   /* 6.0 · 7.2 · 6.2 · 6.0 m / 7.0 · 7.0 m */
+  X.forEach(function (x, i) { el('line', { class: 'm-grid', x1: x, y1: 40, x2: x, y2: 382 }); el('text', { class: 'm-axis', x: x, y: 30, 'text-anchor': 'middle' }, 'X' + (i + 1)); });
+  Y.forEach(function (y, i) { el('line', { class: 'm-grid', x1: 36, y1: y, x2: 604, y2: y }); el('text', { class: 'm-axis', x: 18, y: y + 5, 'text-anchor': 'middle' }, 'Y' + (i + 1)); });
+  function beam(x1, y1, x2, y2, c) { el('line', { class: 'beam' + (c ? ' ' + c : ''), x1: x1, y1: y1, x2: x2, y2: y2 }); }
+  Y.forEach(function (y, j) { for (var i = 0; i < 4; i++) { if (j === 1 && (i === 1 || i === 2)) continue; beam(X[i], y, X[i + 1], y); } });
+  X.forEach(function (x) { beam(x, Y[0], x, Y[1]); beam(x, Y[1], x, Y[2]); });
+  beam(X[1], Y[1], X[3], Y[1], 'long');
+  el('text', { class: 'dim', x: (X[1] + X[3]) / 2, y: Y[1] - 16, 'text-anchor': 'middle' }, '13.4 m');
+  X.forEach(function (x, i) { Y.forEach(function (y, j) { if (i === 2 && j === 1) return; el('rect', { class: 'm-face', x: x - 7, y: y - 7, width: 14, height: 14 }); }); });
+  var cx = X[2], cy = Y[1];
+  el('path', { class: 'm-face lit', d: 'M' + cx + ' ' + (cy - 11) + 'L' + (cx + 11) + ' ' + cy + 'L' + cx + ' ' + (cy + 11) + 'L' + (cx - 11) + ' ' + cy + 'Z' });
+  el('text', { class: 'm-lab', x: cx + 14, y: cy + 26 }, '+C');
+})();
+</script>
 </body>
 </html>

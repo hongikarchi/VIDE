@@ -4,167 +4,128 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VIDE Next 목업</title>
-<!-- 스토리보드 브리프(docs/briefs/README.md). 2026-10-19 사용자 요청 "지금 네가 생각하는 대로 구성해서 HTML 데모 페이지를 만들어 순서대로 페이지 흐름을 보게 해 달라. 실제 기능이 붙기 전에 목업 프론트를 보고 싶다."
-     화면 8장은 assets/vide-next/*.html 에 살아 있는 HTML(클릭되는 목업)이고 여기서는 단계마다 그 화면을 그대로 끼워 보인다. 기능은 없다. 정본은 PRD·SPEC·Design이며 이 문서는 검토용이다. -->
+<!-- 스토리보드 브리프(docs/briefs/README.md). 2026-10-19 "실제 기능이 붙기 전에 목업 프론트를 보고 싶다" → 2026-10-20 2판: 사용자의 기록 아티팩트 컨셉으로 다시 만듦.
+     화면 8장은 assets/vide-next/*.html 에 살아 있는 HTML(눌러 볼 수 있음)이고 여기서는 단계마다 그 화면을 그대로 끼운다. 기능은 없다. 정본은 PRD·SPEC·Design이며 이 문서는 검토용이다. -->
 <link rel="stylesheet" href="_base.css">
 <style>
-/* 문서별 추가분: 살아 있는 화면 끼우기 */
-.live{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;border:1px solid var(--line);background:#0f1012}
-.live iframe{position:absolute;left:0;top:0;width:1440px;height:900px;border:0;transform-origin:0 0;pointer-events:auto}
+.live{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;border:1px solid var(--line);background:#fff}
+.live iframe{position:absolute;left:0;top:0;width:1440px;height:900px;border:0;transform-origin:0 0}
 .live .open{position:absolute;right:10px;bottom:10px;font-size:11px;background:#fff;border:1px solid var(--ink);padding:4px 9px;text-decoration:none;letter-spacing:0}
 .stick .shot{margin:0}
 .stick .cap{font-size:11px;color:var(--muted);margin-top:8px;letter-spacing:0}
 .thumbs button{aspect-ratio:16/10}
 .thumbs img{aspect-ratio:16/10;object-fit:cover}
-.map td:first-child{color:var(--muted);width:30%}
-.map b{font-weight:500}
-.flowline{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0;border-top:1px solid var(--ink);margin-top:6px}
-.flowline li{padding:16px 16px 18px 0;border-right:1px solid var(--line);font-size:13px;line-height:1.6}
-.flowline li:last-child{border-right:0}
-.flowline li small{display:block;font-size:11px;letter-spacing:.15em;color:var(--coral-deep);margin-bottom:6px}
-.flowline li b{display:block;font-weight:500;font-size:16px;margin-bottom:4px;letter-spacing:-.03em}
-.flowline li span{color:var(--muted);font-size:12px}
-.flowline li.hl{background:var(--soft);padding-left:14px}
+.chg td:first-child{color:var(--muted);width:34%}
 .qs.after{margin-top:8px;border-top:1px solid var(--ink)}
 .reply #out{max-height:44px}
-@media(max-width:1100px){.flowline{grid-template-columns:repeat(3,minmax(0,1fr))}.flowline li{border-bottom:1px solid var(--line)}}
-@media(max-width:860px){.flowline{grid-template-columns:1fr}.flowline li{border-right:0}}
 @media print{.live iframe{display:none}.live:after{content:"살아 있는 화면은 인쇄되지 않습니다 — 아래 작은 그림을 보세요";position:absolute;inset:0;display:grid;place-items:center;color:#777}}
 </style>
 </head>
 <body>
 <header>
   <a class="brand" href="#top"><b>VIDE</b><span>목업 · 전체 흐름</span></a>
-  <nav><a href="#flow">01 흐름</a><a href="#s">02 화면 8장</a><a href="#q">03 질문</a></nav>
+  <nav><a href="#s">01 화면 8장</a><a href="#c">02 바뀐 점</a><a href="#q">03 질문</a></nav>
   <button type="button" class="noprint" onclick="window.print()">인쇄 / PDF ↗</button>
 </header>
 <main id="top">
 
 <div class="intro">
   <div>
-    <div class="eyebrow">2026-10-19 / 검토 대기 / 목업 · 기능 없음 / 근거 <a href="../../human/docs/PRD.html">PRD</a> §1.1·§4.5 · <a href="../../human/docs/research/RESEARCH-18-environment-not-model.html">RESEARCH-18</a></div>
-    <h1>가운데는 아티팩트, 오른쪽은 에이전트.<br>자료에서 결정으로, 결정에서 도면·모델로.</h1>
-    <p>VS Code꼴 셸에 건축을 넣으면 이렇게 된다. 화면 8장을 순서대로 넘기며 보고, 구도와 셸만 정한다.</p>
+    <div class="eyebrow">2026-10-20 2판 / 검토 대기 / 목업 · 기능 없음 / 근거 <a href="../../human/docs/PRD.html">PRD</a> §1.1·§4.5</div>
+    <h1>가운데는 아티팩트, 오른쪽은 에이전트.<br>생김새는 기록 아티팩트 그대로.</h1>
+    <p>화면 8장을 순서대로 넘기며 보고, 장마다 좋음·수정만 누른다.</p>
   </div>
-  <div class="study-mark">화면은 살아 있는 HTML(눌러 볼 수 있음)<br>답은 바닥의 [피드백 복사]</div>
+  <div class="study-mark">화면은 살아 있는 HTML<br>답은 바닥의 [피드백 복사]</div>
 </div>
-
-<section class="hero">
-  <div class="stat-row four">
-    <div class="stat"><small>화면</small><b>8<span>장</span></b></div>
-    <div class="stat"><small>아티팩트 종류</small><b>5<span>문서 · 표 · 그래프 · 겹침 · 보고</span></b></div>
-    <div class="stat"><small>속도</small><b>2<span>바로 적용 · 검토 후 반영</span></b></div>
-    <div class="stat"><small>질문</small><b class="hot">3<span>개</span></b></div>
-  </div>
-</section>
-
-<section id="flow">
-  <div class="section-head">
-    <div><div class="eyebrow">01 / FLOW</div><h2>자료 → 조건·결정 → 작업 → 검토. 기록은 늘.</h2></div>
-    <p>Kiro의 spec 흐름을 건축에 옮긴 것. 모델·도면 수정은 '작업' 단계의 산출 하나다.</p>
-  </div>
-  <ul class="flowline">
-    <li><small>0</small><b>시작</b><span>두 길 — 바로 하기 / 설계 세우기</span></li>
-    <li><small>1</small><b>자료</b><span>폴더·메일·회의록·법규·대지를 읽어 사실로. 사람이 확정</span></li>
-    <li><small>2</small><b>조건 · 결정 · 작업</b><span>requirements · design · tasks의 건축판</span></li>
-    <li class="hl"><small>3</small><b>작업</b><span>① 바로 적용 + 되돌리기 ② 아티팩트에서 보고 [반영]</span></li>
-    <li><small>4</small><b>검토 · 보고</b><span>법규·구조·수량·검토본 비교 → 수정 작업으로</span></li>
-    <li><small>늘</small><b>기록</b><span>결정·실행·검토본 그래프. 자료가 바뀌면 영향 표시</span></li>
-  </ul>
-  <div class="table-wrap" style="max-height:none;margin-top:34px">
-    <table class="txt map">
-      <thead><tr><th>VS Code</th><th>VIDE</th></tr></thead>
-      <tbody>
-        <tr><td>Explorer</td><td><b>프로젝트 폴더</b> + 조건·결정·작업 문서 + 연결 문서(Rhino·CAD) + 열린 아티팩트 + 도구</td></tr>
-        <tr><td>가운데 — 코드</td><td><b>아티팩트 창</b>: 호스트가 못 보여 주는 것. 문서형·표/DB형·그래프형·겹침형(DB×3D, 전/후, 검토 겹침)·보고형. 에이전트가 HTML로 즉석에서 만들고, VIDE는 데이터·모델·호스트 행동 API만 준다</td></tr>
-        <tr><td>Source Control</td><td><b>기록 그래프</b>: 커밋 = 결정·검토본, 브랜치 = 대안, diff = 모델·도면 변경, PR = 제출본</td></tr>
-        <tr><td>Extensions</td><td><b>도구(jig)</b> = 저장해 둔 아티팩트 + 도구</td></tr>
-        <tr><td>Chat · Terminal</td><td><b>에이전트</b>: 문맥 칩이 입력창 안에(선택·스케치·자료·결정), 결과는 한 줄 + [검토][되돌리기], 같은 세션의 터미널 탭</td></tr>
-        <tr><td>—</td><td>없앤 것: 뷰포트 위 '1개 선택 · 요청 고정' 띠, 하단 상태줄, 초 단위 진행 타임라인, 월 달력 대시보드</td></tr>
-      </tbody>
-    </table>
-  </div>
-</section>
 
 <section id="s">
   <div class="section-head">
-    <div><div class="eyebrow">02 / SCREENS</div><h2>화면 8장, 한 프로젝트의 하루.</h2></div>
-    <p>왼쪽 화면은 살아 있는 목업이다. 탭·토글·표 행을 눌러 볼 수 있고, 오른쪽 위 ‹ › 로 다음 장으로 간다. 어두운 테마가 기본, 해 아이콘으로 밝게.</p>
+    <div><div class="eyebrow">01 / SCREENS</div><h2>화면 8장, 한 프로젝트의 하루.</h2></div>
+    <p>‹ › 또는 ← → 로 넘긴다. 글자가 작으면 [새 창 ↗].</p>
   </div>
   <div class="story">
     <div class="stick">
       <figure class="shot" data-s="1"><div class="live"><iframe src="assets/vide-next/01-start.html" title="01 시작" loading="lazy"></iframe><a class="open" href="assets/vide-next/01-start.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="2"><div class="live"><iframe data-src="assets/vide-next/02-sources.html" title="02 자료" loading="lazy"></iframe><a class="open" href="assets/vide-next/02-sources.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="3"><div class="live"><iframe data-src="assets/vide-next/03-spec.html" title="03 설계" loading="lazy"></iframe><a class="open" href="assets/vide-next/03-spec.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="4"><div class="live"><iframe data-src="assets/vide-next/04-apply.html" title="04 바로 적용" loading="lazy"></iframe><a class="open" href="assets/vide-next/04-apply.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="2"><div class="live"><iframe data-src="assets/vide-next/02-records-db.html" title="02 기록 DB" loading="lazy"></iframe><a class="open" href="assets/vide-next/02-records-db.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="3"><div class="live"><iframe data-src="assets/vide-next/03-spec.html" title="03 조건·결정·작업" loading="lazy"></iframe><a class="open" href="assets/vide-next/03-spec.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="4"><div class="live"><iframe data-src="assets/vide-next/04-apply.html" title="04 변경 비교" loading="lazy"></iframe><a class="open" href="assets/vide-next/04-apply.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
       <figure class="shot" data-s="5"><div class="live"><iframe data-src="assets/vide-next/05-review-structure.html" title="05 구조 검토안" loading="lazy"></iframe><a class="open" href="assets/vide-next/05-review-structure.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="6"><div class="live"><iframe data-src="assets/vide-next/06-db-3d.html" title="06 실 데이터 × 모델" loading="lazy"></iframe><a class="open" href="assets/vide-next/06-db-3d.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="7"><div class="live"><iframe data-src="assets/vide-next/07-history.html" title="07 기록" loading="lazy"></iframe><a class="open" href="assets/vide-next/07-history.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="8"><div class="live"><iframe data-src="assets/vide-next/08-report.html" title="08 보고" loading="lazy"></iframe><a class="open" href="assets/vide-next/08-report.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <p class="cap">화면 안 글자가 작으면 [새 창 ↗]으로 연다. 그림 위 ‹ ›와 ← → 키로 넘긴다.</p>
+      <figure class="shot" data-s="6"><div class="live"><iframe data-src="assets/vide-next/06-parts-model.html" title="06 부위별 기록 × 모델" loading="lazy"></iframe><a class="open" href="assets/vide-next/06-parts-model.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="7"><div class="live"><iframe data-src="assets/vide-next/07-records-graph.html" title="07 기록 그래프" loading="lazy"></iframe><a class="open" href="assets/vide-next/07-records-graph.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="8"><div class="live"><iframe data-src="assets/vide-next/08-report.html" title="08 검토본 비교·보고" loading="lazy"></iframe><a class="open" href="assets/vide-next/08-report.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <p class="cap">레일 왼쪽 아래: 피드백 · 밝게/어둡게 · 설정 · 계정(현행 제품 순서).</p>
     </div>
     <div class="steps-col">
       <div class="ctl"><button type="button" class="prev">‹ 이전</button><span class="pos"></span><button type="button" class="next">다음 ›</button></div>
       <div class="dots"></div>
       <div class="step" data-s="1" data-id="S1" data-choices="좋음,수정">
-        <small>01</small><h3>시작 — 두 길</h3>
-        <p><b>사용자</b> 프로젝트를 고르거나, 새 프로젝트를 「바로 하기」 또는 「설계 세우기」로 연다.</p>
-        <p><b>화면</b> 두 길 카드와 최근 프로젝트. 셸은 이미 완성형(레일 · 탐색기 · 가운데 · 에이전트).</p>
-        <span class="ref">Kiro의 Vibe / Spec · ADR-045</span>
+        <small>01</small><h3>시작 — 선택 창</h3>
+        <p><b>사용자</b> 폴더를 연다.</p>
+        <p><b>화면</b> Kiro처럼 묻는다: 바로 시작 / 설계 세우기.</p>
       </div>
       <div class="step" data-s="2" data-id="S2" data-choices="좋음,수정">
-        <small>02</small><h3>자료 읽기 → 사실 DB</h3>
-        <p><b>사용자</b> "폴더랑 메일 읽어서 조건 정리해 줘".</p>
-        <p><b>화면</b> 가운데에 사실 표(문장 · 출처 칩 · 확정/미확정/오염). 에이전트는 모순 하나를 묻는다. 확정된 사실만 다음 턴부터 AI에 들어간다.</p>
-        <span class="ref">자료 작업공간(SCR-19) · steering에 해당</span>
+        <small>02</small><h3>기록 DB</h3>
+        <p><b>사용자</b> 회의록·메일·주간/월간 업무·협의 리스트를 넣는다.</p>
+        <p><b>화면</b> 번호·날짜·부위·글리프·문장 한 줄. 왼쪽에서 종류·출처·기간을 거른다.</p>
       </div>
       <div class="step" data-s="3" data-id="S3" data-choices="좋음,수정">
         <small>03</small><h3>조건 · 결정 · 작업</h3>
-        <p><b>사용자</b> 결정 문서를 본다. 회의록이 새로 들어와 조건 2개가 바뀌었다.</p>
-        <p><b>화면</b> 결정 카드마다 근거 칩과 영향 작업. 바뀐 조건은 경고 줄. 작업 탭은 체크리스트이고 [열기]가 작업 화면으로 간다.</p>
-        <span class="ref">requirements · design · tasks의 건축판 · hooks</span>
+        <p><b>사용자</b> 결정 D-04의 근거를 묻는다.</p>
+        <p><b>화면</b> 표 하나, 탭 셋. 근거는 기록 번호.</p>
       </div>
       <div class="step" data-s="4" data-id="S4" data-choices="좋음,수정">
-        <small>04</small><h3>속도 ① 바로 적용</h3>
-        <p><b>사용자</b> Rhino에서 기둥을 고르고 "이 기둥 600 동쪽으로". 선택은 입력창 안 칩으로만 보인다.</p>
-        <p><b>화면</b> 결과는 한 줄(모델 1 · 객체 1 변경 · 검토 · 되돌리기). 가운데에는 전/후 비교가 열린다. 도면 반영은 물어본다.</p>
-        <span class="gate">뷰포트 위 '1개 선택 · 요청 고정' 띠는 없다.</span>
-        <span class="ref">직접 적용 결정(2026-09-30) · SPEC-02.13</span>
+        <small>04</small><h3>바로 적용 → 변경 비교</h3>
+        <p><b>사용자</b> 기둥을 고르고 "600 동쪽으로".</p>
+        <p><b>화면</b> 결과 한 줄 + 되돌리기. 가운데에 전/후.</p>
       </div>
       <div class="step" data-s="5" data-id="S5" data-choices="좋음,수정">
-        <small>05</small><h3>속도 ② 검토 후 반영 — 구조 검토안</h3>
-        <p><b>사용자</b> "기둥 배치 구조 검토해 줘".</p>
-        <p><b>화면</b> 가운데에 평면 겹침 + 스팬 표. 12 m 초과 1곳과 제안 기둥. [반영]을 눌러야 Rhino에 들어가고 결정에 기록된다.</p>
-        <span class="ref">도구(jig) = 저장해 둔 아티팩트 · S-06</span>
+        <small>05</small><h3>검토 후 반영 — 구조 검토안</h3>
+        <p><b>사용자</b> "기둥 배치 구조 검토".</p>
+        <p><b>화면</b> 평면과 경간 표. [모델에 반영]을 눌러야 들어간다.</p>
       </div>
       <div class="step" data-s="6" data-id="S6" data-choices="좋음,수정">
-        <small>06</small><h3>DB × 3D 연동</h3>
-        <p><b>사용자</b> "실별 면적이랑 모델 맞는지 보여 줘". 표 행을 누르면 모델의 실이 켜진다.</p>
-        <p><b>화면</b> 표와 등각 모델이 한 아티팩트. 불일치 2곳. 표 기준/모델 기준 중 고르면 호스트에 반영된다.</p>
-        <span class="gate">성수동 사례의 DB 보기를 모델과 묶은 것.</span>
-        <span class="ref">자료 → 호스트 행동 API</span>
+        <small>06</small><h3>부위별 기록 × 모델</h3>
+        <p><b>사용자</b> 날짜를 끌거나 부위를 누른다.</p>
+        <p><b>화면</b> 위 모델, 아래 타임라인. 커서 하나가 둘을 움직인다.</p>
       </div>
       <div class="step" data-s="7" data-id="S7" data-choices="좋음,수정">
         <small>07</small><h3>기록 그래프</h3>
         <p><b>사용자</b> 레일의 「기록」을 연다.</p>
-        <p><b>화면</b> 결정 ● 실행 ○ 검토본 ◆ 이 한 줄기, 대안은 가지. 노드를 누르면 그 시점의 모델·문서를 본다.</p>
-        <span class="ref">Source Control 자리 · 기록 타임라인(F27)</span>
+        <p><b>화면</b> 부위에 대고 본 기록과 관계, 스레드 4. 아티팩트 그대로.</p>
       </div>
       <div class="step" data-s="8" data-id="S8" data-choices="좋음,수정">
         <small>08</small><h3>검토본 비교 · 보고</h3>
-        <p><b>사용자</b> "10/12 검토본이랑 비교해서 중간 보고 만들어 줘".</p>
-        <p><b>화면</b> A/B 두 장과 바뀐 점, 보고서 미리보기, 외부 의견 2건 → 수정 작업. 폴더에 쓰는 일은 '확인 필요' 카드 한 곳에서만 묻는다.</p>
-        <span class="ref">보고서 등급(SCR-40) · 확인은 한곳(Kiro Focus Mode)</span>
+        <p><b>사용자</b> "검토본 3이랑 비교해서 보고".</p>
+        <p><b>화면</b> 두 장과 바뀐 점, 외부 의견. 폴더에 쓸지는 대화에서 한 번 묻는다.</p>
       </div>
     </div>
   </div>
   <div class="thumbs" aria-label="단계 바로 가기"></div>
 </section>
 
+<section id="c">
+  <div class="section-head">
+    <div><div class="eyebrow">02 / CHANGES</div><h2>2026-10-20 피드백 8개를 이렇게 반영했다.</h2></div>
+  </div>
+  <div class="table-wrap" style="max-height:none">
+    <table class="txt chg">
+      <tbody>
+        <tr><td>1 입력창 단순하게</td><td>「계획부터」와 「자동|확인」을 지우고 스위치 하나 「적용 전 확인」.</td></tr>
+        <tr><td>2 단추 자리</td><td>상단바 삭제. 피드백·테마·설정·계정은 현행 제품처럼 레일 왼쪽 아래.</td></tr>
+        <tr><td>3 기록 아티팩트 컨셉</td><td>토큰·조각을 그대로 옮김(흰 바탕·가는 선·탠·글리프·스위치). 07은 그 코드 포팅, 06은 모델+타임라인 구성.</td></tr>
+        <tr><td>4 탐색기 정리</td><td>유지. 자료에 주간·월간 업무·협의 리스트 추가.</td></tr>
+        <tr><td>5 시작 선택 창</td><td>01에 Kiro식 선택 창(바로 시작 / 설계 세우기, 다음부터 묻지 않기).</td></tr>
+        <tr><td>6 worktrees</td><td>59개 모두 main에 들어간 것 확인 뒤 삭제.</td></tr>
+        <tr><td>7 데이터 DB</td><td>02 기록 DB: 올려 주는 업무 보고·협의 리스트가 번호·날짜·부위·글리프·문장으로 쌓인다.</td></tr>
+        <tr><td>8 글자 줄이기</td><td>장마다 제목 + 한 문장 + 표나 그림 하나. 숫자 줄·안내 상자·배지 삭제.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
 <section id="q">
   <div class="section-head">
     <div><div class="eyebrow">03 / QUESTIONS</div><h2>구도와 셸만 정하면 된다.</h2></div>
-    <p>화면 세부는 단계별 좋음·수정으로.</p>
   </div>
   <ul class="qs after">
     <li class="d decide" data-id="Q1">
@@ -172,35 +133,28 @@
       <div class="ans">
         <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 간다</b><small>PRD §1.1 다음 줄에 넣는다</small></button>
         <button type="button" data-v="②" aria-pressed="false"><b>② 고친다</b><small>무엇이 다른지 메모에</small></button>
-        <button type="button" data-v="③" aria-pressed="false"><b>③ 아직</b><small>한 장 더 보고 정한다</small></button>
       </div>
-      <p class="line"><b>이유</b>호스트가 못 보여 주는 것만 가운데에 두니 뷰어·채팅·대시보드가 한 자리로 정리된다.</p>
-      <p class="line"><b>틀리면</b>아티팩트 API(데이터·모델·호스트 행동)를 먼저 만드는 순서가 바뀐다.</p>
     </li>
     <li class="d decide" data-id="Q2">
       <p class="q"><b class="id">Q2</b><b>셸은 무엇으로 만듭니까?</b></p>
       <div class="ans">
-        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 환경 분리 뒤 1주 실험</b><small>호스트 다리를 MCP로 떼고 터미널·VS Code에서 써 본 뒤 정한다</small></button>
+        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 환경 분리 뒤 1주 실험</b><small>호스트 다리를 MCP로 떼고 터미널·VS Code에서 써 본 뒤</small></button>
         <button type="button" data-v="②" aria-pressed="false"><b>② 전용 앱</b><small>이 목업대로 지금 앱을 고친다</small></button>
         <button type="button" data-v="③" aria-pressed="false"><b>③ VS Code 확장</b><small>가운데 아티팩트는 웹뷰 패널</small></button>
       </div>
-      <p class="line"><b>이유</b>엔진은 같으니 셸 선택은 조작감의 문제다. 실제로 써 봐야 갈린다. PLAN-51이 미룬 MCP 기준선과 같은 실험이다.</p>
-      <p class="line"><b>틀리면</b>UI를 한 번 더 갈아엎는다.</p>
     </li>
     <li class="d decide" data-id="Q3">
       <p class="q"><b class="id">Q3</b><b>첫 번째로 진짜 만들 아티팩트는?</b></p>
       <div class="ans">
-        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 실 데이터 × 모델</b><small>데이터·모델·호스트 행동 세 축이 다 드러난다</small></button>
-        <button type="button" data-v="②" aria-pressed="false"><b>② 구조 검토안</b><small>검토 후 반영의 전형</small></button>
-        <button type="button" data-v="③" aria-pressed="false"><b>③ 사실 DB</b><small>자료 흐름의 시작</small></button>
+        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 부위별 기록 × 모델</b><small>데이터·모델·호스트 행동이 다 드러난다</small></button>
+        <button type="button" data-v="②" aria-pressed="false"><b>② 기록 DB</b><small>올리는 자료가 바로 쌓인다</small></button>
+        <button type="button" data-v="③" aria-pressed="false"><b>③ 구조 검토안</b><small>검토 후 반영의 전형</small></button>
       </div>
-      <p class="line"><b>이유</b>①이 아티팩트 API의 세 가지를 한 번에 검증한다.</p>
-      <p class="line"><b>틀리면</b>첫 아티팩트가 API 한 축만 검증해 두 번째에서 다시 설계한다.</p>
     </li>
   </ul>
 </section>
 
-<footer><span>VIDE 목업 · 전체 흐름 — 검토용 보기이며 정본은 PRD·SPEC·Design · 답이 반영되면 이 파일은 지운다</span><span>2026-10-19</span></footer>
+<footer><span>VIDE 목업 · 전체 흐름 — 검토용 보기이며 정본은 PRD·SPEC·Design · 답이 반영되면 이 파일은 지운다</span><span>2026-10-20</span></footer>
 
 <div class="reply">
   <div class="row">
@@ -220,7 +174,6 @@
   var story=document.querySelector('.story'),steps=$$('.step',story),shots=$$('.stick .shot',story),N=steps.length;
   var prev=story.querySelector('.prev'),next=story.querySelector('.next'),pos=story.querySelector('.pos'),dotsBox=story.querySelector('.dots'),thumbs=document.querySelector('.thumbs');
   var dots=[],tbs=[],k=1;
-  /* 살아 있는 화면 크기 맞추기 */
   function fit(){$$('.live').forEach(function(l){var f=l.querySelector('iframe');if(f)f.style.transform='scale('+(l.clientWidth/1440)+')';});}
   addEventListener('resize',fit);
   function load(i){var f=shots[i-1].querySelector('iframe');if(f&&!f.src&&f.dataset.src)f.src=f.dataset.src;}
@@ -243,7 +196,6 @@
     var r=story.getBoundingClientRect();if(r.top>innerHeight||r.bottom<0)return;
     if(ev.key==='ArrowRight'){set(k+1);ev.preventDefault();}if(ev.key==='ArrowLeft'){set(k-1);ev.preventDefault();}
   });
-  /* 단계 피드백 */
   steps.forEach(function(s){
     var fb=el('div','fb');(s.dataset.choices||'좋음,수정').split(',').forEach(function(v){
       var b=el('button','tg',v);b.type='button';b.setAttribute('aria-pressed','false');

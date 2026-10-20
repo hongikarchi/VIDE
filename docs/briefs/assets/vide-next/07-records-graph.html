@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VIDE — 기록 그래프</title>
+<!-- VIDE Next 목업 v4 공통 셸(정본). 각 장은 이 파일을 복사해 (1) <title> (2) explorer의 .sel·'아티팩트' 묶음 (3) .center 안 tabs-bar·.art (4) .agent 안 .flow·.term (5) demo-nav 번호·링크 만 바꾼다. 셸 마크업·클래스·토큰은 고치지 않는다. 색은 app.css 변수만 쓴다. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500&family=IBM+Plex+Mono&display=swap">
+<link rel="stylesheet" href="app.css">
+<style>
+/* 07 기록 그래프: 레퍼런스 v2의 배치 그대로(왼쪽 230px 스레드 레일 · 오른쪽 넓은 차트). 색은 토큰만. */
+.wrap{display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px}
+.thrail{display:flex;flex-direction:column;gap:16px;font-size:12px}
+.thrail .sw4{display:flex}
+.thrail .sw4 i{flex:1}
+.chartbox{min-width:0;overflow-x:auto;border-bottom:1px solid var(--rule)}
+.threads{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px 24px;margin-top:16px}
+.threads div{min-width:0;font-size:12px}
+.threads h4{margin:0 0 3px;font-size:12.5px;font-weight:500;display:flex;gap:8px;align-items:center}
+.threads h4 i{width:12px;height:12px;display:inline-block;flex:none}
+.threads p{margin:0;color:var(--mute);font-variant-numeric:tabular-nums}
+svg.chart .grp,svg.chart .role,svg.chart .ch,svg.chart .mon,svg.chart .ms{fill:var(--mute)} /* app.css svg.chart text(0,1,2)가 보조 글자를 덮는 것 되돌림 */
+.art-body{padding-bottom:36px} /* demo-nav와 겹치지 않게 */
+</style>
+</head>
+<body>
+<!-- 아이콘: <svg class="i"><use href="#i-files"/></svg> (stroke 1.5) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-files" viewBox="0 0 24 24"><path d="M4 6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 8v8M8 6.5c5 0 8 2 8 5.5"/></symbol>
+  <symbol id="i-tools" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><path d="M16.5 13v7M13 16.5h7"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-feedback" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></symbol>
+  <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 10h18M9 10v10M15 10v10"/></symbol>
+  <symbol id="i-graph" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2"/><circle cx="12" cy="8" r="2"/><circle cx="18" cy="14" r="2"/><path d="M7.5 16.5 10.5 9.6M13.6 9.2l3 3.6"/></symbol>
+  <symbol id="i-cube" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12 20 7.5M12 12v9M12 12 4 7.5"/></symbol>
+  <symbol id="i-report" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 15v-3M12 15V9M16 15v-5"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="m3 7 9 6 9-6"/></symbol>
+  <symbol id="i-law" viewBox="0 0 24 24"><path d="M12 3v18M5 7h14M7 7l-3 6a3 3 0 0 0 6 0zM17 7l-3 6a3 3 0 0 0 6 0z"/></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24"><path d="m3 6 6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="m21 11-8.5 8.5a5 5 0 0 1-7-7L14 4a3.3 3.3 0 0 1 4.7 4.7L10 17.4a1.7 1.7 0 0 1-2.4-2.4L15.5 7"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-chevd" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-collapse" viewBox="0 0 24 24"><path d="m13 6 6 6-6 6M5 6l6 6-6 6"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
+  <symbol id="i-struct" viewBox="0 0 24 24"><path d="M4 20h16M6 20V9l6-5 6 5v11M10 20v-6h4v6"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 15V3M8 7l4-4 4 4"/></symbol>
+</svg>
+
+<div class="app">
+  <!-- rail: 위 탐색 / 아래 피드백 · 테마 · 설정 · 계정 (현행 제품과 같은 순서) -->
+  <nav class="rail" aria-label="주 메뉴">
+    <div class="logo">V</div>
+    <a href="02-records-db.html" data-tip="탐색기"><svg class="i"><use href="#i-files"/></svg></a>
+    <a href="#" data-tip="검색"><svg class="i"><use href="#i-search"/></svg></a>
+    <a href="07-records-graph.html" class="on" data-tip="기록"><svg class="i"><use href="#i-history"/></svg></a>
+    <a href="05-review-structure.html" data-tip="도구"><svg class="i"><use href="#i-tools"/></svg></a>
+    <div class="spacer"></div>
+    <button type="button" data-tip="피드백 보내기"><svg class="i"><use href="#i-feedback"/></svg></button>
+    <button type="button" data-theme-toggle data-tip="밝게 / 어둡게"><svg class="i sun"><use href="#i-sun"/></svg><svg class="i moon"><use href="#i-moon"/></svg></button>
+    <button type="button" data-tip="설정"><svg class="i"><use href="#i-settings"/></svg></button>
+    <button type="button" class="avatar" data-tip="계정">U</button>
+  </nav>
+
+  <!-- explorer -->
+  <aside class="explorer" aria-label="탐색기">
+    <div class="proj"><span class="grow">예시 사무소 신축</span><svg class="i xs"><use href="#i-chevd"/></svg><button type="button" class="iconbtn" data-explorer-toggle title="접기"><svg class="i sm"><use href="#i-collapse"/></svg></button></div>
+
+    <div class="grp"><h3>설계</h3>
+      <a class="row" href="03-spec.html"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">조건</span><span class="meta">12</span></a>
+      <a class="row" href="03-spec.html"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">결정</span><span class="meta">6</span></a>
+      <a class="row" href="03-spec.html"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">작업</span><span class="meta">8</span></a>
+    </div>
+    <div class="grp"><h3>자료</h3>
+      <a class="row" href="02-records-db.html"><span class="tw">›</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow">01 운영 … 09 보고</span><span class="meta">9</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">회의록</span><span class="meta">7</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-mail"/></svg><span class="grow">메일</span><span class="meta">41</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-list"/></svg><span class="grow">주간·월간 업무</span><span class="meta">9</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-list"/></svg><span class="grow">협의 리스트</span><span class="meta">1</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-law"/></svg><span class="grow">법규</span><span class="meta">12</span></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-map"/></svg><span class="grow">대지</span><span class="meta">7</span></a>
+    </div>
+    <div class="grp"><h3>연결 문서</h3>
+      <a class="row" href="04-apply.html"><span class="dot"></span><svg class="i sm"><use href="#i-cube"/></svg><span class="grow">예시 모델.3dm</span><span class="meta">Rhino</span></a>
+      <a class="row" href="04-apply.html"><span class="dot off"></span><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">1층 평면.dwg</span><span class="meta">CAD</span></a>
+    </div>
+    <div class="grp"><h3>아티팩트</h3>
+      <a class="row" href="02-records-db.html"><svg class="i sm"><use href="#i-table"/></svg><span class="grow">기록 180</span></a>
+      <a class="row" href="06-parts-model.html"><svg class="i sm"><use href="#i-cube"/></svg><span class="grow">부위별 기록 × 모델</span></a>
+      <a class="row sel" href="07-records-graph.html"><svg class="i sm"><use href="#i-graph"/></svg><span class="grow">기록 그래프</span></a>
+    </div>
+    <div class="grp"><h3>도구</h3>
+      <a class="row" href="05-review-structure.html"><svg class="i sm"><use href="#i-struct"/></svg><span class="grow">구조 검토</span></a>
+      <a class="row" href="#"><svg class="i sm"><use href="#i-law"/></svg><span class="grow">법규 체크</span></a>
+      <a class="row" href="#"><svg class="i sm"><use href="#i-map"/></svg><span class="grow">규모검토</span></a>
+      <a class="row" href="06-parts-model.html"><svg class="i sm"><use href="#i-table"/></svg><span class="grow">수량·면적표</span></a>
+    </div>
+  </aside>
+
+  <!-- center: 아티팩트 창 -->
+  <main class="center">
+    <div class="tabs-bar">
+      <a class="tab on" href="07-records-graph.html">기록 그래프<span class="x">×</span></a>
+      <a class="tab" href="02-records-db.html">기록 180</a>
+    </div>
+    <section class="art" aria-label="아티팩트">
+      <header class="art-head">
+        <h1>기록 그래프</h1>
+        <p>2024.1 – 2026.12 · 부위에 대고 본 기록 82 · 관계 67 · 스레드 4</p>
+      </header>
+      <div class="art-body">
+        <div class="wrap">
+          <aside class="thrail" id="rail"></aside>
+          <div style="min-width:0">
+            <div class="chartbox" id="chartbox"><div id="chart"></div></div>
+            <div class="legend" id="legend"></div>
+            <div class="threads" id="threads"></div>
+            <p class="note" id="note"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+    <div class="tip" id="tip" hidden></div>
+  </main>
+
+  <!-- agent -->
+  <aside class="agent" aria-label="에이전트">
+    <div class="head">
+      <b>대화</b>
+      <div class="grow"></div>
+      <div class="bar"><button type="button" data-agent-view="term" aria-pressed="false">터미널</button></div>
+      <button type="button" class="iconbtn" title="새 대화"><svg class="i sm"><use href="#i-plus"/></svg></button>
+      <button type="button" class="iconbtn" data-agent-toggle title="접기"><svg class="i sm"><use href="#i-collapse"/></svg></button>
+    </div>
+
+    <div class="flow">
+      <div class="msg user">
+        <div class="who">나</div>
+        <div class="body">
+          <div class="ctx eps"><span>기록 그래프</span></div>
+          <p>가새는 왜 바뀌었어?</p>
+        </div>
+      </div>
+      <div class="msg ai">
+        <div class="who">VIDE</div>
+        <div class="body">
+          <p>X형 가새가 D-04(핀 플레이트 접합)로 바뀐 줄기 1.</p>
+          <div class="bar"><button type="button" id="only-rp" aria-pressed="false">그 줄기만</button></div>
+          <time>오후 4:12</time>
+        </div>
+      </div>
+    </div>
+
+    <div class="term"><span class="p">❯</span> vide records graph --part 가새
+<span class="d">read  records   82 · relations 67</span>
+<span class="d">trace thread    대체 · 11 records</span>
+show  graph     기록 그래프
+<span class="p">❯</span> <span class="cur"></span></div>
+
+    <div class="composer">
+      <div class="ctx eps"><span>기록 그래프<span class="x">×</span></span></div>
+      <textarea placeholder="무엇을 할까요? 선택·스케치·자료를 끌어다 놓거나 @로 부른다"></textarea>
+      <div class="foot">
+        <button type="button" class="iconbtn" title="첨부"><svg class="i sm"><use href="#i-clip"/></svg></button>
+        <button type="button" class="model">Claude<svg class="i xs"><use href="#i-chevd"/></svg></button>
+        <div class="grow"></div>
+        <label class="sw2"><input type="checkbox"> 적용 전 확인</label>
+        <button type="button" class="send" title="보내기"><svg class="i sm"><use href="#i-send"/></svg></button>
+      </div>
+    </div>
+  </aside>
+</div>
+<nav class="demo-nav" aria-label="데모 넘기기"><a class="prev" href="06-parts-model.html" title="이전">‹</a><b>7 / 8</b><a class="next" href="08-report.html" title="다음">›</a></nav>
+<script src="app.js"></script>
+<script>
+/* 07 기록 그래프 — 레퍼런스 v2의 build/draw/apply/wire/buildRail/glyph 그대로, 문자열·데이터만 한국어(합성 데이터). */
+const DATA = {"parts":[{"id":"p1","name":"말뚝","role":"설계 하중 → 위치 옮겨 시공","ch":"B","existing":false,"group":"new"},{"id":"p2","name":"별동 기초","role":"독립 기초 → 매트 기초","ch":"B","existing":false,"group":"new"},{"id":"p3","name":"전면 기둥","role":"8.4 m 간격 → 단면 확정","ch":"Rp","existing":false,"group":"new"},{"id":"p4","name":"가새","role":"X형 → 핀 플레이트","ch":"Rp","existing":false,"group":"new"},{"id":"p5","name":"수평재","role":"1.2 m 간격 → 1.5 m","ch":"Rp C","existing":false,"group":"new"},{"id":"p6","name":"유리","role":"채광 요구 → 하부 조정형","ch":"C","existing":false,"group":"new"},{"id":"p7","name":"증축층","role":"한 층 증축 → 강판 보강 뒤","ch":"Ri","existing":false,"group":"new"},{"id":"p8","name":"코어","role":"동측 배치 → 타설","ch":"—","existing":false,"group":"new"},{"id":"p9","name":"마감","role":"벽돌 살림 → 견본 시공","ch":"—","existing":false,"group":"new"},{"id":"e1","name":"지반","role":"조사 요청 → 차수 공법","ch":"B","existing":true,"group":"existing"},{"id":"e2","name":"기초","role":"도면 1.8 m → 실제 1.2 m","ch":"B Ri","existing":true,"group":"existing"},{"id":"e3","name":"지하벽","role":"그대로 사용 → 균열 보수","ch":"—","existing":true,"group":"existing"},{"id":"e4","name":"기둥(기존)","role":"살림 → 강판 보강","ch":"Ri","existing":true,"group":"existing"},{"id":"e5","name":"슬래브","role":"유지 → 끝단 보강","ch":"Ri C","existing":true,"group":"existing"},{"id":"e6","name":"옥상","role":"방수 → 철거","ch":"Ri","existing":true,"group":"existing"}],"seen":{"e1":"2025-03-20","e2":"2025-04-10","e3":"2025-05-02","e4":"2025-04-22","e5":"2025-07-08"},"events":[{"id":"r01","date":"2024-01-22","part":"e1","type":"R","label":"지반 조사 요청"},{"id":"r02","date":"2024-02-14","part":"p1","type":"R","label":"인접 건물 침하 없게"},{"id":"r03","date":"2024-02-26","part":"e2","type":"E","label":"도면상 기초 깊이 1.8 m"},{"id":"r04","date":"2024-03-05","part":"e4","type":"R","label":"기존 기둥 살림"},{"id":"r05","date":"2024-03-20","part":"p3","type":"I","label":"기둥 8.4 m 간격"},{"id":"r06","date":"2024-03-28","part":"p7","type":"R","label":"4층 한 층 증축"},{"id":"r07","date":"2024-04-03","part":"p1","type":"I","label":"말뚝 24본 계획"},{"id":"r08","date":"2024-04-22","part":"p6","type":"R","label":"북측 채광 확보"},{"id":"r09","date":"2024-04-30","part":"e5","type":"I","label":"기존 슬래브 유지"},{"id":"r10","date":"2024-05-10","part":"p2","type":"I","label":"별동 독립 기초"},{"id":"r11","date":"2024-05-28","part":"e3","type":"I","label":"지하벽 그대로 사용"},{"id":"r12","date":"2024-06-03","part":"p8","type":"I","label":"코어 동측 배치"},{"id":"r13","date":"2024-06-11","part":"p3","type":"R","label":"1층 개방감 유지"},{"id":"r14","date":"2024-07-08","part":"p4","type":"I","label":"X형 가새 계획"},{"id":"r15","date":"2024-07-25","part":"e4","type":"E","label":"구조 도면 없음"},{"id":"r16","date":"2024-08-02","part":"p7","type":"I","label":"경량 철골 증축"},{"id":"r17","date":"2024-08-20","part":"p5","type":"I","label":"수평재 1.2 m 간격"},{"id":"r18","date":"2024-08-28","part":"e6","type":"R","label":"옥상 방수 다시"},{"id":"r19","date":"2024-09-12","part":"e1","type":"E","label":"지하수위 높음"},{"id":"r20","date":"2024-09-18","part":"p1","type":"E","label":"지반조사: 암반 깊음"},{"id":"r21","date":"2024-10-02","part":"p3","type":"E","label":"풍하중 검토 초과"},{"id":"r22","date":"2024-10-15","part":"p4","type":"E","label":"가새가 유리면 가림"},{"id":"r23","date":"2024-11-12","part":"p8","type":"D","label":"코어 위치 확정"},{"id":"r24","date":"2024-12-05","part":"p6","type":"I","label":"저철분 복층유리"},{"id":"r25","date":"2024-12-18","part":"p3","type":"E","label":"철골 단가 상승"},{"id":"r26","date":"2025-01-15","part":"p3","type":"D","label":"기둥 단면 확정","ep":"단면 결정"},{"id":"r27","date":"2025-01-20","part":"p4","type":"R","label":"가새 줄여 달라"},{"id":"r28","date":"2025-02-12","part":"p4","type":"I","label":"핀 플레이트 접합","ep":"핀 플레이트"},{"id":"r29","date":"2025-02-20","part":"p9","type":"R","label":"기존 벽돌 살림"},{"id":"r30","date":"2025-03-12","part":"e6","type":"I","label":"증축층 바닥으로 사용"},{"id":"r31","date":"2025-03-20","part":"e1","type":"K","label":"터파기 지반 확인","ep":"터파기"},{"id":"r32","date":"2025-03-26","part":"p1","type":"K","label":"시험 말뚝 확인"},{"id":"r33","date":"2025-04-01","part":"p4","type":"E","label":"제작사 견적 비교"},{"id":"r34","date":"2025-04-04","part":"e1","type":"D","label":"차수 공법 추가"},{"id":"r35","date":"2025-04-10","part":"e2","type":"K","label":"기초 열어 봄"},{"id":"r36","date":"2025-04-18","part":"e2","type":"E","label":"실제 깊이 1.2 m","ep":"도면과 다름"},{"id":"r37","date":"2025-04-22","part":"e4","type":"K","label":"피복 벗겨 봄","ep":"기둥 열어 봄"},{"id":"r38","date":"2025-05-02","part":"e3","type":"K","label":"지하벽 균열 확인"},{"id":"r39","date":"2025-05-08","part":"p7","type":"E","label":"기존 기둥 내력 부족","ep":"내력 부족"},{"id":"r40","date":"2025-05-14","part":"p4","type":"D","label":"D-04 핀 플레이트 확정","ep":"D-04 결정"},{"id":"r41","date":"2025-05-16","part":"e4","type":"E","label":"철근 부식 일부"},{"id":"r42","date":"2025-05-20","part":"p5","type":"R","label":"가새와 높이 맞춤"},{"id":"r43","date":"2025-05-22","part":"e3","type":"E","label":"균열 폭 0.4 mm"},{"id":"r44","date":"2025-06-03","part":"p5","type":"D","label":"수평재 1.5 m"},{"id":"r45","date":"2025-06-20","part":"p1","type":"D","label":"말뚝 위치 서쪽으로","ep":"말뚝 옮김"},{"id":"r46","date":"2025-06-25","part":"p2","type":"R","label":"경계에서 1.5 m 띄움"},{"id":"r47","date":"2025-06-30","part":"e2","type":"D","label":"기초 확대 보강"},{"id":"r48","date":"2025-07-02","part":"e3","type":"D","label":"주입 보수","ep":"균열 보수"},{"id":"r49","date":"2025-07-08","part":"e5","type":"K","label":"슬래브 하부 확인"},{"id":"r50","date":"2025-07-15","part":"p2","type":"D","label":"매트 기초로 변경","ep":"기초 형식 바꿈"},{"id":"r51","date":"2025-07-24","part":"e4","type":"D","label":"강판 보강 확정"},{"id":"r52","date":"2025-07-29","part":"e5","type":"E","label":"처짐 측정"},{"id":"r53","date":"2025-07-30","part":"p7","type":"D","label":"강판 보강 뒤 증축"},{"id":"r54","date":"2025-08-05","part":"p1","type":"D","label":"말뚝 시공 끝"},{"id":"r55","date":"2025-08-19","part":"p6","type":"E","label":"슬래브 처짐 12 mm","ep":"처짐 발견"},{"id":"r56","date":"2025-08-27","part":"e5","type":"R","label":"유리 하부 여유 20 mm"},{"id":"r57","date":"2025-08-28","part":"e2","type":"K","label":"보강 시공"},{"id":"r58","date":"2025-09-02","part":"p2","type":"K","label":"배근 검측"},{"id":"r59","date":"2025-09-10","part":"p6","type":"D","label":"하부 프레임 조정형"},{"id":"r60","date":"2025-09-20","part":"p3","type":"K","label":"기둥 세움"},{"id":"r61","date":"2025-09-24","part":"e3","type":"K","label":"보수 검측"},{"id":"r62","date":"2025-10-16","part":"e4","type":"K","label":"강판 부착"},{"id":"r63","date":"2025-10-28","part":"p4","type":"K","label":"접합부 시공"},{"id":"r64","date":"2025-11-04","part":"p8","type":"K","label":"코어 타설"},{"id":"r65","date":"2025-11-20","part":"e6","type":"D","label":"옥상 철거 범위","ep":"옥상 철거"},{"id":"r66","date":"2025-12-03","part":"e5","type":"D","label":"슬래브 끝단 보강"},{"id":"r67","date":"2025-12-09","part":"p9","type":"I","label":"벽돌 줄눈 맞춤"},{"id":"r68","date":"2026-01-14","part":"p5","type":"K","label":"수평재 설치"},{"id":"r69","date":"2026-01-27","part":"e4","type":"K","label":"보강 검측"},{"id":"r70","date":"2026-02-10","part":"p3","type":"K","label":"수직도 검측"},{"id":"r71","date":"2026-02-26","part":"p8","type":"K","label":"승강로 검측"},{"id":"r72","date":"2026-03-05","part":"p4","type":"K","label":"볼트 조임 확인"},{"id":"r73","date":"2026-03-24","part":"e5","type":"K","label":"끝단 보강 끝"},{"id":"r74","date":"2026-04-08","part":"p6","type":"K","label":"유리 설치"},{"id":"r75","date":"2026-04-29","part":"e6","type":"K","label":"철거 끝"},{"id":"r76","date":"2026-05-12","part":"p7","type":"K","label":"증축층 골조"},{"id":"r77","date":"2026-06-02","part":"p4","type":"K","label":"도장 확인"},{"id":"r78","date":"2026-06-17","part":"p6","type":"K","label":"누수 시험"},{"id":"r79","date":"2026-07-01","part":"p9","type":"D","label":"외벽 마감 확정","ep":"마감 결정"},{"id":"r80","date":"2026-08-25","part":"p7","type":"K","label":"지붕 마감"},{"id":"r81","date":"2026-09-15","part":"p9","type":"K","label":"견본 시공"},{"id":"r82","date":"2026-10-08","part":"p9","type":"K","label":"줄눈 색 확인"}],"links":[["r01","r02"],["r02","r19"],["r19","r20"],["r20","r31"],["r31","r32"],["r32","r35"],["r35","r45"],["r45","r46"],["r46","r50"],["r14","r22"],["r22","r26"],["r26","r27"],["r27","r28"],["r28","r33"],["r33","r40"],["r40","r42"],["r42","r44"],["r44","r63"],["r63","r72"],["r04","r06"],["r06","r15"],["r15","r16"],["r16","r36"],["r36","r37"],["r37","r39"],["r39","r41"],["r41","r47"],["r47","r51"],["r51","r53"],["r53","r65"],["r65","r66"],["r66","r76"],["r08","r09"],["r09","r24"],["r24","r42"],["r42","r49"],["r49","r52"],["r52","r55"],["r55","r56"],["r56","r59"],["r59","r66"],["r66","r74"],["r02","r07"],["r07","r20"],["r20","r32"],["r32","r45"],["r45","r54"],["r10","r46"],["r50","r58"],["r05","r13"],["r13","r21"],["r21","r25"],["r25","r26"],["r26","r60"],["r60","r70"],["r22","r27"],["r40","r63"],["r72","r77"],["r17","r42"],["r44","r68"],["r08","r24"],["r24","r55"],["r55","r59"],["r59","r74"],["r74","r78"],["r06","r16"],["r16","r39"]],"milestones":[["당선안","2024-03-15"],["도서 납품","2024-11-20"],["착공","2025-03-04"],["인접 필지 계약","2025-06-12"],["도서 재납품","2025-10-01"],["사용승인 예정","2026-11-30"]],"threads":[{"k":"B","rel":"우회","name":"인접 필지 피해 기초 옮기기","ids":["r01","r02","r19","r20","r31","r32","r35","r46","r45","r50"]},{"k":"Rp","rel":"대체","name":"가새를 핀 플레이트로","ids":["r14","r22","r26","r27","r28","r33","r40","r42","r44","r63","r72"]},{"k":"Ri","rel":"보강","name":"기존 기둥 받쳐 증축","ids":["r04","r06","r15","r16","r37","r39","r41","r36","r47","r51","r53","r66","r65","r76"]},{"k":"C","rel":"대비","name":"새 유리와 옛 슬래브 맞추기","ids":["r08","r09","r24","r49","r52","r55","r42","r56","r59","r66","r74"]}]};
+const TYPES={R:'요구',I:'의도',K:'확인',E:'근거',D:'결정'};
+const MON='1 2 3 4 5 6 7 8 9 10 11 12'.split(' ');
+const fdate=s=>{const [y,m,d]=s.split('-');return `${y}.${m}.${d}`;};
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const PART=Object.fromEntries(DATA.parts.map(p=>[p.id,p]));
+const EV=Object.fromEntries(DATA.events.map(e=>[e.id,e]));
+const ORDER=DATA.events.slice().sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+const NUM=Object.fromEntries(ORDER.map((e,i)=>[e.id,i+1]));
+const TH={}; DATA.threads.forEach(t=>t.ids.forEach(i=>{(TH[i] ||= []).push(t.k);}));
+const REL=Object.fromEntries(DATA.threads.map(t=>[t.k,t.rel]));
+const D0=new Date('2024-01-01'),D1=new Date('2026-12-31');
+const state={thread:null, labels:true, numbers:true, links:true, roles:true, milestones:true};
+try{Object.assign(state,JSON.parse(localStorage.getItem('vide-next-07')||'{}'));}catch(e){}
+const save=()=>{try{localStorage.setItem('vide-next-07',JSON.stringify(state));}catch(e){}};
+let hot=null;
+
+function glyph(t,x,y,s){ s=s||1;
+  if(t==='D') return `<circle class="s" cx="${x}" cy="${y}" r="${3.4*s}"/>`;
+  if(t==='R') return `<rect x="${x-3.6*s}" y="${y-3.6*s}" width="${7.2*s}" height="${7.2*s}"/>`;
+  if(t==='I') return `<path d="M${x},${y-4.4*s} L${x+4.2*s},${y+3.2*s} L${x-4.2*s},${y+3.2*s} Z"/>`;
+  if(t==='E') return `<path d="M${x},${y-4.6*s} L${x+4.6*s},${y} L${x},${y+4.6*s} L${x-4.6*s},${y} Z"/>`;
+  return `<circle cx="${x}" cy="${y}" r="${3.6*s}"/><circle cx="${x}" cy="${y}" r="${1.1*s}" style="fill:currentColor;stroke:none"/>`;
+}
+function glyphIcon(t){ return `<svg width="14" height="14" viewBox="0 0 14 14" style="color:var(--fg)"><g class="gl ${t}" style="stroke:currentColor;fill:${t==='D'?'currentColor':'none'}">${glyph(t,7,7,1)}</g></svg>`; }
+
+function buildRail(){
+  const r=document.getElementById('rail');
+  const btn=(k,sw,nm,rl,ct)=>`<button class="th" data-k="${k}" aria-pressed="false">${sw}<span class="nm">${nm}</span><span class="ct">${ct}</span><span class="rl">${rl}</span></button>`;
+  r.innerHTML=`<div class="grp"><h3>스레드</h3>
+    ${btn('','<span class="sw sw4"><i style="background:var(--B)"></i><i style="background:var(--Rp)"></i><i style="background:var(--Ri)"></i><i style="background:var(--C)"></i></span>','전체','관계 넷을 한 번에','')}
+    ${DATA.threads.map(t=>btn(t.k,`<span class="sw" style="background:var(--${t.k})"></span>`,esc(t.name),t.rel,t.ids.length)).join('')}</div>
+  <div class="grp"><h3>표시</h3>
+    <label class="sw2"><input type="checkbox" id="o-labels"> 기록 글자</label>
+    <label class="sw2"><input type="checkbox" id="o-numbers"> 기록 번호</label>
+    <label class="sw2"><input type="checkbox" id="o-links"> 다른 관계</label>
+    <label class="sw2"><input type="checkbox" id="o-roles"> 부위 역할</label>
+    <label class="sw2"><input type="checkbox" id="o-milestones"> 이정표</label></div>`;
+  r.querySelectorAll('.th').forEach(b=>b.onclick=()=>{state.thread=b.dataset.k||null; hot=null; save(); draw(); toThread();});
+  ['labels','numbers','links','roles','milestones'].forEach(k=>{const i=r.querySelector('#o-'+k); i.checked=state[k]; i.onchange=()=>{state[k]=i.checked; save(); draw();};});
+}
+let ctx2;
+function tw(s,px,w){ if(!ctx2) ctx2=document.createElement('canvas').getContext('2d'); ctx2.font=`${w||400} ${px}px "IBM Plex Sans","IBM Plex Sans KR",Pretendard,Helvetica,Arial,sans-serif`; return ctx2.measureText(s).width; }
+
+function build(){
+  const W=2600, LX=state.roles?250:150, X0=LX+20, X1=W-30, FS=9, LANE=11.5, Y0=70;
+  const X=s=>X0+(new Date(s)-D0)/(D1-D0)*(X1-X0);
+  const rows=[]; let g0=null;
+  DATA.parts.forEach(p=>{ if(p.group!==g0){g0=p.group; rows.push({hdr:true,id:'#'+g0,name:g0==='new'?'새 부위':'기존 부위'});} rows.push(p); });
+  const plan={}, used={};
+  const byRow={}; DATA.events.forEach(e=>(byRow[e.part] ||= []).push(e));
+  Object.entries(byRow).forEach(([rid,list])=>{ list.sort((a,b)=>a.date<b.date?-1:1); const lanes={}; let up=0,dn=0, px=-1e9;
+    list.forEach(e=>{ let x=X(e.date); if(x<px+7) x=px+7; px=x; e._x=x;
+      const txt=(state.numbers?NUM[e.id]+'  ':'')+(e.ep||e.short||e.label); const ep=!!e.ep;
+      if(!state.labels){ return; }
+      const w=tw(txt,FS,ep?600:400); let anchor='start', lx=x+6, a=lx, b=lx+w;
+      if(b>X1+10){anchor='end'; lx=x-6; a=lx-w; b=lx;}
+      let best=null;
+      for(let lane=0;lane<14&&!best;lane++) for(const sd of [1,-1]) if(a>(lanes[sd+':'+lane]??-1e9)+8){best=[sd,lane];break;}
+      if(!best) best=[1,13];
+      lanes[best[0]+':'+best[1]]=b; if(best[0]===1) up=Math.max(up,best[1]+1); else dn=Math.max(dn,best[1]+1);
+      plan[e.id]={txt,anchor,lx,sd:best[0],lane:best[1],ep}; });
+    used[rid]={up,dn}; });
+  const Y={}; let yc=Y0;
+  rows.forEach((r,i)=>{ if(r.hdr){ yc+=i?24:6; Y[r.id]=yc; yc+=6; return; }
+    const u=used[r.id]?.up||0, d=used[r.id]?.dn||0;
+    yc+=Math.max(state.roles?18:14, 10+u*LANE); Y[r.id]=yc; yc+=Math.max(state.roles?22:16, 15+d*LANE); });
+  const yb=yc, H=yb+40;
+  const pos=Object.fromEntries(DATA.events.map(e=>[e.id,{x:e._x??X(e.date),y:Y[e.part]}]));
+  const g=[];
+  for(let y=2024;y<=2026;y++) for(let m=1;m<=12;m++){ const d=`${y}-${String(m).padStart(2,'0')}-01`; const x=X(d);
+    g.push(`<line class="mline" x1="${x}" y1="${Y0-20}" x2="${x}" y2="${yb+6}" stroke-width="${m===1?1.2:.6}"/>`);
+    g.push(`<text class="${m===1?'yr':'mon'}" x="${x+3}" y="${yb+20}">${m===1?y:MON[m-1]}</text>`); }
+  if(state.milestones) DATA.milestones.forEach(([lab,d])=>{ const x=X(d);
+    g.push(`<line class="ymark" x1="${x}" y1="${Y0-30}" x2="${x}" y2="${yb+6}" stroke-dasharray="2 2"/><text class="ms" x="${x+3}" y="${Y0-33}">${esc(lab)}</text>`); });
+  rows.forEach(r=>{ const y=Y[r.id];
+    if(r.hdr){ g.push(`<text class="grp" x="0" y="${y}">${esc(r.name.toUpperCase())}</text><line class="grpline" x1="0" y1="${y+4}" x2="${X1}" y2="${y+4}"/>`); return; }
+    g.push(`<text class="part" x="0" y="${y+4}">${esc(r.name)}</text>`);
+    if(state.roles) g.push(`<text class="role" x="0" y="${y+17}">${esc(r.role)}</text>`);
+    g.push(`<text class="ch" x="${LX}" y="${y+4}" text-anchor="end">${esc(r.ch==='—'?'':r.ch.split(' ').map(k=>REL[k]||k).join(' · '))}</text>`);
+    const seen=DATA.seen[r.id];
+    if(r.existing&&seen){ const xs=X(seen); g.push(`<line class="rowline" x1="${X0}" y1="${y}" x2="${xs}" y2="${y}" stroke-dasharray="2 3"/><line class="rowline" x1="${xs}" y1="${y}" x2="${X1}" y2="${y}"/>`); }
+    else g.push(`<line class="rowline" x1="${X0}" y1="${y}" x2="${X1}" y2="${y}"/>`); });
+  if(state.links) DATA.links.forEach(([u,v])=>{ const a=pos[u],b=pos[v]; if(!a||!b) return; const mx=(a.x+b.x)/2;
+    const d=Math.abs(a.y-b.y)<.5?`M${a.x},${a.y} Q${mx},${a.y-Math.min(40,10+Math.abs(b.x-a.x)*.25)} ${b.x},${b.y}`:`M${a.x},${a.y} C${mx},${a.y} ${mx},${b.y} ${b.x},${b.y}`;
+    g.push(`<path class="link" data-u="${u}" data-v="${v}" d="${d}"/>`); });
+  const segs={}; DATA.threads.forEach(t=>{ const ids=t.ids.slice().sort((a,b)=>EV[a].date<EV[b].date?-1:EV[a].date>EV[b].date?1:NUM[a]-NUM[b]); t._ids=ids;
+    for(let i=1;i<ids.length;i++){ const key=ids[i-1]+'|'+ids[i]; (segs[key] ||= []).push(t.k);} });
+  DATA.threads.forEach(t=>{ const ids=t._ids; let d='';
+    for(let i=1;i<ids.length;i++){ const a=pos[ids[i-1]], b=pos[ids[i]]; const sh=segs[ids[i-1]+'|'+ids[i]]; const k=sh.indexOf(t.k), n=sh.length;
+      const dx=b.x-a.x, dy=b.y-a.y, L=Math.hypot(dx,dy)||1; const o=(k-(n-1)/2)*3.2; const ox=-dy/L*o, oy=dx/L*o;
+      const ax=a.x+ox, ay=a.y+oy, bx=b.x+ox, by=b.y+oy;
+      if(Math.abs(a.y-b.y)<.5){ const h=Math.min(46,12+Math.abs(dx)*.22)+ (n>1?k*4:0); d+=`M${ax},${ay} C${ax},${ay-h} ${bx},${by-h} ${bx},${by} `; }
+      else { const mx=(ax+bx)/2; d+=`M${ax},${ay} C${mx},${ay} ${mx},${by} ${bx},${by} `; } }
+    g.push(`<path class="tl" data-t="${t.k}" d="${d}" style="stroke:var(--${t.k})"/>`); });
+  if(state.labels) DATA.events.forEach(e=>{ const p=pos[e.id], L=plan[e.id]; if(!L) return;
+    const ly=L.sd===1? p.y-8-L.lane*LANE : p.y+15+L.lane*LANE;
+    if(L.lane>0) g.push(`<line class="leader" x1="${p.x}" y1="${L.sd===1?p.y-6:p.y+6}" x2="${p.x}" y2="${L.sd===1?ly+2:ly-8}"/>`);
+    const th=TH[e.id]; const nc=th?`style="fill:var(--${th[0]})"`:'';
+    const parts=L.txt.split('  '); const num=state.numbers?parts.shift():'';
+    g.push(`<text class="lbl${L.ep?' ep':''}" data-for="${e.id}" x="${L.lx}" y="${ly}" text-anchor="${L.anchor}">${num?`<tspan class="n" ${nc}>${esc(num)}</tspan>  `:''}${esc(parts.join('  '))}</text>`); });
+  DATA.events.forEach(e=>{ const p=pos[e.id]; const th=TH[e.id]||[]; const c=th.length?`var(--${th[0]})`:'var(--mute)';
+    let ring=''; if(th.length>1) ring=`<circle cx="${p.x}" cy="${p.y}" r="8" fill="none" style="stroke:var(--${th[1]})" stroke-width="1.6"/>`;
+    g.push(`<g class="ev gl ${e.type}${th.length?' on':''}" data-id="${e.id}" tabindex="0" style="stroke:${c};color:${c}">${ring}${glyph(e.type,p.x,p.y,th.length?1.25:1)}<circle cx="${p.x}" cy="${p.y}" r="10" fill="transparent" stroke="none"/></g>`); });
+  return `<svg class="chart" viewBox="-16 0 ${W+16} ${H}" width="${W+16}" height="${H}" role="img" aria-label="부위에 대고 본 기록과 스레드 넷">${g.join('')}</svg>`;
+}
+function draw(){
+  document.getElementById('chart').innerHTML=build();
+  document.querySelectorAll('#chart .gl.D .s').forEach(s=>s.style.fill='currentColor');
+  document.querySelectorAll('.th').forEach(b=>b.setAttribute('aria-pressed', String((b.dataset.k||null)===state.thread)));
+  const only=document.getElementById('only-rp'); if(only) only.setAttribute('aria-pressed', String(state.thread==='Rp'));
+  document.getElementById('legend').innerHTML=['R','I','K','E','D'].map(t=>`<span>${glyphIcon(t)}${TYPES[t]}</span>`).join('')+
+    `<span><svg width="22" height="10"><path d="M1 8 C 8 8, 13 2, 21 2" stroke="var(--link)" stroke-width="1.2" fill="none"/></svg>다른 기록을 불러온 관계</span>`+
+    `<span><svg width="22" height="10"><path d="M1 5 H9" stroke="var(--fg)" stroke-dasharray="2 2"/><path d="M9 5 H21" stroke="var(--fg)"/></svg>기존 부위: 열어 보기 전까지 점선</span>`+
+    `<span><svg width="18" height="18"><circle cx="9" cy="9" r="3.4" fill="var(--B)"/><circle cx="9" cy="9" r="7" fill="none" stroke="var(--C)" stroke-width="1.6"/></svg>두 스레드에 걸친 기록</span>`;
+  document.getElementById('threads').innerHTML=DATA.threads.map(t=>`<div><h4><i style="background:var(--${t.k})"></i>${t.rel} <span style="font-weight:400">${esc(t.name)}</span></h4><p>${t._ids.map(i=>NUM[i]).join(' → ')}</p><p>${fdate(EV[t._ids[0]].date)} – ${fdate(EV[t._ids[t._ids.length-1]].date)} · 부위 ${new Set(t._ids.map(i=>EV[i].part)).size}</p></div>`).join('');
+  document.getElementById('note').textContent=`기록 ${DATA.events.length} · 관계 ${DATA.links.length}. 스레드는 기록을 날짜 순으로 잇는다.`;
+  wire(); apply();
+}
+const up={},down={}; DATA.links.forEach(([u,v])=>{(down[u] ||= []).push(v);(up[v] ||= []).push(u);});
+const reach=(id,m)=>{const s=new Set([id]);const q=[id];while(q.length){const x=q.pop();(m[x]||[]).forEach(y=>{if(!s.has(y)){s.add(y);q.push(y);}});}return s;};
+function apply(){
+  const svg=document.querySelector('#chart svg'); if(!svg) return;
+  let keep=null;
+  if(hot) keep=new Set([...reach(hot,up),...reach(hot,down)]);
+  else if(state.thread) keep=new Set(DATA.threads.find(t=>t.k===state.thread).ids);
+  svg.querySelectorAll('.ev').forEach(e=>e.classList.toggle('dim',!!keep&&!keep.has(e.dataset.id)));
+  svg.querySelectorAll('.lbl').forEach(l=>l.classList.toggle('dim',!!keep&&!keep.has(l.dataset.for)));
+  svg.querySelectorAll('.link').forEach(l=>{const on=!!keep&&keep.has(l.dataset.u)&&keep.has(l.dataset.v); l.classList.toggle('off',!!keep&&!on); l.classList.toggle('hot',!!hot&&on);});
+  svg.querySelectorAll('.tl').forEach(p=>p.classList.toggle('off',(!!state.thread&&p.dataset.t!==state.thread)||!!hot));
+}
+function wire(){
+  const svg=document.querySelector('#chart svg'), tip=document.getElementById('tip');
+  svg.querySelectorAll('.ev').forEach(el=>{ const e=EV[el.dataset.id];
+    el.onmousemove=ev=>{ const th=(TH[e.id]||[]).map(k=>DATA.threads.find(t=>t.k===k).name).join(', ');
+      tip.innerHTML=`<b>${NUM[e.id]}</b> · ${fdate(e.date)} · ${esc(PART[e.part].name)}<br>${TYPES[e.type]}<br>${e.ep&&e.label.split(' ')[0]!==e.ep.split(' ')[0]?`<b>${esc(e.ep)}</b><br>`:''}${esc(e.label)}${th?`<br><span style="opacity:.75">스레드: ${esc(th)}</span>`:''}`;
+      tip.hidden=false; const r=tip.getBoundingClientRect(); tip.style.left=Math.min(ev.clientX+14,innerWidth-r.width-8)+'px'; tip.style.top=Math.min(ev.clientY+14,innerHeight-r.height-8)+'px'; };
+    el.onmouseleave=()=>{tip.hidden=true;};
+    el.onclick=()=>{hot=hot===e.id?null:e.id; apply();};
+    el.onkeydown=ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();el.onclick();}}; });
+}
+/* 차트 가로 위치: 처음엔 왼쪽 끝(부위 이름이 보이게), 스레드를 고르면 그 첫 기록으로, 전체로 돌아오면 왼쪽 끝 */
+const chartbox=document.getElementById('chartbox');
+const scrollToX=x=>{chartbox.scrollLeft=Math.max(0,x);};
+const evX=id=>{const el=document.querySelector('#chart .ev[data-id="'+id+'"]'); return el?el.getBBox().x+16:0;};
+function toThread(){ if(!state.thread){ scrollToX(0); return; } const t=DATA.threads.find(t=>t.k===state.thread); scrollToX(evX(t._ids[0])-40); }
+buildRail(); draw();
+scrollToX(0);
+document.fonts&&document.fonts.ready.then(()=>draw());
+/* 에이전트 [그 줄기만] → 대체 스레드만 */
+document.getElementById('only-rp').onclick=()=>{ state.thread=state.thread==='Rp'?null:'Rp'; hot=null; save(); draw(); toThread(); };
+</script>
+</body>
+</html>

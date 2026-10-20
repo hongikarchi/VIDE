@@ -1,47 +1,61 @@
-/* VIDE Next 목업 공통 동작 — 테마 토글, 알약 탭, 에이전트 대화/터미널 전환, 패널 접기, 스위치. 제품 코드 아님. */
+/* VIDE Next 목업 공통 동작 v4 — 테마(밝음 기본), 탭, 대화/터미널, 접기, 선택 창, 데모 넘기기. 제품 코드 아님. */
 (function () {
   function $$(q, r) { return [].slice.call((r || document).querySelectorAll(q)); }
   var root = document.documentElement, key = 'vide-next-theme';
-  /* 테마: 기본 어두움, light 저장 */
-  try { if (localStorage.getItem(key) === 'light') root.setAttribute('data-theme', 'light'); } catch (e) {}
+  /* 테마: 기본 밝음, dark 저장 (레일 왼쪽 아래 단추) */
+  try { if (localStorage.getItem(key) === 'dark') root.setAttribute('data-theme', 'dark'); } catch (e) {}
   $$('[data-theme-toggle]').forEach(function (b) {
     b.addEventListener('click', function () {
-      var light = root.getAttribute('data-theme') === 'light';
-      if (light) root.removeAttribute('data-theme'); else root.setAttribute('data-theme', 'light');
-      try { if (light) localStorage.removeItem(key); else localStorage.setItem(key, 'light'); } catch (e) {}
+      var dark = root.getAttribute('data-theme') === 'dark';
+      if (dark) root.removeAttribute('data-theme'); else root.setAttribute('data-theme', 'dark');
+      try { if (dark) localStorage.removeItem(key); else localStorage.setItem(key, 'dark'); } catch (e) {}
     });
   });
-  /* 탭: .tabs 안 [data-tab=id] → 같은 [data-tabscope] 안의 .tabpane#id */
-  $$('.tabs').forEach(function (tabs) {
-    $$('[data-tab]', tabs).forEach(function (b) {
-      b.addEventListener('click', function (ev) {
-        ev.preventDefault();
-        $$('[data-tab]', tabs).forEach(function (x) { x.classList.toggle('on', x === b); });
-        var scope = tabs.closest('[data-tabscope]') || document;
-        $$('.tabpane', scope).forEach(function (p) { p.classList.toggle('on', p.id === b.dataset.tab); });
-      });
+  /* 탭: [data-tab=id] 단추 → 같은 [data-tabscope] 안의 .tabpane#id. aria-pressed로 표시 */
+  $$('[data-tab]').forEach(function (b) {
+    b.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      var scope = b.closest('[data-tabscope]') || document;
+      $$('[data-tab]', scope).forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); x.classList.toggle('on', x === b); });
+      $$('.tabpane', scope).forEach(function (p) { p.classList.toggle('on', p.id === b.dataset.tab); });
     });
   });
-  /* 에이전트: 대화 | 터미널 */
+  /* 에이전트: 터미널 단추(aria-pressed) */
   $$('[data-agent-view]').forEach(function (b) {
     b.addEventListener('click', function () {
       var agent = b.closest('.agent');
-      agent.classList.toggle('term-on', b.dataset.agentView === 'term');
-      $$('[data-agent-view]', agent).forEach(function (x) { x.classList.toggle('on', x === b); });
+      var on = b.getAttribute('aria-pressed') !== 'true';
+      agent.classList.toggle('term-on', on);
+      b.setAttribute('aria-pressed', String(on));
     });
   });
-  $$('[data-agent-toggle]').forEach(function (b) { b.addEventListener('click', function () { document.querySelector('.app').classList.toggle('agent-closed'); }); });
-  $$('[data-explorer-toggle]').forEach(function (b) { b.addEventListener('click', function () { document.querySelector('.app').classList.toggle('explorer-closed'); }); });
-  /* 스위치·세그먼트: 보이기만 */
-  $$('.toggle').forEach(function (t) { t.addEventListener('click', function () { t.classList.toggle('on'); }); });
-  $$('.seg').forEach(function (g) {
-    $$('button', g).forEach(function (b) {
-      if (b.hasAttribute('data-agent-view')) return;
-      b.addEventListener('click', function () { $$('button', g).forEach(function (x) { x.classList.toggle('on', x === b); }); });
+  var app = document.querySelector('.app');
+  $$('[data-agent-toggle]').forEach(function (b) { b.addEventListener('click', function () { app.classList.toggle('agent-closed'); }); });
+  $$('[data-explorer-toggle]').forEach(function (b) { b.addEventListener('click', function () { app.classList.toggle('explorer-closed'); }); });
+  /* 접힌 패널 다시 열기: 레일의 탐색기 아이콘 / 오른쪽 위 작은 단추 */
+  var railFiles = document.querySelector('.rail a[data-tip="탐색기"]');
+  if (railFiles) railFiles.addEventListener('click', function (e) { if (app.classList.contains('explorer-closed')) { e.preventDefault(); app.classList.remove('explorer-closed'); } });
+  if (app && !document.querySelector('.reopen')) {
+    var ro = document.createElement('button'); ro.type = 'button'; ro.className = 'iconbtn reopen'; ro.title = '대화 열기'; ro.setAttribute('data-agent-toggle', '');
+    ro.innerHTML = '<svg class="i sm"><use href="#i-collapse"/></svg>';
+    ro.addEventListener('click', function () { app.classList.remove('agent-closed'); });
+    app.parentNode.insertBefore(ro, app.nextSibling);
+  }
+  /* 눌림 표시만 하는 단추: [data-press] (라디오처럼 같은 data-group 안에서 하나만) */
+  $$('[data-press]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var g = b.dataset.group;
+      if (g) { $$('[data-group="' + g + '"]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); }
+      else b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true'));
     });
   });
-  /* 데모 넘기기: ← → 키 */
+  /* 선택 창 닫기 */
+  $$('[data-dialog-close]').forEach(function (b) { b.addEventListener('click', function () { var s = b.closest('.scrim'); if (s) s.remove(); }); });
+  var dlgFirst = document.querySelector('.scrim .dialog [aria-pressed="true"]');
+  if (dlgFirst) dlgFirst.focus();
+  /* 데모 넘기기: ← → 키 (열린 선택 창은 Esc로 먼저 닫는다) */
   document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { var c = document.querySelector('.scrim [data-dialog-close]'); if (c) { c.click(); return; } }
     if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
     var a = e.key === 'ArrowRight' ? document.querySelector('.demo-nav a.next') : e.key === 'ArrowLeft' ? document.querySelector('.demo-nav a.prev') : null;
     if (a && !a.classList.contains('off')) location.href = a.getAttribute('href');
