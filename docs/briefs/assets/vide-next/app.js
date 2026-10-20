@@ -20,6 +20,9 @@
       $$('.tabpane', scope).forEach(function (p) { p.classList.toggle('on', p.id === b.dataset.tab); });
     });
   });
+  /* 해시로 탭 열기: #dec 등이 [data-tab] 값과 같으면 그 단추를 누른다 */
+  var h = location.hash.slice(1);
+  if (h) { var hb = $$('[data-tab]').filter(function (x) { return x.dataset.tab === h; })[0]; if (hb) hb.click(); }
   /* 에이전트: 터미널 단추(aria-pressed) */
   $$('[data-agent-view]').forEach(function (b) {
     b.addEventListener('click', function () {

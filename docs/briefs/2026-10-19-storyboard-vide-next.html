@@ -4,8 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VIDE Next 목업</title>
-<!-- 스토리보드 브리프(docs/briefs/README.md). 2026-10-19 "실제 기능이 붙기 전에 목업 프론트를 보고 싶다" → 2026-10-20 2판: 사용자의 기록 아티팩트 컨셉으로 다시 만듦.
-     화면 8장은 assets/vide-next/*.html 에 살아 있는 HTML(눌러 볼 수 있음)이고 여기서는 단계마다 그 화면을 그대로 끼운다. 기능은 없다. 정본은 PRD·SPEC·Design이며 이 문서는 검토용이다. -->
+<!-- 스토리보드 브리프(docs/briefs/README.md). 2026-10-20 3판: 2차 메모 1~5(글자 줄임·탐색기 묶음). 화면 8장은 assets/vide-next/*.html 살아 있는 HTML. 정본은 PRD·SPEC·Design. -->
 <link rel="stylesheet" href="_base.css">
 <style>
 .live{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;border:1px solid var(--line);background:#fff}
@@ -18,30 +17,36 @@
 .chg td:first-child{color:var(--muted);width:34%}
 .qs.after{margin-top:8px;border-top:1px solid var(--ink)}
 .reply #out{max-height:44px}
-@media print{.live iframe{display:none}.live:after{content:"살아 있는 화면은 인쇄되지 않습니다 — 아래 작은 그림을 보세요";position:absolute;inset:0;display:grid;place-items:center;color:#777}}
+.map{display:block;width:100%;max-width:720px;height:auto}
+.map rect{fill:none;stroke:var(--ink);stroke-width:1}
+.map .tool{stroke-dasharray:3 3}
+.map path{fill:none;stroke:var(--ink);stroke-width:1}
+.map .dash{stroke-dasharray:3 3}
+.map text{font-family:var(--font);font-size:11px;fill:var(--ink)}
+.map .h{font-weight:600}
+.map .r{fill:var(--muted)}
+@media print{.live iframe{display:none}.live:after{content:"인쇄 불가 · 아래 작은 그림";position:absolute;inset:0;display:grid;place-items:center;color:#777}}
 </style>
 </head>
 <body>
 <header>
   <a class="brand" href="#top"><b>VIDE</b><span>목업 · 전체 흐름</span></a>
-  <nav><a href="#s">01 화면 8장</a><a href="#c">02 바뀐 점</a><a href="#q">03 질문</a></nav>
+  <nav><a href="#s">01 화면</a><a href="#e">탐색기</a><a href="#c">02 바뀐 점</a><a href="#q">03 질문</a></nav>
   <button type="button" class="noprint" onclick="window.print()">인쇄 / PDF ↗</button>
 </header>
 <main id="top">
 
 <div class="intro">
   <div>
-    <div class="eyebrow">2026-10-20 2판 / 검토 대기 / 목업 · 기능 없음 / 근거 <a href="../../human/docs/PRD.html">PRD</a> §1.1·§4.5</div>
-    <h1>가운데는 아티팩트, 오른쪽은 에이전트.<br>생김새는 기록 아티팩트 그대로.</h1>
-    <p>화면 8장을 순서대로 넘기며 보고, 장마다 좋음·수정만 누른다.</p>
+    <div class="eyebrow">2026-10-20 3판 / 검토 대기 / 목업 · 기능 없음 / 근거 <a href="../../human/docs/PRD.html">PRD</a> §1.1·§4.5</div>
+    <h1>글자는 낱말, 탐색기는 일의 순서.</h1>
   </div>
-  <div class="study-mark">화면은 살아 있는 HTML<br>답은 바닥의 [피드백 복사]</div>
+  <div class="study-mark">살아 있는 HTML<br>답 = [피드백 복사]</div>
 </div>
 
 <section id="s">
   <div class="section-head">
-    <div><div class="eyebrow">01 / SCREENS</div><h2>화면 8장, 한 프로젝트의 하루.</h2></div>
-    <p>‹ › 또는 ← → 로 넘긴다. 글자가 작으면 [새 창 ↗].</p>
+    <div><div class="eyebrow">01 / SCREENS</div><h2>화면 8장.</h2></div>
   </div>
   <div class="story">
     <div class="stick">
@@ -53,71 +58,63 @@
       <figure class="shot" data-s="6"><div class="live"><iframe data-src="assets/vide-next/06-parts-model.html" title="06 부위별 기록 × 모델" loading="lazy"></iframe><a class="open" href="assets/vide-next/06-parts-model.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
       <figure class="shot" data-s="7"><div class="live"><iframe data-src="assets/vide-next/07-records-graph.html" title="07 기록 그래프" loading="lazy"></iframe><a class="open" href="assets/vide-next/07-records-graph.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
       <figure class="shot" data-s="8"><div class="live"><iframe data-src="assets/vide-next/08-report.html" title="08 검토본 비교·보고" loading="lazy"></iframe><a class="open" href="assets/vide-next/08-report.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <p class="cap">레일 왼쪽 아래: 피드백 · 밝게/어둡게 · 설정 · 계정(현행 제품 순서).</p>
     </div>
     <div class="steps-col">
       <div class="ctl"><button type="button" class="prev">‹ 이전</button><span class="pos"></span><button type="button" class="next">다음 ›</button></div>
       <div class="dots"></div>
-      <div class="step" data-s="1" data-id="S1" data-choices="좋음,수정">
-        <small>01</small><h3>시작 — 선택 창</h3>
-        <p><b>사용자</b> 폴더를 연다.</p>
-        <p><b>화면</b> Kiro처럼 묻는다: 바로 시작 / 설계 세우기.</p>
-      </div>
-      <div class="step" data-s="2" data-id="S2" data-choices="좋음,수정">
-        <small>02</small><h3>기록 DB</h3>
-        <p><b>사용자</b> 회의록·메일·주간/월간 업무·협의 리스트를 넣는다.</p>
-        <p><b>화면</b> 번호·날짜·부위·글리프·문장 한 줄. 왼쪽에서 종류·출처·기간을 거른다.</p>
-      </div>
-      <div class="step" data-s="3" data-id="S3" data-choices="좋음,수정">
-        <small>03</small><h3>조건 · 결정 · 작업</h3>
-        <p><b>사용자</b> 결정 D-04의 근거를 묻는다.</p>
-        <p><b>화면</b> 표 하나, 탭 셋. 근거는 기록 번호.</p>
-      </div>
-      <div class="step" data-s="4" data-id="S4" data-choices="좋음,수정">
-        <small>04</small><h3>바로 적용 → 변경 비교</h3>
-        <p><b>사용자</b> 기둥을 고르고 "600 동쪽으로".</p>
-        <p><b>화면</b> 결과 한 줄 + 되돌리기. 가운데에 전/후.</p>
-      </div>
-      <div class="step" data-s="5" data-id="S5" data-choices="좋음,수정">
-        <small>05</small><h3>검토 후 반영 — 구조 검토안</h3>
-        <p><b>사용자</b> "기둥 배치 구조 검토".</p>
-        <p><b>화면</b> 평면과 경간 표. [모델에 반영]을 눌러야 들어간다.</p>
-      </div>
-      <div class="step" data-s="6" data-id="S6" data-choices="좋음,수정">
-        <small>06</small><h3>부위별 기록 × 모델</h3>
-        <p><b>사용자</b> 날짜를 끌거나 부위를 누른다.</p>
-        <p><b>화면</b> 위 모델, 아래 타임라인. 커서 하나가 둘을 움직인다.</p>
-      </div>
-      <div class="step" data-s="7" data-id="S7" data-choices="좋음,수정">
-        <small>07</small><h3>기록 그래프</h3>
-        <p><b>사용자</b> 레일의 「기록」을 연다.</p>
-        <p><b>화면</b> 부위에 대고 본 기록과 관계, 스레드 4. 아티팩트 그대로.</p>
-      </div>
-      <div class="step" data-s="8" data-id="S8" data-choices="좋음,수정">
-        <small>08</small><h3>검토본 비교 · 보고</h3>
-        <p><b>사용자</b> "검토본 3이랑 비교해서 보고".</p>
-        <p><b>화면</b> 두 장과 바뀐 점, 외부 의견. 폴더에 쓸지는 대화에서 한 번 묻는다.</p>
-      </div>
+      <div class="step" data-s="1" data-id="S1" data-choices="좋음,수정"><small>01</small><h3>시작 선택 창</h3></div>
+      <div class="step" data-s="2" data-id="S2" data-choices="좋음,수정"><small>02</small><h3>기록 표</h3></div>
+      <div class="step" data-s="3" data-id="S3" data-choices="좋음,수정"><small>03</small><h3>조건·결정·작업</h3></div>
+      <div class="step" data-s="4" data-id="S4" data-choices="좋음,수정"><small>04</small><h3>변경 비교</h3></div>
+      <div class="step" data-s="5" data-id="S5" data-choices="좋음,수정"><small>05</small><h3>구조 검토안</h3></div>
+      <div class="step" data-s="6" data-id="S6" data-choices="좋음,수정"><small>06</small><h3>부위 × 모델</h3></div>
+      <div class="step" data-s="7" data-id="S7" data-choices="좋음,수정"><small>07</small><h3>기록 그래프</h3></div>
+      <div class="step" data-s="8" data-id="S8" data-choices="좋음,수정"><small>08</small><h3>검토본 비교</h3></div>
     </div>
   </div>
   <div class="thumbs" aria-label="단계 바로 가기"></div>
 </section>
 
+<section id="e">
+  <div class="section-head">
+    <div><div class="eyebrow">EXPLORER</div><h2>탐색기 묶음.</h2></div>
+  </div>
+  <svg class="map" viewBox="0 0 720 158" role="img" aria-label="탐색기 묶음: 자료, 기록, 설계, 보고, 설계 아래 도구">
+    <defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1L7 4L1 7"/></marker></defs>
+    <rect x=".5" y=".5" width="164" height="118"/>
+    <text class="h" x="10" y="17">자료</text>
+    <text class="r" x="10" y="35">01 운영 … 09 보고</text><text class="r" x="10" y="48">회의록</text><text class="r" x="10" y="61">메일</text><text class="r" x="10" y="74">주간·월간 업무</text><text class="r" x="10" y="87">협의 리스트</text><text class="r" x="10" y="100">법규</text><text class="r" x="10" y="113">대지</text>
+    <path d="M165 13H183" marker-end="url(#ar)"/>
+    <rect x="185.5" y=".5" width="164" height="105"/>
+    <text class="h" x="195" y="17">기록</text>
+    <text class="r" x="195" y="35">전체</text><text class="r" x="195" y="48">조건</text><text class="r" x="195" y="61">결정</text><text class="r" x="195" y="74">작업</text><text class="r" x="195" y="87">그래프</text><text class="r" x="195" y="100">부위 × 모델</text>
+    <path d="M350 13H368" marker-end="url(#ar)"/>
+    <rect x="370.5" y=".5" width="164" height="81"/>
+    <text class="h" x="380" y="17">설계</text>
+    <text class="r" x="380" y="35">예시 모델.3dm</text><text class="r" x="380" y="48">1층 평면.dwg</text><text class="r" x="380" y="61">변경 비교</text><text class="r" x="380" y="74">구조 검토안</text>
+    <path d="M535 13H553" marker-end="url(#ar)"/>
+    <rect x="555.5" y=".5" width="164" height="53"/>
+    <text class="h" x="565" y="17">보고</text>
+    <text class="r" x="565" y="35">검토본 3 → 4</text><text class="r" x="565" y="48">보고서</text>
+    <path class="dash" d="M452.5 82V102"/>
+    <rect class="tool" x="370.5" y="102.5" width="164" height="55"/>
+    <text class="h" x="380" y="119">도구</text>
+    <text class="r" x="380" y="136">구조 검토</text><text class="r" x="456" y="136">법규 체크</text><text class="r" x="380" y="150">규모검토</text><text class="r" x="456" y="150">수량·면적표</text>
+  </svg>
+</section>
+
 <section id="c">
   <div class="section-head">
-    <div><div class="eyebrow">02 / CHANGES</div><h2>2026-10-20 피드백 8개를 이렇게 반영했다.</h2></div>
+    <div><div class="eyebrow">02 / CHANGES</div><h2>2차 메모 5개.</h2></div>
   </div>
   <div class="table-wrap" style="max-height:none">
     <table class="txt chg">
       <tbody>
-        <tr><td>1 입력창 단순하게</td><td>「계획부터」와 「자동|확인」을 지우고 스위치 하나 「적용 전 확인」.</td></tr>
-        <tr><td>2 단추 자리</td><td>상단바 삭제. 피드백·테마·설정·계정은 현행 제품처럼 레일 왼쪽 아래.</td></tr>
-        <tr><td>3 기록 아티팩트 컨셉</td><td>토큰·조각을 그대로 옮김(흰 바탕·가는 선·탠·글리프·스위치). 07은 그 코드 포팅, 06은 모델+타임라인 구성.</td></tr>
-        <tr><td>4 탐색기 정리</td><td>유지. 자료에 주간·월간 업무·협의 리스트 추가.</td></tr>
-        <tr><td>5 시작 선택 창</td><td>01에 Kiro식 선택 창(바로 시작 / 설계 세우기, 다음부터 묻지 않기).</td></tr>
-        <tr><td>6 worktrees</td><td>59개 모두 main에 들어간 것 확인 뒤 삭제.</td></tr>
-        <tr><td>7 데이터 DB</td><td>02 기록 DB: 올려 주는 업무 보고·협의 리스트가 번호·날짜·부위·글리프·문장으로 쌓인다.</td></tr>
-        <tr><td>8 글자 줄이기</td><td>장마다 제목 + 한 문장 + 표나 그림 하나. 숫자 줄·안내 상자·배지 삭제.</td></tr>
+        <tr><td>1 설명 문장</td><td>낱말·숫자·아이콘</td></tr>
+        <tr><td>2 기록 DB·모델</td><td>기록 묶음으로</td></tr>
+        <tr><td>3 변경 비교</td><td>설계 묶음으로</td></tr>
+        <tr><td>4 조건·결정·작업</td><td>설계 = 3dm·dwg</td></tr>
+        <tr><td>5 이름 옆 아이콘</td><td>모든 행·탭·선택지</td></tr>
       </tbody>
     </table>
   </div>
@@ -125,36 +122,36 @@
 
 <section id="q">
   <div class="section-head">
-    <div><div class="eyebrow">03 / QUESTIONS</div><h2>구도와 셸만 정하면 된다.</h2></div>
+    <div><div class="eyebrow">03 / QUESTIONS</div><h2>3판 · 셸 · DB 엔진.</h2></div>
   </div>
   <ul class="qs after">
     <li class="d decide" data-id="Q1">
-      <p class="q"><b class="id">Q1</b><b>가운데 = 아티팩트 창, 두 속도(바로 적용 / 검토 후 반영). 이 구도로 갑니까?</b></p>
+      <p class="q"><b class="id">Q1</b><b>3판으로 갑니까?</b></p>
       <div class="ans">
-        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 간다</b><small>PRD §1.1 다음 줄에 넣는다</small></button>
-        <button type="button" data-v="②" aria-pressed="false"><b>② 고친다</b><small>무엇이 다른지 메모에</small></button>
+        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 간다</b><small>3판 그대로</small></button>
+        <button type="button" data-v="②" aria-pressed="false"><b>② 고친다</b><small>메모에</small></button>
       </div>
     </li>
     <li class="d decide" data-id="Q2">
-      <p class="q"><b class="id">Q2</b><b>셸은 무엇으로 만듭니까?</b></p>
+      <p class="q"><b class="id">Q2</b><b>셸은 무엇으로?</b></p>
       <div class="ans">
-        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 환경 분리 뒤 1주 실험</b><small>호스트 다리를 MCP로 떼고 터미널·VS Code에서 써 본 뒤</small></button>
-        <button type="button" data-v="②" aria-pressed="false"><b>② 전용 앱</b><small>이 목업대로 지금 앱을 고친다</small></button>
-        <button type="button" data-v="③" aria-pressed="false"><b>③ VS Code 확장</b><small>가운데 아티팩트는 웹뷰 패널</small></button>
+        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 환경 분리 뒤 1주 실험</b><small>MCP 다리 · 터미널·VS Code</small></button>
+        <button type="button" data-v="②" aria-pressed="false"><b>② 전용 앱</b><small>이 목업대로</small></button>
+        <button type="button" data-v="③" aria-pressed="false"><b>③ VS Code 확장</b><small>가운데 = 웹뷰 패널</small></button>
       </div>
     </li>
     <li class="d decide" data-id="Q3">
-      <p class="q"><b class="id">Q3</b><b>첫 번째로 진짜 만들 아티팩트는?</b></p>
+      <p class="q"><b class="id">Q3</b><b>DB 엔진은?</b> <a href="../research/RESEARCH-19-db-engine.md">근거 RESEARCH-19</a></p>
       <div class="ans">
-        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 부위별 기록 × 모델</b><small>데이터·모델·호스트 행동이 다 드러난다</small></button>
-        <button type="button" data-v="②" aria-pressed="false"><b>② 기록 DB</b><small>올리는 자료가 바로 쌓인다</small></button>
-        <button type="button" data-v="③" aria-pressed="false"><b>③ 구조 검토안</b><small>검토 후 반영의 전형</small></button>
+        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① SQLite 유지</b><small>+ 벡터·그래프 보강</small></button>
+        <button type="button" data-v="②" aria-pressed="false"><b>② PostgreSQL 전환</b><small>로컬 · 내장 · 서버</small></button>
+        <button type="button" data-v="③" aria-pressed="false"><b>③ 혼합</b><small>로컬 SQLite · 서버 PostgreSQL</small></button>
       </div>
     </li>
   </ul>
 </section>
 
-<footer><span>VIDE 목업 · 전체 흐름 — 검토용 보기이며 정본은 PRD·SPEC·Design · 답이 반영되면 이 파일은 지운다</span><span>2026-10-20</span></footer>
+<footer><span>VIDE 목업 · 검토용 · 정본 PRD·SPEC·Design</span><span>2026-10-20</span></footer>
 
 <div class="reply">
   <div class="row">
@@ -162,12 +159,12 @@
     <input type="text" id="memo" placeholder="전체 메모(선택)">
     <span id="msg"></span>
   </div>
-  <pre id="out">Q1~Q3을 고르고 단계마다 좋음·수정을 누르면 여기에 피드백이 만들어집니다.</pre>
+  <pre id="out">Q1~Q3 · S1~S8 선택</pre>
 </div>
 </main>
 <script>
 (function(){
-  var EMPTY='Q1~Q3을 고르고 단계마다 좋음·수정을 누르면 여기에 피드백이 만들어집니다.';
+  var EMPTY='Q1~Q3 · S1~S8 선택';
   function $$(q,r){return [].slice.call((r||document).querySelectorAll(q));}
   function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text)e.textContent=text;return e;}
   function pad(v){return String(v).padStart(2,'0');}
@@ -219,8 +216,8 @@
   document.getElementById('memo').addEventListener('input',render);
   document.getElementById('copy').addEventListener('click',function(){
     var t=render(),m=document.getElementById('msg');
-    if(!t){m.textContent='먼저 질문이나 단계의 단추를 누르세요.';return;}
-    (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){m.textContent='복사됨. 채팅에 붙여 넣으세요.';},function(){m.textContent='아래 문장을 직접 복사하세요.';});
+    if(!t){m.textContent='단추 먼저';return;}
+    (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){m.textContent='복사됨';},function(){m.textContent='직접 복사';});
   });
   set(1);
 })();

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VIDE — 시작</title>
-<!-- VIDE Next 목업 v4 공통 셸(정본). 각 장은 이 파일을 복사해 (1) <title> (2) explorer의 .sel·'아티팩트' 묶음 (3) .center 안 tabs-bar·.art (4) .agent 안 .flow·.term (5) demo-nav 번호·링크 만 바꾼다. 셸 마크업·클래스·토큰은 고치지 않는다. 색은 app.css 변수만 쓴다. -->
+<!-- VIDE Next 목업 v5 공통 셸(정본). 각 장은 이 파일을 복사해 (1) <title> (2) explorer(묶음 자료·기록·설계·보고·도구)의 .sel 위치 (3) .center 안 tabs-bar·.art (4) .agent 안 .flow·.term (5) demo-nav 번호·링크 만 바꾼다. 셸 마크업·클래스·토큰은 고치지 않는다. 색은 app.css 변수만 쓴다. -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500&family=IBM+Plex+Mono&display=swap">
 <link rel="stylesheet" href="app.css">
 </head>
@@ -37,6 +37,7 @@
   <symbol id="i-collapse" viewBox="0 0 24 24"><path d="m13 6 6 6-6 6M5 6l6 6-6 6"/></symbol>
   <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
   <symbol id="i-struct" viewBox="0 0 24 24"><path d="M4 20h16M6 20V9l6-5 6 5v11M10 20v-6h4v6"/></symbol>
+  <symbol id="i-compare" viewBox="0 0 24 24"><rect x="3" y="5" width="8" height="14" rx="1"/><rect x="13" y="5" width="8" height="14" rx="1"/></symbol>
   <symbol id="i-share" viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 15V3M8 7l4-4 4 4"/></symbol>
 </svg>
 
@@ -70,7 +71,7 @@
   <main class="center">
     <div class="tabs-bar"></div>
     <section class="art" aria-label="아티팩트">
-      <div class="art-body"><div class="art-empty">프로젝트를 열면 여기에 아티팩트가 열린다</div></div>
+      <div class="art-body"><div class="art-empty"><svg class="i"><use href="#i-files"/></svg></div></div>
     </section>
   </main>
 
@@ -88,7 +89,10 @@
       <div class="msg ai">
         <div class="who">VIDE</div>
         <div class="body">
-          <p>폴더를 읽었다. 시작 방식을 고르면 이어간다.</p>
+          <ul class="steps">
+            <li class="done"><span class="st"></span>폴더 9</li>
+            <li class="done"><span class="st"></span>파일 412</li>
+          </ul>
           <time>오후 2:03</time>
         </div>
       </div>
@@ -100,7 +104,7 @@
 <span class="p">❯</span> <span class="cur"></span></div>
 
     <div class="composer">
-      <textarea placeholder="무엇을 할까요? 선택·스케치·자료를 끌어다 놓거나 @로 부른다"></textarea>
+      <textarea placeholder="선택 · 스케치 · @자료"></textarea>
       <div class="foot">
         <button type="button" class="iconbtn" title="첨부"><svg class="i sm"><use href="#i-clip"/></svg></button>
         <button type="button" class="model">Claude<svg class="i xs"><use href="#i-chevd"/></svg></button>
@@ -113,7 +117,7 @@
 </div>
 <div class="scrim">
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-t">
-    <h1 id="dlg-t">이 폴더로 어떻게 시작할까요?</h1>
+    <h1 id="dlg-t">시작 방식</h1>
     <p>예시 사무소 신축 · 폴더 9 · 파일 412</p>
     <div class="opts" role="radiogroup" aria-label="시작 방식">
       <button type="button" class="opt" data-press data-group="start" aria-pressed="true">
@@ -129,8 +133,8 @@
           <polygon class="m-face lit" points="110,45 118,42 118,12 110,15"/>
           <polygon class="m-face lit" points="110,9 118,12 110,15 102,12"/>
         </svg>
+        <span class="w"><span>문서</span><span>대화</span><span>반영</span></span>
         <span class="t">바로 시작</span>
-        <span class="s">연결 문서를 열고 대화로 바로 고친다.</span>
       </button>
       <button type="button" class="opt" data-press data-group="start" aria-pressed="false">
         <svg viewBox="0 0 220 64" aria-hidden="true">
@@ -145,7 +149,6 @@
           <text x="185" y="50" text-anchor="middle">작업</text>
         </svg>
         <span class="t">설계 세우기</span>
-        <span class="s">자료를 읽어 조건·결정·작업을 먼저 정리한다.</span>
       </button>
     </div>
     <div class="foot">

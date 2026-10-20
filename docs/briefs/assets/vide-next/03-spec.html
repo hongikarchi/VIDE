@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VIDE — 결정</title>
-<!-- VIDE Next 목업 v4 공통 셸(정본). 각 장은 이 파일을 복사해 (1) <title> (2) explorer의 .sel·'아티팩트' 묶음 (3) .center 안 tabs-bar·.art (4) .agent 안 .flow·.term (5) demo-nav 번호·링크 만 바꾼다. 셸 마크업·클래스·토큰은 고치지 않는다. 색은 app.css 변수만 쓴다. -->
+<!-- VIDE Next 목업 v5 공통 셸(정본). 각 장은 이 파일을 복사해 (1) <title> (2) explorer(묶음 자료·기록·설계·보고·도구)의 .sel 위치 (3) .center 안 tabs-bar·.art (4) .agent 안 .flow·.term (5) demo-nav 번호·링크 만 바꾼다. 셸 마크업·클래스·토큰은 고치지 않는다. 색은 app.css 변수만 쓴다. -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500&family=IBM+Plex+Mono&display=swap">
 <link rel="stylesheet" href="app.css">
 <style>
@@ -31,6 +31,7 @@ table.tbl col.c-go{width:48px}
   <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></symbol>
   <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 10h18M9 10v10M15 10v10"/></symbol>
   <symbol id="i-graph" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2"/><circle cx="12" cy="8" r="2"/><circle cx="18" cy="14" r="2"/><path d="M7.5 16.5 10.5 9.6M13.6 9.2l3 3.6"/></symbol>
+  <symbol id="i-compare" viewBox="0 0 24 24"><rect x="3" y="5" width="8" height="14" rx="1"/><rect x="13" y="5" width="8" height="14" rx="1"/></symbol>
   <symbol id="i-cube" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12 20 7.5M12 12v9M12 12 4 7.5"/></symbol>
   <symbol id="i-report" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 15v-3M12 15V9M16 15v-5"/></symbol>
   <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
@@ -68,11 +69,6 @@ table.tbl col.c-go{width:48px}
   <aside class="explorer" aria-label="탐색기">
     <div class="proj"><span class="grow">예시 사무소 신축</span><svg class="i xs"><use href="#i-chevd"/></svg><button type="button" class="iconbtn" data-explorer-toggle title="접기"><svg class="i sm"><use href="#i-collapse"/></svg></button></div>
 
-    <div class="grp"><h3>설계</h3>
-      <a class="row" href="#pane-c" data-pane="pane-c"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">조건</span><span class="meta">12</span></a>
-      <a class="row sel" href="#pane-d" data-pane="pane-d"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">결정</span><span class="meta">6</span></a>
-      <a class="row" href="#pane-t" data-pane="pane-t"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">작업</span><span class="meta">8</span></a>
-    </div>
     <div class="grp"><h3>자료</h3>
       <a class="row" href="02-records-db.html"><span class="tw">›</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow">01 운영 … 09 보고</span><span class="meta">9</span></a>
       <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">회의록</span><span class="meta">7</span></a>
@@ -82,12 +78,23 @@ table.tbl col.c-go{width:48px}
       <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-law"/></svg><span class="grow">법규</span><span class="meta">12</span></a>
       <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-map"/></svg><span class="grow">대지</span><span class="meta">7</span></a>
     </div>
-    <div class="grp"><h3>연결 문서</h3>
+    <div class="grp"><h3>기록</h3>
+      <a class="row" href="02-records-db.html"><svg class="i sm"><use href="#i-table"/></svg><span class="grow">전체</span><span class="meta">180</span></a>
+      <a class="row" href="03-spec.html#cond" data-pane="cond"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">조건</span><span class="meta">12</span></a>
+      <a class="row sel" href="03-spec.html#dec" data-pane="dec"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">결정</span><span class="meta">6</span></a>
+      <a class="row" href="03-spec.html#task" data-pane="task"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">작업</span><span class="meta">8</span></a>
+      <a class="row" href="07-records-graph.html"><svg class="i sm"><use href="#i-graph"/></svg><span class="grow">그래프</span></a>
+      <a class="row" href="06-parts-model.html"><svg class="i sm"><use href="#i-cube"/></svg><span class="grow">부위 × 모델</span></a>
+    </div>
+    <div class="grp"><h3>설계</h3>
       <a class="row" href="04-apply.html"><span class="dot"></span><svg class="i sm"><use href="#i-cube"/></svg><span class="grow">예시 모델.3dm</span><span class="meta">Rhino</span></a>
       <a class="row" href="04-apply.html"><span class="dot off"></span><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">1층 평면.dwg</span><span class="meta">CAD</span></a>
+      <a class="row" href="04-apply.html"><svg class="i sm"><use href="#i-compare"/></svg><span class="grow">변경 비교</span></a>
+      <a class="row" href="05-review-structure.html"><svg class="i sm"><use href="#i-struct"/></svg><span class="grow">구조 검토안</span></a>
     </div>
-    <div class="grp"><h3>아티팩트</h3>
-      <a class="row" href="02-records-db.html"><svg class="i sm"><use href="#i-table"/></svg><span class="grow">기록 DB</span></a>
+    <div class="grp"><h3>보고</h3>
+      <a class="row" href="08-report.html"><svg class="i sm"><use href="#i-report"/></svg><span class="grow">검토본 3 → 4</span></a>
+      <a class="row" href="08-report.html"><svg class="i sm"><use href="#i-report"/></svg><span class="grow">보고서</span><span class="meta">2</span></a>
     </div>
     <div class="grp"><h3>도구</h3>
       <a class="row" href="05-review-structure.html"><svg class="i sm"><use href="#i-struct"/></svg><span class="grow">구조 검토</span></a>
@@ -100,20 +107,20 @@ table.tbl col.c-go{width:48px}
   <!-- center: 아티팩트 창 -->
   <main class="center">
     <div class="tabs-bar">
-      <a class="tab" href="02-records-db.html">기록 DB</a>
-      <a class="tab on" href="#">설계<span class="x">×</span></a>
+      <a class="tab" href="02-records-db.html"><svg class="i sm"><use href="#i-table"/></svg>기록</a>
+      <a class="tab on" href="#"><svg class="i sm"><use href="#i-doc"/></svg>결정<span class="x">×</span></a>
     </div>
     <section class="art" aria-label="아티팩트" data-tabscope>
       <header class="art-head">
-        <h1>설계</h1>
+        <h1>결정</h1>
         <div class="bar">
-          <button type="button" data-tab="pane-c" aria-pressed="false">조건 12</button>
-          <button type="button" data-tab="pane-d" aria-pressed="true" class="on">결정 6</button>
-          <button type="button" data-tab="pane-t" aria-pressed="false">작업 8</button>
+          <button type="button" data-tab="cond" aria-pressed="false">조건 12</button>
+          <button type="button" data-tab="dec" aria-pressed="true" class="on">결정 6</button>
+          <button type="button" data-tab="task" aria-pressed="false">작업 8</button>
         </div>
       </header>
       <div class="art-body">
-        <div class="tabpane" id="pane-c">
+        <div class="tabpane" id="cond">
           <table class="tbl">
             <colgroup><col class="c-no"><col class="c-d"><col><col class="c-src"></colgroup>
             <thead><tr><th>번호</th><th>날짜</th><th>조건</th><th>출처</th></tr></thead>
@@ -133,7 +140,7 @@ table.tbl col.c-go{width:48px}
             </tbody>
           </table>
         </div>
-        <div class="tabpane on" id="pane-d">
+        <div class="tabpane on" id="dec">
           <table class="tbl">
             <colgroup><col class="c-no"><col class="c-d"><col><col class="c-src"><col class="c-st"></colgroup>
             <thead><tr><th>번호</th><th>날짜</th><th>결정</th><th>근거</th><th>상태</th></tr></thead>
@@ -147,7 +154,7 @@ table.tbl col.c-go{width:48px}
             </tbody>
           </table>
         </div>
-        <div class="tabpane" id="pane-t">
+        <div class="tabpane" id="task">
           <table class="tbl">
             <colgroup><col class="c-no"><col><col class="c-src"><col class="c-st"><col class="c-go"></colgroup>
             <thead><tr><th>번호</th><th>작업</th><th>근거</th><th>상태</th><th></th></tr></thead>
@@ -164,9 +171,9 @@ table.tbl col.c-go{width:48px}
           </table>
         </div>
       </div>
-      <div class="art-note" data-note="pane-c" hidden>근거는 기록 DB 번호</div>
-      <div class="art-note" data-note="pane-d">확정 <b>5</b> · 검토 중 <b>1</b></div>
-      <div class="art-note" data-note="pane-t" hidden>끝 <b>3</b> · 진행 <b>2</b> · 대기 <b>3</b></div>
+      <div class="art-note" data-note="cond" hidden>출처 · 기록 번호</div>
+      <div class="art-note" data-note="dec">확정 <b>5</b> · 검토 중 <b>1</b></div>
+      <div class="art-note" data-note="task" hidden>끝 <b>3</b> · 진행 <b>2</b> · 대기 <b>3</b></div>
     </section>
   </main>
 
@@ -191,8 +198,8 @@ table.tbl col.c-go{width:48px}
       <div class="msg ai">
         <div class="who">VIDE</div>
         <div class="body">
-          <p>기록 9 코어를 동쪽 끝으로, 기록 19 횡력은 코어가 받는다.</p>
-          <a class="art-card" href="02-records-db.html"><span class="grow"><span class="t">기록 9 · 19</span> <span class="s">· 기록 DB</span></span><svg class="i sm"><use href="#i-chev"/></svg></a>
+          <a class="art-card" href="02-records-db.html"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow"><span class="t">회의록</span> <span class="s">2025.06.02 · 9</span></span><svg class="i sm"><use href="#i-chev"/></svg></a>
+          <a class="art-card" href="02-records-db.html"><svg class="i sm"><use href="#i-mail"/></svg><span class="grow"><span class="t">메일</span> <span class="s">2026.02.05 · 19</span></span><svg class="i sm"><use href="#i-chev"/></svg></a>
           <time>오후 3:40</time>
         </div>
       </div>
@@ -206,7 +213,7 @@ found records   2
 
     <div class="composer">
       <div class="ctx eps"><span>결정 D-04<span class="x">×</span></span></div>
-      <textarea placeholder="무엇을 할까요? 선택·스케치·자료를 끌어다 놓거나 @로 부른다"></textarea>
+      <textarea placeholder="선택 · 스케치 · @자료"></textarea>
       <div class="foot">
         <button type="button" class="iconbtn" title="첨부"><svg class="i sm"><use href="#i-clip"/></svg></button>
         <button type="button" class="model">Claude<svg class="i xs"><use href="#i-chevd"/></svg></button>
@@ -220,7 +227,7 @@ found records   2
 <nav class="demo-nav" aria-label="데모 넘기기"><a class="prev" href="02-records-db.html" title="이전">‹</a><b>3 / 8</b><a class="next" href="04-apply.html" title="다음">›</a></nav>
 <script src="app.js"></script>
 <script>
-/* 탭 ↔ 주소 #pane-* ↔ 탐색기 행 ↔ 아래 집계 */
+/* 탭 ↔ 주소 #cond·#dec·#task ↔ 탐색기 행 ↔ 아래 집계 */
 (function(){
   function sync(id){
     document.querySelectorAll('.explorer [data-pane]').forEach(function(a){a.classList.toggle('sel',a.dataset.pane===id);});
