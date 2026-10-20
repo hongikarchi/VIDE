@@ -1,4 +1,4 @@
-/* VIDE Next 목업 공통 스타일 v4 — 2026-10-20 (검토용 목업, 제품 코드 아님)
+/* VIDE Next 목업 공통 스타일 v6 — 2026-10-20 (v6: 탐색기 트리 · 한/영 · + 폴더 · 검색/이력 패널 · .party · .flag · .rep) (검토용 목업, 제품 코드 아님)
    레퍼런스: 사용자의 기록 아티팩트 3장(Threads Through the Building · Interconnected Judgements v1·v2).
    그 토큰과 조각을 그대로 쓴다: 흰 바탕 · 따뜻한 회색 선 1px · 모서리 3px · 탠 강조 하나 · 글리프 · 22×12 스위치 ·
    10.5px 대문자 묶음 제목 · 그림자·알약·색 배지 없음. 어두운 테마는 아티팩트의 따뜻한 다크.
@@ -51,7 +51,7 @@ svg.i.xs{width:12px;height:12px}
 .grp h3{font-size:10.5px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:0 0 4px}
 .th{display:grid;grid-template-columns:16px 1fr auto;gap:2px 8px;align-items:start;text-align:left;border:0;background:transparent;color:var(--fg);font:inherit;font-size:12px;padding:5px 6px;border-radius:3px;cursor:pointer}
 .th:hover{background:var(--panel)}
-.th[aria-pressed="true"]{background:var(--panel);box-shadow:inset 2px 0 0 var(--fg)}
+.th[aria-pressed="true"]{background:var(--panel)}
 .th .sw{width:12px;height:12px;margin-top:3px}
 .th .nm{font-weight:500}
 .th .rl{grid-column:2;color:var(--mute);font-size:11px}
@@ -178,10 +178,60 @@ svg .m-axis{font-size:9px;fill:var(--mute)}
 .explorer .row:hover{background:var(--panel)}
 .explorer .row.sel{background:var(--panel)}
 .explorer .row .tw{width:10px;color:var(--mute);font-size:10px;flex:none;text-align:center}
+.explorer .row .tw .dot{display:inline-block;vertical-align:middle}
 .explorer .row .dot{width:7px;height:7px;border-radius:50%;background:var(--fg);flex:none}
 .explorer .row .dot.off{background:transparent;border:1px solid var(--mute)}
 .explorer .row .meta{font-size:11px;color:var(--mute);flex:none;font-variant-numeric:tabular-nums}
 .explorer .row svg.i{color:var(--mute)}
+/* explorer v6: 트리 하나(디스크 폴더 그대로) · 한/영 · + 폴더 */
+.explorer .tree{display:flex;flex-direction:column}
+.explorer .row[hidden]{display:none}
+.explorer .row.top{font-weight:500;margin-top:6px}
+.explorer .row.top:first-child{margin-top:0}
+.explorer .row[data-fold]{cursor:pointer;user-select:none}
+.explorer .row .tw.open{font-size:11px}
+.explorer .row[data-fold]>.tw{cursor:pointer}
+.explorer .row .add{display:grid;visibility:hidden;width:16px;height:16px;place-items:center;border-radius:3px;font-size:11px;line-height:1;color:var(--mute);flex:none;margin-left:-2px}
+.explorer .row:hover .add{visibility:visible}
+.explorer .row .add:hover{background:var(--bg);color:var(--fg)}
+.explorer .row.new{background:var(--panel)}
+.explorer input.newf{flex:1;min-width:0;height:20px;border:1px solid var(--fg);border-radius:3px;background:var(--bg);padding:0 5px;font-size:12px;outline:none}
+.explorer input.newf::placeholder{color:var(--mute)}
+.explorer .proj .lang{height:18px;min-width:22px;padding:0 5px;border:1px solid var(--rule);border-radius:3px;font-size:10.5px;font-weight:500;color:var(--mute);line-height:16px}
+.explorer .proj .lang:hover{color:var(--fg);border-color:var(--fg)}
+
+/* 사이드바 패널(검색 · 이력): .explorer와 같은 자리·폭·여백, 행은 .explorer .row 그대로 */
+.app>.panel{grid-column:2;min-height:0}
+.app.explorer-closed .panel{display:none}
+.panel{border-right:1px solid var(--rule);overflow:auto;padding:10px 10px 20px;font-size:12px;background:var(--bg)}
+.panel .proj{display:flex;align-items:center;gap:6px;padding:4px 6px 12px;font-weight:500;font-size:13px}
+.panel .proj .iconbtn{color:var(--mute)}
+.panel .grp{margin-top:14px}
+.panel .grp h3{padding:0 6px}
+.panel .q{width:100%;height:26px;border:1px solid var(--rule);border-radius:3px;background:var(--bg);padding:0 8px;font-size:12px;outline:none}
+.panel .q:focus{border-color:var(--fg)}
+.panel .eps{padding:8px 0 0}
+.panel .row{display:flex;align-items:center;gap:7px;height:26px;padding:0 6px 0 calc(6px + var(--d,0)*14px);min-width:0;border-radius:3px;color:var(--fg)}
+.panel .row .grow{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.panel .row:hover,.panel .row.sel{background:var(--panel)}
+.panel .row .meta{font-size:11px;color:var(--mute);flex:none;font-variant-numeric:tabular-nums}
+.panel .row svg.i{color:var(--mute)}
+.panel .row .gly{width:12px;flex:none;text-align:center;color:var(--mute);font-size:11px}
+.panel.history .grp{gap:0}
+.panel .hit{font-size:11px;color:var(--mute);padding:0 6px 4px 27px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:-3px}
+
+/* 협의 대장: 주체 네모 7개 · 인허가 행 강조 */
+.party{display:inline-flex;gap:3px;vertical-align:middle}
+.party i{width:11px;height:11px;border:1px solid var(--rule);display:block}
+.party i.on{background:var(--fg);border-color:var(--fg)}
+.flag,.tbl tr.flag td{color:var(--Rp);font-weight:500} /* 밝음: 흰 바탕 대비 약 6:1 */
+[data-theme=dark] .flag,[data-theme=dark] .tbl tr.flag td{color:var(--accent)}
+
+/* 보고(주간·월간) 표 간격 */
+.rep{display:flex;flex-direction:column;gap:22px;max-width:980px}
+.rep .tbl td{padding:8px 14px 8px 0;line-height:1.5}
+.rep .tbl th{padding:7px 14px 7px 0}
+
 .iconbtn{width:26px;height:26px;border-radius:3px;display:grid;place-items:center;color:var(--mute)}
 .iconbtn:hover{background:var(--panel);color:var(--fg)}
 
@@ -266,7 +316,7 @@ svg .m-axis{font-size:9px;fill:var(--mute)}
 .dialog .opt .s{display:block;font-size:12px;color:var(--mute);line-height:1.45}
 .dialog .opt .w{display:flex;justify-content:space-between;font-size:11px;color:var(--mute)}
 .dialog .opt svg{width:100%;height:64px;display:block;margin-bottom:4px}
-.dialog .opt svg text{font-size:9px;fill:var(--mute);font-family:var(--sans)}
+.dialog .opt svg text{font-size:11px;fill:var(--mute);font-family:var(--sans)}
 .dialog .opt svg .flowline{stroke:var(--mute);stroke-width:1;fill:none}
 .dialog .opt svg .node{fill:var(--bg);stroke:var(--mute);stroke-width:1}
 .dialog .opt svg .node.on{fill:var(--mute)}
@@ -283,5 +333,5 @@ svg .m-axis{font-size:9px;fill:var(--mute)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 
 @media(max-width:1280px){:root{--agent:340px;--explorer:210px}.two{grid-template-columns:1fr}}
-@media(max-width:1000px){.app{grid-template-columns:var(--rail) 0 minmax(0,1fr) var(--agent)}.explorer{display:none}}
+@media(max-width:1000px){.app{grid-template-columns:var(--rail) 0 minmax(0,1fr) var(--agent)}.explorer,.panel{display:none}}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VIDE — 구조 검토안</title>
-<!-- VIDE Next 목업 v5 공통 셸(정본). 각 장은 이 파일을 복사해 (1) <title> (2) explorer(묶음 자료·기록·설계·보고·도구)의 .sel 위치 (3) .center 안 tabs-bar·.art (4) .agent 안 .flow·.term (5) demo-nav 번호·링크 만 바꾼다. 셸 마크업·클래스·토큰은 고치지 않는다. 색은 app.css 변수만 쓴다. -->
+<!-- VIDE Next 목업 v6 공통 셸(정본). 각 장은 이 파일을 복사해 (1) <title> (2) rail:start~rail:end 블록(a.on 위치) (3) explorer:start~explorer:end 블록(.row.sel 위치, 또는 aside.panel.search / aside.panel.history로 교체) (4) .center 안 tabs-bar·.art (5) .agent 안 .flow·.term (6) demo-nav 번호·링크 만 바꾼다. 순서 01 02 10 03 04 05 06 07 08 09 (n / 10). 셸 마크업·클래스·토큰은 고치지 않는다. 색은 app.css 변수만 쓴다. -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500&family=IBM+Plex+Mono&display=swap">
 <link rel="stylesheet" href="app.css">
 <style>
@@ -26,7 +26,7 @@
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-files" viewBox="0 0 24 24"><path d="M4 6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
-  <symbol id="i-history" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 8v8M8 6.5c5 0 8 2 8 5.5"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4 4v4h4"/><path d="M12 8v4l3 2"/></symbol>
   <symbol id="i-tools" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><path d="M16.5 13v7M13 16.5h7"/></symbol>
   <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
   <symbol id="i-feedback" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
@@ -55,58 +55,61 @@
 </svg>
 
 <div class="app">
-  <!-- rail: 위 탐색 / 아래 피드백 · 테마 · 설정 · 계정 (현행 제품과 같은 순서) -->
+  <!-- rail:start — 위: 사이드바 보기 3개(탐색기 · 검색 · 이력) / 아래: 피드백 · 테마 · 설정 · 계정. 장마다 바꾸는 것은 a.on 하나 -->
   <nav class="rail" aria-label="주 메뉴">
     <div class="logo">V</div>
-    <a href="02-records-db.html" data-tip="탐색기"><svg class="i"><use href="#i-files"/></svg></a>
-    <a href="#" data-tip="검색"><svg class="i"><use href="#i-search"/></svg></a>
-    <a href="07-records-graph.html" data-tip="기록"><svg class="i"><use href="#i-history"/></svg></a>
-    <a href="05-review-structure.html" class="on" data-tip="도구"><svg class="i"><use href="#i-tools"/></svg></a>
+    <a href="#" class="on" data-tip="탐색기"><svg class="i"><use href="#i-files"/></svg></a>
+    <a href="09-search.html" data-tip="검색"><svg class="i"><use href="#i-search"/></svg></a>
+    <a href="04-apply.html" data-tip="이력"><svg class="i"><use href="#i-history"/></svg></a>
     <div class="spacer"></div>
     <button type="button" data-tip="피드백 보내기"><svg class="i"><use href="#i-feedback"/></svg></button>
     <button type="button" data-theme-toggle data-tip="밝게 / 어둡게"><svg class="i sun"><use href="#i-sun"/></svg><svg class="i moon"><use href="#i-moon"/></svg></button>
     <button type="button" data-tip="설정"><svg class="i"><use href="#i-settings"/></svg></button>
     <button type="button" class="avatar" data-tip="계정">U</button>
   </nav>
+  <!-- rail:end -->
 
-  <!-- explorer -->
+  <!-- explorer:start — 디스크 폴더 그대로(영어 이름 = data-en). 장마다 바꾸는 것은 .row.sel 하나 -->
   <aside class="explorer" aria-label="탐색기">
-    <div class="proj"><span class="grow">예시 사무소 신축</span><svg class="i xs"><use href="#i-chevd"/></svg><button type="button" class="iconbtn" data-explorer-toggle title="접기"><svg class="i sm"><use href="#i-collapse"/></svg></button></div>
+    <div class="proj"><span class="grow">예시 사무소 신축</span><button type="button" class="lang" title="한 / EN">EN</button><button type="button" class="iconbtn" data-explorer-toggle title="접기"><svg class="i sm"><use href="#i-collapse"/></svg></button></div>
 
-    <div class="grp"><h3>자료</h3>
-      <a class="row" href="02-records-db.html"><span class="tw">›</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow">01 운영 … 09 보고</span><span class="meta">9</span></a>
-      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">회의록</span><span class="meta">7</span></a>
-      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-mail"/></svg><span class="grow">메일</span><span class="meta">41</span></a>
-      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-list"/></svg><span class="grow">주간·월간 업무</span><span class="meta">9</span></a>
-      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-list"/></svg><span class="grow">협의 리스트</span><span class="meta">1</span></a>
-      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-law"/></svg><span class="grow">법규</span><span class="meta">12</span></a>
-      <a class="row" href="02-records-db.html" style="--d:1"><svg class="i sm"><use href="#i-map"/></svg><span class="grow">대지</span><span class="meta">7</span></a>
-    </div>
-    <div class="grp"><h3>기록</h3>
-      <a class="row" href="02-records-db.html"><svg class="i sm"><use href="#i-table"/></svg><span class="grow">전체</span><span class="meta">180</span></a>
-      <a class="row" href="03-spec.html#cond"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">조건</span><span class="meta">12</span></a>
-      <a class="row" href="03-spec.html#dec"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">결정</span><span class="meta">6</span></a>
-      <a class="row" href="03-spec.html#task"><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">작업</span><span class="meta">8</span></a>
-      <a class="row" href="07-records-graph.html"><svg class="i sm"><use href="#i-graph"/></svg><span class="grow">그래프</span></a>
-      <a class="row" href="06-parts-model.html"><svg class="i sm"><use href="#i-cube"/></svg><span class="grow">부위 × 모델</span></a>
-    </div>
-    <div class="grp"><h3>설계</h3>
-      <a class="row" href="04-apply.html"><span class="dot"></span><svg class="i sm"><use href="#i-cube"/></svg><span class="grow">예시 모델.3dm</span><span class="meta">Rhino</span></a>
-      <a class="row" href="04-apply.html"><span class="dot off"></span><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">1층 평면.dwg</span><span class="meta">CAD</span></a>
-      <a class="row" href="04-apply.html"><svg class="i sm"><use href="#i-compare"/></svg><span class="grow">변경 비교</span></a>
-      <a class="row sel" href="05-review-structure.html"><svg class="i sm"><use href="#i-struct"/></svg><span class="grow">구조 검토안</span></a>
-    </div>
-    <div class="grp"><h3>보고</h3>
-      <a class="row" href="08-report.html"><svg class="i sm"><use href="#i-report"/></svg><span class="grow">검토본 3 → 4</span></a>
-      <a class="row" href="08-report.html"><svg class="i sm"><use href="#i-report"/></svg><span class="grow">보고서</span><span class="meta">2</span></a>
-    </div>
-    <div class="grp"><h3>도구</h3>
-      <a class="row" href="05-review-structure.html"><svg class="i sm"><use href="#i-struct"/></svg><span class="grow">구조 검토</span></a>
-      <a class="row" href="#"><svg class="i sm"><use href="#i-law"/></svg><span class="grow">법규 체크</span></a>
-      <a class="row" href="#"><svg class="i sm"><use href="#i-map"/></svg><span class="grow">규모검토</span></a>
-      <a class="row" href="06-parts-model.html"><svg class="i sm"><use href="#i-table"/></svg><span class="grow">수량·면적표</span></a>
+    <div class="tree" role="tree">
+      <div class="row top" data-fold><span class="tw open">⌄</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow" data-ko="자료" data-en="BaseData">자료</span><button type="button" class="add" title="new-folder">+</button></div>
+      <a class="row" href="02-records-db.html" style="--d:1"><span class="tw">›</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow" data-ko="회의록" data-en="minutes">회의록</span><span class="meta">7</span><button type="button" class="add" title="new-folder">+</button></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><span class="tw">›</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow" data-ko="메일" data-en="mail">메일</span><span class="meta">41</span><button type="button" class="add" title="new-folder">+</button></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><span class="tw">›</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow" data-ko="업무 보고" data-en="reports">업무 보고</span><span class="meta">9</span><button type="button" class="add" title="new-folder">+</button></a>
+      <a class="row" href="10-threads.html" style="--d:1"><span class="tw">›</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow" data-ko="협의" data-en="threads">협의</span><span class="meta">1</span><button type="button" class="add" title="new-folder">+</button></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><span class="tw">›</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow" data-ko="법규" data-en="law">법규</span><span class="meta">12</span><button type="button" class="add" title="new-folder">+</button></a>
+      <a class="row" href="02-records-db.html" style="--d:1"><span class="tw">›</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow" data-ko="대지" data-en="site">대지</span><span class="meta">7</span><button type="button" class="add" title="new-folder">+</button></a>
+
+      <div class="row top" data-fold><span class="tw open">⌄</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow" data-ko="기록" data-en="DB">기록</span></div>
+      <a class="row view" href="02-records-db.html" style="--d:1"><span class="tw"></span><svg class="i sm"><use href="#i-table"/></svg><span class="grow" data-ko="전체" data-en="All">전체</span><span class="meta">180</span></a>
+      <a class="row view" href="10-threads.html" style="--d:1"><span class="tw"></span><svg class="i sm"><use href="#i-list"/></svg><span class="grow" data-ko="협의 대장" data-en="Ledger">협의 대장</span><span class="meta">196행</span></a>
+      <a class="row view" href="03-spec.html#cond" data-pane="cond" style="--d:1"><span class="tw"></span><svg class="i sm"><use href="#i-doc"/></svg><span class="grow" data-ko="조건" data-en="Conditions">조건</span><span class="meta">12</span></a>
+      <a class="row view" href="03-spec.html#dec" data-pane="dec" style="--d:1"><span class="tw"></span><svg class="i sm"><use href="#i-doc"/></svg><span class="grow" data-ko="결정" data-en="Decisions">결정</span><span class="meta">6</span></a>
+      <a class="row view" href="03-spec.html#task" data-pane="task" style="--d:1"><span class="tw"></span><svg class="i sm"><use href="#i-doc"/></svg><span class="grow" data-ko="작업" data-en="Tasks">작업</span><span class="meta">8</span></a>
+      <a class="row view" href="07-records-graph.html" style="--d:1"><span class="tw"></span><svg class="i sm"><use href="#i-graph"/></svg><span class="grow" data-ko="그래프" data-en="Graph">그래프</span></a>
+      <a class="row view" href="06-parts-model.html" style="--d:1"><span class="tw"></span><svg class="i sm"><use href="#i-cube"/></svg><span class="grow" data-ko="부위 × 모델" data-en="Parts × Model">부위 × 모델</span></a>
+
+      <div class="row top" data-fold><span class="tw open">⌄</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow" data-ko="설계" data-en="Design">설계</span><button type="button" class="add" title="new-folder">+</button></div>
+      <a class="row" href="04-apply.html#tree" style="--d:1"><span class="tw"><span class="dot"></span></span><svg class="i sm"><use href="#i-cube"/></svg><span class="grow">예시 모델.3dm</span><span class="meta">Rhino</span></a>
+      <a class="row" href="04-apply.html#tree" style="--d:1"><span class="tw"><span class="dot off"></span></span><svg class="i sm"><use href="#i-doc"/></svg><span class="grow">1층 평면.dwg</span><span class="meta">CAD</span></a>
+      <a class="row view" href="04-apply.html#tree" style="--d:1"><span class="tw"></span><svg class="i sm"><use href="#i-compare"/></svg><span class="grow" data-ko="변경 비교" data-en="Diff">변경 비교</span></a>
+      <a class="row sel" href="05-review-structure.html" style="--d:1"><span class="tw"></span><svg class="i sm"><use href="#i-struct"/></svg><span class="grow">구조 검토안.html</span></a>
+
+      <div class="row top" data-fold><span class="tw open">⌄</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow" data-ko="보고" data-en="Output">보고</span><button type="button" class="add" title="new-folder">+</button></div>
+      <a class="row" href="08-report.html" style="--d:1"><span class="tw">›</span><svg class="i sm"><use href="#i-report"/></svg><span class="grow" data-ko="주간" data-en="weekly">주간</span><span class="meta">5</span><button type="button" class="add" title="new-folder">+</button></a>
+      <a class="row" href="08-report.html" style="--d:1"><span class="tw">›</span><svg class="i sm"><use href="#i-report"/></svg><span class="grow" data-ko="월간" data-en="monthly">월간</span><span class="meta">4</span><button type="button" class="add" title="new-folder">+</button></a>
+      <a class="row" href="08-report.html" style="--d:1"><span class="tw"></span><svg class="i sm"><use href="#i-report"/></svg><span class="grow">검토본 4.html</span></a>
+
+      <div class="row top" data-fold><span class="tw open">⌄</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow" data-ko="도구" data-en="Extensions">도구</span><button type="button" class="add" title="new-folder">+</button></div>
+      <a class="row" href="05-review-structure.html" style="--d:1"><span class="tw"></span><svg class="i sm"><use href="#i-struct"/></svg><span class="grow" data-ko="구조 검토" data-en="StructCheck">구조 검토</span></a>
+      <a class="row" href="#" style="--d:1"><span class="tw"></span><svg class="i sm"><use href="#i-law"/></svg><span class="grow" data-ko="법규 체크" data-en="CodeCheck">법규 체크</span></a>
+      <a class="row" href="#" style="--d:1"><span class="tw"></span><svg class="i sm"><use href="#i-map"/></svg><span class="grow" data-ko="규모검토" data-en="Massing">규모검토</span></a>
+      <a class="row" href="06-parts-model.html" style="--d:1"><span class="tw"></span><svg class="i sm"><use href="#i-table"/></svg><span class="grow" data-ko="수량·면적표" data-en="QTO">수량·면적표</span></a>
     </div>
   </aside>
+  <!-- explorer:end -->
 
   <!-- center: 아티팩트 창 -->
   <main class="center">
@@ -187,7 +190,7 @@ over  X2–X4 Y2  13.4 m
     </div>
   </aside>
 </div>
-<nav class="demo-nav" aria-label="데모 넘기기"><a class="prev" href="04-apply.html" title="이전">‹</a><b>5 / 8</b><a class="next" href="06-parts-model.html" title="다음">›</a></nav>
+<nav class="demo-nav" aria-label="데모 넘기기"><a class="prev" href="04-apply.html" title="이전">‹</a><b>6 / 10</b><a class="next" href="06-parts-model.html" title="다음">›</a></nav>
 <script src="app.js"></script>
 <script>
 /* 05 평면: 축선 · 기둥 · 보 · 제안 기둥 +C */

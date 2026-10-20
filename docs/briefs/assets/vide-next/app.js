@@ -1,4 +1,4 @@
-/* VIDE Next 목업 공통 동작 v4 — 테마(밝음 기본), 탭, 대화/터미널, 접기, 선택 창, 데모 넘기기. 제품 코드 아님. */
+/* VIDE Next 목업 공통 동작 v6 — 테마(밝음 기본), 탭, 대화/터미널, 접기, 탐색기 한/영·폴더 접기·+ 폴더, 선택 창, 데모 넘기기. 제품 코드 아님. */
 (function () {
   function $$(q, r) { return [].slice.call((r || document).querySelectorAll(q)); }
   var root = document.documentElement, key = 'vide-next-theme';
@@ -35,9 +35,25 @@
   var app = document.querySelector('.app');
   $$('[data-agent-toggle]').forEach(function (b) { b.addEventListener('click', function () { app.classList.toggle('agent-closed'); }); });
   $$('[data-explorer-toggle]').forEach(function (b) { b.addEventListener('click', function () { app.classList.toggle('explorer-closed'); }); });
-  /* 접힌 패널 다시 열기: 레일의 탐색기 아이콘 / 오른쪽 위 작은 단추 */
-  var railFiles = document.querySelector('.rail a[data-tip="탐색기"]');
-  if (railFiles) railFiles.addEventListener('click', function (e) { if (app.classList.contains('explorer-closed')) { e.preventDefault(); app.classList.remove('explorer-closed'); } });
+  /* 레일 보기: 이 장에 그 사이드바가 있으면 장(가운데)을 유지한 채 바꾸고, 이미 보이면 접기·펼치기만. 없으면 링크대로 이동 */
+  var sides = { '탐색기': '.app>aside.explorer', '검색': '.app>aside.panel.search', '이력': '.app>aside.panel.history' };
+  function showSide(tip) {
+    Object.keys(sides).forEach(function (k) {
+      var el = document.querySelector(sides[k]); if (el) el.hidden = k !== tip;
+      var a = document.querySelector('.rail a[data-tip="' + k + '"]'); if (a) a.classList.toggle('on', k === tip);
+    });
+    app.classList.remove('explorer-closed');
+  }
+  $$('.rail a[data-tip]').forEach(function (a) {
+    var q = sides[a.dataset.tip]; if (!q) return;
+    a.addEventListener('click', function (e) {
+      var el = document.querySelector(q); if (!el) return;
+      e.preventDefault();
+      if (!el.hidden) app.classList.toggle('explorer-closed'); else showSide(a.dataset.tip);
+    });
+  });
+  if (location.hash === '#tree' && document.querySelector('.app>aside.panel') && document.querySelector(sides['탐색기'])) showSide('탐색기');
+  /* 접힌 대화 다시 열기: 오른쪽 위 작은 단추 */
   if (app && !document.querySelector('.reopen')) {
     var ro = document.createElement('button'); ro.type = 'button'; ro.className = 'iconbtn reopen'; ro.title = '대화 열기'; ro.setAttribute('data-agent-toggle', '');
     ro.innerHTML = '<svg class="i sm"><use href="#i-collapse"/></svg>';
@@ -50,6 +66,55 @@
       var g = b.dataset.group;
       if (g) { $$('[data-group="' + g + '"]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); }
       else b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true'));
+    });
+  });
+  /* 탐색기 v6: 한/영 토글 — [data-ko][data-en] 글자를 바꾸고 'vide-lang'에 기억 */
+  var langKey = 'vide-lang', lang = 'ko';
+  try { if (localStorage.getItem(langKey) === 'en') lang = 'en'; } catch (e) {}
+  function setLang(l) {
+    lang = l;
+    $$('[data-ko][data-en]').forEach(function (el) { el.textContent = el.getAttribute('data-' + l); });
+    $$('button.lang').forEach(function (b) { b.textContent = l === 'en' ? '한' : 'EN'; b.setAttribute('aria-pressed', String(l === 'en')); });
+  }
+  if (lang === 'en') setLang('en');
+  $$('button.lang').forEach(function (b) {
+    b.addEventListener('click', function () {
+      setLang(lang === 'en' ? 'ko' : 'en');
+      try { if (lang === 'en') localStorage.setItem(langKey, 'en'); else localStorage.removeItem(langKey); } catch (e) {}
+    });
+  });
+  /* 탐색기 v6: 폴더 접기·펼치기(.row[data-fold]) · + 폴더(button.add → input.newf, Enter 추가 / Esc 취소, 메모리만) */
+  function depth(r) { return parseFloat(r.style.getPropertyValue('--d')) || 0; }
+  function kids(r) { var out = [], d = depth(r), n = r.nextElementSibling; while (n && depth(n) > d) { out.push(n); n = n.nextElementSibling; } return out; }
+  function fold(r) {
+    var tw = r.querySelector('.tw'), open = tw.classList.contains('open');
+    tw.classList.toggle('open', !open); tw.textContent = open ? '›' : '⌄';
+    kids(r).forEach(function (k) { k.hidden = open; if (!open && k.hasAttribute('data-fold')) { var t = k.querySelector('.tw'); t.classList.add('open'); t.textContent = '⌄'; } });
+  }
+  function addRow(r) {
+    var old = document.querySelector('.explorer .row.new'); if (old) old.remove();
+    /* 접힌 폴더에 넣으면 그 폴더를 펼친 꼴로(꺾쇠 ⌄) */
+    var ptw = r.querySelector('.tw'); if (ptw && ptw.textContent === '›') { ptw.classList.add('open'); ptw.textContent = '⌄'; r.setAttribute('data-fold', ''); }
+    var row = document.createElement('div'); row.className = 'row new'; row.style.setProperty('--d', depth(r) + 1);
+    row.innerHTML = '<span class="tw"></span><svg class="i sm"><use href="#i-folder"/></svg><input class="newf" placeholder="new-folder" spellcheck="false">';
+    r.parentNode.insertBefore(row, r.nextSibling);
+    var inp = row.querySelector('input'); inp.focus();
+    inp.addEventListener('keydown', function (e) {
+      e.stopPropagation();
+      if (e.key === 'Escape') { row.remove(); return; }
+      if (e.key !== 'Enter') return;
+      var v = inp.value.trim(); if (!v) { row.remove(); return; }
+      row.className = 'row'; row.innerHTML = '<span class="tw">›</span><svg class="i sm"><use href="#i-folder"/></svg><span class="grow"></span><button type="button" class="add" title="new-folder">+</button>';
+      row.querySelector('.grow').textContent = v;
+    });
+  }
+  $$('.explorer .tree').forEach(function (t) {
+    t.addEventListener('click', function (e) {
+      var r = e.target.closest('.row'); if (!r) return;
+      if (e.target.closest('.add')) { e.preventDefault(); e.stopPropagation(); addRow(r); return; }
+      if (!r.hasAttribute('data-fold')) return;
+      if (r.tagName === 'A' && !e.target.closest('.tw')) return;
+      e.preventDefault(); fold(r);
     });
   });
   /* 선택 창 닫기 */

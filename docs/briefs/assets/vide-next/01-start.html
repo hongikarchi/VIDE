@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VIDE — 시작</title>
-<!-- VIDE Next 목업 v5 공통 셸(정본). 각 장은 이 파일을 복사해 (1) <title> (2) explorer(묶음 자료·기록·설계·보고·도구)의 .sel 위치 (3) .center 안 tabs-bar·.art (4) .agent 안 .flow·.term (5) demo-nav 번호·링크 만 바꾼다. 셸 마크업·클래스·토큰은 고치지 않는다. 색은 app.css 변수만 쓴다. -->
+<!-- VIDE Next 목업 v6 공통 셸(정본). 각 장은 이 파일을 복사해 (1) <title> (2) rail:start~rail:end 블록(a.on 위치) (3) explorer:start~explorer:end 블록(.row.sel 위치, 또는 aside.panel.search / aside.panel.history로 교체) (4) .center 안 tabs-bar·.art (5) .agent 안 .flow·.term (6) demo-nav 번호·링크 만 바꾼다. 순서 01 02 10 03 04 05 06 07 08 09 (n / 10). 셸 마크업·클래스·토큰은 고치지 않는다. 색은 app.css 변수만 쓴다. -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500&family=IBM+Plex+Mono&display=swap">
 <link rel="stylesheet" href="app.css">
 </head>
@@ -13,7 +13,7 @@
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-files" viewBox="0 0 24 24"><path d="M4 6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
-  <symbol id="i-history" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 8v8M8 6.5c5 0 8 2 8 5.5"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4 4v4h4"/><path d="M12 8v4l3 2"/></symbol>
   <symbol id="i-tools" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><path d="M16.5 13v7M13 16.5h7"/></symbol>
   <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
   <symbol id="i-feedback" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
@@ -42,25 +42,25 @@
 </svg>
 
 <div class="app">
-  <!-- rail: 위 탐색 / 아래 피드백 · 테마 · 설정 · 계정 (현행 제품과 같은 순서) -->
+  <!-- rail:start — 위: 사이드바 보기 3개(탐색기 · 검색 · 이력) / 아래: 피드백 · 테마 · 설정 · 계정. 장마다 바꾸는 것은 a.on 하나 -->
   <nav class="rail" aria-label="주 메뉴">
     <div class="logo">V</div>
-    <a href="02-records-db.html" class="on" data-tip="탐색기"><svg class="i"><use href="#i-files"/></svg></a>
-    <a href="#" data-tip="검색"><svg class="i"><use href="#i-search"/></svg></a>
-    <a href="07-records-graph.html" data-tip="기록"><svg class="i"><use href="#i-history"/></svg></a>
-    <a href="05-review-structure.html" data-tip="도구"><svg class="i"><use href="#i-tools"/></svg></a>
+    <a href="#" class="on" data-tip="탐색기"><svg class="i"><use href="#i-files"/></svg></a>
+    <a href="09-search.html" data-tip="검색"><svg class="i"><use href="#i-search"/></svg></a>
+    <a href="04-apply.html" data-tip="이력"><svg class="i"><use href="#i-history"/></svg></a>
     <div class="spacer"></div>
     <button type="button" data-tip="피드백 보내기"><svg class="i"><use href="#i-feedback"/></svg></button>
     <button type="button" data-theme-toggle data-tip="밝게 / 어둡게"><svg class="i sun"><use href="#i-sun"/></svg><svg class="i moon"><use href="#i-moon"/></svg></button>
     <button type="button" data-tip="설정"><svg class="i"><use href="#i-settings"/></svg></button>
     <button type="button" class="avatar" data-tip="계정">U</button>
   </nav>
+  <!-- rail:end -->
 
   <!-- explorer -->
   <aside class="explorer" aria-label="탐색기">
-    <div class="proj"><span class="grow">프로젝트 없음</span><svg class="i xs"><use href="#i-chevd"/></svg><button type="button" class="iconbtn" data-explorer-toggle title="접기"><svg class="i sm"><use href="#i-collapse"/></svg></button></div>
+    <div class="proj"><span class="grow" data-ko="프로젝트 없음" data-en="No project">프로젝트 없음</span><button type="button" class="lang" title="한 / EN">EN</button><button type="button" class="iconbtn" data-explorer-toggle title="접기"><svg class="i sm"><use href="#i-collapse"/></svg></button></div>
 
-    <div class="grp"><h3>최근</h3>
+    <div class="grp"><h3 data-ko="최근" data-en="Recent">최근</h3>
       <a class="row sel" href="#"><svg class="i sm"><use href="#i-folder"/></svg><span class="grow">예시 사무소 신축</span><span class="meta">10.20</span></a>
       <a class="row" href="#"><svg class="i sm"><use href="#i-folder"/></svg><span class="grow">예시 주택 리모델링</span><span class="meta">10.08</span></a>
       <a class="row" href="#"><svg class="i sm"><use href="#i-folder"/></svg><span class="grow">예시 도서관 증축</span><span class="meta">09.21</span></a>
@@ -159,7 +159,7 @@
     </div>
   </div>
 </div>
-<nav class="demo-nav" aria-label="데모 넘기기"><a class="prev off" href="#" title="이전">‹</a><b>1 / 8</b><a class="next" href="02-records-db.html" title="다음">›</a></nav>
+<nav class="demo-nav" aria-label="데모 넘기기"><a class="prev off" href="#" title="이전">‹</a><b>1 / 10</b><a class="next" href="02-records-db.html" title="다음">›</a></nav>
 <script src="app.js"></script>
 </body>
 </html>
