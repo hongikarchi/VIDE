@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title data-en="VIDE — Sign in">VIDE — 로그인</title>
-<!-- VIDE Next 목업 v7 · 12 로그인(설치본 첫 실행: 로그인 → 프로젝트 고르기, src/ui/first-run.tsx 단계 참고). .app 격자 없음. 입력값 비움. 설명 문장 없음. -->
+<!-- VIDE Next 목업 v7 · 11 로그인(설치본 첫 실행의 첫 장, src/ui/first-run.tsx 참고; 프로젝트는 앱 안에서 고른다). .app 격자 없음. 입력값 비움. 설명 문장 없음. -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500&family=IBM+Plex+Mono&display=swap">
 <link rel="stylesheet" href="app.css">
 <style>
@@ -37,7 +37,7 @@
 
 <main class="signin">
   <form class="card" action="01-start.html" method="get" aria-label="로그인">
-    <div class="head"><span class="mark">VIDE</span><span class="grow"></span><span class="step">1 / 2</span></div>
+    <div class="head"><span class="mark">VIDE</span></div>
     <label><span data-en="Email">이메일</span><input type="email" name="email" autocomplete="email" spellcheck="false"></label>
     <label><span data-en="Password">비밀번호</span><input type="password" name="password" autocomplete="current-password"></label>
     <a class="btn primary" href="01-start.html" data-en="Sign in">로그인</a>
@@ -46,18 +46,9 @@
     <div class="links"><a href="#">AccountSwitch</a></div>
   </form>
 
-  <section class="card next" aria-label="프로젝트 고르기">
-    <div class="head"><h3 data-en="Projects">프로젝트 고르기</h3><span class="grow"></span><span class="step">2 / 2</span></div>
-    <div class="list">
-      <a class="row" href="01-start.html"><svg class="i sm"><use href="#i-folder"/></svg><span class="grow">예시 사무소 신축</span><span class="meta">10.20</span></a>
-      <a class="row" href="01-start.html"><svg class="i sm"><use href="#i-folder"/></svg><span class="grow">예시 주택 리모델링</span><span class="meta">10.08</span></a>
-      <a class="row" href="01-start.html"><svg class="i sm"><use href="#i-folder"/></svg><span class="grow">예시 도서관 증축</span><span class="meta">09.21</span></a>
-    </div>
-    <a class="btn new" href="01-start.html"><svg class="i xs"><use href="#i-plus"/></svg><span data-en="New">새 프로젝트</span></a>
-  </section>
 </main>
 
-<nav class="demo-nav" aria-label="데모 넘기기"><a class="prev" href="11-landing.html" title="이전">‹</a><b>2 / 12</b><a class="next" href="01-start.html" title="다음">›</a></nav>
+<nav class="demo-nav" aria-label="데모 넘기기"><a class="prev off" href="#" title="이전">‹</a><b>1 / 11</b><a class="next" href="01-start.html" title="다음">›</a></nav>
 <script src="app.js"></script>
 </body>
 </html>
