@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VIDE Next 목업</title>
-<!-- 스토리보드 브리프(docs/briefs/README.md). 2026-10-23 7판: 6차 메모(첫 실행 3단계·데스크톱 가입·세션 탭·홈·방식 3종). 화면 16장은 assets/vide-next/*.html 살아 있는 HTML. 정본은 PRD·SPEC·Design. -->
+<!-- 스토리보드 브리프(docs/briefs/README.md). 2026-10-23 8판: 7차 메모(세로 세션 목록·Claude Code식 대화·가운데 설정·마스크 리빌). 화면 16장은 assets/vide-next/*.html 살아 있는 HTML. 정본은 PRD·SPEC·Design. -->
 <link rel="stylesheet" href="_base.css">
 <style>
 .live{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;border:1px solid var(--line);background:#fff}
@@ -46,15 +46,15 @@
 <body>
 <header>
   <a class="brand" href="#top"><b>VIDE</b><span>목업 · 전체 흐름</span></a>
-  <nav><a href="#s">01 화면</a><a href="#f">첫 실행</a><a href="#a">세션</a><a href="#m">방식</a><a href="#c">02 바뀐 점</a><a href="#q">03 질문</a></nav>
+  <nav><a href="#s">01 화면</a><a href="#f">첫 실행</a><a href="#a">세션</a><a href="#t">대화</a><a href="#m">방식</a><a href="#c">02 바뀐 점</a><a href="#q">03 질문</a></nav>
   <button type="button" class="noprint" onclick="window.print()">인쇄 / PDF ↗</button>
 </header>
 <main id="top">
 
 <div class="intro">
   <div>
-    <div class="eyebrow">2026-10-23 7판 / 검토 대기 / 근거 <a href="../research/RESEARCH-21-first-run-and-sessions.md">RESEARCH-21</a> · SPEC-02.19 · SPEC-05.6</div>
-    <h1>첫 실행은 세 단계, 세션은 탭.</h1>
+    <div class="eyebrow">2026-10-23 8판 / 검토 대기 / 근거 <a href="../research/RESEARCH-18-environment-not-model.md">RESEARCH-18 §세션</a> · <a href="../research/RESEARCH-21-first-run-and-sessions.md">RESEARCH-21</a></div>
+    <h1>세션은 세로 목록, 대화는 읽히게.</h1>
   </div>
   <div class="study-mark">살아 있는 HTML<br>답 = [피드백 복사]</div>
 </div>
@@ -68,7 +68,7 @@
       <figure class="shot" data-s="1"><div class="live"><iframe src="assets/vide-next/11-signin.html" title="S11 로그인" loading="lazy"></iframe><a class="open" href="assets/vide-next/11-signin.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
       <figure class="shot" data-s="2"><div class="live"><iframe data-src="assets/vide-next/14-setup.html" title="S14 AI 계정" loading="lazy"></iframe><a class="open" href="assets/vide-next/14-setup.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
       <figure class="shot" data-s="3"><div class="live"><iframe data-src="assets/vide-next/15-setup-hosts.html" title="S15 프로그램" loading="lazy"></iframe><a class="open" href="assets/vide-next/15-setup-hosts.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="4"><div class="live"><iframe data-src="assets/vide-next/16-setup-style.html" title="S16 방식" loading="lazy"></iframe><a class="open" href="assets/vide-next/16-setup-style.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="4"><div class="live"><iframe data-src="assets/vide-next/16-setup-style.html" title="S16 방식 리빌" loading="lazy"></iframe><a class="open" href="assets/vide-next/16-setup-style.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
       <figure class="shot" data-s="5"><div class="live"><iframe data-src="assets/vide-next/01-start.html" title="S1 시작" loading="lazy"></iframe><a class="open" href="assets/vide-next/01-start.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
       <figure class="shot" data-s="6"><div class="live"><iframe data-src="assets/vide-next/02-records-db.html" title="S2 기록 표" loading="lazy"></iframe><a class="open" href="assets/vide-next/02-records-db.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
       <figure class="shot" data-s="7"><div class="live"><iframe data-src="assets/vide-next/10-threads.html" title="S10 협의 대장" loading="lazy"></iframe><a class="open" href="assets/vide-next/10-threads.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
@@ -80,7 +80,7 @@
       <figure class="shot" data-s="13"><div class="live"><iframe data-src="assets/vide-next/08-report.html" title="S8 주간 보고" loading="lazy"></iframe><a class="open" href="assets/vide-next/08-report.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
       <figure class="shot" data-s="14"><div class="live"><iframe data-src="assets/vide-next/09-search.html" title="S9 검색" loading="lazy"></iframe><a class="open" href="assets/vide-next/09-search.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
       <figure class="shot" data-s="15"><div class="live"><iframe data-src="assets/vide-next/12-sessions.html" title="S12 세션 목록" loading="lazy"></iframe><a class="open" href="assets/vide-next/12-sessions.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="16"><div class="live"><iframe data-src="assets/vide-next/13-home.html" title="S13 홈" loading="lazy"></iframe><a class="open" href="assets/vide-next/13-home.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="16"><div class="live"><iframe data-src="assets/vide-next/13-home.html" title="S13 새 세션" loading="lazy"></iframe><a class="open" href="assets/vide-next/13-home.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
     </div>
     <div class="steps-col">
       <div class="ctl"><button type="button" class="prev">‹ 이전</button><span class="pos"></span><button type="button" class="next">다음 ›</button></div>
@@ -88,7 +88,7 @@
       <div class="step" data-s="1" data-n="11" data-id="S11" data-choices="좋음,수정"><small>11</small><h3>S11 로그인</h3></div>
       <div class="step" data-s="2" data-n="14" data-id="S14" data-choices="좋음,수정"><small>14</small><h3>S14 AI 계정</h3></div>
       <div class="step" data-s="3" data-n="15" data-id="S15" data-choices="좋음,수정"><small>15</small><h3>S15 프로그램</h3></div>
-      <div class="step" data-s="4" data-n="16" data-id="S16" data-choices="좋음,수정"><small>16</small><h3>S16 방식</h3></div>
+      <div class="step" data-s="4" data-n="16" data-id="S16" data-choices="좋음,수정"><small>16</small><h3>S16 방식 리빌</h3></div>
       <div class="step" data-s="5" data-n="01" data-id="S1" data-choices="좋음,수정"><small>01</small><h3>S1 시작</h3></div>
       <div class="step" data-s="6" data-n="02" data-id="S2" data-choices="좋음,수정"><small>02</small><h3>S2 기록 표</h3></div>
       <div class="step" data-s="7" data-n="10" data-id="S10" data-choices="좋음,수정"><small>10</small><h3>S10 협의 대장</h3></div>
@@ -100,7 +100,7 @@
       <div class="step" data-s="13" data-n="08" data-id="S8" data-choices="좋음,수정"><small>08</small><h3>S8 주간 보고</h3></div>
       <div class="step" data-s="14" data-n="09" data-id="S9" data-choices="좋음,수정"><small>09</small><h3>S9 검색</h3></div>
       <div class="step" data-s="15" data-n="12" data-id="S12" data-choices="좋음,수정"><small>12</small><h3>S12 세션 목록</h3></div>
-      <div class="step" data-s="16" data-n="13" data-id="S13" data-choices="좋음,수정"><small>13</small><h3>S13 홈</h3></div>
+      <div class="step" data-s="16" data-n="13" data-id="S13" data-choices="좋음,수정"><small>13</small><h3>S13 새 세션</h3></div>
     </div>
   </div>
   <div class="thumbs" aria-label="단계 바로 가기"></div>
@@ -122,81 +122,98 @@
     <path d="M570 35H604" marker-end="url(#ar)"/>
     <rect x="608.5" y="20.5" width="111" height="30"/><text class="h" x="620" y="40">시작</text>
     <text class="r" x="12" y="76">아이디</text><text class="r" x="12" y="96">비밀번호</text><text class="r" x="12" y="116">가입 코드</text>
-    <text x="164" y="76">감지</text><text x="164" y="96">설치</text><text class="acc" x="164" y="116">AccountSwitch</text><text class="r" x="164" y="136">로그인</text>
-    <text x="316" y="76">감지</text><text x="316" y="96">확장 설치</text><text class="r" x="316" y="116">지원 예정</text>
-    <text x="468" y="76">AI 처음</text><text class="h" x="468" y="96">AI 좀 씀</text><text x="468" y="116">개발자</text>
+    <text x="164" y="76">큰 카드 2</text><text x="164" y="96">설치</text><text class="acc" x="164" y="116">AccountSwitch</text><text class="r" x="164" y="136">로그인</text>
+    <text x="316" y="76">큰 카드 6</text><text x="316" y="96">확장 설치</text><text class="r" x="316" y="116">지원 예정</text>
+    <text x="468" y="76">마스크 리빌</text><text class="h" x="468" y="96">AI 좀 씀</text><text class="r" x="468" y="116">AI 처음 · 개발자</text>
     <text class="r" x="620" y="76">S1</text>
     <path class="dash" d="M152 152H568"/><text class="r" x="316" y="148">건너뛰기 · 설정에서 다시</text>
   </svg>
-  <p class="words">S11 → S14 → S15 → S16 → S1</p>
+  <p class="words">S11 → S14 → S15 → S16 → S1 · 가운데 카드 · 진행 점 3</p>
 </section>
 
 <section id="a">
   <div class="section-head">
     <div><div class="eyebrow">SESSION</div><h2>세션 모형.</h2></div>
   </div>
-  <svg class="map" viewBox="0 0 720 200" role="img" aria-label="탭 줄, 제공자 고정 세션, 홈, 다른 제공자는 새 세션">
+  <svg class="map" viewBox="0 0 720 200" role="img" aria-label="목록 보기와 대화 보기, 행 클릭과 뒤로">
     <defs><marker id="ar2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1L7 4L1 7"/></marker></defs>
-    <text class="r" x="0" y="14">탭 줄</text>
-    <rect x=".5" y="24.5" width="259" height="30"/>
-    <text class="acc" x="10" y="44">●</text><text class="h" x="24" y="44">기둥 C2A…</text>
-    <text class="r" x="104" y="44">기록 180</text><text x="178" y="44">+</text><text class="r" x="200" y="44">…2</text><text x="238" y="44">»</text>
-    <text class="r" x="0" y="78">세션</text>
-    <rect class="box" x=".5" y="86.5" width="259" height="104"/>
-    <text class="h" x="12" y="108">제공자 고정</text><text x="112" y="108">Claude | Codex</text>
-    <text class="h" x="12" y="132">모델 가변</text><text class="r" x="112" y="132">Sonnet · Opus · Fable</text>
-    <text class="h" x="12" y="156">effort 가변</text><text class="r" x="112" y="156">medium · high</text>
-    <text class="r" x="12" y="180">문맥 칩 · 터미널 · 되돌리기</text>
-    <path d="M262 39H296" marker-end="url(#ar2)"/><text class="r" x="274" y="32">+</text>
-    <text class="r" x="300" y="14">홈</text>
-    <rect x="300.5" y="24.5" width="199" height="166"/>
-    <rect class="box" x="310.5" y="34.5" width="179" height="40"/><text class="r" x="318" y="58">선택 · 스케치 · @자료</text>
-    <text x="318" y="96">Claude</text><text x="372" y="96">Codex</text><rect x="420.5" y="84.5" width="40" height="17"/><text class="h" x="428" y="97">자동</text>
-    <text x="318" y="122">이번 주 보고</text><text x="318" y="140">어긋남 2 · 법규 체크</text>
-    <text x="318" y="166">최근 5</text><text class="r" x="440" y="166">전체 ›</text>
-    <path d="M298 150H264" marker-end="url(#ar2)"/><text class="r" x="266" y="144">Enter</text>
-    <text class="r" x="540" y="14">다른 제공자</text>
-    <text class="h" x="540" y="44">Claude 세션</text>
-    <path d="M560 52V84" marker-end="url(#ar2)"/><text class="r" x="570" y="72">Codex</text>
-    <text class="acc" x="540" y="104">↳ 새 세션</text>
-    <text class="h" x="540" y="148">모델 · effort</text>
-    <path d="M560 156V176" marker-end="url(#ar2)"/><text class="r" x="540" y="194">같은 세션</text>
+    <text class="r" x="0" y="12">목록</text>
+    <rect x=".5" y="20.5" width="259" height="178"/>
+    <text class="h" x="12" y="40">세션</text><text x="190" y="40">+ 새 세션</text>
+    <rect class="box" x="10.5" y="50.5" width="239" height="36"/>
+    <text class="r" x="18" y="66">Claude</text><rect class="on" x="70" y="62" width="90" height="3"/><text class="r" x="168" y="66">53%</text>
+    <text class="r" x="18" y="80">Codex</text><rect class="on" x="70" y="76" width="20" height="3"/><text class="r" x="168" y="80">12%</text>
+    <text class="r" x="12" y="104">검색 · 진행 중 1 · 전체</text>
+    <text class="r" x="12" y="124">오늘</text>
+    <text class="h" x="12" y="142">●</text><text x="26" y="142">기둥 C2A 이동</text><text class="r" x="210" y="142">2분</text>
+    <text class="acc" x="12" y="160">●</text><text x="26" y="160">이번 주 보고</text><text class="r" x="210" y="160">1시간</text>
+    <text class="r" x="12" y="182">7일 · 지난</text>
+    <path d="M262 92H452" marker-end="url(#ar2)"/><text class="r" x="330" y="84">행 클릭</text>
+    <path d="M456 132H266" marker-end="url(#ar2)"/><text class="r" x="330" y="150">‹ 세션</text>
+    <text class="r" x="460" y="12">대화</text>
+    <rect x="460.5" y="20.5" width="259" height="178"/>
+    <text x="470" y="40">‹</text><text class="h" x="484" y="40">● 기둥 C2A 이동</text><text class="r" x="664" y="40">터미널</text>
+    <text class="r" x="470" y="58">Claude · Sonnet · medium</text>
+    <rect class="box" x="566.5" y="66.5" width="143" height="20"/><text x="574" y="81">이 기둥 600 동쪽으로.</text>
+    <text x="470" y="104">기둥 C2A를 옮기겠습니다.</text>
+    <text class="r" x="470" y="122">✓ 모델 읽기 · 8</text>
+    <text class="r" x="470" y="138">✓ C2A 이동 · +600 x</text>
+    <text class="acc" x="470" y="154">⟳ 1층 평면 확인 중 · 12 s</text>
+    <rect x="470.5" y="164.5" width="239" height="24"/><text x="478" y="181">평면에 반영</text><text class="r" x="560" y="181">모델만</text>
   </svg>
-  <p class="words">세션 = 제공자 고정 · 모델·effort 가변 · 자동 = 첫 요청 → 제공자·모델</p>
+  <p class="words">가로 탭 삭제 · 세션 = 제공자 고정 · 모델·effort 가변</p>
+</section>
+
+<section id="t">
+  <div class="section-head">
+    <div><div class="eyebrow">CHAT</div><h2>대화 조각.</h2></div>
+  </div>
+  <div class="table-wrap" style="max-height:none">
+    <table class="txt sty">
+      <thead><tr><th>조각</th><th>언제</th></tr></thead>
+      <tbody>
+        <tr><td>도구 행</td><td>읽기 · 계산 · 이동, 접힘 ✓ ⟳ ✗</td></tr>
+        <tr><td>진행 중</td><td>⟳ 작업 · 경과 초</td></tr>
+        <tr><td>질문</td><td>적용 전 확인 켬</td></tr>
+        <tr><td>결과</td><td>요약 · 변경 비교 카드</td></tr>
+        <tr><td>되돌림</td><td>요청 단위 · 오류 ✗</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="words">사용자 말 · AI 글 = 문장 · 화면 글자 = 낱말</p>
 </section>
 
 <section id="m">
   <div class="section-head">
-    <div><div class="eyebrow">STYLE</div><h2>방식 3종.</h2></div>
+    <div><div class="eyebrow">STYLE</div><h2>방식 3종 · 스위치 6.</h2></div>
   </div>
   <div class="table-wrap" style="max-height:none">
     <table class="txt sty">
-      <thead><tr><th>기본값</th><th>AI 처음</th><th>AI 좀 씀</th><th>개발자</th></tr></thead>
+      <thead><tr><th>스위치</th><th>AI 처음</th><th>AI 좀 씀</th><th>개발자</th></tr></thead>
       <tbody>
-        <tr><td>제공자·모델</td><td>자동</td><td>홈 칩</td><td>칩 + 모델</td></tr>
+        <tr><td>터미널 탭</td><td>끔</td><td>끔</td><td>켬</td></tr>
         <tr><td>적용 전 확인</td><td>켬</td><td>켬</td><td>끔</td></tr>
-        <tr><td>터미널</td><td>숨김</td><td>있음</td><td>열림</td></tr>
-        <tr><td>세션 탭</td><td>1개</td><td>있음</td><td>있음</td></tr>
-        <tr><td>제안 카드</td><td>있음</td><td>있음</td><td>없음</td></tr>
-        <tr><td>말</td><td>쉬운 말</td><td>기본</td><td>내부 용어</td></tr>
+        <tr><td>모델·effort</td><td>끔</td><td>켬</td><td>켬</td></tr>
+        <tr><td>제공자 칩</td><td>끔</td><td>켬</td><td>켬</td></tr>
+        <tr><td>제안 카드</td><td>켬</td><td>켬</td><td>끔</td></tr>
+        <tr><td>도구 행 펼침</td><td>끔</td><td>끔</td><td>켬</td></tr>
       </tbody>
     </table>
   </div>
-  <p class="words">설정에서 변경</p>
+  <p class="words">고르면 뒤 화면의 그 부분만 마스크 걷힘 · 설정에서 변경</p>
 </section>
 
 <section id="c">
   <div class="section-head">
-    <div><div class="eyebrow">02 / CHANGES</div><h2>6차 메모 5.</h2></div>
+    <div><div class="eyebrow">02 / CHANGES</div><h2>7차 메모 4.</h2></div>
   </div>
   <div class="table-wrap" style="max-height:none">
     <table class="txt chg">
       <tbody>
-        <tr><td>1 설정 튜토리얼</td><td>S14·S15·S16</td></tr>
-        <tr><td>2 로그인·가입</td><td>가입 탭 · 링크 삭제</td></tr>
-        <tr><td>3 모델 고정</td><td>제공자 고정 · 탭 줄</td></tr>
-        <tr><td>4 새 세션</td><td>S13 홈 · 칩 자동</td></tr>
-        <tr><td>5 선호 세팅</td><td>③ 방식 3종</td></tr>
+        <tr><td>1 탭이 쌓임</td><td>대화 패널 가로 탭 삭제 · 세로 목록 ↔ 대화 · S12 · 가운데 아티팩트 탭은 9판</td></tr>
+        <tr><td>2 설정이 딱딱함</td><td>가운데 큰 카드 · 진행 점 · S14·S15</td></tr>
+        <tr><td>3 대화가 안 읽힘</td><td>Claude Code식 · 문장 + 도구 행 + 진행 중</td></tr>
+        <tr><td>4 방식 = 팝업</td><td>회색 마스크 · 바뀐 부분만 흰색 · S16</td></tr>
       </tbody>
     </table>
   </div>
@@ -204,40 +221,38 @@
 
 <section id="q">
   <div class="section-head">
-    <div><div class="eyebrow">03 / QUESTIONS</div><h2>세션 UI · 제공자 · 방식.</h2></div>
+    <div><div class="eyebrow">03 / QUESTIONS</div><h2>세션 보기 · 대화 본문 · 방식 설정.</h2></div>
   </div>
   <ul class="qs after">
     <li class="d decide" data-id="Q1">
-      <p class="q"><b class="id">Q1</b><b>세션 관리 UI?</b></p>
+      <p class="q"><b class="id">Q1</b><b>세션 보기?</b></p>
       <div class="ans">
-        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 탭 줄 + 홈</b><small>S13</small></button>
-        <button type="button" data-v="②" aria-pressed="false"><b>② 제목 드롭다운</b><small>6판</small></button>
-        <button type="button" data-v="③" aria-pressed="false"><b>③ 탐색기 '대화'</b><small>레일 묶음</small></button>
+        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 세로 목록 ↔ 대화</b><small>S12 · 레퍼런스 꼴</small></button>
+        <button type="button" data-v="②" aria-pressed="false"><b>② 왼쪽 탐색기에 목록</b><small>레일 묶음</small></button>
       </div>
-      <p class="line"><b>이유</b>열린 세션이 늘 보임, 전환 1클릭.</p>
-      <p class="line"><b>틀리면</b>탭 줄을 목록 단추로, 홈은 그대로.</p>
+      <p class="line"><b>이유</b>세션이 늘어도 한 줄씩, 검색·거르기.</p>
+      <p class="line"><b>틀리면</b>목록만 탐색기로 옮김.</p>
     </li>
     <li class="d decide" data-id="Q2">
-      <p class="q"><b class="id">Q2</b><b>새 세션의 제공자?</b></p>
+      <p class="q"><b class="id">Q2</b><b>대화 본문?</b></p>
       <div class="ans">
-        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 홈 칩, 기본 자동</b><small>둘 다 있을 때만</small></button>
-        <button type="button" data-v="②" aria-pressed="false"><b>② 항상 고르기</b><small>첫 요청 전</small></button>
-        <button type="button" data-v="③" aria-pressed="false"><b>③ 항상 자동</b><small>칩 없음</small></button>
+        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① Claude Code식</b><small>문장 + 도구 행</small></button>
+        <button type="button" data-v="②" aria-pressed="false"><b>② 결과 낱말식</b><small>7판</small></button>
       </div>
-      <p class="line"><b>이유</b>고르는 사람·그냥 적는 사람 둘 다.</p>
-      <p class="line"><b>틀리면</b>칩 기본값만 바꿈.</p>
+      <p class="line"><b>이유</b>AI가 무엇을 어떻게 하는지 보임.</p>
+      <p class="line"><b>틀리면</b>도구 행 기본 접힘만 남김.</p>
     </li>
     <li class="d decide" data-id="Q3">
-      <p class="q"><b class="id">Q3</b><b>첫 실행 '방식' 단계?</b></p>
+      <p class="q"><b class="id">Q3</b><b>방식 설정?</b></p>
       <div class="ans">
-        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 넣는다</b><small>S16 · 기본값 묶음</small></button>
-        <button type="button" data-v="②" aria-pressed="false"><b>② 뺀다</b><small>설정에서만</small></button>
+        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 마스크 리빌 팝업</b><small>S16</small></button>
+        <button type="button" data-v="②" aria-pressed="false"><b>② 가운데 표</b><small>7판</small></button>
       </div>
-      <p class="line"><b>이유</b>같은 화면, 다른 사용자.</p>
-      <p class="line"><b>틀리면</b>③ 단계 삭제, 표는 설정으로.</p>
+      <p class="line"><b>이유</b>고른 결과가 실제 화면에서 보임.</p>
+      <p class="line"><b>틀리면</b>팝업 안에 표만 둠.</p>
     </li>
   </ul>
-  <p class="words">열린 결정 · 공동 편집 어디부터 · 셸 — 6판 Q2·Q3 그대로 (<a href="../research/RESEARCH-19-db-engine.md">RESEARCH-19 §9</a> · <a href="../research/RESEARCH-20-shell.md">RESEARCH-20</a>)</p>
+  <p class="words">열린 결정 · 가운데 아티팩트 탭(상한 + 나머지는 탐색기) · 공동 편집 어디부터 · 셸 그대로 · 제공자 선택·방식 단계는 8판에 흡수 (<a href="../research/RESEARCH-19-db-engine.md">RESEARCH-19 §9</a> · <a href="../research/RESEARCH-20-shell.md">RESEARCH-20</a>)</p>
 </section>
 
 <footer><span>VIDE 목업 · 검토용 · 정본 PRD·SPEC·Design</span><span>2026-10-23</span></footer>

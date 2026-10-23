@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title data-en="VIDE — Setup · AI">VIDE — 설정 · AI 계정</title>
-<!-- VIDE Next 목업 v9 · 14 첫 실행 설정 ① AI 계정(11 로그인|가입 뒤). 계정 칩 2(Claude · GPT, 있음=눌림; 끄면 그 행 —). 감지 표 3행(CLI 감지 src/ai/paths.ts · 로그인 accounts[].signedIn · AccountSwitch src/ai/account-switch.ts). Codex (GPT) = 설치 ✓ · 로그인 안 됨 → [로그인 ›](AccountSwitch로) 누르면 ✓ · AccountSwitch 계정 2. 상태 칩 .st(됨·안 됨). [건너뛰기][다음] → 15. 설명 문장 없음. 합성 데이터. -->
+<!-- VIDE Next 목업 v10 · 14 첫 실행 설정 ① AI 계정(가운데, Aside 첫 화면 꼴). 워드마크 → 질문 한 낱말 → 큰 카드 2(Claude · Codex(설치 안 됨 → 처음 꺼짐, 켜면 [설치] 줄), 켬 = 1px --fg 테두리 + ✓, 누르면 켬/끔) → 상태 줄(Claude Code ✓ 설치 · ✓ 로그인 / Codex — 설치 안 됨 [설치]) · AccountSwitch 행 → 진행 점 3 + [건너뛰기][다음] → 15. 끈 카드의 상태 줄은 숨김. 설명 문장 없음. 합성 데이터. -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500&family=IBM+Plex+Mono&display=swap">
 <link rel="stylesheet" href="app.css">
 <style>
@@ -15,12 +15,9 @@
 .corner .moon{display:none}
 [data-theme=dark] .corner .sun{display:none}
 [data-theme=dark] .corner .moon{display:block}
-.setup .steps-nav .mark{font-size:13px;font-weight:600;letter-spacing:-.02em;padding:0 8px 12px}
-.setup .steps-nav .n{width:10px;color:var(--mute);font-variant-numeric:tabular-nums}
-.setup .tbl td .btn{margin-right:8px}
-.setup .tbl .ok-g{color:var(--fg)}
-.setup .tbl .n-acct b{font-weight:400}
-@media(max-width:520px){.setup{padding:32px 16px}.setup .tbl th,.setup .tbl td{padding:8px 4px}.setup .tbl td:last-child{white-space:normal}.setup .tbl td .btn{margin:0 4px 4px 0}}
+.center .status .row b{font-weight:500;color:var(--fg)}
+.center .status .row[hidden]{display:none}
+.center .status .acs{margin-top:4px}
 </style>
 </head>
 <body class="site">
@@ -28,6 +25,8 @@
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
   <symbol id="i-lang" viewBox="0 0 24 24"><path d="M2.5 20 6.5 9l4 11M4 16.5h5"/><path d="M12.5 4.5h5c0 4.6-1.9 8.1-5 10.5"/><path d="M20.5 3v13M20.5 9.5h2"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></symbol>
+  <symbol id="i-knot" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4.5"/><circle cx="8" cy="15" r="4.5"/><circle cx="16" cy="15" r="4.5"/></symbol>
 </svg>
 
 <div class="corner">
@@ -35,46 +34,39 @@
   <button type="button" data-theme-toggle title="밝게 / 어둡게" data-en-title="Light / Dark"><svg class="i xs sun"><use href="#i-sun"/></svg><svg class="i xs moon"><use href="#i-moon"/></svg></button>
 </div>
 
-<div class="setup">
-  <nav class="steps-nav" aria-label="설정 단계" data-en-label="Setup steps">
-    <span class="mark">VIDE</span>
-    <a class="on" href="14-setup.html" aria-current="step"><span class="g">●</span><span class="n">1</span><span data-en="AI accounts">AI 계정</span></a>
-    <a href="15-setup-hosts.html"><span class="g">○</span><span class="n">2</span><span data-en="Programs">프로그램</span></a>
-    <a href="16-setup-style.html"><span class="g">○</span><span class="n">3</span><span data-en="Style">방식</span></a>
-  </nav>
-  <main>
-    <h1 data-en="AI accounts">AI 계정</h1>
-    <div class="acct eps" role="group" aria-label="계정" data-en-label="Accounts"><bdi data-en="Account">계정</bdi><button type="button" class="on" aria-pressed="true" data-acct="claude">Claude</button><button type="button" class="on" aria-pressed="true" data-acct="gpt">GPT</button></div>
-    <table class="tbl">
-      <thead><tr><th data-en="Tool">도구</th><th data-en="Install">설치</th><th data-en="Login">로그인</th><th data-en="State">상태</th></tr></thead>
-      <tbody>
-        <tr data-acct="claude"><td>Claude Code</td><td><span class="ok-g">✓</span></td><td><span><span class="ok-g">✓</span> · <bdi data-en="Account">계정</bdi> 1</span></td><td><span class="st ok" data-en="Ready">됨</span></td></tr>
-        <tr data-acct="gpt"><td>Codex (GPT)</td><td><span class="ok-g">✓</span></td><td class="login"><button type="button" class="btn" data-login title="AccountSwitch"><bdi data-en="Sign in">로그인</bdi> ›</button></td><td><span class="st" data-en="Not yet">안 됨</span></td></tr>
-        <tr><td>AccountSwitch</td><td><span class="ok-g">✓</span></td><td><span class="n-acct"><bdi data-en="Account">계정</bdi> <b>1</b></span></td><td><button type="button" class="btn" data-en="Open">열기</button><span class="st ok" data-en="Ready">됨</span></td></tr>
-      </tbody>
-    </table>
-    <div class="foot"><span class="grow"></span><a class="btn" href="15-setup-hosts.html" data-en="Skip">건너뛰기</a><a class="btn primary" href="15-setup-hosts.html" data-en="Next">다음</a></div>
-  </main>
-</div>
+<main class="center">
+  <span class="wm">VIDE</span>
+  <h1 data-en="AI accounts">AI 계정</h1>
+  <div class="bigcards" role="group" aria-label="계정" data-en-label="Accounts">
+    <button type="button" class="bigcard" aria-pressed="true" data-acct="claude"><span class="ck">✓</span><svg class="i"><use href="#i-spark"/></svg><span>Claude</span></button>
+    <button type="button" class="bigcard" aria-pressed="false" data-acct="gpt"><span class="ck">✓</span><svg class="i"><use href="#i-knot"/></svg><span>Codex</span></button>
+  </div>
+  <div class="status">
+    <div class="row" data-acct="claude"><b>Claude Code</b><span>✓ <bdi data-en="Installed">설치</bdi></span>·<span>✓ <bdi data-en="Signed in">로그인</bdi></span></div>
+    <div class="row" data-acct="gpt" hidden><b>Codex</b><span class="inst">— <bdi data-en="Not installed">설치 안 됨</bdi></span><button type="button" class="btn" data-install data-en="Install">설치</button></div>
+    <div class="row acs"><b>AccountSwitch</b><span>✓ <bdi data-en="Installed">설치</bdi></span>·<span><bdi data-en="Account">계정</bdi> <span class="n">1</span></span><button type="button" class="btn" data-en="Open">열기</button></div>
+  </div>
+  <div class="dots" aria-label="1 / 3"><i class="on"></i><i></i><i></i></div>
+  <div class="foot"><a class="btn" href="15-setup-hosts.html" data-en="Skip">건너뛰기</a><a class="btn primary" href="15-setup-hosts.html" data-en="Next">다음</a></div>
+</main>
 
 <nav class="demo-nav" aria-label="데모 넘기기"><a class="prev" href="11-signin.html" title="이전">‹</a><b>2 / 16</b><a class="next" href="15-setup-hosts.html" title="다음">›</a></nav>
 <script src="app.js"></script>
 <script>
-/* 14: 계정 칩(있음/없음) → 그 제공자 행 켜고 끔(tr.off = —) · [로그인 ›] → AccountSwitch에서 로그인한 꼴(✓ · 계정 1, 됨, AccountSwitch 계정 +1) */
+/* 14: 카드 켬/끔 → 그 상태 줄 보임/숨김 · Codex [설치] → ✓ 설치 · AccountSwitch 계정 +1 */
 (function () {
-  var tb = document.querySelector('.setup .tbl tbody');
-  document.querySelector('.acct').addEventListener('click', function (e) {
-    var b = e.target.closest('button[data-acct]'); if (!b) return;
-    var on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(on)); b.classList.toggle('on', on);
-    tb.querySelector('tr[data-acct="' + b.dataset.acct + '"]').classList.toggle('off', !on);
+  var st = document.querySelector('.center .status');
+  document.querySelector('.bigcards').addEventListener('click', function (e) {
+    var b = e.target.closest('.bigcard'); if (!b) return;
+    var on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(on));
+    st.querySelector('.row[data-acct="' + b.dataset.acct + '"]').hidden = !on;
   });
-  tb.addEventListener('click', function (e) {
-    var b = e.target.closest('[data-login]'); if (!b) return; var tr = b.closest('tr'), n = tb.querySelector('.n-acct b');
-    b.parentNode.innerHTML = '<span><span class="ok-g">✓</span> · <bdi data-en="Account" data-ko="계정">계정</bdi> 1</span>';
-    var st = tr.querySelector('.st'); st.classList.add('ok'); st.setAttribute('data-en', 'Ready'); st.setAttribute('data-ko', '됨');
-    st.textContent = document.documentElement.lang === 'en' ? 'Ready' : '됨';
-    n.textContent = String(+n.textContent + 1);
-    if (document.documentElement.lang === 'en') tr.querySelector('bdi').textContent = 'Account';
+  st.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-install]'); if (!b) return;
+    var en = document.documentElement.lang === 'en';
+    b.previousElementSibling.innerHTML = '✓ <bdi data-ko="설치" data-en="Installed">' + (en ? 'Installed' : '설치') + '</bdi>';
+    b.remove();
+    var n = st.querySelector('.acs .n'); n.textContent = String(+n.textContent + 1);
   });
 })();
 </script>

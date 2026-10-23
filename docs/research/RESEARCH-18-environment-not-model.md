@@ -2,8 +2,8 @@
 id: RESEARCH-18
 title: 환경으로서의 VIDE — 같은 모델, 건축에 맞춘 작업 환경 (Claude Code·Cursor·Kiro 대조와 현행 인벤토리)
 status: draft
-version: 0.2
-updated: 2026-10-20
+version: 0.3
+updated: 2026-10-23
 owner: user
 related: [OQ-15, FR-08, FR-13, FR-18, FR-24, FR-25, ADR-011, ADR-021, ADR-022, ADR-028, ADR-031, ADR-037, SPEC-01, SPEC-02, SPEC-05, SPEC-07, SPEC-08, ARCH-01, ARCH-03, RESEARCH-10, RESEARCH-11, RESEARCH-14, PLAN-24, PLAN-28, PLAN-51]
 ---
@@ -310,3 +310,15 @@ PRD가 지금 VIDE를 정의하는 문장은 셋이다. 머리 "여러 설계 �
 - https://code.claude.com/docs/en/sessions (#name-your-sessions · #resume-a-session · #use-the-session-picker)
 - https://cursor.com/docs/agent/overview · https://cursor.com/docs/release-notes · https://cursor.com/changelog/3-0 · https://cursor.com/changelog/3-4
 - https://kiro.dev/docs/ide/chat/ · https://kiro.dev/docs/crew/chat/sessions/ · https://kiro.dev/docs/checkpoints/ · https://kiro.dev/docs/cli/terminal-ui/
+
+대화 렌더링 조각(2026-10-23 추가, Claude Code VS Code 확장) [사실]:
+
+- 도구 호출 접힘: Focus view는 도구 호출·결과·thinking을 펼칠 수 있는 행 뒤로 숨기고 사용자 말·응답만 남긴다. 최신 할 일 목록과 기다리는 질문은 계속 보인다. thinking은 접힌 블록이고 Ctrl+O로 모두 펼친다. 도구 행의 낱말 구성(이름·대상·수) 형식은 문서에 없다.
+- 진행 표시: 턴 중에는 spinner가 동사를 바꿔 보여 주고(spinnerVerbs), 접힌 도구 요약 줄에 경과 시간이 실시간으로 오른다(2.1.210). 하위 에이전트는 입력창 아래 '2 agents' 칩 → 에이전트 지도(상태·경과·토큰).
+- 허용 프롬프트: Yes / Yes, and don't ask again(설명형 이름, 저장 범위 선택 2.1.3) / No. Tab으로 코멘트를 달고, 코멘트 없는 No는 턴을 멈춘다. 편집은 원본·제안을 나란히 비교한 뒤 변경마다 수락·거부한다.
+- 체크포인트: 턴을 시작한 프롬프트마다 하나. 메시지 hover → 대화 갈래 / 코드 되감기 / 둘 다. 파일 편집 도구로 바꾼 것만 되돌리며 Bash·외부 변경은 Git에 맡긴다.
+- 메시지 시각은 기본 표시(2.1.290), 날짜가 바뀌면 날짜 줄(2.1.284).
+- 세션 목록 패널(2.1.257): 접이식 ACCOUNT & USAGE(계정·사용량 막대·View details)와 SESSION MANAGER. /usage 창은 한도마다 막대와 초기화까지 남은 시간(current session·week), 행 표시는 읽지 않음 점·다른 창에서 열림 속 빈 고리(2.1.261).
+- 목업 v10이 가져온 것: 가로 탭 대신 세로 세션 목록(검색·칩·사용량 구역) ↔ 대화 보기, 읽히는 AI 문단 + 접히는 도구 행(`details.tool`)·경과 시간, [허용] [항상 허용] [거부] 카드와 변경 비교 카드, 결과 카드 [되돌리기](요청 단위).
+
+근거(접속 2026-10-23): https://code.claude.com/docs/en/vs-code (#use-the-prompt-box · #check-account-and-usage · #rewind-with-checkpoints · #extension-settings) · https://code.claude.com/docs/en/permissions · https://code.claude.com/docs/en/checkpointing · https://code.claude.com/docs/en/changelog

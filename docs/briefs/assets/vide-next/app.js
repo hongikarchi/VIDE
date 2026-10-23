@@ -1,4 +1,4 @@
-/* VIDE Next 목업 공통 동작 v9 — 대화 세션(탭 줄·홈·모델 메뉴·목록), 테마(밝음 기본), 탭, 대화/터미널, 접기, 레일 묶음 5 → 탐색기 블록, 검색칸 거르기, UI 언어 전체 전환(applyLang), 폴더 접기·+ 폴더, 선택 창, 데모 넘기기. 제품 코드 아님. */
+/* VIDE Next 목업 공통 동작 v10 — 대화 패널 두 보기(세션 목록 ↔ 대화 · 새 세션 · 질문 카드 · 모델 메뉴), 테마(밝음 기본), 탭, 대화/터미널, 접기, 레일 묶음 5 → 탐색기 블록, 검색칸 거르기, UI 언어 전체 전환(applyLang), 폴더 접기·+ 폴더, 선택 창, 데모 넘기기. 제품 코드 아님. */
 (function () {
   function $$(q, r) { return [].slice.call((r || document).querySelectorAll(q)); }
   var root = document.documentElement, key = 'vide-next-theme';
@@ -163,90 +163,73 @@
     showSec(selT ? selT.closest('.tree').dataset.sec : saved || 'base');
   }
   try { if (localStorage.getItem(langKey) === 'en') applyLang('en'); } catch (e) {}
-  /* 대화 v9: 탭 줄(.tab[data-sess] → .flow 전환 · 메타 = 제공자 · 모델 · effort · 나머지) · × 닫기 · + → 홈(.home, .add.on) · 홈 Enter → 새 탭(앞 16자 · 칩 제공자) · 칩 · 카드 · 모델 메뉴(세션 제공자 것만) · …/전체 › → .sessions(검색·접기·행 → 탭) */
+  /* 대화 v10: 두 보기(.agent[data-view] list|chat) · 목록 행 → 대화(.flow[data-sess], 없으면 stub = 행 제목 말 1 + 접힌 도구 행 1) · ‹ → 목록 · + → 새 세션(.new-on, .starter) · Enter → 새 세션이면 제목 앞 16자 + 목록 맨 위 행, 아니면 지금 대화에 말 추가 · 검색·칩 거르기 · × 행 지우기 · .ask 단추 → 완료 줄 · 모델 메뉴(행 제공자 것만). 도구 행은 details 기본 동작 */
   $$('.agent').forEach(function (ag) {
-    var tabs = ag.querySelector('.tabs'); if (!tabs) return;
-    var add = tabs.querySelector('.add'), more = tabs.querySelector('.more'), meta = ag.querySelector('.meta .m'), ss = ag.querySelector('.sessions'), home = ag.querySelector('.home');
-    var mb = ag.querySelector('.composer .model'), hta = home && home.querySelector('textarea'), menu = null, REQ = '<bdi data-en="Req">요청</bdi> ';
+    var lv = ag.querySelector('.lv'); if (!lv) return;
+    var head = ag.querySelector('.head.ch'), ht = head.querySelector('.t'), meta = ag.querySelector('.meta .m'), mb = ag.querySelector('.composer .model'), ta = ag.querySelector('.composer textarea');
+    var st = ag.querySelector('.starter'), cx = ag.querySelector('.composer .ctx'), q = lv.querySelector('.q'), f0 = ag.querySelector('.flow'), menu = null;
     var MODELS = { Claude: ['Sonnet', 'Opus', 'Fable'], Codex: ['GPT-5 Codex', 'GPT-5'] }, EFF = ['medium', 'high'];
-    function all() { return $$('.tab', tabs); }
-    /* 보이는 탭 수: 패널 380px = 3, 340px(≤1280) = 2 (app.css .tab:nth-of-type와 같음). base = 탭 줄에 없는 세션 수(마크업은 3 기준) */
-    function lim() { return window.matchMedia && matchMedia('(max-width:1280px)').matches ? 2 : 3; }
-    var base = (more ? parseInt(more.textContent.replace(/\D/g, ''), 10) || 0 : 0) - Math.max(0, all().length - 3);
-    function count() { if (more) { var n = base + Math.max(0, all().length - lim()); more.textContent = '…' + n; more.hidden = !n; } }
-    /* 닫은 뒤 자리가 비고 넘침이 있으면 목록에서 탭 줄에 없는 첫 세션을 끝에 올린다 */
-    function refill(gone) { while (base > 0 && all().length < lim()) { var r = ss && $$('.srow', ss).filter(function (x) { return x.dataset.sess !== gone && !/^↳/.test(x.querySelector('.t').textContent) && !tabs.querySelector('.tab[data-sess="' + x.dataset.sess + '"]'); })[0]; if (!r) break;
-      var sub = r.querySelector('.sub'), t = mkTab(r.dataset.sess, r.querySelector('.t').textContent, r.querySelector('.st').innerHTML, sub ? (/^Codex/.test(sub.textContent) ? 'Codex' : 'Claude') : ''); tabs.insertBefore(t, add); base--; applyLang(lang); } count(); }
-    function srowSub(id) { return ss && ss.querySelector('.srow[data-sess="' + id + '"] .sub'); }
-    function dflt(t) { var r = srowSub(t.dataset.sess); t.dataset.p = t.dataset.p || (r && /^Codex/.test(r.textContent) ? 'Codex' : 'Claude'); t.dataset.m = t.dataset.m || MODELS[t.dataset.p][0]; t.dataset.e = t.dataset.e || 'medium'; }
-    function setMeta(t) { var r = srowSub(t.dataset.sess), rest = t.dataset.rest || (r ? r.innerHTML.replace(/^(Claude|Codex) · /, '') : REQ + '1');
-      if (meta) meta.innerHTML = [t.dataset.p, t.dataset.m, t.dataset.e, rest].join(' · '); if (mb) mb.firstChild.nodeValue = t.dataset.m + ' · ' + t.dataset.e; applyLang(lang); }
-    /* 장에 없는 세션의 짧은 본문(말 수 = 메타 '요청 n') · 그 밖은 접힘 줄 + 제목 말 + 결과 */
-    function U(t) { return '<div class="msg user"><div class="who" data-en="Me">나</div><div class="body"><p>' + t + '</p></div></div>'; }
-    function A(t, tm) { return '<div class="msg ai"><div class="who">VIDE</div><div class="body"><p>' + t + '</p>' + (tm ? '<time>' + tm + '</time>' : '') + '</div></div>'; }
-    var SNIP = {
-      s02: U('기록 모아 줘.') + A('<bdi data-en="Records">기록</bdi> 180 · <bdi data-en="Mismatch">어긋남</bdi> 2', '15:40'),
-      s04: U('C2A 어디?') + A('X3 · Y2') + U('D-03 근거') + A('← 4, 5') + U('이 기둥 600 동쪽으로.') + A('<bdi data-en="Columns">기둥</bdi> 1 · <bdi data-en="Plans">평면</bdi> 1', '16:12'),
-      s05: U('1층 보 경간 봐줘.') + A('12 m ↑ 4') + U('트러스로.') + A('<svg class="i xs"><use href="#i-cube"/></svg>4', '15:40')
-    };
-    function mk(id) { var f = document.createElement('div'); f.className = 'flow'; f.dataset.sess = id;
-      if (SNIP[id]) f.innerHTML = SNIP[id];
-      else { var r = ss && ss.querySelector('.srow[data-sess="' + id + '"]'), sub = r && r.querySelector('.sub'), n = sub ? parseInt((sub.textContent.match(/(요청|Req)\s*(\d+)/) || [0, 0, 1])[2], 10) : 1, tl = r ? r.querySelector('.t').textContent.replace(/^↳ /, '') : '';
-        f.innerHTML = (n > 1 ? '<div class="fold">⋯ <bdi data-en="Req">요청</bdi> ' + (n - 1) + '</div>' : '') + U(tl) + A(sub ? sub.innerHTML.replace(/^(Claude|Codex) · <bdi[^>]*>[^<]*<\/bdi> \d+ · /, '') : '·', r && r.querySelector('time') ? r.querySelector('time').textContent : ''); }
-      ag.insertBefore(f, ag.querySelector('.term')); return f; }
-    var cx = ag.querySelector('.composer .ctx'), s0 = (tabs.querySelector('.tab.on') || {}).dataset; s0 = s0 && s0.sess;
-    function flow(id) { var fs = $$('.flow', ag), f = fs.filter(function (x) { return x.dataset.sess === id; })[0];
-      if (!f) { f = mk(id); fs.push(f); }
-      fs.forEach(function (x) { x.hidden = x !== f; }); f.hidden = false;
-      if (cx && !cx.querySelector('.ghost')) cx.hidden = id !== s0; }
-    function list(on) { if (ss) ss.hidden = !on; }
-    function go(t) {
-      all().forEach(function (x) { x.classList.toggle('on', x === t); x.setAttribute('aria-selected', String(x === t)); });
-      ag.classList.toggle('home-on', !t); if (home) home.hidden = !!t; if (add) add.classList.toggle('on', !t); list(false); if (menu) menu.hidden = true;
-      if (!t) return; var g = t.querySelector('.g-new'); if (g) g.remove(); dflt(t); flow(t.dataset.sess); setMeta(t);
+    var cur = lv.querySelector('.srow[data-sess="' + (f0 && f0.dataset.sess) + '"]') || lv.querySelector('.srow.sel');
+    function view(v) { ag.setAttribute('data-view', v); if (menu) menu.hidden = true; }
+    function dflt(r) { var s = r.querySelector('.sub'); r.dataset.p = r.dataset.p || (s && /^Codex/.test(s.textContent) ? 'Codex' : 'Claude'); r.dataset.m = r.dataset.m || MODELS[r.dataset.p][0]; r.dataset.e = r.dataset.e || 'medium'; }
+    function setMeta(p, m, e, rest) { meta.innerHTML = [p, m, e].concat(rest ? [rest] : []).join(' · '); if (mb) mb.firstChild.nodeValue = m + ' · ' + e; applyLang(lang); }
+    function rowMeta(r) { dflt(r); var s = r.querySelector('.sub'); setMeta(r.dataset.p, r.dataset.m, r.dataset.e, s ? s.innerHTML.replace(/^(Claude|Codex)( · )?/, '') : ''); }
+    /* 자기 .flow가 없는 행 = 자리 흐름(행 제목 사용자 말 1 + 접힌 도구 행 1) */
+    function stub(r) {
+      var f = document.createElement('div'), t = r.querySelector('.t').textContent.replace(/^↳\s*/, ''), s = r.querySelector('.sub'), n = s ? s.textContent.replace(/^(Claude|Codex)( · )?/, '') : '';
+      f.className = 'flow'; f.dataset.sess = r.dataset.sess;
+      f.innerHTML = '<div class="msg user"><div class="body"><p></p></div></div><details class="tool"><summary><span class="st">✓</span><b data-en="Read records">기록 읽기</b><span class="n"></span></summary><pre class="out"></pre></details>';
+      f.querySelector('.msg p').textContent = t; f.querySelector('.n').textContent = n ? '· ' + n : '';
+      f.querySelector('.out').textContent = 'read  session  ' + r.dataset.sess + '\ntitle ' + t + '\nscope ' + (n || '-');
+      ag.insertBefore(f, ag.querySelector('.term')); return f;
     }
-    function mkTab(id, title, st, p) { var t = document.createElement('button'); t.type = 'button'; t.className = 'tab'; t.setAttribute('role', 'tab'); t.dataset.sess = id; t.title = title; if (p) t.dataset.p = p;
-      t.innerHTML = '<span class="st"></span><span class="t"></span><span class="x" title="닫기" data-en-title="Close">×</span>'; t.firstChild.innerHTML = st || ''; t.children[1].textContent = title; return t; }
-    function open(id, title, st, p) { var t = tabs.querySelector('.tab[data-sess="' + id + '"]');
-      if (!t) { t = mkTab(id, title, st, p); }
-      tabs.insertBefore(t, tabs.firstChild); count(); go(t); return t; }
-    function rowOpen(r) { var sub = r.querySelector('.sub'); open(r.dataset.sess, r.querySelector('.t').textContent, r.querySelector('.st').innerHTML, sub ? (/^Codex/.test(sub.textContent) ? 'Codex' : 'Claude') : ''); }
-    tabs.addEventListener('click', function (e) { var t = e.target.closest('.tab'); if (!t) return;
-      if (e.target.closest('.x')) { var on = t.classList.contains('on'), sid = t.dataset.sess; t.remove(); refill(sid); if (on) go(all()[0] || null); } else go(t); });
-    $$('[data-agent-new]', ag).forEach(function (b) { b.addEventListener('click', function () { go(null); if (hta) hta.focus(); }); });
-    $$('[data-agent-list]', ag).forEach(function (b) { b.addEventListener('click', function () { if (ss) list(ss.hidden); }); });
-    var sq = ss && ss.querySelector('.q');
-    if (sq) sq.addEventListener('input', function () { var v = sq.value.trim().toLowerCase(); ss.classList.toggle('filtering', !!v);
-      $$('.grp', ss).forEach(function (g) { var n = 0; $$('.srow', g).forEach(function (r) { r.hidden = !!v && r.querySelector('.t').textContent.toLowerCase().indexOf(v) < 0; if (!r.hidden) n++; }); g.hidden = !!v && !n; }); });
-    if (ss) ss.addEventListener('click', function (e) {
-      var h = e.target.closest('h3[role=button]'), r = e.target.closest('.srow'); if (h) { h.parentNode.classList.toggle('shut'); return; } if (!r) return;
-      if (e.target.closest('.x')) { var b = r.parentNode.querySelector('h3 bdi'); if (b && b.nextSibling) b.nextSibling.nodeValue = b.nextSibling.nodeValue.replace(/\d+/, function (n) { return Math.max(0, n - 1); }); r.remove(); } else rowOpen(r); });
-    if (home) home.addEventListener('click', function (e) {
-      var c = e.target.closest('.prov button'), k = e.target.closest('.cards .art-card'), r = e.target.closest('.recent .srow');
-      if (c) $$('.prov button', home).forEach(function (x) { x.classList.toggle('on', x === c); });
-      if (k && hta) { hta.value = k.querySelector('.t').textContent; hta.focus(); }
-      if (r) rowOpen(r);
+    function open(r) {
+      cur = r; ag.classList.remove('new-on'); $$('.srow', lv).forEach(function (x) { x.classList.toggle('sel', x === r); });
+      var g = r.querySelector('.g-new'), fs = $$('.flow', ag), f = fs.filter(function (x) { return x.dataset.sess === r.dataset.sess; })[0] || stub(r); if (g) g.remove(); fs = $$('.flow', ag);
+      fs.forEach(function (x) { x.hidden = x !== f; }); if (cx) cx.hidden = r.dataset.sess !== (f0 && f0.dataset.sess);
+      head.querySelector('.st').innerHTML = r.querySelector('.st').innerHTML; ht.removeAttribute('data-en'); ht.removeAttribute('data-ko'); ht.textContent = r.querySelector('.t').textContent;
+      rowMeta(r); view('chat');
+    }
+    function prov() { var c = st && st.querySelector('.prov .on'); return c && c.dataset.p !== 'auto' ? c.dataset.p : 'Claude'; }
+    function fresh() { ag.classList.add('new-on'); view('chat'); head.querySelector('.st').innerHTML = ''; ht.removeAttribute('data-ko'); ht.textContent = '새 세션'; ht.setAttribute('data-en', 'New session'); setMeta(prov(), MODELS[prov()][0], 'medium'); if (ta) ta.focus(); }
+    function filt() { var v = q.value.trim().toLowerCase(), run = lv.querySelector('.tools [data-f=run].on');
+      $$('.grp', lv).forEach(function (g) { var n = 0; $$('.srow', g).forEach(function (r) { r.hidden = !!(v && r.querySelector('.t').textContent.toLowerCase().indexOf(v) < 0) || !!(run && r.querySelector('.st').textContent !== '●'); if (!r.hidden) n++; }); g.hidden = !n; }); }
+    q.addEventListener('input', filt);
+    lv.addEventListener('click', function (e) {
+      var c = e.target.closest('.tools .eps button'), r = e.target.closest('.srow');
+      if (c) { $$('.tools .eps button', lv).forEach(function (x) { x.classList.toggle('on', x === c); }); filt(); }
+      if (r && e.target.closest('.x')) { r.remove(); filt(); } else if (r) open(r);
     });
-    if (hta) hta.addEventListener('keydown', function (e) {
-      if (e.key !== 'Enter' || e.shiftKey) return; e.preventDefault(); var v = hta.value.trim(); if (!v) return;
-      var c = home.querySelector('.prov .on'), p = c && c.dataset.p !== 'auto' ? c.dataset.p : 'Claude', id = 'n' + Date.now(), f = document.createElement('div');
-      f.className = 'flow'; f.dataset.sess = id; f.setAttribute('data-new', ''); f.innerHTML = '<div class="msg user"><div class="who" data-en="Me">나</div><div class="body"><p></p></div></div>'; f.querySelector('p').textContent = v;
-      ag.insertBefore(f, ag.querySelector('.term')); hta.value = '';
-      var t = open(id, v.slice(0, 16).trimEnd(), '●', p); t.dataset.rest = REQ + '1'; setMeta(t);
+    lv.addEventListener('keydown', function (e) { var r = e.target.closest('.srow'); if (r && e.key === 'Enter') open(r); });
+    $$('[data-agent-back]', ag).forEach(function (b) { b.addEventListener('click', function () { view('list'); }); });
+    $$('[data-agent-new]', ag).forEach(function (b) { b.addEventListener('click', fresh); });
+    if (st) st.addEventListener('click', function (e) { var c = e.target.closest('.prov button'), k = e.target.closest('.cards .art-card');
+      if (c) { $$('.prov button', st).forEach(function (x) { x.classList.toggle('on', x === c); }); setMeta(prov(), MODELS[prov()][0], 'medium'); }
+      if (k && ta) { ta.value = k.querySelector('.t').textContent; ta.focus(); } });
+    if (ta) ta.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || e.shiftKey) return; e.preventDefault(); var v = ta.value.trim(); if (!v) return; ta.value = '';
+      var m = document.createElement('div'); m.className = 'msg user'; m.innerHTML = '<div class="body"><p></p></div>'; m.querySelector('p').textContent = v;
+      if (!ag.classList.contains('new-on')) { var cf = $$('.flow', ag).filter(function (x) { return !x.hidden; })[0]; if (cf) { cf.appendChild(m); cf.scrollTop = 1e6; } return; }
+      var id = 'n' + Date.now(), p = prov(), f = document.createElement('div'), r = document.createElement('div'), g = lv.querySelector('.grp');
+      f.className = 'flow'; f.dataset.sess = id; f.appendChild(m); f.insertAdjacentHTML('beforeend', '<div class="working"><span class="spin">⟳</span><span data-en="Thinking">생각 중</span></div>'); ag.insertBefore(f, ag.querySelector('.term'));
+      r.className = 'srow'; r.setAttribute('role', 'button'); r.tabIndex = 0; r.dataset.sess = id; r.dataset.p = p;
+      r.innerHTML = '<span class="st">●</span><span class="t"></span><time data-en="now">방금</time><span class="x" title="닫기" data-en-title="Close">×</span><span class="sub" hidden>' + p + '</span>'; r.querySelector('.t').textContent = v.slice(0, 16).trimEnd();
+      g.insertBefore(r, g.querySelector('.srow')); filt(); open(r);
     });
+    ag.addEventListener('click', function (e) { var b = e.target.closest('.ask:not(.done) button'); if (!b) return; var a = b.closest('.ask'), f = a.closest('.flow');
+      a.className = 'ask done'; a.innerHTML = '<span class="st">✓</span><span></span>'; a.lastChild.textContent = b.dataset.done || b.textContent; if (b.dataset.doneEn) a.lastChild.setAttribute('data-en', b.dataset.doneEn);
+      $$('.working', f).forEach(function (w) { w.remove(); }); $$('details.tool .st .spin', f).forEach(function (s) { s.parentNode.textContent = '✓'; }); applyLang(lang); });
     if (mb) mb.addEventListener('click', function (e) {
-      e.stopPropagation(); var t = tabs.querySelector('.tab.on'); if (!t) return;
-      if (!menu) { menu = document.createElement('div'); menu.className = 'menu'; menu.hidden = true; mb.parentNode.insertBefore(menu, mb.nextSibling); menu.addEventListener('click', function (ev) { var b = ev.target.closest('button'), cur = tabs.querySelector('.tab.on'); if (!b || !cur) return; cur.dataset[b.dataset.k] = b.dataset.v; setMeta(cur); menu.hidden = true; }); }
+      e.stopPropagation(); if (!cur || ag.classList.contains('new-on')) return; dflt(cur);
+      if (!menu) { menu = document.createElement('div'); menu.className = 'menu'; menu.hidden = true; mb.parentNode.insertBefore(menu, mb.nextSibling); menu.addEventListener('click', function (ev) { var b = ev.target.closest('button'); if (!b || !cur) return; cur.dataset[b.dataset.k] = b.dataset.v; rowMeta(cur); menu.hidden = true; }); }
       if (!menu.hidden) { menu.hidden = true; return; }
-      function btn(k, v) { return '<button type="button" data-k="' + k + '" data-v="' + v + '"' + (t.dataset[k] === v ? ' class="on"' : '') + '>' + v + '</button>'; }
-      menu.innerHTML = MODELS[t.dataset.p].map(function (m) { return btn('m', m); }).join('') + '<hr>' + EFF.map(function (x) { return btn('e', x); }).join(''); menu.hidden = false;
+      function btn(k, v) { return '<button type="button" data-k="' + k + '" data-v="' + v + '"' + (cur.dataset[k] === v ? ' class="on"' : '') + '>' + v + '</button>'; }
+      menu.innerHTML = MODELS[cur.dataset.p].map(function (m) { return btn('m', m); }).join('') + '<hr>' + EFF.map(function (x) { return btn('e', x); }).join(''); menu.hidden = false;
     });
     document.addEventListener('click', function (e) { if (menu && !menu.contains(e.target)) menu.hidden = true; });
-    /* 처음: .tab.on에 메타 첫 세 낱말(제공자·모델·effort)·나머지를 담는다. 홈이 열린 꼴(13)이면 홈 */
-    var on0 = tabs.querySelector('.tab.on');
-    if (on0 && meta) { var ps = meta.innerHTML.split(' · '); on0.dataset.p = on0.dataset.p || ps[0]; on0.dataset.m = on0.dataset.m || ps[1]; on0.dataset.e = on0.dataset.e || ps[2]; on0.dataset.rest = ps.slice(3).join(' · '); if (mb) mb.firstChild.nodeValue = on0.dataset.m + ' · ' + on0.dataset.e; }
-    if (home && !home.hidden) go(null);
-    count();
+    /* 처음: 메타 첫 세 낱말 = 지금 행의 제공자·모델·effort. .agent.new-on(13)이면 새 세션 상태 */
+    if (cur && meta) { var ps = meta.innerHTML.split(' · '); cur.dataset.p = ps[0]; cur.dataset.m = ps[1]; cur.dataset.e = ps[2]; if (mb) mb.firstChild.nodeValue = ps[1] + ' · ' + ps[2]; }
+    if (ag.classList.contains('new-on')) fresh();
   });
   /* 선택 창 닫기 */
   $$('[data-dialog-close]').forEach(function (b) { b.addEventListener('click', function () { var s = b.closest('.scrim'); if (s) s.remove(); }); });
