@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title data-en="VIDE — Sign in">VIDE — 로그인</title>
 <!-- VIDE Next 목업 v9 · 11 로그인|가입(설치본 첫 실행의 첫 장, src/ui/first-run.tsx 라벨: 아이디 · 비밀번호 · PC 이름). 카드 머리 .seg 토글, 가입 = 아이디 · 비밀번호 · 가입 코드(서버 SIGNUP_CODE 관문) · PC 이름(로그인과 같음, 비우면 VIDE PC — first-run.tsx:118). AccountSwitch는 14 설정 ①로 옮김. [로그인]/[가입] → 14-setup.html. .app 격자 없음. 입력값 비움. 설명 문장 없음. -->
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500&family=IBM+Plex+Mono&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&display=swap">
 <link rel="stylesheet" href="app.css">
 <style>
 /* 장별: 배치만 */
@@ -23,8 +24,8 @@
 <body class="site">
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
-  <symbol id="i-lang-ko" viewBox="0 0 24 24"><text x="12" y="17.5" text-anchor="middle" font-family="IBM Plex Sans KR, IBM Plex Sans, sans-serif" font-size="15" font-weight="500" fill="currentColor" stroke="none">가</text></symbol>
-  <symbol id="i-lang-en" viewBox="0 0 24 24"><text x="12" y="17.5" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="16" font-weight="500" fill="currentColor" stroke="none">A</text></symbol>
+  <symbol id="i-lang-ko" viewBox="0 0 24 24"><text x="12" y="17.5" text-anchor="middle" font-family="Pretendard Variable, Pretendard, sans-serif" font-size="15" font-weight="500" fill="currentColor" stroke="none">가</text></symbol>
+  <symbol id="i-lang-en" viewBox="0 0 24 24"><text x="12" y="17.5" text-anchor="middle" font-family="Pretendard Variable, Pretendard, sans-serif" font-size="16" font-weight="500" fill="currentColor" stroke="none">A</text></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
 </svg>
 
@@ -48,7 +49,7 @@
   </form>
 </main>
 
-<nav class="demo-nav" aria-label="데모 넘기기"><a class="prev off" href="#" title="이전">‹</a><b>1 / 16</b><a class="next" href="14-setup.html" title="다음">›</a></nav>
+<nav class="demo-nav" aria-label="데모 넘기기"><a class="prev off" href="#" title="이전">‹</a><b>1 / 18</b><a class="next" href="14-setup.html" title="다음">›</a></nav>
 <script src="app.js"></script>
 <script>
 /* 11: 로그인 | 가입 토글(.seg) — 가입이면 가입 코드 칸 추가(PC 이름은 둘 다: 가입 직후 /remote/link name, 비우면 VIDE PC), 단추 글자 바뀜 */

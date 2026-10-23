@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VIDE Next 목업</title>
-<!-- 스토리보드 브리프(docs/briefs/README.md). 2026-10-23 8판: 7차 메모(세로 세션 목록·Claude Code식 대화·가운데 설정·마스크 리빌). 화면 16장은 assets/vide-next/*.html 살아 있는 HTML. 정본은 PRD·SPEC·Design. -->
+<!-- 스토리보드 브리프(docs/briefs/README.md). 2026-10-23 9판: 9차 메모(Pretendard·답변 UI 변형 3·자료 = 사람 폴더·파일 보기·탭 분할). 화면 18장은 assets/vide-next/*.html 살아 있는 HTML. 정본은 PRD·SPEC·Design. -->
 <link rel="stylesheet" href="_base.css">
 <style>
 .live{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;border:1px solid var(--line);background:#fff}
@@ -31,6 +31,10 @@
 .map .h{font-weight:600}
 .map .r{fill:var(--muted)}
 .map .acc{fill:var(--coral-deep)}
+.map .fi path,.map .fi rect,.map .fi circle{fill:none;stroke-width:1.2;stroke:currentColor}
+.map .fi text{font-family:var(--font);fill:currentColor}
+.map .fi{--f-pdf:#b5533c;--f-xlsx:#3f8f5f;--f-docx:#3b6fb6;--f-hwp:#2a8c9c;--f-img:#7d5bb0;--f-html:#c7762c}
+.map .fi .pdf{color:var(--f-pdf)}.map .fi .xlsx{color:var(--f-xlsx)}.map .fi .docx{color:var(--f-docx)}.map .fi .hwp{color:var(--f-hwp)}.map .fi .img{color:var(--f-img)}.map .fi .html{color:var(--f-html)}
 .words{font-size:12px;color:var(--muted);margin:10px 0 0;letter-spacing:0}
 .rails{display:flex;flex-wrap:wrap;gap:20px;max-width:720px}
 .rails figure{margin:0;flex:1 1 200px;max-width:220px}
@@ -40,28 +44,35 @@
 .shells figure{max-width:200px}
 .rails figcaption{font-size:12px;margin-top:6px;letter-spacing:0}
 .rails figcaption em{font-style:normal;font-size:10px;color:var(--coral-deep);border:1px solid var(--coral);border-radius:2px;padding:1px 5px;margin-left:6px}
-@media print{.live iframe{display:none}.live:after{content:"인쇄 불가 · 아래 작은 그림";position:absolute;inset:0;display:grid;place-items:center;color:#777}}
+.vars{display:flex;flex-wrap:wrap;gap:16px 5px;margin-top:18px}
+.vars figure{margin:0;flex:0 1 380px;max-width:100%}
+.vars iframe{display:block;box-sizing:border-box;width:380px;max-width:100%;height:420px;border:1px solid var(--line);background:#fff}
+.vars figcaption{font-size:12px;margin-top:6px;letter-spacing:0}
+.vars figcaption em{font-style:normal;font-size:10px;color:var(--coral-deep);border:1px solid var(--coral);border-radius:2px;padding:1px 5px;margin-left:6px}
+.ref td:last-child a{font-size:12px}
+.map .fi rect{fill:none;stroke-width:1.6}
+@media print{.vars iframe{display:none}.live iframe{display:none}.live:after{content:"인쇄 불가 · 아래 작은 그림";position:absolute;inset:0;display:grid;place-items:center;color:#777}}
 </style>
 </head>
 <body>
 <header>
   <a class="brand" href="#top"><b>VIDE</b><span>목업 · 전체 흐름</span></a>
-  <nav><a href="#s">01 화면</a><a href="#f">첫 실행</a><a href="#a">세션</a><a href="#t">대화</a><a href="#m">방식</a><a href="#c">02 바뀐 점</a><a href="#q">03 질문</a></nav>
+  <nav><a href="#s">01 화면</a><a href="#t">대화</a><a href="#v">파일</a><a href="#c">02 바뀐 점</a><a href="#q">03 질문</a></nav>
   <button type="button" class="noprint" onclick="window.print()">인쇄 / PDF ↗</button>
 </header>
 <main id="top">
 
 <div class="intro">
   <div>
-    <div class="eyebrow">2026-10-23 8판-3 / 검토 대기 / 근거 <a href="../research/RESEARCH-18-environment-not-model.md">RESEARCH-18 §세션</a> · <a href="../research/RESEARCH-21-first-run-and-sessions.md">RESEARCH-21</a></div>
-    <h1>세션은 세로 목록, 대화는 읽히게.</h1>
+    <div class="eyebrow">2026-10-23 9판 / 검토 대기 / 근거 <a href="../research/RESEARCH-22-answer-ui-files-and-tabs.md">RESEARCH-22</a> · <a href="../research/RESEARCH-21-first-run-and-sessions.md">RESEARCH-21</a></div>
+    <h1>읽히는 답, 열리는 파일.</h1>
   </div>
-  <div class="study-mark">살아 있는 HTML<br>답 = [피드백 복사]</div>
+  <div class="study-mark">살아 있는 HTML<br>Pretendard<br>답 = [피드백 복사]</div>
 </div>
 
 <section id="s">
   <div class="section-head">
-    <div><div class="eyebrow">01 / SCREENS</div><h2>화면 16장.</h2></div>
+    <div><div class="eyebrow">01 / SCREENS</div><h2>화면 18장.</h2></div>
   </div>
   <div class="story">
     <div class="stick">
@@ -71,16 +82,18 @@
       <figure class="shot" data-s="4"><div class="live"><iframe data-src="assets/vide-next/16-setup-style.html" title="S16 방식 리빌" loading="lazy"></iframe><a class="open" href="assets/vide-next/16-setup-style.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
       <figure class="shot" data-s="5"><div class="live"><iframe data-src="assets/vide-next/01-start.html" title="S1 시작" loading="lazy"></iframe><a class="open" href="assets/vide-next/01-start.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
       <figure class="shot" data-s="6"><div class="live"><iframe data-src="assets/vide-next/02-records-db.html" title="S2 기록 표" loading="lazy"></iframe><a class="open" href="assets/vide-next/02-records-db.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="7"><div class="live"><iframe data-src="assets/vide-next/10-threads.html" title="S10 협의 대장" loading="lazy"></iframe><a class="open" href="assets/vide-next/10-threads.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="8"><div class="live"><iframe data-src="assets/vide-next/03-spec.html" title="S3 조건·결정" loading="lazy"></iframe><a class="open" href="assets/vide-next/03-spec.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="9"><div class="live"><iframe data-src="assets/vide-next/04-apply.html" title="S4 변경·이력" loading="lazy"></iframe><a class="open" href="assets/vide-next/04-apply.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="10"><div class="live"><iframe data-src="assets/vide-next/05-review-structure.html" title="S5 구조 검토" loading="lazy"></iframe><a class="open" href="assets/vide-next/05-review-structure.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="11"><div class="live"><iframe data-src="assets/vide-next/06-parts-model.html" title="S6 부위×모델" loading="lazy"></iframe><a class="open" href="assets/vide-next/06-parts-model.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="12"><div class="live"><iframe data-src="assets/vide-next/07-records-graph.html" title="S7 그래프" loading="lazy"></iframe><a class="open" href="assets/vide-next/07-records-graph.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="13"><div class="live"><iframe data-src="assets/vide-next/08-report.html" title="S8 주간 보고" loading="lazy"></iframe><a class="open" href="assets/vide-next/08-report.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="14"><div class="live"><iframe data-src="assets/vide-next/09-search.html" title="S9 검색" loading="lazy"></iframe><a class="open" href="assets/vide-next/09-search.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="15"><div class="live"><iframe data-src="assets/vide-next/12-sessions.html" title="S12 세션 목록" loading="lazy"></iframe><a class="open" href="assets/vide-next/12-sessions.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
-      <figure class="shot" data-s="16"><div class="live"><iframe data-src="assets/vide-next/13-home.html" title="S13 새 세션" loading="lazy"></iframe><a class="open" href="assets/vide-next/13-home.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="7"><div class="live"><iframe data-src="assets/vide-next/17-file-view.html" title="S17 파일 보기" loading="lazy"></iframe><a class="open" href="assets/vide-next/17-file-view.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="8"><div class="live"><iframe data-src="assets/vide-next/10-threads.html" title="S10 협의 대장" loading="lazy"></iframe><a class="open" href="assets/vide-next/10-threads.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="9"><div class="live"><iframe data-src="assets/vide-next/03-spec.html" title="S3 조건·결정" loading="lazy"></iframe><a class="open" href="assets/vide-next/03-spec.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="10"><div class="live"><iframe data-src="assets/vide-next/04-apply.html" title="S4 변경·이력" loading="lazy"></iframe><a class="open" href="assets/vide-next/04-apply.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="11"><div class="live"><iframe data-src="assets/vide-next/18-split.html" title="S18 분할" loading="lazy"></iframe><a class="open" href="assets/vide-next/18-split.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="12"><div class="live"><iframe data-src="assets/vide-next/05-review-structure.html" title="S5 구조 검토" loading="lazy"></iframe><a class="open" href="assets/vide-next/05-review-structure.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="13"><div class="live"><iframe data-src="assets/vide-next/06-parts-model.html" title="S6 부위×모델" loading="lazy"></iframe><a class="open" href="assets/vide-next/06-parts-model.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="14"><div class="live"><iframe data-src="assets/vide-next/07-records-graph.html" title="S7 그래프" loading="lazy"></iframe><a class="open" href="assets/vide-next/07-records-graph.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="15"><div class="live"><iframe data-src="assets/vide-next/08-report.html" title="S8 주간 보고" loading="lazy"></iframe><a class="open" href="assets/vide-next/08-report.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="16"><div class="live"><iframe data-src="assets/vide-next/09-search.html" title="S9 검색" loading="lazy"></iframe><a class="open" href="assets/vide-next/09-search.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="17"><div class="live"><iframe data-src="assets/vide-next/12-sessions.html" title="S12 새 세션 서랍" loading="lazy"></iframe><a class="open" href="assets/vide-next/12-sessions.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
+      <figure class="shot" data-s="18"><div class="live"><iframe data-src="assets/vide-next/13-home.html" title="S13 새 세션" loading="lazy"></iframe><a class="open" href="assets/vide-next/13-home.html" target="_blank" rel="noopener">새 창 ↗</a></div></figure>
     </div>
     <div class="steps-col">
       <div class="ctl"><button type="button" class="prev">‹ 이전</button><span class="pos"></span><button type="button" class="next">다음 ›</button></div>
@@ -91,161 +104,102 @@
       <div class="step" data-s="4" data-n="16" data-id="S16" data-choices="좋음,수정"><small>16</small><h3>S16 방식 리빌</h3></div>
       <div class="step" data-s="5" data-n="01" data-id="S1" data-choices="좋음,수정"><small>01</small><h3>S1 시작</h3></div>
       <div class="step" data-s="6" data-n="02" data-id="S2" data-choices="좋음,수정"><small>02</small><h3>S2 기록 표</h3></div>
-      <div class="step" data-s="7" data-n="10" data-id="S10" data-choices="좋음,수정"><small>10</small><h3>S10 협의 대장</h3></div>
-      <div class="step" data-s="8" data-n="03" data-id="S3" data-choices="좋음,수정"><small>03</small><h3>S3 조건·결정</h3></div>
-      <div class="step" data-s="9" data-n="04" data-id="S4" data-choices="좋음,수정"><small>04</small><h3>S4 변경·이력</h3></div>
-      <div class="step" data-s="10" data-n="05" data-id="S5" data-choices="좋음,수정"><small>05</small><h3>S5 구조 검토</h3></div>
-      <div class="step" data-s="11" data-n="06" data-id="S6" data-choices="좋음,수정"><small>06</small><h3>S6 부위×모델</h3></div>
-      <div class="step" data-s="12" data-n="07" data-id="S7" data-choices="좋음,수정"><small>07</small><h3>S7 그래프</h3></div>
-      <div class="step" data-s="13" data-n="08" data-id="S8" data-choices="좋음,수정"><small>08</small><h3>S8 주간 보고</h3></div>
-      <div class="step" data-s="14" data-n="09" data-id="S9" data-choices="좋음,수정"><small>09</small><h3>S9 검색</h3></div>
-      <div class="step" data-s="15" data-n="12" data-id="S12" data-choices="좋음,수정"><small>12</small><h3>S12 세션 목록</h3></div>
-      <div class="step" data-s="16" data-n="13" data-id="S13" data-choices="좋음,수정"><small>13</small><h3>S13 새 세션</h3></div>
+      <div class="step" data-s="7" data-n="17" data-id="S17" data-choices="좋음,수정"><small>17</small><h3>S17 파일 보기</h3></div>
+      <div class="step" data-s="8" data-n="10" data-id="S10" data-choices="좋음,수정"><small>10</small><h3>S10 협의 대장</h3></div>
+      <div class="step" data-s="9" data-n="03" data-id="S3" data-choices="좋음,수정"><small>03</small><h3>S3 조건·결정</h3></div>
+      <div class="step" data-s="10" data-n="04" data-id="S4" data-choices="좋음,수정"><small>04</small><h3>S4 변경·이력</h3></div>
+      <div class="step" data-s="11" data-n="18" data-id="S18" data-choices="좋음,수정"><small>18</small><h3>S18 분할</h3></div>
+      <div class="step" data-s="12" data-n="05" data-id="S5" data-choices="좋음,수정"><small>05</small><h3>S5 구조 검토</h3></div>
+      <div class="step" data-s="13" data-n="06" data-id="S6" data-choices="좋음,수정"><small>06</small><h3>S6 부위×모델</h3></div>
+      <div class="step" data-s="14" data-n="07" data-id="S7" data-choices="좋음,수정"><small>07</small><h3>S7 그래프</h3></div>
+      <div class="step" data-s="15" data-n="08" data-id="S8" data-choices="좋음,수정"><small>08</small><h3>S8 주간 보고</h3></div>
+      <div class="step" data-s="16" data-n="09" data-id="S9" data-choices="좋음,수정"><small>09</small><h3>S9 검색</h3></div>
+      <div class="step" data-s="17" data-n="12" data-id="S12" data-choices="좋음,수정"><small>12</small><h3>S12 새 세션 서랍</h3></div>
+      <div class="step" data-s="18" data-n="13" data-id="S13" data-choices="좋음,수정"><small>13</small><h3>S13 새 세션</h3></div>
     </div>
   </div>
   <div class="thumbs" aria-label="단계 바로 가기"></div>
 </section>
 
-<section id="f">
-  <div class="section-head">
-    <div><div class="eyebrow">FIRST RUN</div><h2>첫 실행 흐름.</h2></div>
-  </div>
-  <svg class="map" viewBox="0 0 720 160" role="img" aria-label="로그인 또는 가입, AI 계정, 프로그램, 방식, 시작">
-    <defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1L7 4L1 7"/></marker></defs>
-    <rect x=".5" y="20.5" width="111" height="30"/><text class="h" x="12" y="40">로그인 | 가입</text>
-    <path d="M114 35H148" marker-end="url(#ar)"/>
-    <rect class="box" x="152.5" y="20.5" width="111" height="30"/><text class="h" x="164" y="40">① AI 계정</text>
-    <path d="M266 35H300" marker-end="url(#ar)"/>
-    <rect class="box" x="304.5" y="20.5" width="111" height="30"/><text class="h" x="316" y="40">② 프로그램</text>
-    <path d="M418 35H452" marker-end="url(#ar)"/>
-    <rect class="box" x="456.5" y="20.5" width="111" height="30"/><text class="h" x="468" y="40">③ 방식</text>
-    <path d="M570 35H604" marker-end="url(#ar)"/>
-    <rect x="608.5" y="20.5" width="111" height="30"/><text class="h" x="620" y="40">시작</text>
-    <text class="r" x="12" y="76">아이디</text><text class="r" x="12" y="96">비밀번호</text><text class="r" x="12" y="116">가입 코드</text>
-    <text x="164" y="76">큰 카드 3</text><text x="164" y="96">누름 → ⟳ → ✓</text><text class="acc" x="164" y="116">AccountSwitch</text><text class="r" x="164" y="136">로그인 = 브라우저</text>
-    <text x="316" y="76">큰 카드 6</text><text x="316" y="96">누름 → 확장 ✓</text><text class="r" x="316" y="116">지원 예정</text>
-    <text x="468" y="76">마스크 리빌</text><text class="h" x="468" y="96">AI 좀 씀</text><text class="r" x="468" y="116">AI 처음 · 개발자</text>
-    <text class="r" x="620" y="76">S1</text>
-    <path class="dash" d="M152 152H568"/><text class="r" x="316" y="148">건너뛰기 · 설정에서 다시</text>
-  </svg>
-  <p class="words">S11 → S14 → S15 → S16 → S1 · 가운데 카드 · 진행 점 3</p>
-</section>
-
-<section id="a">
-  <div class="section-head">
-    <div><div class="eyebrow">SESSION</div><h2>세션 모형.</h2></div>
-  </div>
-  <svg class="map" viewBox="0 0 720 200" role="img" aria-label="목록 보기와 대화 보기, 행 클릭과 뒤로">
-    <defs><marker id="ar2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1L7 4L1 7"/></marker></defs>
-    <text class="r" x="0" y="12">목록</text>
-    <rect x=".5" y="20.5" width="259" height="178"/>
-    <text class="h" x="12" y="40">세션</text><text x="190" y="40">+ 새 세션</text>
-    <rect class="box" x="10.5" y="50.5" width="239" height="36"/>
-    <text class="r" x="18" y="66">Claude</text><rect class="on" x="70" y="62" width="90" height="3"/><text class="r" x="168" y="66">53%</text>
-    <text class="r" x="18" y="80">Codex</text><rect class="on" x="70" y="76" width="20" height="3"/><text class="r" x="168" y="80">12%</text>
-    <text class="r" x="12" y="104">검색 · 진행 중 1 · 전체</text>
-    <text class="r" x="12" y="124">오늘</text>
-    <text class="h" x="12" y="142">●</text><text x="26" y="142">기둥 C2A 이동</text><text class="r" x="210" y="142">2분</text>
-    <text class="acc" x="12" y="160">●</text><text x="26" y="160">이번 주 보고</text><text class="r" x="210" y="160">1시간</text>
-    <text class="r" x="12" y="182">7일 · 지난</text>
-    <path d="M262 92H452" marker-end="url(#ar2)"/><text class="r" x="330" y="84">행 클릭</text>
-    <path d="M456 132H266" marker-end="url(#ar2)"/><text class="r" x="330" y="150">‹ 세션</text>
-    <text class="r" x="460" y="12">대화</text>
-    <rect x="460.5" y="20.5" width="259" height="178"/>
-    <text x="470" y="40">‹</text><text class="h" x="484" y="40">● 기둥 C2A 이동</text><text class="r" x="664" y="40">터미널</text>
-    <text class="r" x="470" y="58">Claude · Sonnet · medium</text>
-    <rect class="box" x="566.5" y="66.5" width="143" height="20"/><text x="574" y="81">이 기둥 600 동쪽으로.</text>
-    <text x="470" y="104">기둥 C2A를 옮기겠습니다.</text>
-    <text class="r" x="470" y="122">✓ 모델 읽기 · 8</text>
-    <text class="r" x="470" y="138">✓ C2A 이동 · +600 x</text>
-    <text class="acc" x="470" y="154">⟳ 1층 평면 확인 중 · 12 s</text>
-    <rect x="470.5" y="164.5" width="239" height="24"/><text x="478" y="181">평면에 반영</text><text class="r" x="560" y="181">모델만</text>
-  </svg>
-  <p class="words">가로 탭 삭제 · 세션 = 제공자 고정 · 모델·effort 가변</p>
-</section>
-
-<section id="w">
-  <div class="section-head">
-    <div><div class="eyebrow">LAYOUT</div><h2>열 너비 · 접기.</h2></div>
-  </div>
-  <svg class="map" viewBox="0 0 720 150" role="img" aria-label="세 열과 경계 손잡이, 접힌 띠와 쉐브론">
-    <defs><marker id="ar3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1L7 4L1 7"/></marker></defs>
-    <text class="r" x="0" y="12">펼침</text>
-    <rect x=".5" y="20.5" width="19" height="110"/>
-    <rect x="20.5" y="20.5" width="99" height="110"/><text class="h" x="30" y="40">탐색기</text>
-    <rect x="120.5" y="20.5" width="179" height="110"/><text class="h" x="130" y="40">본문</text>
-    <rect x="300.5" y="20.5" width="139" height="110"/><text class="h" x="310" y="40">대화</text>
-    <rect class="on" x="119" y="56" width="3" height="40"/><rect class="on" x="299" y="56" width="3" height="40"/>
-    <text x="96" y="114">↔</text><text x="290" y="114">↔</text>
-    <text class="acc" x="30" y="80">230</text><text class="acc" x="310" y="80">380</text>
-    <text class="r" x="130" y="80">끌기 · 더블클릭</text>
-    <path d="M450 75H498" marker-end="url(#ar3)"/><text class="r" x="452" y="66">최소 이하</text>
-    <text class="r" x="504" y="12">접힘</text>
-    <rect x="504.5" y="20.5" width="19" height="110"/>
-    <rect class="box" x="524.5" y="20.5" width="11" height="110"/><text x="526" y="80">›</text>
-    <rect x="536.5" y="20.5" width="171" height="110"/><text class="h" x="546" y="40">본문</text>
-    <rect class="box" x="708.5" y="20.5" width="11" height="110"/><text x="710" y="80">‹</text>
-    <text class="r" x="546" y="80">띠 클릭 · 띠 끌기</text>
-    <text class="r" x="504" y="146">Ctrl+B · Ctrl+Alt+B · Ctrl+\</text>
-  </svg>
-  <p class="words">끌기 · 더블클릭 기본 · 최소 이하 접힘 · 띠 클릭 펼침</p>
-</section>
-
 <section id="t">
   <div class="section-head">
-    <div><div class="eyebrow">CHAT</div><h2>대화 조각.</h2></div>
+    <div><div class="eyebrow">CHAT</div><h2>답변 변형 3 · 1등 B.</h2></div>
   </div>
   <div class="table-wrap" style="max-height:none">
-    <table class="txt sty">
-      <thead><tr><th>조각</th><th>언제</th></tr></thead>
+    <table class="txt sty ref">
+      <thead><tr><th>도구</th><th>가져온 것</th><th>URL</th></tr></thead>
       <tbody>
-        <tr><td>도구 행</td><td>읽기 · 계산 · 이동, 접힘 ✓ ⟳ ✗</td></tr>
-        <tr><td>진행 중</td><td>⟳ 작업 · 경과 초</td></tr>
-        <tr><td>질문</td><td>적용 전 확인 켬</td></tr>
-        <tr><td>결과</td><td>요약 · 변경 비교 카드</td></tr>
-        <tr><td>되돌림</td><td>요청 단위 · 오류 ✗</td></tr>
+        <tr><td>Perplexity</td><td>단계 타임라인 · 결과 카드</td><td><a href="https://www.perplexity.ai/hub/blog/pro-search-upgraded-for-more-advanced-problem-solving">perplexity.ai</a></td></tr>
+        <tr><td>Claude Code VS Code</td><td>점 · 세로선 · 도구 인자</td><td><a href="https://marketplace.visualstudio.com/items?itemName=anthropic.claude-code">marketplace</a> · 실측</td></tr>
+        <tr><td>Cursor</td><td>도구 묶음 · 밀도 3단</td><td><a href="https://cursor.com/changelog/3-4">cursor.com</a></td></tr>
+        <tr><td>Cursor</td><td>되돌리기 체크포인트</td><td><a href="https://cursor.com/docs/agent/chat/checkpoints">cursor.com</a></td></tr>
+        <tr><td>Linear Agents</td><td>action · parameter · result</td><td><a href="https://linear.app/developers/agent-interaction">linear.app</a></td></tr>
+        <tr><td>Raycast AI</td><td>hover 행동 · 다시</td><td><a href="https://manual.raycast.com/ai/ai-chat">raycast.com</a></td></tr>
+        <tr><td>Notion AI</td><td>결과 아래 낱말 단추</td><td><a href="https://www.notion.com/help/guides/notion-ai-for-docs">notion.com</a></td></tr>
+        <tr><td>collectui</td><td>연한 사용자 상자 · 맨 글 답</td><td><a href="https://collectui.com/designs/ai-ui-design-inspiration">collectui.com</a></td></tr>
       </tbody>
     </table>
   </div>
-  <p class="words">사용자 말 · AI 글 = 문장 · 화면 글자 = 낱말</p>
+  <div class="vars">
+    <figure><iframe src="assets/vide-next/variants/A.html" title="변형 A" width="380" height="420" loading="lazy"></iframe><figcaption>A 49 · 넓은 행간 · 단계 접힘</figcaption></figure>
+    <figure><iframe src="assets/vide-next/variants/B.html" title="변형 B" width="380" height="420" loading="lazy"></iframe><figcaption>B 53 · 타임라인 · 결과 카드 <em>1등</em></figcaption></figure>
+    <figure><iframe src="assets/vide-next/variants/C.html" title="변형 C" width="380" height="420" loading="lazy"></iframe><figcaption>C 41 · 도구 행 · 파일 칩</figcaption></figure>
+  </div>
+  <p class="words">셸 = B · 접목 A 큰 번호 열 · C 도구 행 대상 칩 · 본문 14 / 1.6 · 이력 행 = 요청 하나</p>
 </section>
 
-<section id="m">
+<section id="v">
   <div class="section-head">
-    <div><div class="eyebrow">STYLE</div><h2>방식 3종 · 스위치 6.</h2></div>
+    <div><div class="eyebrow">FILES</div><h2>파일 보기 · 분할.</h2></div>
   </div>
+  <svg class="map" viewBox="0 0 720 170" role="img" aria-label="자료 폴더, 클릭, 미리보기 탭, 더블클릭 고정, 끌기 또는 우클릭, 2분할">
+    <defs><marker id="ar4" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1L7 4L1 7"/></marker></defs>
+    <rect class="box" x=".5" y="20.5" width="131" height="30"/><text class="h" x="12" y="40">자료 · 사람 폴더</text>
+    <g class="fi"><g class="pdf" transform="translate(8 58) scale(.75)"><title>pdf</title><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 16.5h6"/></g><g class="xlsx" transform="translate(29 58) scale(.75)"><title>xlsx</title><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M8.5 11h7v7h-7zM8.5 14.5h7M12 11v7"/></g><g class="docx" transform="translate(50 58) scale(.75)"><title>docx</title><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 11.5h6M9 14.5h6M9 17.5h4"/></g><g class="hwp" transform="translate(71 58) scale(.75)"><title>hwp</title><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><text x="12" y="19" text-anchor="middle" font-size="12" font-weight="600" stroke="none">한</text></g><g class="img" transform="translate(92 58) scale(.75)"><title>img</title><rect x="3.5" y="5" width="17" height="14" rx="1"/><path d="m3.5 16.5 5-5 4 4 2.5-2.5 5.5 5.5"/><circle cx="15.5" cy="9.5" r="1.5"/></g><g class="html" transform="translate(113 58) scale(.75)"><title>html</title><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="m10 12-2.2 2.5L10 17M14 12l2.2 2.5L14 17M12.7 11.5l-1.4 6"/></g></g>
+    <path d="M134 35H170" marker-end="url(#ar4)"/><text class="r" x="138" y="14">클릭</text>
+    <rect x="174.5" y="20.5" width="111" height="30"/><text x="186" y="40" font-style="italic">미리보기 탭</text>
+    <path d="M288 35H324" marker-end="url(#ar4)"/><text class="r" x="282" y="14">더블클릭</text>
+    <rect x="328.5" y="20.5" width="95" height="30"/><text class="h" x="340" y="40">고정 탭</text><text class="acc" x="404" y="40">8</text>
+    <path d="M426 35H462" marker-end="url(#ar4)"/><text class="r" x="414" y="14">끌기 · 우클릭</text>
+    <rect x="466.5" y="20.5" width="253" height="110"/><rect class="box" x="466.5" y="20.5" width="125" height="110"/>
+    <text class="h" x="478" y="40">변경 비교</text><text class="h" x="604" y="40">회의록.pdf</text>
+    <rect class="on" x="591" y="56" width="3" height="40"/>
+    <text class="r" x="478" y="120">오른쪽 · 아래</text><text class="r" x="604" y="120">Ctrl+\</text>
+    <text class="r" x="186" y="76">다음 클릭 = 덮어씀</text><text class="r" x="340" y="76">초과 = 오래된 탭 닫힘</text>
+    <path class="dash" d="M174 156H720"/><text class="r" x="186" y="150">우클릭 · 분할 2 · 고정 · 닫기 4</text>
+  </svg>
   <div class="table-wrap" style="max-height:none">
     <table class="txt sty">
-      <thead><tr><th>스위치</th><th>AI 처음</th><th>AI 좀 씀</th><th>개발자</th></tr></thead>
+      <thead><tr><th>형식</th><th>보기 방식</th><th>지금 코드</th><th>비고</th></tr></thead>
       <tbody>
-        <tr><td>터미널 탭</td><td>끔</td><td>끔</td><td>켬</td></tr>
-        <tr><td>적용 전 확인</td><td>켬</td><td>켬</td><td>끔</td></tr>
-        <tr><td>모델·effort</td><td>끔</td><td>켬</td><td>켬</td></tr>
-        <tr><td>제공자 칩</td><td>끔</td><td>켬</td><td>켬</td></tr>
-        <tr><td>제안 카드</td><td>켬</td><td>켬</td><td>끔</td></tr>
-        <tr><td>도구 행 펼침</td><td>끔</td><td>끔</td><td>켬</td></tr>
+        <tr><td>이미지</td><td>WebView2 내장</td><td>없음</td><td>라이브러리 0</td></tr>
+        <tr><td>HTML</td><td>iframe sandbox</td><td>없음</td><td>라이브러리 0</td></tr>
+        <tr><td>PDF</td><td>WebView2 PDF 뷰어</td><td>텍스트 층</td><td>대안 pdf.js</td></tr>
+        <tr><td>DOCX</td><td>docx-preview</td><td>본문 텍스트</td><td>Apache-2.0</td></tr>
+        <tr><td>XLSX</td><td>SheetJS 값 표</td><td>셀 값</td><td>서식 없음</td></tr>
+        <tr><td>HWP · HWPX</td><td>@rhwp/core</td><td>본문 텍스트</td><td>MIT · WASM</td></tr>
+        <tr><td>DWG</td><td>외부 프로그램</td><td>ZWCAD 텍스트</td><td>변환 추정</td></tr>
+        <tr><td>3DM</td><td>rhino3dm + three</td><td>없음</td><td>MIT</td></tr>
       </tbody>
     </table>
   </div>
-  <p class="words">고르면 뒤 화면의 그 부분만 마스크 걷힘 · 설정에서 변경</p>
 </section>
 
 <section id="c">
   <div class="section-head">
-    <div><div class="eyebrow">02 / CHANGES</div><h2>7차 메모 4 · 8차 메모 5.</h2></div>
+    <div><div class="eyebrow">02 / CHANGES</div><h2>9차 메모 8.</h2></div>
   </div>
   <div class="table-wrap" style="max-height:none">
     <table class="txt chg">
       <tbody>
-        <tr><td>1 탭이 쌓임</td><td>대화 패널 가로 탭 삭제 · 세로 목록 ↔ 대화 · S12 · 가운데 아티팩트 탭은 9판</td></tr>
-        <tr><td>2 설정이 딱딱함</td><td>가운데 큰 카드 · 진행 점 · S14·S15</td></tr>
-        <tr><td>3 대화가 안 읽힘</td><td>Claude Code식 · 문장 + 도구 행 + 진행 중</td></tr>
-        <tr><td>4 방식 = 팝업</td><td>회색 마스크 · 바뀐 부분만 흰색 · S16</td></tr>
-        <tr><td>8-1 설정 카드 3장</td><td>순서 처리 · ① → ② → ③</td></tr>
-        <tr><td>8-2 한/영</td><td>아이콘 가 / A</td></tr>
-        <tr><td>8-3 세션 서랍</td><td>왼쪽으로 펼침 · 300</td></tr>
-        <tr><td>8-4 열 너비·접기</td><td>경계 끌기 · » 단추 삭제 · 띠</td></tr>
-        <tr><td>8-5 설치 단추 없음</td><td>카드 누름 → ⟳ 확인 · 설치 → ✓ · 로그인은 브라우저 · S14·S15</td></tr>
+        <tr><td>9-1 + 새 세션 서랍 유지</td><td>임시 행 · 첫 요청 → 제목 · S12</td></tr>
+        <tr><td>9-2 답변 UI</td><td>변형 3 → B · A·C 접목 · S10</td></tr>
+        <tr><td>9-3 Pretendard</td><td>CDN · 제품은 woff2 동봉 · 본문 14</td></tr>
+        <tr><td>9-4 자료 = 사람 폴더</td><td>한/영 그대로 · 클릭 → 미리보기 · S17</td></tr>
+        <tr><td>9-5 가운데 탭·분할</td><td>미리보기 · 고정 · 우클릭 · 끌기 · 2분할 · S18</td></tr>
+        <tr><td>9-6 이력 = 요청</td><td>요청 10 · S4</td></tr>
+        <tr><td>9-7 최상위 폴더 = 머리 아이콘</td><td>새 폴더 · 가져오기 · 모두 접기 · 우클릭 5</td></tr>
+        <tr><td>9-8 형식 아이콘 색+모양</td><td>pdf · xlsx · docx · hwp · img · html · dwg</td></tr>
       </tbody>
     </table>
   </div>
@@ -253,38 +207,41 @@
 
 <section id="q">
   <div class="section-head">
-    <div><div class="eyebrow">03 / QUESTIONS</div><h2>세션 보기 · 대화 본문 · 방식 설정.</h2></div>
+    <div><div class="eyebrow">03 / QUESTIONS</div><h2>답변 UI · 파일 보기 · 탭 규칙.</h2></div>
   </div>
   <ul class="qs after">
     <li class="d decide" data-id="Q1">
-      <p class="q"><b class="id">Q1</b><b>세션 보기?</b></p>
+      <p class="q"><b class="id">Q1</b><b>답변 UI?</b></p>
       <div class="ans">
-        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 세로 목록 ↔ 대화</b><small>S12 · 레퍼런스 꼴</small></button>
-        <button type="button" data-v="②" aria-pressed="false"><b>② 왼쪽 탐색기에 목록</b><small>레일 묶음</small></button>
+        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① B 타임라인 · 카드</b><small>53점 · 1등</small></button>
+        <button type="button" data-v="②" aria-pressed="false"><b>② A 넓은 행간</b><small>49점</small></button>
+        <button type="button" data-v="③" aria-pressed="false"><b>③ C 도구 칩</b><small>41점</small></button>
       </div>
-      <p class="line"><b>이유</b>세션이 늘어도 한 줄씩, 검색·거르기.</p>
-      <p class="line"><b>틀리면</b>목록만 탐색기로 옮김.</p>
+      <p class="line"><b>이유</b>한 일과 결과가 한눈에.</p>
+      <p class="line"><b>틀리면</b>단계만 기본 접힘.</p>
     </li>
     <li class="d decide" data-id="Q2">
-      <p class="q"><b class="id">Q2</b><b>대화 본문?</b></p>
+      <p class="q"><b class="id">Q2</b><b>파일 보기 범위?</b></p>
       <div class="ans">
-        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① Claude Code식</b><small>문장 + 도구 행</small></button>
-        <button type="button" data-v="②" aria-pressed="false"><b>② 결과 낱말식</b><small>7판</small></button>
+        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 이미지·HTML·PDF 먼저</b><small>오피스·HWP는 다음 단계(라이브러리 렌더)</small></button>
+        <button type="button" data-v="②" aria-pressed="false"><b>② 전 형식 한 번에</b><small>라이브러리 5+</small></button>
+        <button type="button" data-v="③" aria-pressed="false"><b>③ 외부 프로그램만</b><small>보기 없음</small></button>
       </div>
-      <p class="line"><b>이유</b>AI가 무엇을 어떻게 하는지 보임.</p>
-      <p class="line"><b>틀리면</b>도구 행 기본 접힘만 남김.</p>
+      <p class="line"><b>이유</b>WebView2 내장, 라이브러리 0.</p>
+      <p class="line"><b>틀리면</b>뷰어 층만 추가.</p>
     </li>
     <li class="d decide" data-id="Q3">
-      <p class="q"><b class="id">Q3</b><b>방식 설정?</b></p>
+      <p class="q"><b class="id">Q3</b><b>가운데 탭 규칙?</b></p>
       <div class="ans">
-        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 마스크 리빌 팝업</b><small>S16</small></button>
-        <button type="button" data-v="②" aria-pressed="false"><b>② 가운데 표</b><small>7판</small></button>
+        <button type="button" class="rec" data-v="①" aria-pressed="false"><b>① 미리보기 + 2분할</b><small>고정 8 상한</small></button>
+        <button type="button" data-v="②" aria-pressed="false"><b>② VS Code 전체</b><small>자유 분할 · 무제한</small></button>
+        <button type="button" data-v="③" aria-pressed="false"><b>③ 탭 없이 하나</b><small>매번 덮어씀</small></button>
       </div>
-      <p class="line"><b>이유</b>고른 결과가 실제 화면에서 보임.</p>
-      <p class="line"><b>틀리면</b>팝업 안에 표만 둠.</p>
+      <p class="line"><b>이유</b>탭 쌓임 없이 둘 비교.</p>
+      <p class="line"><b>틀리면</b>상한만 설정에서.</p>
     </li>
   </ul>
-  <p class="words">열린 결정 · 가운데 아티팩트 탭(상한 + 나머지는 탐색기) · 공동 편집 어디부터 · 셸 그대로 · 제공자 선택·방식 단계는 8판에 흡수 (<a href="../research/RESEARCH-19-db-engine.md">RESEARCH-19 §9</a> · <a href="../research/RESEARCH-20-shell.md">RESEARCH-20</a>)</p>
+  <p class="words">열린 결정 · 8판 세션 보기 · 대화 본문 · 방식 설정 답 대기 · 공동 편집 어디부터 · 셸 (<a href="../research/RESEARCH-20-shell.md">RESEARCH-20</a>)</p>
 </section>
 
 <footer><span>VIDE 목업 · 검토용 · 정본 PRD·SPEC·Design</span><span>2026-10-23</span></footer>
@@ -295,12 +252,12 @@
     <input type="text" id="memo" placeholder="전체 메모(선택)">
     <span id="msg"></span>
   </div>
-  <pre id="out">Q1~Q3 · S1~S16 선택</pre>
+  <pre id="out">Q1~Q3 · S1~S18 선택</pre>
 </div>
 </main>
 <script>
 (function(){
-  var EMPTY='Q1~Q3 · S1~S16 선택';
+  var EMPTY='Q1~Q3 · S1~S18 선택';
   function $$(q,r){return [].slice.call((r||document).querySelectorAll(q));}
   function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text)e.textContent=text;return e;}
   function pad(v){return String(v).padStart(2,'0');}

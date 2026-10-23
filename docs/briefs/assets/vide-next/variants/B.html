@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>답변 변형 B</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+/* 변형 B — Perplexity식: 단계 타임라인(점선) · 결과 카드(번호 배지) · 행동 줄. 토큰은 app.css에서 복사 */
+:root{--bg:#fff;--fg:#111;--mute:#7a7672;--rule:#d9d5cf;--faint:#efece7;--panel:#f7f5f1;--accent:#CD9F73;
+  --sans:"Pretendard Variable",Pretendard,"IBM Plex Sans",system-ui,sans-serif;--mono:"Cascadia Mono",Consolas,monospace;--r:3px;color-scheme:light}
+html[data-theme=dark]{--bg:#161515;--fg:#ebe7e1;--mute:#9a948d;--rule:#3a3734;--faint:#242220;--panel:#1e1c1a;--accent:#D4A97D;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--fg);font:13px/1.45 var(--sans);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+p,ul,ol{margin:0;padding:0;list-style:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+svg.i{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round}
+.pane{width:380px;height:100vh;display:flex;flex-direction:column;border-right:1px solid var(--rule)}
+.hd{display:flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-bottom:1px solid var(--rule)}
+.hd .back{color:var(--mute);font-size:12px}
+.hd b{font-weight:600}
+.hd .m{margin-left:auto;color:var(--mute);font-size:11px}
+.flow{flex:1;overflow:auto;padding:18px 16px 12px;display:flex;flex-direction:column;gap:14px}
+/* 사용자 말: 연한 panel 3px */
+.you{background:var(--panel);border-radius:var(--r);padding:8px 12px 9px;font-size:14px;line-height:1.6}
+.you .top{display:flex;align-items:center;gap:5px;color:var(--mute);font-size:11px;margin-bottom:2px}
+.you .top svg{width:12px;height:12px}
+.you .top time{margin-left:auto}
+/* 답 문장 */
+.ans{font-size:14px;line-height:1.6;letter-spacing:-.01em}
+.ans b{font-weight:600}
+.ans .hot{color:var(--accent);font-weight:600}
+/* 단계 타임라인: 점 + 세로 점선 */
+.steps{display:flex;flex-direction:column}
+.cap{display:flex;align-items:center;gap:8px;color:var(--mute);font-size:11px;margin-bottom:8px}
+.cap::after{content:"";flex:1;border-top:1px solid var(--faint)}
+.step{position:relative;padding:0 0 10px 22px}
+.step:last-child{padding-bottom:0}
+.step:not(:last-child)::before{content:"";position:absolute;left:6px;top:17px;bottom:1px;border-left:1px dashed var(--rule)}
+.step .dot{position:absolute;left:0;top:3px;width:13px;height:13px;border:1px solid var(--rule);border-radius:50%;background:var(--bg);display:grid;place-items:center}
+.step .dot svg{width:9px;height:9px;stroke-width:1.5}
+.step summary{list-style:none;display:flex;align-items:baseline;gap:6px;cursor:pointer;font-size:13px}
+.step summary::-webkit-details-marker{display:none}
+.step summary .v{color:var(--mute);font-size:12px}
+.step summary .ch{margin-left:auto;align-self:center;color:var(--mute);transition:transform .15s}
+.step[open] summary .ch{transform:rotate(90deg)}
+.step pre{margin:6px 0 0;padding:6px 8px;border:1px solid var(--faint);border-radius:var(--r);font:11px/1.55 var(--mono);color:var(--mute);white-space:pre;overflow:auto}
+/* 결과 카드: 번호 배지 + 제목 + 메타 */
+.cards{border:1px solid var(--rule);border-radius:var(--r)}
+.card{display:grid;grid-template-columns:auto 1fr auto;column-gap:10px;padding:10px 12px;cursor:pointer}
+.card+.card{border-top:1px solid var(--faint)}
+.card:hover{background:var(--panel)}
+.no{min-width:34px;height:20px;padding:0 5px;border:1px solid var(--rule);border-radius:var(--r);display:grid;place-items:center;font-size:11.5px;font-weight:600}
+.card .t{font-size:14px;line-height:1.45;font-weight:500;padding-top:1px}
+.card .age{font-size:12px;color:var(--mute);padding-top:2px}
+.card .mt{grid-column:2;color:var(--mute);font-size:12px;margin-top:2px}
+.card.old .no{border-color:var(--accent)}
+.card.old .age{color:var(--accent);font-weight:600}
+/* 행동 줄 */
+.acts{display:flex;align-items:center;gap:6px}
+.btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--rule);border-radius:var(--r);font-size:12.5px}
+.btn:hover{background:var(--panel)}
+.btn.pri{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.acts .sep{flex:1}
+.ico{width:26px;height:26px;display:grid;place-items:center;color:var(--mute);border-radius:var(--r)}
+.ico:hover{background:var(--panel);color:var(--fg)}
+.acts time{color:var(--mute);font-size:11px;margin-left:2px}
+/* 입력 */
+.cmp{margin:0 12px 12px;border:1px solid var(--rule);border-radius:var(--r);padding:10px 12px;color:var(--mute);display:flex}
+.cmp .k{margin-left:auto;font-size:11px}
+</style>
+</head>
+<body>
+<div class="pane">
+  <div class="hd"><button class="back" type="button">‹ 세션</button><b>구조 협의 미답</b><span class="m">Claude · Sonnet · 메일 3</span></div>
+  <div class="flow">
+    <div class="you">
+      <div class="top"><svg class="i" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1"/><path d="M2.5 6.5h11M6.5 6.5v7"/></svg>협의 대장<time>16:28</time></div>
+      <p>구조 협의 중에 답 안 온 거 있어?</p>
+    </div>
+
+    <p class="ans">협의 대장에서 구조 협의 행만 골라, 우리가 보낸 뒤 아직 답이 없는 것을 찾아보겠습니다.</p>
+
+    <div class="steps">
+      <div class="cap">단계 2</div>
+      <details class="step"><summary><span class="dot"><svg class="i" viewBox="0 0 10 10"><path d="M2 5.2l2 2 4-4.4"/></svg></span>대장 읽기<span class="v">행 196</span><svg class="i ch" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg></summary><pre>read  협의 대장.xlsx
+rows  196
+kind  구조 협의 27 · 열림 23</pre></details>
+      <details class="step"><summary><span class="dot"><svg class="i" viewBox="0 0 10 10"><path d="M2 5.2l2 2 4-4.4"/></svg></span>미답 거르기<span class="v">3건</span><svg class="i ch" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg></summary><pre>190  10.09  유수지 기둥 보강 단면      11일
+193  10.13  증축층 하중 3.5 kN/m² 확인  7일
+196  10.17  기둥 C2A 이동안 검토 요청    3일</pre></details>
+    </div>
+
+    <p class="ans">구조 쪽에서 답이 없는 협의가 <b>3건</b> 있습니다. 가장 오래된 것은 <span class="hot">11일째</span>입니다.</p>
+
+    <ol class="cards">
+      <li class="card old"><span class="no">190</span><span class="t">유수지 기둥 보강 단면</span><span class="age">11일</span><span class="mt">10.09 보냄 · 구조 협의</span></li>
+      <li class="card"><span class="no">193</span><span class="t">증축층 하중 3.5 kN/m² 확인</span><span class="age">7일</span><span class="mt">10.13 보냄 · 구조 협의</span></li>
+      <li class="card"><span class="no">196</span><span class="t">기둥 C2A 이동안 검토 요청</span><span class="age">3일</span><span class="mt">10.17 보냄 · 구조 협의</span></li>
+    </ol>
+
+    <p class="ans">190은 다음 주 심의 도서에 들어가야 해서, 다시 묻는 메일을 먼저 보내는 것이 좋겠습니다.</p>
+
+    <div class="acts">
+      <button class="btn pri" type="button"><svg class="i" viewBox="0 0 16 16"><rect x="2" y="3.5" width="12" height="9" rx="1"/><path d="M2.5 4.5l5.5 4 5.5-4"/></svg>메일 쓰기</button>
+      <button class="btn" type="button"><svg class="i" viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="10" rx="1"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3"/></svg>기한 넣기</button>
+      <span class="sep"></span>
+      <button class="ico" type="button" title="복사"><svg class="i" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></svg></button>
+      <button class="ico" type="button" title="다시"><svg class="i" viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.5h-2.5"/></svg></button>
+      <time>16:30</time>
+    </div>
+  </div>
+  <div class="cmp">이어서 묻기<span class="k">Enter</span></div>
+</div>
+</body>
+</html>

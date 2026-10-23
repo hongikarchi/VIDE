@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>답변 변형 C</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+/* 변형 C — Cursor/Claude Code식: 촘촘한 도구 행(아이콘·동사·대상 칩·수) · 기록 칩 · 짧은 문단 */
+:root{--bg:#fff;--fg:#111;--mute:#7a7672;--rule:#d9d5cf;--faint:#efece7;--panel:#f7f5f1;--accent:#CD9F73;
+  --sans:"Pretendard Variable",Pretendard,"IBM Plex Sans",system-ui,sans-serif;--mono:"Cascadia Mono",Consolas,monospace;--r:3px;color-scheme:light}
+html[data-theme=dark]{--bg:#161515;--fg:#ebe7e1;--mute:#9a948d;--rule:#3a3734;--faint:#242220;--panel:#1e1c1a;--accent:#D4A97D;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;letter-spacing:-.005em}
+p,ul{margin:0;padding:0;list-style:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+svg.i{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round}
+.agent{width:380px;height:100vh;display:flex;flex-direction:column;border-left:1px solid var(--rule);background:var(--bg)}
+.head{display:flex;align-items:center;gap:8px;height:36px;padding:0 12px 0 16px;border-bottom:1px solid var(--rule);flex:none}
+.head b{font-weight:600;font-size:13px}
+.head .m{margin-left:auto;font-size:11px;color:var(--mute)}
+.flow{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.num{font-variant-numeric:tabular-nums}
+/* 사용자 말 */
+.user{background:var(--panel);border-radius:var(--r);padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.user .top{display:flex;align-items:center;gap:6px}
+.user time{margin-left:auto;font-size:11px;color:var(--mute)}
+.user p{font-size:14px;line-height:1.6}
+/* 칩: 파일·기록 */
+.chip{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 5px;border:1px solid var(--rule);border-radius:var(--r);background:var(--bg);font-size:11.5px;color:var(--fg);white-space:nowrap;vertical-align:1px;line-height:1}
+.chip svg.i{width:11px;height:11px;color:var(--mute)}
+.chip.rec{font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums}
+/* AI 문단 */
+.ai{font-size:14px;line-height:1.6}
+.ai p+p{margin-top:6px}
+/* 도구 행 묶음 */
+.tools{border:1px solid var(--rule);border-radius:var(--r)}
+.tools .cap{display:flex;align-items:center;gap:6px;height:24px;padding:0 8px;font-size:11px;color:var(--mute);border-bottom:1px solid var(--faint)}
+.tools .cap .n{margin-left:auto}
+.trow{display:flex;align-items:center;gap:7px;width:100%;height:28px;padding:0 8px;font-size:12.5px;color:var(--mute);text-align:left}
+.trow+.trow{border-top:1px solid var(--faint)}
+.trow:hover{background:var(--panel)}
+.trow .ok{color:var(--fg)}
+.trow .v{color:var(--fg);font-weight:500}
+.trow .n{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--fg)}
+.trow .n small{font-size:11px;color:var(--mute);margin-left:2px}
+.trow .car{color:var(--mute);width:10px;text-align:center}
+/* 결과 목록 */
+.list{border-top:1px solid var(--rule);margin-top:8px}
+.list li{display:grid;grid-template-columns:auto 1fr auto;column-gap:8px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--faint)}
+.list .rec{grid-column:1;grid-row:1;justify-self:start}
+.list .t{grid-column:2;grid-row:1;font-size:13.5px;line-height:1.45;min-width:0}
+.list .s{grid-column:2;grid-row:2;font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums}
+.list .d{grid-column:3;grid-row:1/span 2;align-self:center;font-size:12px;font-variant-numeric:tabular-nums;color:var(--mute);text-align:right}
+.list .d.old{color:var(--fg);font-weight:600}
+.list .d.old::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--accent);margin-right:5px;vertical-align:2px}
+/* 행동 줄 */
+.acts{display:flex;align-items:center;gap:6px;margin-top:10px}
+.btn{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border:1px solid var(--rule);border-radius:var(--r);background:var(--bg);font-size:12px;white-space:nowrap}
+.btn:hover{border-color:var(--fg)}
+.btn.pri{border-color:var(--fg)}
+.acts time{margin-left:auto;font-size:11px;color:var(--mute)}
+.acts .ic{width:24px;justify-content:center;padding:0;border-color:transparent;color:var(--mute)}
+.acts .ic:hover{border-color:var(--rule);color:var(--fg)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-file" viewBox="0 0 16 16"><path d="M4 1.5h5l3 3v10H4z"/><path d="M9 1.5v3h3"/><path d="M6 8h4M6 10.5h4"/></symbol>
+  <symbol id="i-sheet" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1"/><path d="M2.5 6.5h11M2.5 10h11M6.5 6.5v7"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7"/></symbol>
+  <symbol id="i-read" viewBox="0 0 16 16"><path d="M1.5 3.5h5a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 0-1.5-1.5h-5zM14.5 3.5h-5A1.5 1.5 0 0 0 8 5v8.5a1.5 1.5 0 0 1 1.5-1.5h5z"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 16 16"><path d="M2 3h12l-4.5 5.5V13l-3-1.5v-3z"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 16 16"><rect x="1.5" y="3.5" width="13" height="9" rx="1"/><path d="M2 4.5l6 4.5 6-4.5"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="11" rx="1"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M11 5V2.5H2.5V11H5"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.5-3.5"/><path d="M13 2v3h-3"/></symbol>
+</svg>
+<aside class="agent">
+  <div class="head"><b>구조 협의 미답</b><span class="m">Claude · Sonnet · 메일 3</span></div>
+  <div class="flow">
+    <div class="user">
+      <div class="top"><span class="chip"><svg class="i"><use href="#i-sheet"/></svg>협의 대장</span><time class="num">16:28</time></div>
+      <p>구조 협의 중에 답 안 온 거 있어?</p>
+    </div>
+
+    <div class="ai"><p>협의 대장에서 구조 협의 행만 골라, 보낸 뒤 아직 답이 없는 것을 찾아보겠습니다.</p></div>
+
+    <div class="tools">
+      <div class="cap"><svg class="i"><use href="#i-check"/></svg>도구 2</div>
+      <button class="trow" type="button"><svg class="i ok"><use href="#i-read"/></svg><span class="v">읽기</span><span class="chip"><svg class="i"><use href="#i-sheet"/></svg>협의 대장.xlsx</span><span class="n">196<small>행</small></span><span class="car">›</span></button>
+      <button class="trow" type="button"><svg class="i ok"><use href="#i-filter"/></svg><span class="v">거르기</span><span class="chip">구조 협의 27</span><span class="chip">미답</span><span class="n">3<small>건</small></span><span class="car">›</span></button>
+    </div>
+
+    <div class="ai">
+      <p>구조 쪽에서 답이 없는 협의가 <b>3건</b> 있습니다. 가장 오래된 것은 11일째입니다.</p>
+      <ul class="list">
+        <li><span class="chip rec">#190</span><span class="t">유수지 기둥 보강 단면</span><span class="d old">11일</span><span class="s">10.09 보냄</span></li>
+        <li><span class="chip rec">#193</span><span class="t">증축층 하중 3.5 kN/m² 확인</span><span class="d">7일</span><span class="s">10.13 보냄</span></li>
+        <li><span class="chip rec">#196</span><span class="t">기둥 C2A 이동안 검토 요청</span><span class="d">3일</span><span class="s">10.17 보냄</span></li>
+      </ul>
+      <p style="margin-top:10px"><span class="chip rec">#190</span>은 다음 주 심의 도서에 들어가야 해서, 다시 묻는 메일을 먼저 보내는 것이 좋겠습니다.</p>
+      <div class="acts">
+        <button class="btn pri" type="button"><svg class="i"><use href="#i-mail"/></svg>메일 쓰기</button>
+        <button class="btn" type="button"><svg class="i"><use href="#i-cal"/></svg>기한 넣기</button>
+        <button class="btn ic" type="button" title="복사"><svg class="i"><use href="#i-copy"/></svg></button>
+        <button class="btn ic" type="button" title="다시"><svg class="i"><use href="#i-redo"/></svg></button>
+        <time class="num">16:30</time>
+      </div>
+    </div>
+  </div>
+</aside>
+</body>
+</html>
