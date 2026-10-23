@@ -40,8 +40,8 @@
 <main class="center top">
   <h1 data-en="Programs">프로그램</h1>
   <div class="bigcards sm" role="group" aria-label="프로그램" data-en-label="Programs">
-    <div class="bigcard" role="button" tabindex="0" aria-pressed="true" data-host="rhino"><span class="ck">✓</span><svg class="i"><use href="#i-cube"/></svg><span class="t">Rhino</span><span class="s">8 · ✓ <bdi data-en="Found">감지</bdi></span>
-      <div class="act"><button type="button" class="btn" data-step="install" title="확장" data-en-title="Extension" data-en="Install">설치</button></div></div>
+    <div class="bigcard" role="button" tabindex="0" aria-pressed="false" data-host="rhino"><span class="ck">✓</span><svg class="i"><use href="#i-cube"/></svg><span class="t">Rhino</span><span class="s">8 · ✓ <bdi data-en="Found">감지</bdi></span>
+      <div class="act" hidden></div></div>
     <div class="bigcard" role="button" tabindex="0" aria-pressed="true" data-host="zwcad"><span class="ck">✓</span><svg class="i"><use href="#i-plan"/></svg><span class="t">ZWCAD</span><span class="s">2023 · ✓ <bdi data-en="Found">감지</bdi></span>
       <div class="act"><span class="ok">✓ <bdi data-en="Installed">설치됨</bdi></span></div></div>
     <div class="bigcard dim" aria-disabled="true"><svg class="i"><use href="#i-plan"/></svg><span class="t">AutoCAD</span><span class="s" data-en="Soon">지원 예정</span></div>
@@ -56,14 +56,18 @@
 <nav class="demo-nav" aria-label="데모 넘기기"><a class="prev" href="14-setup.html" title="이전">‹</a><b>3 / 16</b><a class="next" href="16-setup-style.html" title="다음">›</a></nav>
 <script src="app.js"></script>
 <script>
-/* 15: 카드 켬/끔 → 오른쪽 아래 확장 처리 칸 · [설치] → ✓ 설치됨 */
+/* 15: 카드를 누르면 단추 없이 그 자리에서 확장 처리 — ⟳ 설치 → ✓ 설치됨. 다시 누르면 끔 */
 (function () {
+  var en = function () { return document.documentElement.lang === 'en'; };
+  var w = function (ko, e) { return '<bdi data-ko="' + ko + '" data-en="' + e + '">' + (en() ? e : ko) + '</bdi>'; };
   document.querySelector('.bigcards').addEventListener('click', function (e) {
     var card = e.target.closest('.bigcard'); if (!card || card.classList.contains('dim')) return;
-    var step = e.target.closest('[data-step]');
-    if (!step) { var on = card.getAttribute('aria-pressed') !== 'true'; card.setAttribute('aria-pressed', String(on)); card.querySelector('.act').hidden = !on; return; }
-    var en = document.documentElement.lang === 'en';
-    card.querySelector('.act').innerHTML = '<span class="ok">✓ <bdi data-ko="설치됨" data-en="Installed">' + (en ? 'Installed' : '설치됨') + '</bdi></span>';
+    var act = card.querySelector('.act');
+    var on = card.getAttribute('aria-pressed') !== 'true';
+    card.setAttribute('aria-pressed', String(on)); act.hidden = !on;
+    if (!on) { act.innerHTML = ''; return; }
+    act.innerHTML = '<span class="busy"><span class="spin">⟳</span> ' + w('설치', 'Installing') + '</span>';
+    setTimeout(function () { if (!act.hidden) act.innerHTML = '<span class="ok">✓ ' + w('설치됨', 'Installed') + '</span>'; }, 900);
   });
 })();
 </script>

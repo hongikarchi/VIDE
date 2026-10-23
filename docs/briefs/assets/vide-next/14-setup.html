@@ -39,12 +39,12 @@
 <main class="center top">
   <h1 data-en="AI accounts">AI 계정</h1>
   <div class="bigcards" role="group" aria-label="계정" data-en-label="Accounts">
-    <div class="bigcard" role="button" tabindex="0" aria-pressed="true" data-acct="claude"><span class="ck">✓</span><svg class="i"><use href="#i-spark"/></svg><span>Claude</span>
-      <div class="act"><span class="ok">✓ <bdi data-en="Installed">설치</bdi></span></div></div>
+    <div class="bigcard" role="button" tabindex="0" aria-pressed="true" data-acct="claude" data-have="1"><span class="ck">✓</span><svg class="i"><use href="#i-spark"/></svg><span>Claude</span>
+      <div class="act"><span class="ok">✓ <bdi data-ko="설치" data-en="Installed">설치</bdi></span></div></div>
     <div class="bigcard" role="button" tabindex="0" aria-pressed="false" data-acct="gpt"><span class="ck">✓</span><svg class="i"><use href="#i-knot"/></svg><span>Codex</span>
-      <div class="act" hidden><button type="button" class="btn" data-step="install" data-en="Install">설치</button></div></div>
-    <div class="bigcard" role="button" tabindex="0" aria-pressed="true" data-acct="acs"><span class="ck">✓</span><svg class="i"><use href="#i-switch"/></svg><span>AccountSwitch</span>
-      <div class="act"><button type="button" class="btn" data-step="install" data-en="Install">설치</button></div></div>
+      <div class="act" hidden></div></div>
+    <div class="bigcard" role="button" tabindex="0" aria-pressed="false" data-acct="acs"><span class="ck">✓</span><svg class="i"><use href="#i-switch"/></svg><span>AccountSwitch</span>
+      <div class="act" hidden></div></div>
   </div>
   <div class="dots" aria-label="1 / 3"><i class="on"></i><i></i><i></i></div>
   <div class="foot"><a class="btn" href="15-setup-hosts.html" data-en="Skip">건너뛰기</a><a class="btn primary" href="15-setup-hosts.html" data-en="Next">다음</a></div>
@@ -53,23 +53,32 @@
 <nav class="demo-nav" aria-label="데모 넘기기"><a class="prev" href="11-signin.html" title="이전">‹</a><b>2 / 16</b><a class="next" href="15-setup-hosts.html" title="다음">›</a></nav>
 <script src="app.js"></script>
 <script>
-/* 14: 카드 켬/끔 → 오른쪽 아래 처리 칸 보임 · [설치] → ✓ 설치(AccountSwitch는 → [로그인] → ✓ 로그인 · 계정 n) */
+/* 14: 카드를 누르면 단추 없이 그 자리에서 처리 — ⟳ 확인 → (없으면) ⟳ 설치 → ✓ 설치. AccountSwitch는 ⟳ 설치 → ⟳ 로그인(브라우저) → ✓ 로그인 · 계정 n. 다시 누르면 끔 */
 (function () {
   var en = function () { return document.documentElement.lang === 'en'; };
-  var T = { inst: ['설치', 'Installed'], login: ['로그인', 'Sign in'], acct: ['계정', 'Account'], ok: ['로그인', 'Signed in'] };
+  var T = { chk: ['확인', 'Checking'], inst: ['설치', 'Installing'], done: ['설치', 'Installed'], login: ['로그인', 'Sign in'], acct: ['계정', 'Account'], ok: ['로그인', 'Signed in'] };
   var w = function (k) { return '<bdi data-ko="' + T[k][0] + '" data-en="' + T[k][1] + '">' + (en() ? T[k][1] : T[k][0]) + '</bdi>'; };
+  var run = function (act, steps) {
+    var i = 0, tick = function () {
+      if (act.hidden) return;
+      var st = steps[i++];
+      if (!st) return;
+      if (st[0] === 'ok') act.innerHTML = '<span class="ok">✓ ' + st[1] + '</span>';
+      else { act.innerHTML = '<span class="busy"><span class="spin">⟳</span> ' + st[1] + '</span>'; setTimeout(tick, st[2] || 700); }
+    };
+    tick();
+  };
   document.querySelector('.bigcards').addEventListener('click', function (e) {
     var card = e.target.closest('.bigcard'); if (!card) return;
-    var step = e.target.closest('[data-step]');
-    if (!step) { var on = card.getAttribute('aria-pressed') !== 'true'; card.setAttribute('aria-pressed', String(on)); card.querySelector('.act').hidden = !on; return; }
     var act = card.querySelector('.act');
-    if (step.dataset.step === 'install') {
-      if (card.dataset.acct === 'acs') act.innerHTML = '<span class="ok">✓ ' + w('inst') + '</span><button type="button" class="btn" data-step="login" data-ko="로그인" data-en="Sign in">' + (en() ? 'Sign in' : '로그인') + '</button>';
-      else act.innerHTML = '<span class="ok">✓ ' + w('inst') + '</span>';
-    } else if (step.dataset.step === 'login') {
+    var on = card.getAttribute('aria-pressed') !== 'true';
+    card.setAttribute('aria-pressed', String(on)); act.hidden = !on;
+    if (!on) { act.innerHTML = ''; return; }
+    if (card.dataset.have) { act.innerHTML = '<span class="ok">✓ ' + w('done') + '</span>'; return; }
+    if (card.dataset.acct === 'acs') {
       var n = document.querySelectorAll('.bigcard[data-acct="claude"][aria-pressed="true"],.bigcard[data-acct="gpt"][aria-pressed="true"]').length;
-      act.innerHTML = '<span class="ok">✓ ' + w('ok') + ' · ' + w('acct') + ' <span class="n">' + n + '</span></span>';
-    }
+      run(act, [['busy', w('inst'), 900], ['busy', w('login'), 900], ['ok', w('ok') + ' · ' + w('acct') + ' <span class="n">' + n + '</span>']]);
+    } else run(act, [['busy', w('chk'), 600], ['busy', w('inst'), 900], ['ok', w('done')]]);
   });
 })();
 </script>
