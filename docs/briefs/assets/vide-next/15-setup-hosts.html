@@ -23,7 +23,8 @@
 <body class="site">
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
-  <symbol id="i-lang" viewBox="0 0 24 24"><path d="M2.5 20 6.5 9l4 11M4 16.5h5"/><path d="M12.5 4.5h5c0 4.6-1.9 8.1-5 10.5"/><path d="M20.5 3v13M20.5 9.5h2"/></symbol>
+  <symbol id="i-lang-ko" viewBox="0 0 24 24"><text x="12" y="17.5" text-anchor="middle" font-family="IBM Plex Sans KR, IBM Plex Sans, sans-serif" font-size="15" font-weight="500" fill="currentColor" stroke="none">가</text></symbol>
+  <symbol id="i-lang-en" viewBox="0 0 24 24"><text x="12" y="17.5" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="16" font-weight="500" fill="currentColor" stroke="none">A</text></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
   <symbol id="i-cube" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12 20 7.5M12 12v9M12 12 4 7.5"/></symbol>
   <symbol id="i-plan" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 11h8v9M11 4v4M15 11h6"/></symbol>
@@ -32,24 +33,21 @@
 </svg>
 
 <div class="corner">
-  <button type="button" data-lang-toggle aria-pressed="false" title="언어 · EN" data-en-title="Language · 한" aria-label="언어" data-en-label="Language"><svg class="i xs"><use href="#i-lang"/></svg></button>
+  <button type="button" data-lang-toggle aria-pressed="false" title="언어 · EN" data-en-title="Language · 한" aria-label="언어" data-en-label="Language"><svg class="i xs ko"><use href="#i-lang-ko"/></svg><svg class="i xs en"><use href="#i-lang-en"/></svg></button>
   <button type="button" data-theme-toggle title="밝게 / 어둡게" data-en-title="Light / Dark"><svg class="i xs sun"><use href="#i-sun"/></svg><svg class="i xs moon"><use href="#i-moon"/></svg></button>
 </div>
 
-<main class="center">
-  <span class="wm">VIDE</span>
+<main class="center top">
   <h1 data-en="Programs">프로그램</h1>
   <div class="bigcards sm" role="group" aria-label="프로그램" data-en-label="Programs">
-    <button type="button" class="bigcard" aria-pressed="true" data-host="rhino"><span class="ck">✓</span><svg class="i"><use href="#i-cube"/></svg><span class="t">Rhino 8</span><span class="s">✓ <bdi data-en="Found">감지</bdi></span></button>
-    <button type="button" class="bigcard" aria-pressed="true" data-host="zwcad"><span class="ck">✓</span><svg class="i"><use href="#i-plan"/></svg><span class="t">ZWCAD 2023</span><span class="s">✓ <bdi data-en="Found">감지</bdi></span></button>
+    <div class="bigcard" role="button" tabindex="0" aria-pressed="true" data-host="rhino"><span class="ck">✓</span><svg class="i"><use href="#i-cube"/></svg><span class="t">Rhino</span><span class="s">8 · ✓ <bdi data-en="Found">감지</bdi></span>
+      <div class="act"><button type="button" class="btn" data-step="install" title="확장" data-en-title="Extension" data-en="Install">설치</button></div></div>
+    <div class="bigcard" role="button" tabindex="0" aria-pressed="true" data-host="zwcad"><span class="ck">✓</span><svg class="i"><use href="#i-plan"/></svg><span class="t">ZWCAD</span><span class="s">2023 · ✓ <bdi data-en="Found">감지</bdi></span>
+      <div class="act"><span class="ok">✓ <bdi data-en="Installed">설치됨</bdi></span></div></div>
     <div class="bigcard dim" aria-disabled="true"><svg class="i"><use href="#i-plan"/></svg><span class="t">AutoCAD</span><span class="s" data-en="Soon">지원 예정</span></div>
     <div class="bigcard dim" aria-disabled="true"><svg class="i"><use href="#i-struct"/></svg><span class="t">Revit</span><span class="s" data-en="Soon">지원 예정</span></div>
     <div class="bigcard dim" aria-disabled="true"><svg class="i"><use href="#i-cube"/></svg><span class="t">SketchUp</span><span class="s" data-en="Soon">지원 예정</span></div>
     <div class="bigcard dim" aria-disabled="true"><svg class="i"><use href="#i-sphere"/></svg><span class="t">Blender</span><span class="s" data-en="Soon">지원 예정</span></div>
-  </div>
-  <div class="status">
-    <div class="row" data-host="rhino"><b>Rhino 8</b><span data-en="Extension">확장</span><button type="button" class="btn" data-install data-en="Install">설치</button></div>
-    <div class="row" data-host="zwcad"><b>ZWCAD 2023</b><span data-en="Extension">확장</span><span>✓ <bdi data-en="Installed">설치됨</bdi></span></div>
   </div>
   <div class="dots" aria-label="2 / 3"><i></i><i class="on"></i><i></i></div>
   <div class="foot"><a class="btn" href="14-setup.html" data-en="Back">이전</a><a class="btn primary" href="16-setup-style.html" data-en="Next">다음</a></div>
@@ -58,18 +56,14 @@
 <nav class="demo-nav" aria-label="데모 넘기기"><a class="prev" href="14-setup.html" title="이전">‹</a><b>3 / 16</b><a class="next" href="16-setup-style.html" title="다음">›</a></nav>
 <script src="app.js"></script>
 <script>
-/* 15: 감지된 카드 켬/끔 → 그 확장 줄 보임/숨김 · [설치] → ✓ 설치됨 */
+/* 15: 카드 켬/끔 → 오른쪽 아래 확장 처리 칸 · [설치] → ✓ 설치됨 */
 (function () {
-  var st = document.querySelector('.center .status');
   document.querySelector('.bigcards').addEventListener('click', function (e) {
-    var b = e.target.closest('button.bigcard'); if (!b) return;
-    var on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(on));
-    st.querySelector('.row[data-host="' + b.dataset.host + '"]').hidden = !on;
-  });
-  st.addEventListener('click', function (e) {
-    var b = e.target.closest('[data-install]'); if (!b) return;
-    var en = document.documentElement.lang === 'en', s = document.createElement('span');
-    s.innerHTML = '✓ <bdi data-ko="설치됨" data-en="Installed">' + (en ? 'Installed' : '설치됨') + '</bdi>'; b.replaceWith(s);
+    var card = e.target.closest('.bigcard'); if (!card || card.classList.contains('dim')) return;
+    var step = e.target.closest('[data-step]');
+    if (!step) { var on = card.getAttribute('aria-pressed') !== 'true'; card.setAttribute('aria-pressed', String(on)); card.querySelector('.act').hidden = !on; return; }
+    var en = document.documentElement.lang === 'en';
+    card.querySelector('.act').innerHTML = '<span class="ok">✓ <bdi data-ko="설치됨" data-en="Installed">' + (en ? 'Installed' : '설치됨') + '</bdi></span>';
   });
 })();
 </script>

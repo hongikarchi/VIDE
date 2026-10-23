@@ -1,4 +1,4 @@
-/* VIDE Next 목업 공통 동작 v10 — 대화 패널 두 보기(세션 목록 ↔ 대화 · 새 세션 · 질문 카드 · 모델 메뉴), 테마(밝음 기본), 탭, 대화/터미널, 접기, 레일 묶음 5 → 탐색기 블록, 검색칸 거르기, UI 언어 전체 전환(applyLang), 폴더 접기·+ 폴더, 선택 창, 데모 넘기기. 제품 코드 아님. */
+/* VIDE Next 목업 공통 동작 v11 — 스플리터·가장자리 띠(v11), 대화 패널 두 보기(세션 목록 ↔ 대화 · 새 세션 · 질문 카드 · 모델 메뉴), 테마(밝음 기본), 탭, 대화/터미널, 접기, 레일 묶음 5 → 탐색기 블록, 검색칸 거르기, UI 언어 전체 전환(applyLang), 폴더 접기·+ 폴더, 선택 창, 데모 넘기기. 제품 코드 아님. */
 (function () {
   function $$(q, r) { return [].slice.call((r || document).querySelectorAll(q)); }
   var root = document.documentElement, key = 'vide-next-theme';
@@ -37,14 +37,59 @@
     });
   });
   var app = document.querySelector('.app');
-  $$('[data-agent-toggle]').forEach(function (b) { b.addEventListener('click', function () { app.classList.toggle('agent-closed'); }); });
-  $$('[data-explorer-toggle]').forEach(function (b) { b.addEventListener('click', function () { app.classList.toggle('explorer-closed'); }); });
-  /* 접힌 대화 다시 열기: 오른쪽 위 작은 단추 */
-  if (app && !document.querySelector('.reopen')) {
-    var ro = document.createElement('button'); ro.type = 'button'; ro.className = 'iconbtn reopen'; ro.title = '대화 열기'; ro.setAttribute('data-en-title', 'Open chat'); ro.setAttribute('data-agent-toggle', '');
-    ro.innerHTML = '<svg class="i sm"><use href="#i-collapse"/></svg>';
-    ro.addEventListener('click', function () { app.classList.remove('agent-closed'); });
-    app.parentNode.insertBefore(ro, app.nextSibling);
+  /* 스플리터 v11: .split[data-split=explorer|agent] 끌기 → --explorer(160~420) · --agent(300~640). 최소 미만 = 접힘(.explorer-closed/.agent-closed) + 가장자리 띠 .edge(클릭·끌기로 펼침). 더블클릭 = 기본(230/380). 손잡이 ←→ 16px · Enter 접기/펼치기. Ctrl+B 탐색기 · Ctrl+Alt+B 대화 · Ctrl+\ 둘 다. 'vide-w'에 기억 */
+  var W = { explorer: { min: 160, max: 420, def: 230, dir: 1 }, agent: { min: 300, max: 640, def: 380, dir: -1 } }, wKey = 'vide-w', ws = {};
+  try { ws = JSON.parse(localStorage.getItem(wKey)) || {}; } catch (e) {}
+  function wOf(k) { return ws[k] || W[k].def; }
+  function shut(k) { return app.classList.contains(k + '-closed'); }
+  /* 가운데 열 최소 320px: 탐색기+대화 ≤ 창 너비 − 레일 − 320. 끌기·복원·resize 모두 같은 규칙 */
+  var MID = 320;
+  function room(k) {
+    var o = k === 'explorer' ? 'agent' : 'explorer', ow = shut(o) ? 0 : wOf(o);
+    var rail = parseFloat(getComputedStyle(root).getPropertyValue('--rail')) || 44;
+    return Math.max(W[k].min, Math.min(W[k].max, window.innerWidth - rail - MID - ow));
+  }
+  function fit() { ['agent', 'explorer'].forEach(function (k) { if (!shut(k)) setW(k, wOf(k), true); }); }
+  function setW(k, v, noSave) {
+    var c = W[k], closed = v < c.min, s = app.querySelector('.split[data-split=' + k + ']');
+    if (!closed) { ws[k] = v = Math.min(room(k), Math.round(v)); root.style.setProperty('--' + k, v + 'px'); }
+    app.classList.toggle(k + '-closed', closed); ws[k + 'C'] = closed;
+    if (s) { s.setAttribute('aria-valuenow', wOf(k)); s.dataset.w = closed ? '' : wOf(k); }
+    if (!noSave) try { localStorage.setItem(wKey, JSON.stringify(ws)); } catch (e) {}
+  }
+  function setOpen(k, open) { if (app) setW(k, open ? wOf(k) : 0); }
+  if (app) {
+    Object.keys(W).forEach(function (k) { if (ws[k]) root.style.setProperty('--' + k, ws[k] + 'px'); if (k + 'C' in ws) app.classList.toggle(k + '-closed', !!ws[k + 'C']); });
+    fit(); window.addEventListener('resize', fit);
+    var drag = null, moved = false;
+    $$('.split[data-split], .edge[data-edge]', app).forEach(function (el) {
+      var k = el.dataset.split || el.dataset.edge;
+      el.addEventListener('pointerdown', function (e) {
+        if (e.button) return; e.preventDefault(); moved = false;
+        drag = { k: k, x: e.clientX, w: shut(k) ? 0 : wOf(k), s: app.querySelector('.split[data-split=' + k + ']') };
+        app.classList.add('dragging'); if (drag.s) drag.s.classList.add('on');
+      });
+      if (el.dataset.edge) { el.addEventListener('click', function () { if (!moved) setOpen(k, true); moved = false; }); return; }
+      el.addEventListener('dblclick', function () { setW(k, W[k].def); });
+      el.addEventListener('keydown', function (e) {
+        var d = e.key === 'ArrowRight' ? 16 : e.key === 'ArrowLeft' ? -16 : 0;
+        if (d) setW(k, Math.max(W[k].min, wOf(k) + d * W[k].dir)); else if (e.key === 'Enter') setOpen(k, shut(k)); else return;
+        e.preventDefault(); e.stopPropagation();
+      });
+    });
+    window.addEventListener('pointermove', function (e) {
+      if (!drag) return; var dx = e.clientX - drag.x; if (Math.abs(dx) > 3) moved = true;
+      if (moved) setW(drag.k, drag.w + dx * W[drag.k].dir, true);
+    });
+    window.addEventListener('pointerup', function () {
+      if (!drag) return; app.classList.remove('dragging'); if (drag.s) drag.s.classList.remove('on');
+      if (moved) { if (shut(drag.k) && drag.w) ws[drag.k] = drag.w; setW(drag.k, shut(drag.k) ? 0 : wOf(drag.k)); } drag = null;
+    });
+    document.addEventListener('keydown', function (e) {
+      if (!e.ctrlKey || e.shiftKey) return;
+      var ks = e.key === '\\' ? ['explorer', 'agent'] : /^b$/i.test(e.key) ? [e.altKey ? 'agent' : 'explorer'] : null; if (!ks) return;
+      e.preventDefault(); var open = ks.some(shut); ks.forEach(function (k) { setOpen(k, open); });
+    });
   }
   /* 눌림 표시만 하는 단추: [data-press] (라디오처럼 같은 data-group 안에서 하나만) */
   $$('[data-press]').forEach(function (b) {
@@ -109,9 +154,9 @@
       if (!trees.length) return;
       e.preventDefault();
       var cur = trees.filter(function (t) { return !t.hidden; })[0];
-      if (cur && cur.dataset.sec === a.dataset.sec && !app.classList.contains('explorer-closed')) { app.classList.add('explorer-closed'); return; }
+      if (cur && cur.dataset.sec === a.dataset.sec && !shut('explorer')) { setOpen('explorer', false); return; }
       if (q && q.value) q.setAttribute('data-live', ''); /* 검색 중 묶음을 바꾸면 그 묶음도 같은 글자로 거른다(09 첫 값 포함) */
-      app.classList.remove('explorer-closed'); showSec(a.dataset.sec);
+      setOpen('explorer', true); showSec(a.dataset.sec);
       try { localStorage.setItem(secKey, a.dataset.sec); } catch (err) {}
     });
   });
@@ -170,7 +215,7 @@
     var st = ag.querySelector('.starter'), cx = ag.querySelector('.composer .ctx'), q = lv.querySelector('.q'), f0 = ag.querySelector('.flow'), menu = null;
     var MODELS = { Claude: ['Sonnet', 'Opus', 'Fable'], Codex: ['GPT-5 Codex', 'GPT-5'] }, EFF = ['medium', 'high'];
     var cur = lv.querySelector('.srow[data-sess="' + (f0 && f0.dataset.sess) + '"]') || lv.querySelector('.srow.sel');
-    function view(v) { ag.setAttribute('data-view', v); if (menu) menu.hidden = true; }
+    function view(v) { ag.setAttribute('data-view', 'chat'); ag.classList.toggle('sess-open', v === 'list'); if (menu) menu.hidden = true; }
     function dflt(r) { var s = r.querySelector('.sub'); r.dataset.p = r.dataset.p || (s && /^Codex/.test(s.textContent) ? 'Codex' : 'Claude'); r.dataset.m = r.dataset.m || MODELS[r.dataset.p][0]; r.dataset.e = r.dataset.e || 'medium'; }
     function setMeta(p, m, e, rest) { meta.innerHTML = [p, m, e].concat(rest ? [rest] : []).join(' · '); if (mb) mb.firstChild.nodeValue = m + ' · ' + e; applyLang(lang); }
     function rowMeta(r) { dflt(r); var s = r.querySelector('.sub'); setMeta(r.dataset.p, r.dataset.m, r.dataset.e, s ? s.innerHTML.replace(/^(Claude|Codex)( · )?/, '') : ''); }
@@ -201,7 +246,7 @@
       if (r && e.target.closest('.x')) { r.remove(); filt(); } else if (r) open(r);
     });
     lv.addEventListener('keydown', function (e) { var r = e.target.closest('.srow'); if (r && e.key === 'Enter') open(r); });
-    $$('[data-agent-back]', ag).forEach(function (b) { b.addEventListener('click', function () { view('list'); }); });
+    $$('[data-agent-back]', ag).forEach(function (b) { b.addEventListener('click', function () { view(ag.classList.contains('sess-open') ? 'chat' : 'list'); }); });
     $$('[data-agent-new]', ag).forEach(function (b) { b.addEventListener('click', fresh); });
     if (st) st.addEventListener('click', function (e) { var c = e.target.closest('.prov button'), k = e.target.closest('.cards .art-card');
       if (c) { $$('.prov button', st).forEach(function (x) { x.classList.toggle('on', x === c); }); setMeta(prov(), MODELS[prov()][0], 'medium'); }

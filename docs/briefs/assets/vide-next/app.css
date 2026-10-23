@@ -1,4 +1,4 @@
-/* VIDE Next 목업 공통 스타일 v10 — 2026-10-23 (v10: 대화 패널 두 보기(목록 .lv ↔ 대화) · Claude Code식 대화 조각(details.tool · .working · .ask · .result) · 새 세션 .starter · 14·15 가운데 큰 카드 · 16 .mask/.lit; v9: 대화 패널 탭 줄·홈·모델 메뉴 · 11 .seg · 14~16 .setup·.preview; v8: 대화 패널 세션 머리·.meta·.sessions·.ghost; v7: 레일 묶음 5 · 탐색기 묶음별 트리 · 머리 검색칸 · UI 언어 · body.site(11 랜딩) · .signin(12 로그인); v6: + 폴더 · .party · .flag · .rep) (검토용 목업, 제품 코드 아님)
+/* VIDE Next 목업 공통 스타일 v11 — 2026-10-23 (v11: 열 경계 스플리터 .split · 접힌 열 가장자리 띠 .edge · 머리 » 단추와 .reopen 제거; v10: 대화 패널 두 보기(목록 .lv ↔ 대화) · Claude Code식 대화 조각(details.tool · .working · .ask · .result) · 새 세션 .starter · 14·15 가운데 큰 카드 · 16 .mask/.lit; v9: 대화 패널 탭 줄·홈·모델 메뉴 · 11 .seg · 14~16 .setup·.preview; v8: 대화 패널 세션 머리·.meta·.sessions·.ghost; v7: 레일 묶음 5 · 탐색기 묶음별 트리 · 머리 검색칸 · UI 언어 · body.site(11 랜딩) · .signin(12 로그인); v6: + 폴더 · .party · .flag · .rep) (검토용 목업, 제품 코드 아님)
    레퍼런스: 사용자의 기록 아티팩트 3장(Threads Through the Building · Interconnected Judgements v1·v2).
    그 토큰과 조각을 그대로 쓴다: 흰 바탕 · 따뜻한 회색 선 1px · 모서리 3px · 탠 강조 하나 · 글리프 · 22×12 스위치 ·
    10.5px 대문자 묶음 제목 · 그림자·알약·색 배지 없음. 어두운 테마는 아티팩트의 따뜻한 다크.
@@ -144,12 +144,33 @@ svg .m-axis{font-size:9px;fill:var(--mute)}
 .app{display:grid;grid-template-columns:var(--rail) var(--explorer) minmax(0,1fr) var(--agent);grid-template-rows:minmax(0,1fr);height:100vh}
 .app>.rail{grid-column:1}.app>.explorer{grid-column:2}.app>.center{grid-column:3}.app>.agent{grid-column:4}
 .app>.explorer,.app>.center,.app>.agent{min-height:0}
-.app.agent-closed{grid-template-columns:var(--rail) var(--explorer) minmax(0,1fr) 0}
-.app.agent-closed .agent{display:none}
-.app.explorer-closed{grid-template-columns:var(--rail) 0 minmax(0,1fr) var(--agent)}
-.app.explorer-closed .explorer{display:none}
-.iconbtn.reopen{position:fixed;top:8px;right:8px;z-index:4;display:none}
-.app.agent-closed~.iconbtn.reopen{display:grid}
+/* v11 스플리터·가장자리 띠: 접힌 열 = --edge 띠(.edge, 아이콘 + hover 쉐브론). 경계 = .split(히트 6px, 선 1px --rule → hover·끌기 --fg), 끄는 동안 너비 숫자 */
+.app{position:relative;--edge:24px}
+.app.agent-closed{grid-template-columns:var(--rail) var(--explorer) minmax(0,1fr) var(--edge)}
+.app.explorer-closed{grid-template-columns:var(--rail) var(--edge) minmax(0,1fr) var(--agent)}
+.app.explorer-closed.agent-closed{grid-template-columns:var(--rail) var(--edge) minmax(0,1fr) var(--edge)}
+.app.agent-closed .agent,.app.explorer-closed .explorer{display:none}
+.app>.split{position:absolute;top:0;bottom:0;width:6px;z-index:6;cursor:col-resize;touch-action:none;outline:none}
+.app>.split[data-split=explorer]{left:calc(var(--rail) + var(--explorer) - 3px)}
+.app>.split[data-split=agent]{right:calc(var(--agent) - 3px)}
+.app>.split::after{content:"";position:absolute;top:0;bottom:0;left:2px;width:1px;background:var(--rule);transition:background .15s}
+.app>.split[data-split=agent]::after{left:3px}
+.app>.split:hover::after{background:var(--fg);transition-delay:.2s}
+.app>.split.on::after,.app>.split:focus-visible::after{background:var(--fg);transition-delay:0s}
+.app>.split::before{content:attr(data-w);position:absolute;top:8px;left:9px;font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums;background:var(--bg);padding:0 3px;opacity:0;pointer-events:none}
+.app>.split[data-split=agent]::before{left:auto;right:9px}
+.app>.split.on::before{opacity:1}
+.app.explorer-closed>.split[data-split=explorer],.app.agent-closed>.split[data-split=agent]{display:none}
+.app.dragging{cursor:col-resize;user-select:none}
+.app.dragging *{transition:none!important}
+.app>.edge{display:none;grid-row:1;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;min-height:0;color:var(--mute);cursor:pointer;background:var(--bg);touch-action:none;transition:background .15s,color .15s}
+.app>.edge[data-edge=explorer]{grid-column:2;border-right:1px solid var(--rule)}
+.app>.edge[data-edge=agent]{grid-column:4;border-left:1px solid var(--rule)}
+.app.explorer-closed>.edge[data-edge=explorer],.app.agent-closed>.edge[data-edge=agent]{display:flex}
+.app>.edge:hover,.app>.edge:focus-visible{background:var(--panel);color:var(--fg);outline:none}
+.app>.edge .cv{font-size:13px;line-height:1;opacity:0;transition:opacity .15s}
+.app>.edge:hover .cv,.app>.edge:focus-visible .cv{opacity:1}
+@media (prefers-reduced-motion: reduce){.app>.split::after,.app>.edge,.app>.edge .cv{transition:none}}
 .tabpane{display:none}
 .tabpane.on{display:block}
 
@@ -164,6 +185,10 @@ svg .m-axis{font-size:9px;fill:var(--mute)}
 .rail [data-tip]:after{content:attr(data-tip);position:absolute;left:38px;top:50%;transform:translateY(-50%);background:var(--fg);color:var(--bg);font-size:11.5px;padding:4px 8px;border-radius:3px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .1s;z-index:6}
 .rail [data-tip]:hover:after{opacity:1}
 .rail .moon{display:none}
+/* 언어 단추: 밝기 단추처럼 지금 상태를 보여 준다 — 한국어면 가, 영어면 A */
+[data-lang-toggle] .en{display:none}
+html[lang=en] [data-lang-toggle] .ko{display:none}
+html[lang=en] [data-lang-toggle] .en{display:block}
 [data-theme=dark] .rail .sun{display:none}
 [data-theme=dark] .rail .moon{display:block}
 
@@ -332,7 +357,7 @@ svg .m-axis{font-size:9px;fill:var(--mute)}
 .demo-nav a:hover{background:var(--panel);color:var(--fg)}
 .demo-nav a.off{opacity:.3;pointer-events:none}
 .demo-nav b{font-weight:500;color:var(--fg);padding:0 2px;font-variant-numeric:tabular-nums}
-.app.agent-closed~.demo-nav{right:12px}
+.app.agent-closed~.demo-nav{right:calc(var(--edge,24px) + 12px)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 
 /* ── 11 랜딩(body.site): 한 열 페이지, 토큰만 ── */
@@ -382,8 +407,15 @@ body.site{overflow:auto;height:auto;min-height:100%}
 .signin .list .row .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* agent v10: 두 보기 — .agent[data-view=list] 목록(.lv: 머리 · .usage · .tools · .list) / [data-view=chat] 대화(.head.ch · .meta · .flow · .term · .starter · .composer). 새 세션 = .agent.new-on(.flow 숨김, .starter 보임) */
-.agent[data-view=list]>:not(.lv){display:none!important}
-.agent[data-view=chat]>.lv{display:none}
+/* v10b(2026-10-23): 목록은 보기 전환이 아니라 **서랍** — ‹ 세션을 누르면 패널 왼쪽으로 300px 슥 펼쳐진다(.agent.sess-open), 행을 고르면 다시 접힌다. 대화는 자리에 그대로 */
+.agent{position:relative}
+.agent>.lv{position:absolute;top:0;bottom:0;right:100%;width:0;overflow:hidden;background:var(--bg);border-left:0 solid var(--rule);z-index:5;transition:width .25s ease,border-width 0s .25s;display:flex;flex-direction:column}
+.agent>.lv>*{min-width:300px;flex:none}
+.agent>.lv>.list{flex:1;overflow:auto}
+.agent.sess-open>.lv{width:300px;border-left-width:1px;transition:width .25s ease}
+.agent .head.ch [data-agent-back]{transition:color .15s}
+.agent.sess-open .head.ch [data-agent-back]{color:var(--fg);font-weight:500}
+@media (prefers-reduced-motion: reduce){.agent>.lv{transition:none}}
 .agent .lv{flex:1;min-height:0;display:flex;flex-direction:column}
 .agent .head .new{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border-radius:3px;font-size:12px;color:var(--fg)}
 .agent .head .new:hover{background:var(--panel)}
@@ -497,17 +529,23 @@ pre.out{margin:4px 0 2px 18px;padding:6px 8px;background:var(--panel);border-rad
 
 /* 14·15 첫 실행 설정 v10(body.site .center): 세로 가운데 · 워드마크 · 질문 한 낱말 28px · 큰 카드 · 진행 점 · 상태 줄 */
 body.site .center{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:48px 16px;text-align:center}
-body.site .center .wm{font-size:13px;font-weight:600;letter-spacing:-.02em}
 body.site .center h1{font-size:28px;font-weight:500;letter-spacing:-.01em;line-height:1.25}
+/* .top: 제목 위치 고정(설정 장끼리 같은 자리) — 위에서 26vh */
+body.site .center.top{justify-content:flex-start;padding-top:26vh}
+.bigcard{cursor:pointer}
+.bigcard .act{position:absolute;right:8px;bottom:8px;display:flex;align-items:center;gap:4px;font-size:11px;color:var(--mute);font-weight:400}
+.bigcard .act .ok{color:var(--fg)}
+.bigcard .act .btn{padding:1px 8px;font-size:11px;height:22px}
+.bigcard .act[hidden]{display:none}
 .bigcards{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;max-width:100%}
-.bigcard{position:relative;width:200px;max-width:100%;height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;border:1px solid var(--rule);border-radius:3px;background:var(--bg);color:var(--fg);font:inherit;font-size:14px;font-weight:500}
+.bigcard{position:relative;width:200px;max-width:100%;height:170px;padding-bottom:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;border:1px solid var(--rule);border-radius:3px;background:var(--bg);color:var(--fg);font:inherit;font-size:14px;font-weight:500}
 .bigcard:hover{background:var(--panel)}
 .bigcard.on,.bigcard[aria-pressed="true"]{border-color:var(--fg)}
 .bigcard svg.i{width:36px;height:36px;stroke-width:1.2;color:var(--fg)}
 .bigcard .ck{position:absolute;top:8px;right:10px;font-size:12px;color:var(--fg);display:none}
 .bigcard.on .ck,.bigcard[aria-pressed="true"] .ck{display:block}
 .bigcard .s{font-size:11px;font-weight:400;color:var(--mute)}
-.bigcards.sm .bigcard{width:140px;height:120px;gap:8px;font-size:13px}
+.bigcards.sm .bigcard{width:140px;height:150px;gap:8px;font-size:13px;padding-bottom:26px}
 .bigcards.sm .bigcard svg.i{width:28px;height:28px}
 .bigcard.dim{border-style:dashed;color:var(--mute);cursor:default;pointer-events:none}
 .bigcard.dim svg.i{color:var(--mute)}
@@ -531,5 +569,5 @@ body.site .center h1{font-size:28px;font-weight:500;letter-spacing:-.01em;line-h
 [data-theme=dark] .lit{background:var(--panel)}
 
 @media(max-width:1280px){:root{--agent:340px;--explorer:210px}.two{grid-template-columns:1fr}}
-@media(max-width:1000px){.app{grid-template-columns:var(--rail) 0 minmax(0,1fr) var(--agent)}.explorer,.panel{display:none}}
+@media(max-width:1000px){.app{grid-template-columns:var(--rail) 0 minmax(0,1fr) var(--agent)}.explorer,.panel,.app>.split[data-split=explorer],.app>.edge[data-edge=explorer]{display:none}}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}.spin{animation:none!important}}
