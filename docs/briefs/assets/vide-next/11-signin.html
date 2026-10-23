@@ -4,21 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title data-en="VIDE — Sign in">VIDE — 로그인</title>
-<!-- VIDE Next 목업 v7 · 11 로그인(설치본 첫 실행의 첫 장, src/ui/first-run.tsx 참고; 프로젝트는 앱 안에서 고른다). .app 격자 없음. 입력값 비움. 설명 문장 없음. -->
+<!-- VIDE Next 목업 v9 · 11 로그인|가입(설치본 첫 실행의 첫 장, src/ui/first-run.tsx 라벨: 아이디 · 비밀번호 · PC 이름). 카드 머리 .seg 토글, 가입 = 아이디 · 비밀번호 · 가입 코드(서버 SIGNUP_CODE 관문) · PC 이름(로그인과 같음, 비우면 VIDE PC — first-run.tsx:118). AccountSwitch는 14 설정 ①로 옮김. [로그인]/[가입] → 14-setup.html. .app 격자 없음. 입력값 비움. 설명 문장 없음. -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500&family=IBM+Plex+Mono&display=swap">
 <link rel="stylesheet" href="app.css">
 <style>
-/* 장별: 배치와 SVG 크기만 */
+/* 장별: 배치만 */
 .corner{position:fixed;top:12px;right:12px;display:flex;gap:4px;z-index:3}
 .corner button{font-size:11px;color:var(--mute);height:24px;min-width:24px;padding:0 6px;border-radius:3px;display:inline-grid;place-items:center}
 .corner button:hover{background:var(--panel);color:var(--fg)}
 .corner .moon{display:none}
 [data-theme=dark] .corner .sun{display:none}
 [data-theme=dark] .corner .moon{display:block}
-.signin .head{display:flex;align-items:center;gap:8px}
-.signin .head .step{font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums}
-.signin .card.next{align-self:center}
-.signin .card .btn.new{justify-content:flex-start}
+.signin .head{display:flex;align-items:center;gap:12px}
+.signin .head .seg{flex:1}
+.signin [hidden]{display:none!important}
 </style>
 </head>
 <body class="site">
@@ -26,8 +25,6 @@
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
   <symbol id="i-lang" viewBox="0 0 24 24"><path d="M2.5 20 6.5 9l4 11M4 16.5h5"/><path d="M12.5 4.5h5c0 4.6-1.9 8.1-5 10.5"/><path d="M20.5 3v13M20.5 9.5h2"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
-  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
-  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
 </svg>
 
 <div class="corner">
@@ -36,19 +33,33 @@
 </div>
 
 <main class="signin">
-  <form class="card" action="01-start.html" method="get" aria-label="로그인">
-    <div class="head"><span class="mark">VIDE</span></div>
-    <label><span data-en="Email">이메일</span><input type="email" name="email" autocomplete="email" spellcheck="false"></label>
+  <form class="card" action="14-setup.html" method="get" aria-label="로그인" data-en-label="Sign in">
+    <div class="head"><span class="mark">VIDE</span>
+      <div class="seg" role="group"><button type="button" class="on" aria-pressed="true" data-mode="in" data-en="Sign in">로그인</button><button type="button" aria-pressed="false" data-mode="up" data-en="Sign up">가입</button></div>
+    </div>
+    <label><span data-en="ID">아이디</span><input type="text" name="id" autocomplete="username" spellcheck="false"></label>
     <label><span data-en="Password">비밀번호</span><input type="password" name="password" autocomplete="current-password"></label>
-    <a class="btn primary" href="01-start.html" data-en="Sign in">로그인</a>
-    <div class="links"><a href="#" data-en="Sign up">가입</a><a href="#" data-en="Reset">비밀번호 찾기</a></div>
-    <div class="rule"></div>
-    <div class="links"><a href="#">AccountSwitch</a></div>
+    <label data-only="up" hidden><span data-en="Sign-up code">가입 코드</span><input type="text" name="code" autocomplete="off" spellcheck="false"></label>
+    <label><span data-en="PC name">PC 이름</span><input type="text" name="pc" spellcheck="false" placeholder="VIDE PC" data-en-ph="VIDE PC"></label>
+    <a class="btn primary" href="14-setup.html" data-only="in" data-en="Sign in">로그인</a>
+    <a class="btn primary" href="14-setup.html" data-only="up" data-en="Sign up" hidden>가입</a>
+    <div class="links" data-only="in"><a href="#" data-en="Reset">비밀번호 찾기</a></div>
   </form>
-
 </main>
 
-<nav class="demo-nav" aria-label="데모 넘기기"><a class="prev off" href="#" title="이전">‹</a><b>1 / 13</b><a class="next" href="01-start.html" title="다음">›</a></nav>
+<nav class="demo-nav" aria-label="데모 넘기기"><a class="prev off" href="#" title="이전">‹</a><b>1 / 16</b><a class="next" href="14-setup.html" title="다음">›</a></nav>
 <script src="app.js"></script>
+<script>
+/* 11: 로그인 | 가입 토글(.seg) — 가입이면 가입 코드 칸 추가(PC 이름은 둘 다: 가입 직후 /remote/link name, 비우면 VIDE PC), 단추 글자 바뀜 */
+(function () {
+  var f = document.querySelector('.signin form'), pw = f.querySelector('input[name=password]');
+  f.querySelector('.seg').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-mode]'); if (!b) return; var m = b.dataset.mode;
+    [].forEach.call(this.querySelectorAll('button'), function (x) { var on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); });
+    [].forEach.call(f.querySelectorAll('[data-only]'), function (x) { x.hidden = x.dataset.only !== m; });
+    pw.autocomplete = m === 'up' ? 'new-password' : 'current-password';
+  });
+})();
+</script>
 </body>
 </html>

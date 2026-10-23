@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-en="VIDE — Setup · Programs">VIDE — 설정 · 프로그램</title>
+<!-- VIDE Next 목업 v9 · 15 첫 실행 설정 ② 프로그램. 카드 6: Rhino 8 · ZWCAD 2023(확장 있음: hosts/rhino · hosts/zwcad; 감지 키 connectors.ts:18 = 2023) — 카드 누르면 켜고 끔(.ck button[aria-pressed])(감지됨 = 기본 켬, 켠 카드만 [설치]) / AutoCAD · Revit · SketchUp · Blender = 지원 예정(.dim, 고를 수 없음). [이전][다음] → 16. 설명 문장 없음. 합성 데이터. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500&family=IBM+Plex+Mono&display=swap">
+<link rel="stylesheet" href="app.css">
+<style>
+/* 장별: 배치만 */
+.corner{position:fixed;top:12px;right:12px;display:flex;gap:4px;z-index:3}
+.corner button{font-size:11px;color:var(--mute);height:24px;min-width:24px;padding:0 6px;border-radius:3px;display:inline-grid;place-items:center}
+.corner button:hover{background:var(--panel);color:var(--fg)}
+.corner .moon{display:none}
+[data-theme=dark] .corner .sun{display:none}
+[data-theme=dark] .corner .moon{display:block}
+.setup .steps-nav .mark{font-size:13px;font-weight:600;letter-spacing:-.02em;padding:0 8px 12px}
+.setup .steps-nav .n{width:10px;color:var(--mute);font-variant-numeric:tabular-nums}
+.setup .card .row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--mute)}
+.setup .card .row .btn{padding:1px 8px;font-size:11px}
+</style>
+</head>
+<body class="site">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-lang" viewBox="0 0 24 24"><path d="M2.5 20 6.5 9l4 11M4 16.5h5"/><path d="M12.5 4.5h5c0 4.6-1.9 8.1-5 10.5"/><path d="M20.5 3v13M20.5 9.5h2"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+  <symbol id="i-cube" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12 20 7.5M12 12v9M12 12 4 7.5"/></symbol>
+  <symbol id="i-plan" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 11h8v9M11 4v4M15 11h6"/></symbol>
+  <symbol id="i-struct" viewBox="0 0 24 24"><path d="M4 20h16M6 20V9l6-5 6 5v11M10 20v-6h4v6"/></symbol>
+  <symbol id="i-sphere" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M4 12c0 2.2 3.6 4 8 4s8-1.8 8-4"/></symbol>
+</svg>
+
+<div class="corner">
+  <button type="button" data-lang-toggle aria-pressed="false" title="언어 · EN" data-en-title="Language · 한" aria-label="언어" data-en-label="Language"><svg class="i xs"><use href="#i-lang"/></svg></button>
+  <button type="button" data-theme-toggle title="밝게 / 어둡게" data-en-title="Light / Dark"><svg class="i xs sun"><use href="#i-sun"/></svg><svg class="i xs moon"><use href="#i-moon"/></svg></button>
+</div>
+
+<div class="setup">
+  <nav class="steps-nav" aria-label="설정 단계" data-en-label="Setup steps">
+    <span class="mark">VIDE</span>
+    <a href="14-setup.html"><span class="g">✓</span><span class="n">1</span><span data-en="AI accounts">AI 계정</span></a>
+    <a class="on" href="15-setup-hosts.html" aria-current="step"><span class="g">●</span><span class="n">2</span><span data-en="Programs">프로그램</span></a>
+    <a href="16-setup-style.html"><span class="g">○</span><span class="n">3</span><span data-en="Style">방식</span></a>
+  </nav>
+  <main>
+    <h1 data-en="Programs">프로그램</h1>
+    <div class="cards">
+      <div class="card on">
+        <div class="hd"><svg class="i"><use href="#i-cube"/></svg><span class="t">Rhino 8</span><button type="button" class="ck" aria-pressed="true" title="고르기" data-en-title="Pick">✓</button></div>
+        <div class="row"><span class="st ok">✓ <bdi data-en="Found">감지됨</bdi></span></div>
+        <div class="row"><span data-en="Extension">확장</span><button type="button" class="btn" data-en="Install">설치</button></div>
+      </div>
+      <div class="card on">
+        <div class="hd"><svg class="i"><use href="#i-plan"/></svg><span class="t">ZWCAD 2023</span><button type="button" class="ck" aria-pressed="true" title="고르기" data-en-title="Pick">✓</button></div>
+        <div class="row"><span class="st ok">✓ <bdi data-en="Found">감지됨</bdi></span></div>
+        <div class="row"><span data-en="Extension">확장</span><span class="st ok">✓ <bdi data-en="Installed">설치됨</bdi></span></div>
+      </div>
+      <div class="card dim" aria-disabled="true">
+        <div class="hd"><svg class="i"><use href="#i-plan"/></svg><span class="t">AutoCAD</span></div>
+        <div class="row"><span class="st" data-en="Found">감지됨</span></div>
+        <div class="row"><span class="st" data-en="Soon">지원 예정</span></div>
+      </div>
+      <div class="card dim" aria-disabled="true">
+        <div class="hd"><svg class="i"><use href="#i-struct"/></svg><span class="t">Revit</span></div>
+        <div class="row"><span class="st" data-en="Not found">감지 안 됨</span></div>
+        <div class="row"><span class="st" data-en="Soon">지원 예정</span></div>
+      </div>
+      <div class="card dim" aria-disabled="true">
+        <div class="hd"><svg class="i"><use href="#i-cube"/></svg><span class="t">SketchUp</span></div>
+        <div class="row"><span class="st" data-en="Not found">감지 안 됨</span></div>
+        <div class="row"><span class="st" data-en="Soon">지원 예정</span></div>
+      </div>
+      <div class="card dim" aria-disabled="true">
+        <div class="hd"><svg class="i"><use href="#i-sphere"/></svg><span class="t">Blender</span></div>
+        <div class="row"><span class="st" data-en="Not found">감지 안 됨</span></div>
+        <div class="row"><span class="st" data-en="Soon">지원 예정</span></div>
+      </div>
+    </div>
+    <div class="foot"><a class="btn" href="14-setup.html" data-en="Back">이전</a><span class="grow"></span><a class="btn primary" href="16-setup-style.html" data-en="Next">다음</a></div>
+  </main>
+</div>
+
+<nav class="demo-nav" aria-label="데모 넘기기"><a class="prev" href="14-setup.html" title="이전">‹</a><b>3 / 16</b><a class="next" href="16-setup-style.html" title="다음">›</a></nav>
+<script src="app.js"></script>
+<script>
+/* 15: 지원 호스트 카드 켜고 끔(카드 누르기 = .ck aria-pressed ↔ .card.on). [설치]는 켠 카드에만(app.css) */
+(function () {
+  [].forEach.call(document.querySelectorAll('.setup .card:not(.dim)'), function (c) {
+    var ck = c.querySelector('.ck');
+    c.addEventListener('click', function (e) { if (e.target.closest('.row .btn')) return; var on = !c.classList.contains('on'); c.classList.toggle('on', on); ck.setAttribute('aria-pressed', String(on)); });
+  });
+})();
+</script>
+</body>
+</html>
